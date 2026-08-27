@@ -31,6 +31,8 @@ MONO = "/System/Library/Fonts/Menlo.ttc"
 
 # slug -> (kicker, title, stat, stat_label, accent)
 CARDS = {
+    "vol11": ("LUMO FLYWHEEL / VOL. XI", "The Port That Was Only Quantization",
+              "1 line", "the entire architectural diff of the model-generation swap — the rest was the four bits", GREEN),
     "vol10": ("LUMO FLYWHEEL / VOL. X", "Twenty-Seven Milliseconds, Shipped",
               "−27 ms", "per step, four concurrent requests — byte-identical, shipped", GREEN),
     "vol9": ("LUMO FLYWHEEL / VOL. IX", "Where Every Millisecond Went",
@@ -51,6 +53,12 @@ CARDS = {
              "REVERSED", "what a fuller ablation did to the verdict", AMBER),
     "vol1": ("LUMO FLYWHEEL / VOL. I", "Track-B Round-4b Ablation",
              "5x", "the real-workload audit that started the series", CYAN),
+}
+
+
+# slug -> byline model string (default applies to every earlier volume)
+MODELS = {
+    "vol11": "Qwen 3.8-27B NVFP4 / GB10",
 }
 
 
@@ -111,7 +119,8 @@ def render(slug, kicker, title, stat, stat_label, accent, out):
     for i, ln in enumerate(wrap(d, stat_label, f_label, W - pad * 2 - sw - 34)):
         d.text((pad + sw + 34, 452 + i * 28), ln, font=f_label, fill=MUTED)
 
-    d.text((pad, H - 66), "Mark Ma  ·  ML systems / inference  ·  Qwen 3.6-27B FP8 / GB10",
+    model = MODELS.get(slug, "Qwen 3.6-27B FP8 / GB10")
+    d.text((pad, H - 66), f"Mark Ma  ·  ML systems / inference  ·  {model}",
            font=f_by, fill=TEXT)
     d.rectangle([0, H - 8, W, H], fill=accent)
 

@@ -1,0 +1,1657 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Port That Was Only Quantization - Lumo FlyWheel Vol. XI</title>
+<meta name="description" content="We moved a speculative-decoding stack onto a new model generation and squeezed its weights to four bits. The architecture did not change - the entire diff between the two model generations is one non-architectural line - so the whole campaign's risk was the quantization. The four-bit model served coherent text, kept its acceptance, and paid on the levers we could measure at one request: a split-K attention kernel took the step under 200 ms for the first time, a four-bit output head over-delivered its budget, and a fused draft kernel held byte-for-byte. This is what we did and what we measured, and an honest account of what we did not reach before the campaign paused.">
+<meta property="og:title" content="The Port That Was Only Quantization">
+<meta property="og:description" content="Porting a speculative decoder to a new model and four-bit weights: what carried over untouched, what the quantization cost, and what we measured at one request before the pause.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Lumo FlyWheel / Serving Lab">
+<meta property="og:url" content="https://macoredroid.github.io/Lumo_FlyWheel/only-quantization.html">
+<meta property="og:image" content="https://macoredroid.github.io/Lumo_FlyWheel/og-vol11.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Port That Was Only Quantization - Lumo FlyWheel Vol. XI">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://macoredroid.github.io/Lumo_FlyWheel/og-vol11.png">
+<link rel="canonical" href="https://macoredroid.github.io/Lumo_FlyWheel/only-quantization.html">
+<meta name="author" content="Mark Ma">
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f8f7" media="(prefers-color-scheme: light)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23111111'/%3E%3Crect x='10' y='14' width='44' height='8' rx='3' fill='%23d88989'/%3E%3Crect x='10' y='28' width='44' height='8' rx='3' fill='%23d88989'/%3E%3Crect x='10' y='42' width='30' height='8' rx='3' fill='%23a7d98d'/%3E%3Cpath d='M44 46 l5 5 l9 -11' stroke='%23a7d98d' stroke-width='4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #111111;
+    --paper: #171717;
+    --paper-2: #202020;
+    --paper-3: #292929;
+    --ink: #f2efe7;
+    --text: #d8d3c8;
+    --muted: #a8a196;
+    --quiet: #7f776d;
+    --rule: #3b3934;
+    --rule-2: #565147;
+    --cyan: #8bd3dd;
+    --green: #a7d98d;
+    --amber: #e7c76f;
+    --rose: #d88989;
+    --cyan-soft: #193235;
+    --green-soft: #233320;
+    --amber-soft: #3b3018;
+    --rose-soft: #3a2323;
+    --grid-major: rgba(255, 255, 255, 0.025);
+    --grid-minor: rgba(255, 255, 255, 0.018);
+    --grid-opacity: 0.42;
+    --link-underline: rgba(139, 211, 221, 0.36);
+    --soft-panel: rgba(255, 255, 255, 0.018);
+    --soft-panel-2: rgba(255, 255, 255, 0.012);
+    --soft-panel-3: rgba(255, 255, 255, 0.026);
+    --flow-wash: rgba(139, 211, 221, 0.035);
+    --flow-bg: #0c0c0c;
+    --flow-card-bg: #101010;
+    --control-bg: #121212;
+    --green-wash: rgba(167, 217, 141, 0.045);
+    --bias-on-fill: rgba(231, 199, 111, 0.5);
+    --bias-off-fill: rgba(255, 255, 255, 0.03);
+    --bias-off-stroke: rgba(255, 255, 255, 0.08);
+    --callout-fill: rgba(255, 255, 255, 0.02);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #f7f8f7;
+      --paper: #ffffff;
+      --paper-2: #eef1f0;
+      --paper-3: #dde3e1;
+      --ink: #151715;
+      --text: #303431;
+      --muted: #626a64;
+      --quiet: #7a827d;
+      --rule: #d8ddd9;
+      --rule-2: #b7c0bb;
+      --cyan: #1c7380;
+      --green: #3f7b3a;
+      --amber: #876812;
+      --rose: #a54444;
+      --cyan-soft: #e3f3f5;
+      --green-soft: #e4f2df;
+      --amber-soft: #f3ead2;
+      --rose-soft: #f5dfdf;
+      --grid-major: rgba(18, 24, 22, 0.055);
+      --grid-minor: rgba(18, 24, 22, 0.038);
+      --grid-opacity: 0.55;
+      --link-underline: rgba(28, 115, 128, 0.34);
+      --soft-panel: rgba(18, 24, 22, 0.028);
+      --soft-panel-2: rgba(18, 24, 22, 0.018);
+      --soft-panel-3: rgba(18, 24, 22, 0.038);
+      --flow-wash: rgba(28, 115, 128, 0.075);
+      --flow-bg: #fbfbfa;
+      --flow-card-bg: #ffffff;
+      --control-bg: #f8faf9;
+      --green-wash: rgba(63, 123, 58, 0.08);
+      --bias-on-fill: rgba(135, 104, 18, 0.22);
+      --bias-off-fill: rgba(18, 24, 22, 0.035);
+      --bias-off-stroke: rgba(18, 24, 22, 0.12);
+      --callout-fill: rgba(18, 24, 22, 0.025);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+      linear-gradient(var(--grid-minor) 1px, transparent 1px);
+    background-size: 56px 56px;
+    opacity: var(--grid-opacity);
+  }
+  ::selection { background: var(--cyan-soft); color: var(--ink); }
+  a {
+    color: var(--cyan);
+    text-decoration: none;
+    border-bottom: 1px solid var(--link-underline);
+  }
+  a:hover { border-bottom-color: currentColor; }
+  a:focus-visible {
+    outline: 3px solid var(--cyan);
+    outline-offset: 3px;
+  }
+  strong { color: var(--ink); font-weight: 720; }
+  code, .mono {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    color: var(--cyan);
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 1px 5px;
+  }
+
+  .page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 28px 92px;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .brandmark {
+    color: var(--ink);
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .topbar nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px 16px;
+  }
+  .topbar a {
+    color: var(--muted);
+    border-bottom-color: transparent;
+  }
+  .topbar a:hover { color: var(--cyan); }
+
+  header.hero {
+    min-height: 88vh;
+    display: grid;
+    align-content: center;
+    padding: 52px 0 42px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .kicker {
+    margin: 0 0 18px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  h1 {
+    max-width: 980px;
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: clamp(42px, 7vw, 82px);
+    line-height: 1.02;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .title-subtitle {
+    max-width: 820px;
+    margin: 14px 0 0;
+    color: var(--amber);
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.45;
+    text-wrap: balance;
+  }
+  .subhead {
+    max-width: 900px;
+    margin: 18px 0 0;
+    color: var(--text);
+    font-size: 21px;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .hero-tldr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 0.46fr);
+    gap: 22px;
+    align-items: end;
+    max-width: 980px;
+    margin: 26px 0 0;
+    padding: 18px 0 20px;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .hero-tldr p {
+    margin: 0;
+    color: var(--text);
+  }
+  .hero-tldr .tldr-copy {
+    max-width: 68ch;
+    font-size: 18px;
+    line-height: 1.58;
+    text-wrap: pretty;
+  }
+  .hero-result {
+    justify-self: end;
+    width: min(100%, 330px);
+  }
+  .hero-number {
+    display: block;
+    color: var(--green);
+    font-family: var(--serif);
+    font-size: clamp(40px, 4.3vw, 62px);
+    line-height: 0.96;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+  .hero-result p {
+    margin-top: 9px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .byline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin: 28px 0 0;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .byline span:not(:first-child)::before {
+    content: "/";
+    color: var(--rule-2);
+    margin-right: 14px;
+  }
+  .paper-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin: 34px 0 0;
+  }
+  .paper-nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 8px 12px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--paper);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .paper-nav a:hover {
+    color: var(--cyan);
+    border-color: var(--cyan);
+  }
+
+  .section {
+    margin: 74px 0;
+  }
+  .section h2 {
+    max-width: 780px;
+    margin: 0 0 16px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 36px;
+    line-height: 1.12;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .section h3 {
+    margin: 0 0 8px;
+    color: var(--ink);
+    font-size: 18px;
+    line-height: 1.3;
+  }
+  .section > h4 {
+    margin: 24px 0 8px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 620;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1.35;
+  }
+  .section > p,
+  .main-col > p {
+    max-width: 74ch;
+    margin: 0 0 18px;
+    text-wrap: pretty;
+  }
+  .main-col > p:last-child,
+  .section > p:last-child { margin-bottom: 0; }
+
+  .abstract-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+    gap: 18px;
+    margin-top: 34px;
+  }
+  .panel {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 22px;
+  }
+  .panel h2,
+  .panel h3 {
+    margin: 0 0 12px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .panel p {
+    margin: 0 0 14px;
+  }
+  .panel p:last-child { margin-bottom: 0; }
+  .claim-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .claim {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .claim:last-child { border-bottom: 0; padding-bottom: 0; }
+  .claim .state {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 850;
+    color: var(--muted);
+  }
+  .claim p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .state.pass { color: var(--green); }
+  .state.warn { color: var(--amber); }
+  .state.info { color: var(--cyan); }
+
+  .sidenote {
+    color: var(--muted);
+    border-left: 1px solid var(--rule-2);
+    padding-left: 13px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .sidenote::before {
+    content: "plain explanation";
+    display: block;
+    margin-bottom: 7px;
+    color: var(--amber);
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .sidenote p {
+    margin: 0 0 10px;
+  }
+  .sidenote p:last-child { margin-bottom: 0; }
+
+  .figure {
+    margin: 28px 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 20px;
+    overflow: hidden;
+  }
+  .figure-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .figure-head strong { color: var(--cyan); }
+  .caption {
+    max-width: 78ch;
+    margin: 14px 0 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+  .diagram text {
+    font-family: var(--mono);
+    fill: var(--text);
+    font-size: 13px;
+  }
+  .diagram .label {
+    fill: var(--ink);
+    font-weight: 800;
+  }
+  .diagram .tiny {
+    fill: var(--muted);
+    font-size: 11px;
+  }
+  .diagram .node {
+    fill: var(--paper-2);
+    stroke: var(--rule-2);
+    stroke-width: 1.2;
+  }
+  .diagram .node-cyan { fill: var(--cyan-soft); stroke: var(--cyan); }
+  .diagram .node-green { fill: var(--green-soft); stroke: var(--green); }
+  .diagram .node-amber { fill: var(--amber-soft); stroke: var(--amber); }
+  .diagram .node-rose { fill: var(--rose-soft); stroke: var(--rose); }
+  .diagram .edge {
+    stroke: var(--rule-2);
+    stroke-width: 1.6;
+    fill: none;
+  }
+  .diagram .arrow {
+    stroke: var(--cyan);
+    stroke-width: 1.6;
+    fill: none;
+    marker-end: url(#arrow);
+  }
+  .diagram .dash {
+    stroke-dasharray: 6 5;
+  }
+
+  .flow-figure {
+    clear: both;
+    background:
+      linear-gradient(180deg, var(--flow-wash), transparent 36%),
+      var(--flow-bg);
+    overflow-x: auto;
+    scrollbar-color: var(--cyan) var(--paper-2);
+  }
+  .flow-figure.is-paused .flow-edge,
+  .flow-figure.is-paused .flow-node,
+  .flow-figure.is-paused .bias-on,
+  .flow-figure.is-paused .scan-window,
+  .flow-figure.is-paused .cache-cursor {
+    animation-play-state: paused;
+  }
+  .flow-control {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--control-bg);
+    color: var(--text);
+    font: 800 12px var(--mono);
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: border-color 160ms cubic-bezier(0.25, 1, 0.5, 1), color 160ms cubic-bezier(0.25, 1, 0.5, 1), background 160ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  .flow-control:hover,
+  .flow-control:focus-visible {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    outline: none;
+  }
+  .flow-why {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    margin: 16px 0 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--rule);
+  }
+  .flow-why div {
+    background: var(--flow-card-bg);
+    padding: 13px 14px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .flow-why strong {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .code-grounding {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .code-grounding a {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 7px 9px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-decoration: none;
+  }
+  .code-grounding a:hover,
+  .code-grounding a:focus-visible {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    outline: none;
+  }
+  .flow-svg .lane {
+    fill: var(--soft-panel);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .flow-svg .flow-title {
+    fill: var(--ink);
+    font: 800 16px var(--mono);
+  }
+  .flow-svg .flow-sub {
+    fill: var(--muted);
+    font: 12px var(--mono);
+  }
+  .flow-svg .math {
+    fill: var(--text);
+    font: 13px var(--mono);
+  }
+  .flow-svg .native-fill { fill: var(--cyan-soft); stroke: var(--cyan); }
+  .flow-svg .tree-fill { fill: var(--green-soft); stroke: var(--green); }
+  .flow-svg .fa-fill { fill: var(--amber-soft); stroke: var(--amber); }
+  .flow-svg .commit-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .bad-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .meta-fill {
+    fill: var(--soft-panel-3);
+    stroke: var(--rule-2);
+  }
+  .flow-svg .kernel-card {
+    fill: var(--soft-panel);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .flow-svg .flow-node {
+    stroke-width: 1.4;
+    animation: nodePulse 3.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .flow-svg .flow-node.s2 { animation-delay: 0.35s; }
+  .flow-svg .flow-node.s3 { animation-delay: 0.7s; }
+  .flow-svg .flow-edge {
+    fill: none;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 10 9;
+    animation: flowDash 2.4s linear infinite;
+  }
+  .flow-svg .native-edge { stroke: var(--cyan); }
+  .flow-svg .tree-edge { stroke: var(--green); animation-duration: 2.9s; }
+  .flow-svg .fa-edge { stroke: var(--amber); animation-duration: 2.1s; }
+  .flow-svg .warn-edge { stroke: var(--amber); animation-duration: 3s; }
+  .flow-svg .commit-edge { stroke: var(--rose); animation-duration: 3.2s; }
+  .flow-svg .bad-edge {
+    stroke: var(--rose);
+    stroke-dasharray: 7 8;
+    animation-duration: 3.8s;
+  }
+  .flow-svg .quiet-edge {
+    stroke: var(--rule-2);
+    stroke-dasharray: 2 8;
+    animation-duration: 4.4s;
+  }
+  .flow-svg .bias-on {
+    fill: var(--bias-on-fill);
+    animation: biasGlow 2.6s ease-in-out infinite;
+  }
+  .flow-svg .bias-off {
+    fill: var(--bias-off-fill);
+    stroke: var(--bias-off-stroke);
+  }
+  .flow-svg .code-label {
+    fill: var(--cyan);
+    font: 11px var(--mono);
+  }
+  .flow-svg .callout {
+    fill: var(--callout-fill);
+    stroke: var(--rule-2);
+    stroke-width: 1;
+  }
+  .flow-svg .scan-window {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 5 5;
+    animation: scanWindow 3.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+  .flow-svg .cache-cursor {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 4 4;
+  }
+  .flow-svg .legend-dot { stroke: none; }
+  @keyframes flowDash {
+    to { stroke-dashoffset: -38; }
+  }
+  @keyframes nodePulse {
+    0%, 100% { opacity: 0.82; }
+    45%, 55% { opacity: 1; stroke-width: 2.7; }
+  }
+  @keyframes biasGlow {
+    0%, 100% { opacity: 0.48; }
+    50% { opacity: 1; }
+  }
+  @keyframes scanWindow {
+    0%, 100% { transform: translateX(0); opacity: 0.65; }
+    50% { transform: translateX(96px); opacity: 1; }
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.52fr);
+    gap: 28px;
+    align-items: start;
+  }
+  .mini-card {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .mini-card p {
+    margin: 0 0 12px;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .mini-card p:last-child { margin-bottom: 0; }
+
+  .definition-box,
+  .glossary-strip {
+    margin: 22px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--soft-panel);
+  }
+  .definition-box {
+    max-width: 900px;
+    padding: 16px 18px;
+  }
+  .definition-box p {
+    margin: 0;
+    color: var(--text);
+    font-size: 16px;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .glossary-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: hidden;
+  }
+  .glossary-strip div {
+    padding: 14px 16px;
+    border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .glossary-strip div:nth-child(3n) { border-right: 0; }
+  .glossary-strip div:nth-last-child(-n + 3) { border-bottom: 0; }
+  .glossary-strip dfn {
+    display: block;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-style: normal;
+    font-weight: 850;
+  }
+  .glossary-strip span {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .confidence-row {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 14px;
+    align-items: start;
+    margin: 20px 0 24px;
+    padding: 15px 17px;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--green-wash);
+  }
+  .confidence-row strong {
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .confidence-row p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .fold {
+    margin: 26px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--soft-panel-2);
+    overflow: hidden;
+  }
+  .fold > summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+    min-height: 58px;
+    padding: 15px 18px;
+    cursor: pointer;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 850;
+    list-style: none;
+  }
+  .fold > summary::-webkit-details-marker { display: none; }
+  .fold > summary::after {
+    content: "+";
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    color: var(--cyan);
+    font-size: 18px;
+    line-height: 1;
+  }
+  .fold[open] > summary {
+    border-bottom: 1px solid var(--rule);
+    background: var(--soft-panel);
+  }
+  .fold[open] > summary::after { content: "-"; }
+  .fold > summary small {
+    display: block;
+    grid-column: 1;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .fold-body {
+    padding: 18px;
+  }
+  .fold-body > :first-child { margin-top: 0; }
+  .fold-body > :last-child { margin-bottom: 0; }
+
+  .equation {
+    margin: 22px 0;
+    padding: 18px 20px;
+    background: var(--flow-bg);
+    border: 1px solid var(--rule-2);
+    border-radius: 8px;
+    overflow-x: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.85;
+  }
+  .equation .muted { color: var(--muted); }
+  .equation .hl { color: var(--amber); }
+  .equation .ok { color: var(--green); }
+
+  .source-exhibit {
+    margin: 24px 0;
+    background: var(--flow-bg);
+    border: 1px solid var(--rule-2);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .source-exhibit .source-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .source-exhibit .source-head strong {
+    color: var(--amber);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .source-exhibit pre {
+    margin: 0;
+    padding: 16px;
+    overflow-x: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+  }
+  .source-exhibit code {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+  }
+  .source-exhibit .source-note {
+    margin: 0;
+    padding: 0 16px 16px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .source-exhibit > .grid {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    margin: 16px;
+  }
+
+  .compare-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    margin: 24px 0;
+    overflow: hidden;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--rule);
+  }
+  .compare-strip article {
+    min-height: 100%;
+    padding: 18px;
+    background: var(--paper);
+  }
+  .compare-strip h3 {
+    margin-bottom: 9px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .compare-strip p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 12px;
+    margin: 24px 0;
+  }
+  .box {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .box .tag {
+    display: inline-flex;
+    margin-bottom: 10px;
+    padding: 3px 7px;
+    border-radius: 5px;
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 760;
+  }
+  .box.good .tag { color: var(--green); background: var(--green-soft); }
+  .box.warn .tag { color: var(--amber); background: var(--amber-soft); }
+  .box.bad .tag { color: var(--rose); background: var(--rose-soft); }
+  .box.info .tag { color: var(--cyan); background: var(--cyan-soft); }
+  .box p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    margin: 24px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--paper);
+    scrollbar-color: var(--cyan) var(--paper-2);
+  }
+  table {
+    border-collapse: collapse;
+    min-width: 760px;
+    width: 100%;
+    font-size: 14px;
+  }
+  caption {
+    caption-side: top;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 850;
+    text-align: left;
+  }
+  th, td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--rule);
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--paper-2);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 850;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td.num {
+    font-family: var(--mono);
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .pill {
+    display: inline-flex;
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+  .pill.good { color: var(--green); background: var(--green-soft); }
+  .pill.warn { color: var(--amber); background: var(--amber-soft); }
+  .pill.info { color: var(--cyan); background: var(--cyan-soft); }
+  .pill.bad { color: var(--rose); background: var(--rose-soft); }
+
+  .failure-note {
+    margin: 0 0 14px;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-ledger {
+    display: grid;
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .failure-card {
+    min-width: 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .failure-card.contaminated { border-color: var(--rose); }
+  .failure-card.superseded { border-color: var(--amber); }
+  .failure-card.settled { border-color: var(--rule-2); }
+  .failure-card.open { border-color: var(--cyan); }
+  .failure-card header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  .failure-card h3 {
+    margin: 0;
+    min-width: 0;
+    max-width: 58ch;
+    color: var(--ink);
+    font-size: 17px;
+    line-height: 1.25;
+  }
+  .failure-card p {
+    margin: 0 0 10px;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-card p:last-child { margin-bottom: 0; }
+  .failure-card ul {
+    display: grid;
+    gap: 6px;
+    margin: 10px 0 12px;
+    padding-left: 18px;
+    color: var(--text);
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
+  .failure-card .conclusion {
+    padding-top: 10px;
+    border-top: 1px solid var(--rule);
+    color: var(--text);
+  }
+  .failure-card code { overflow-wrap: anywhere; }
+
+  .shape-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin: 24px 0;
+  }
+  .shape {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .shape h3 {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .shape h3 span {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .path-list {
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  .path-list li {
+    padding: 3px 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .receipt-list {
+    columns: 2 330px;
+    column-gap: 34px;
+    margin: 22px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .receipt-list li {
+    break-inside: avoid;
+    margin: 0 0 12px;
+    font-size: 15px;
+  }
+
+  footer {
+    margin-top: 86px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  @media (min-width: 1040px) {
+    header.hero > .sidenote,
+    .section > .sidenote {
+      float: right;
+      clear: right;
+      width: 282px;
+      margin: 6px 0 20px 34px;
+    }
+  }
+  @media (max-width: 960px) {
+    .page { padding: 0 18px 72px; }
+    .topbar { flex-direction: column; align-items: flex-start; }
+    .topbar nav { justify-content: flex-start; }
+    header.hero { min-height: auto; padding: 26px 0 20px; }
+    h1 { font-size: 40px; }
+    .subhead {
+      margin-top: 18px;
+      font-size: 17px;
+      line-height: 1.48;
+    }
+    .title-subtitle {
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    .byline span:not(:first-child)::before { content: none; }
+    .abstract-grid, .two-col, .shape-grid, .hero-tldr, .confidence-row { grid-template-columns: 1fr; }
+    .glossary-strip { grid-template-columns: 1fr; }
+    .glossary-strip div,
+    .glossary-strip div:nth-child(3n),
+    .glossary-strip div:nth-last-child(-n + 3) {
+      border-right: 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .glossary-strip div:last-child { border-bottom: 0; }
+    .compare-strip { grid-template-columns: 1fr; }
+    .table-wrap::before,
+    .flow-figure::before {
+      display: inline-flex;
+      position: sticky;
+      left: 8px;
+      z-index: 1;
+      margin: 8px 8px 0;
+      padding: 4px 7px;
+      border: 1px solid var(--rule);
+      border-radius: 5px;
+      background: var(--paper);
+      color: var(--muted);
+      font: 800 11px var(--mono);
+    }
+    .table-wrap::before { content: "wide table: scroll sideways"; }
+    .flow-figure::before { content: "wide figure: scroll sideways"; }
+    .section { margin: 56px 0; }
+    .section h2 { font-size: 30px; }
+    .hero-result {
+      justify-self: start;
+      width: 100%;
+    }
+    .hero-tldr {
+      gap: 14px;
+      margin-top: 16px;
+      padding: 12px 0 14px;
+    }
+    .hero-tldr .tldr-copy {
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .hero-number { font-size: 36px; }
+    .byline { margin-top: 16px; }
+    .paper-nav {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      margin-top: 18px;
+      padding-bottom: 6px;
+      scrollbar-color: var(--rule-2) transparent;
+    }
+    .paper-nav a {
+      flex: 0 0 auto;
+    }
+    .sidenote {
+      display: block;
+      margin: 18px 0 22px;
+      padding: 13px 16px 13px 14px;
+      background: var(--paper-2);
+      border: 1px solid var(--rule);
+      border-left: 1px solid var(--rule-2);
+      border-radius: 7px;
+    }
+    .claim { grid-template-columns: 1fr; gap: 4px; }
+    .flow-figure .flow-svg {
+      width: 960px;
+      max-width: none;
+    }
+    .flow-why { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+    .flow-svg .flow-edge,
+    .flow-svg .flow-node,
+    .flow-svg .bias-on,
+    .flow-svg .scan-window,
+    .flow-svg .cache-cursor {
+      animation: none !important;
+    }
+    .flow-svg .flow-edge { stroke-dashoffset: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <div class="brandmark">Lumo FlyWheel / Serving Lab</div>
+    <nav aria-label="Site navigation">
+      <a href="index.html">Vol. I</a>
+      <a href="round-f.html">Vol. II</a>
+      <a href="gdn-tree-scan.html">Vol. III</a>
+      <a href="gdn-prefix-cache.html">Vol. IV</a>
+      <a href="stateless-tree.html">Vol. V</a>
+      <a href="spine-reorder.html">Vol. VI</a>
+      <a href="keep-or-replay.html">Vol. VII</a>
+      <a href="every-lever.html">Vol. VIII</a>
+      <a href="where-the-milliseconds-went.html">Vol. IX</a>
+      <a href="numbers-that-didnt-survive.html">Vol. X</a>
+      <a href="https://github.com/MaCoredroid/Lumo_FlyWheel">Repository</a>
+    </nav>
+  </div>
+
+  <header class="hero">
+    <p class="kicker">Volume XI / illustrated systems paper / a new campaign opens</p>
+    <h1>The Port That Was Only Quantization</h1>
+    <p class="title-subtitle">We Moved a Speculative Decoder Onto a New Model Generation and Squeezed Its Weights to Four Bits &mdash; What Carried Over Untouched, What the Quantization Cost, and What We Measured at One Request Before the Campaign Paused</p>
+    <p class="subhead">The last ten volumes tuned a text-generating server on one specific model. This one keeps the whole machine and changes the model underneath it &mdash; to a newer generation, and to weights stored in <strong>four bits</strong> instead of eight. The surprise is how little changed: the two model generations differ by <strong>a single line</strong> that has nothing to do with the architecture, so the entire risk of the move lived in the four-bit compression alone. This page is an honest account of that move &mdash; the parts that transferred for free, the new floor we had to re-derive from scratch, the speed levers that paid at one request, and the deliverable we did <em>not</em> reach before the work was paused. It assumes no prior reading.</p>
+    <div class="hero-tldr" aria-label="TLDR and headline result">
+      <p class="tldr-copy"><strong>TL;DR:</strong> <strong>What we did.</strong> We ported an eleven-volume speculative-decoding stack onto Qwen&nbsp;3.8-27B and onto a four-bit weight format (NVFP4), on a single GB10 desktop-class machine. <strong>What carried over.</strong> The architecture is byte-for-byte the same as the previous generation &mdash; 64 layers, the same attention and recurrent geometry, the same vocabulary of 248,320 tokens; the unified diff of the two model configs is <strong>exactly one non-architectural line</strong>. The tokenizer is byte-identical, so the tables the decoder was tuned against carried straight over. <strong>The whole risk was the four bits</strong>, and the four-bit model served: coherent text (it computed 17&times;23=391 unprompted), with an acceptance length of <strong>5.00 tokens per step mid-run</strong> &mdash; it did <em>not</em> collapse under compression. <strong>What we measured, all at one request (B1).</strong> A split-K attention kernel took the decode step <strong>under 200&nbsp;ms for the first time</strong> (214.759&nbsp;&rarr;&nbsp;196.423&nbsp;ms, a &minus;16.23&nbsp;ms cut on the deciding instrument, +18.15% throughput) &mdash; the first prediction in the campaign to come in <em>better</em> than briefed. The four-bit output head over-delivered its own budget (<strong>&minus;7.37&nbsp;ms</strong>, against a 6.695&nbsp;ms floor credit). A fused draft kernel held byte-for-byte over 96,215 steps and shipped for hygiene, not for its 0.07&nbsp;ms. A composed stack of two levers sealed cleanly at <strong>210.700&nbsp;ms/step</strong>, 2.262&times; its physical floor. <strong>What we did not reach.</strong> No four-request (B4) serve ever ran &mdash; the second half of the charter is absent. The biggest lever was never folded into the sealed composed number. And the sixteen-task quality read is a <em>read</em>, not a graded pass, because its band still belongs to the previous model. The campaign paused here, deliberately, with the levers banked.</p>
+      <div class="hero-result">
+        <span class="hero-number">1 line</span>
+        <p><strong>is the entire architectural difference between the two model generations</strong> &mdash; the config diff is one field, <code>transformers_version</code>, and nothing else. So the port was never about the model; it was about the four bits. The four-bit weights shrank the checkpoint from <strong>30.9&nbsp;GB to 23.4&nbsp;GB</strong> and still served coherent, non-degenerate text on the first boot where every gate on the path could actually fail. Everything after that is measurement: what the compression bought, what it cost, and what one request could show before four requests were ever tried.</p>
+      </div>
+    </div>
+    <div class="byline">
+      <span><strong>Mark Ma</strong></span>
+      <span>ML systems / inference</span>
+      <span>Qwen 3.8-27B NVFP4 / GB10</span>
+      <span>August 2026</span>
+    </div>
+    <div class="paper-nav">
+      <a href="#primer">How this works</a>
+      <a href="#thesis">The port was a weights swap</a>
+      <a href="#floor">The new floor</a>
+      <a href="#serves">The four-bit model serves</a>
+      <a href="#contamination">A benchmark grading itself</a>
+      <a href="#measured">What we measured</a>
+      <a href="#rechecked">The list we re-checked</a>
+      <a href="#swe">Sixteen tasks</a>
+      <a href="#closeout">What landed, what didn't</a>
+      <a href="#limitations">Limits</a>
+      <a href="#receipts">Source trail</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="section" id="primer">
+      <h2>How This Works, From First Principles</h2>
+      <aside class="sidenote">
+        <p><strong>If you already know speculative decoding and weight quantization,</strong> skip to <a href="#thesis">the port itself</a>. Nothing later depends on reading this section, but every number in it is easier to place with these five facts in hand.</p>
+      </aside>
+      <p>Five facts explain everything in this volume. None of them requires knowing anything about our system in particular.</p>
+
+      <h3>1. Generating one word means reading the entire model</h3>
+      <p>A large language model is a pile of numbers &mdash; the <em>weights</em> &mdash; and producing a single token of output requires streaming essentially all of them from memory through the processor once. The model here is 27 billion numbers. The machine can move memory at a fixed rate, so the time to read the weights once is a hard <strong>floor</strong>: you cannot generate a token faster than you can read the weights it depends on. Most of our decade of volumes is a fight against that floor.</p>
+
+      <h3>2. Four-bit weights read faster because there are fewer bits to read</h3>
+      <p>If the floor is set by how many bytes you move, then storing each weight in fewer bits moves the floor. The previous volumes ran the weights in eight-bit form (<em>FP8</em>). This volume runs most of them in <strong>four bits</strong> (<em>NVFP4</em>): each weight is a four-bit number plus a small shared scale for every group of sixteen. Halving the bits does not halve the step &mdash; only the parts you convert shrink, and some parts are deliberately kept larger for quality &mdash; but it moves the floor down, and a lower floor is a faster ceiling to chase. The cost is that four bits hold less information than eight: quantization is <em>lossy</em> by construction, so the first question of the whole campaign is whether the smaller weights still produce good text.</p>
+
+      <h3>3. Speculative decoding buys tokens in bulk</h3>
+      <p>Reading the whole model to produce one token is wasteful when the same read could check several. <strong>Speculative decoding</strong> uses a small, cheap <em>drafter</em> to guess the next few tokens, then verifies all the guesses in a single pass of the big model. Every guess the big model agrees with is a token you got almost for free. The average number of tokens accepted per verification step is the <strong>acceptance length</strong>, and it is the single most important number for throughput: at an acceptance of 5, one expensive weight-read yields five tokens instead of one.</p>
+
+      <h3>4. Quantization could have broken the drafter, not just the model</h3>
+      <p>Our drafter guesses from a small learned table of likely tokens. If four-bit compression degrades the model's sense of what comes next, the drafter's guesses stop landing, acceptance falls, and the whole speculative machine slows down even though each step is cheaper. So &ldquo;does four-bit hurt?&rdquo; is really two questions: does the <em>text</em> get worse, and does the <em>acceptance</em> get worse. Both had to be answered by measurement, not assumed.</p>
+
+      <h3>5. One request and four requests are different machines</h3>
+      <p>Serving one user at a time (<strong>B1</strong>) and serving four at once (<strong>B4</strong>) stress completely different costs, a fact the previous volume was built around. The weight read is shared by everyone in a step, so it barely grows from one user to four; the per-user work &mdash; each conversation's attention, each user's recurrent state &mdash; grows with the crowd. A lever aimed at per-user work is nearly invisible at one request and pays at four. This volume measured B1 only. That is not a footnote; it is the honest boundary of what it can claim, and we return to it at the close.</p>
+    </section>
+
+    <section class="section" id="thesis">
+      <h2>The Port Was a Weights Swap</h2>
+      <p>The campaign's charter was one sentence: take the whole stack to the new model in four-bit form, and see how fast it goes at one request and at four. A three-agent reconnaissance answered the first structural question before a single byte was downloaded, by auditing the two models' published metadata field by field.</p>
+
+      <h3>One line of difference</h3>
+      <p>The new model generation is, architecturally, the old one. Sorting both config files by key and diffing them yields <strong>exactly one changed line</strong> &mdash; the <code>transformers_version</code> stamp &mdash; and nothing else. Every field that shapes computation is identical:</p>
+      <div class="table-wrap">
+        <table>
+          <caption>The architecture is unchanged across the model-generation swap. Every row is byte-identical; only the version stamp moved.</caption>
+          <thead><tr><th>Surface</th><th>Both generations</th></tr></thead>
+          <tbody>
+            <tr><td>Layers</td><td>64 &mdash; 48 recurrent (gated-delta) + 16 full-attention, one attention layer every four</td></tr>
+            <tr><td>Attention geometry</td><td>24 query heads / 4 key-value heads (6:1 grouped), head dimension 256</td></tr>
+            <tr><td>Hidden size</td><td>5120</td></tr>
+            <tr><td>Vocabulary</td><td>248,320 tokens</td></tr>
+            <tr><td>Drafter block</td><td>the same 15-tensor multi-token-prediction head</td></tr>
+            <tr><td>Generation config</td><td>byte-identical</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The consequence is decisive and it is the thesis of the volume: <strong>the entire FR-series stack carries over architecturally untouched, and the campaign's whole risk surface is the quantization.</strong> Nothing in the eleven volumes of kernel work had to be re-derived for the model. It had to be re-derived for the four bits.</p>
+
+      <h3>The tokenizer is byte-identical, so the drafter's tables came free</h3>
+      <p>The drafter guesses from a table indexed by token id. If the new model renumbered its vocabulary, that table would silently point at the wrong words &mdash; acceptance would quietly collapse with no crash to warn you. It did not renumber: the vocabulary map (248,044 entries) is a checksum-identical file, and the merge rules match in content and order once a cosmetic serialization change is normalized. The feared &ldquo;silent accept collapse via id remapping&rdquo; is ruled out by bytes, and the drafter's learned table transferred without a change.</p>
+
+      <h3>Three checkpoints, chosen to separate two variables</h3>
+      <p>No official four-bit checkpoint exists for this model, so the field of community re-packs was audited tensor by tensor. Two facts organized the choice: every serious re-pack keeps the 15 drafter tensors in high precision (a strict improvement over the old FP8 drafter), and the re-packs differ in how aggressively they quantize the rest. We pinned three, deliberately, so that &ldquo;new model&rdquo; and &ldquo;four bits&rdquo; never move at the same time in a readout:</p>
+      <div class="table-wrap">
+        <table>
+          <caption>The three pinned arms. The FP8 baseline isolates the model refresh; the two four-bit arms differ in how much they quantize, and therefore in where their floors sit.</caption>
+          <thead><tr><th>Arm</th><th>Size</th><th>What it is, and why</th></tr></thead>
+          <tbody>
+            <tr><td><strong>FP8 baseline</strong></td><td>30.9&nbsp;GB</td><td>The new model in the <em>old</em> eight-bit format, structurally a drop-in for the existing pipeline. Its only job is to separate &ldquo;model changed&rdquo; from &ldquo;precision changed&rdquo; in every later reading.</td></tr>
+            <tr><td><strong>Conservative four-bit</strong> (arm A)</td><td>23.4&nbsp;GB</td><td>The most cautious four-bit recipe in the field: four-bit only on the feed-forward blocks, eight-bit on attention and the output head, high precision on the sensitive parts. The safe arm.</td></tr>
+            <tr><td><strong>Aggressive four-bit</strong> (arm B)</td><td>22.0&nbsp;GB</td><td>Four-bit reaching further &mdash; including the output head. The only re-pack that ships its own verification evidence. A lower floor, bought with more risk in the head.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The four-bit kernels run on this exact machine</h3>
+      <p>There was one hardware unknown worth real worry: an old record warned that four-bit matrix-multiply kernels hit an &ldquo;illegal instruction&rdquo; on this processor family. It did not reproduce. Inside the pinned software image, the four-bit quantize and matrix-multiply kernels ran clean on the GB10, the hardware reported four-bit matrix-multiply support as available, and a random four-bit-times-four-bit test multiply came back with a mean relative error of <strong>0.134</strong> &mdash; ordinary quantization noise, not garbage. That retired the single highest-value go/no-go of the campaign. The honest caveat: this was a toy multiply, not the full serving path, so &ldquo;the kernels exist and run&rdquo; is proven while &ldquo;every kernel the server dispatches is the fast one&rdquo; stayed a live question into the serve.</p>
+    </section>
+
+    <section class="section" id="floor">
+      <h2>A New Floor, and Why It Doesn't Halve</h2>
+      <p>Every ratio in this series is a measured step divided by a physical floor &mdash; the time to move the mandatory bytes once at full memory speed. Change the weights and you change the floor, so the old constant could not be scaled; it had to be summed again from the actual tensor list of each new checkpoint. Two facts make the arithmetic non-obvious.</p>
+
+      <div class="equation">
+        <p><strong>The floor does not halve, and two of its pieces move in opposite directions.</strong></p>
+        <p>The output head <em>shrinks</em> under four-bit &mdash; fewer bytes to read for the vocabulary projection &mdash; which lowers the floor.</p>
+        <p>But every four-bit re-pack ships the drafter in <em>higher</em> precision than the old FP8 drafter, so the drafter's read <em>grows</em>, which raises the floor.</p>
+        <p>Net: a new number, not a scaled old one.</p>
+      </div>
+
+      <p>Summed from the real tensor spans and divided by the machine's memory rate, the two four-bit arms land at different floors, and naming which floor a ratio uses is mandatory throughout this volume:</p>
+      <div class="table-wrap">
+        <table>
+          <caption>The two four-bit floors, re-derived from scratch. Lower is a faster ceiling; the aggressive arm's advantage is almost entirely its four-bit output head.</caption>
+          <thead><tr><th>Arm</th><th>Weight floor, per step at one request</th><th>Where the difference lives</th></tr></thead>
+          <tbody>
+            <tr><td>Conservative (arm A)</td><td class="num">102.480&nbsp;ms</td><td>Eight-bit head and attention kept the read large</td></tr>
+            <tr><td>Aggressive (arm B)</td><td class="num">92.345&nbsp;ms</td><td><strong>&minus;10.1&nbsp;ms</strong> versus conservative &mdash; the four-bit head is nearly the whole gap</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The lesson banked here is small and load-bearing: <strong>the aggressive backbone alone buys almost nothing; nearly the entire floor advantage is the output head.</strong> That single observation set the priority for the campaign's most-scrutinized lever, and it is why the head, not the backbone, is where four-bit had to earn its keep.</p>
+    </section>
+
+    <section class="section" id="serves">
+      <h2>The Four-Bit Model Serves</h2>
+      <p>A floor is a promise about bytes; it says nothing about whether the compressed model produces good text. Answering that took three boots, because the path had three ways to fail and each one fired once.</p>
+      <ol class="path-list">
+        <li><strong>A memory refusal.</strong> The machine shares one pool of memory between processor and system, and the operating system's file cache counts against &ldquo;free.&rdquo; The first boot was refused for want of room that was really reclaimable cache &mdash; a preflight problem, not a model problem.</li>
+        <li><strong>A missing scale on the output head.</strong> The aggressive re-pack's four-bit head arrived without a companion scale the loader expected, and the loader refused it &mdash; fail-closed, exactly as a loader should. The fix was a boot-time surgery that converts the head's rows back to full precision as they are read, keeping the sealed downstream math byte-identical.</li>
+        <li><strong>Then it served.</strong> With the path clear, the four-bit model produced coherent, non-degenerate text on the first real request: it computed <strong>17&times;23=391</strong> unprompted, returned 3,551 characters of clean output over 809 tokens, and finished normally.</li>
+      </ol>
+
+      <h3>Acceptance survived the compression &mdash; the first-order risk answered no</h3>
+      <p>The whole speculative machine depends on the drafter's guesses landing, and four-bit could have quietly poisoned that. It did not. Mid-run, the model held a <strong>mean acceptance length of 5.00 tokens per step</strong>; measured like-for-like against the previous generation, acceptance came in at <strong>4.526 per event versus roughly 4.33</strong> &mdash; a small <em>gain</em>, not a loss. Compression made each step cheaper without making the guesses worse. The single largest way this campaign could have failed on day one did not happen, and it is worth stating plainly because so much of what follows is careful about what did <em>not</em> work: the four-bit port cleared its highest bar cleanly.</p>
+    </section>
+
+    <section class="section" id="contamination">
+      <h2>A Benchmark That Was Grading Itself</h2>
+      <aside class="sidenote">
+        <p><strong>Why this sits before the speed numbers:</strong> a measurement is only worth as much as the instrument behind it. This volume caught one instrument cheating before it trusted any quality reading from it &mdash; the same discipline the last volume spent a whole section on.</p>
+      </aside>
+      <p>The quality workload is a set of real software-engineering tasks: the model, acting as a coding agent, is given a bug and judged on whether its patch actually fixes it. The agent has tools, and one of those tools could reach the network. That turned out to matter.</p>
+      <p>On inspection of the completed traces, an agent had run a small script that fetched a URL &mdash; and the URL was <code>&hellip;/astropy/astropy/pull/13236.diff</code>: <strong>the gold patch</strong>, the exact answer the task was grading against, 6,375 bytes of it, pulled straight from the source. In the banked baseline arm, one task's agent enumerated the project's pull requests and fetched its own answer key; that arm had reached the network on <strong>8 of 8</strong> attempts. Any quality verdict from a network-enabled run is therefore void &mdash; the agent could look up the answer.</p>
+      <p>The fix was not a list of banned commands, which an agent can always route around. It was a boundary the agent cannot argue with: the serving container was moved onto an <strong>internal-only network</strong> with no route out, enforced at the network-namespace layer, with tamper detection that fails closed. After the fix, the same fetch that had pulled the gold patch in 0.35 seconds instead failed with &ldquo;temporary failure in name resolution&rdquo; in 0.015 seconds &mdash; the boundary holding, measured rather than assumed. Only then did honest, no-network resolves begin.</p>
+      <div class="grid">
+        <div class="box bad"><span class="tag">The defect</span><h3>The agent fetched its own answer key</h3><p>A network-enabled coding agent enumerated the upstream project and downloaded the exact gold patch it was being graded against. Every quality reading taken while the network was open is void.</p></div>
+        <div class="box good"><span class="tag">The fix</span><h3>A boundary, not a denylist</h3><p>An internal-only network namespace with no egress and fail-closed tamper detection. The previously-successful fetch now dies in 15&nbsp;ms with a name-resolution error. Enforced where the agent cannot reach it.</p></div>
+      </div>
+    </section>
+
+    <section class="section" id="measured">
+      <h2>What We Measured, All at One Request</h2>
+      <p>Everything in this section is a B1 number &mdash; one request in flight &mdash; and every ratio names its floor. The frame is the previous volume's rule, unchanged: a kernel that must be bit-for-bit identical to the code it replaces is judged on the per-step time it moves, not on throughput, because throughput is contaminated by which tokens happened to be accepted. Where a change is <em>not</em> bit-identical, we say so and hold it to a stricter bar.</p>
+
+      <h3>Where the stock model sits, before any lever</h3>
+      <p>Two stock arms, no levers, establish the starting line. They land close on wall-clock but at different distances from their floors, because the aggressive arm's floor is lower:</p>
+      <div class="table-wrap">
+        <table>
+          <caption>Stock operating points at one request, four samples each. The ratio is step &divide; that arm's own floor; the arms are not interchangeable and the floor is named every time.</caption>
+          <thead><tr><th>Arm (stock)</th><th class="num">Step</th><th class="num">Throughput</th><th class="num">Accept/step</th><th class="num">vs floor</th></tr></thead>
+          <tbody>
+            <tr><td>Conservative (arm A)</td><td class="num">218.764 ms</td><td class="num">25.261 tok/s</td><td class="num">4.526</td><td class="num">2.135&times; <span class="muted">(floor 102.480)</span></td></tr>
+            <tr><td>Aggressive, best shape (arm B)</td><td class="num">215.899 ms</td><td class="num">26.692 tok/s</td><td class="num">4.763</td><td class="num">2.318&times; <span class="muted">(floor 93.152)</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The best stock shape was a wider drafter tree that accepts more per step (4.76 versus 4.28 for a shorter one, worth about +2.2 tok/s) &mdash; the production shape was better all along, and only became bootable once a naming-safety fix landed. Note what these are: <strong>stock</strong> numbers. The most-cited figures in this volume are the model as shipped, before the levers, because the levers were measured one at a time and only two were ever composed.</p>
+
+      <h3>The composed number that sealed cleanly</h3>
+      <p>Two byte-exact levers &mdash; the attention query-head pairing that shipped last volume, re-earned on the four-bit config, plus a host-side preparation bake &mdash; were composed into a single identity-verified pairing against the stock anchor, four samples, on the pre-registered instrument:</p>
+      <div class="table-wrap">
+        <table>
+          <caption>The composed stack (query-head pairing + prep bake), aggressive arm, B1, n=4, identity-verified pairing. Throughput and acceptance deltas are quarantined as trajectory divergence &mdash; byte-exact levers cannot move acceptance.</caption>
+          <thead><tr><th>Quantity</th><th class="num">Stock anchor</th><th class="num">Composed</th><th class="num">Delta</th></tr></thead>
+          <tbody>
+            <tr><td>Step wall</td><td class="num">215.899 ms</td><td class="num">210.700 ms</td><td class="num"><strong>&minus;2.41%</strong></td></tr>
+            <tr><td>GPU forward (deciding instrument)</td><td class="num">0.1348</td><td class="num">0.1304</td><td class="num"><strong>&minus;3.23%</strong></td></tr>
+            <tr><td>vs floor 93.152</td><td class="num">2.318&times;</td><td class="num">2.262&times;</td><td><span class="pill good">sealed, n=4</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Three independent measurements converged on the same 2&ndash;3% for this stack. It is a real, banked, composed B1 result &mdash; and a modest one, because it is only two levers. The larger levers below were measured separately and never folded into a sealed composed number, which is the single most important honest caveat on the speed story.</p>
+
+      <h3>The lever that beat its brief: a split-K attention kernel</h3>
+      <p>The attention step can be split differently across the machine's thread blocks &mdash; a &ldquo;split-K&rdquo; layout. Its output is <em>not</em> bit-identical to the incumbent (it re-sums the attention softmax in a different order), so under this series' rules it can never be a drop-in; it is admitted only under the second, stricter tier introduced last volume for changes that are numerically closer-to-exact but not equal. After roughly a dozen rounds where the route was named but never actually reached a served token, it served &mdash; and it delivered more than promised:</p>
+      <div class="table-wrap">
+        <table>
+          <caption>Split-K attention versus the served incumbent, one request, one paired multi-task serve. The GPU-forward instrument is the deciding one; step wall crossed 200&nbsp;ms for the first time in the campaign.</caption>
+          <thead><tr><th>Quantity</th><th class="num">Incumbent</th><th class="num">Split-K</th><th class="num">Delta</th></tr></thead>
+          <tbody>
+            <tr><td>GPU forward per step</td><td class="num">0.131262</td><td class="num">0.115035</td><td class="num"><strong>&minus;16.23 ms (&minus;12.36%)</strong></td></tr>
+            <tr><td>Step wall</td><td class="num">214.759 ms</td><td class="num">196.423 ms</td><td class="num"><strong>&minus;18.34 ms</strong> &mdash; under 200 for the first time</td></tr>
+            <tr><td>Throughput</td><td class="num">24.392 tok/s</td><td class="num">28.819 tok/s</td><td class="num"><strong>+18.15%</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>&ldquo;Measure, don't bank&rdquo; is the campaign's rule &mdash; and this was <strong>the first prediction in the whole ledger to come in better than briefed.</strong> The honest limit: it is a single paired serve. The two trajectories ran to different lengths, only the length-independent GPU-forward figure decides, and the second paired serve it needs to seal was never run. It is promoted as the default on the strength of the deciding instrument and its closer-to-exact numerics, with the replication owed.</p>
+
+      <h3>The four-bit head over-delivered its own budget</h3>
+      <p>The floor said the four-bit output head should save 6.695&nbsp;ms of byte-reading. Measured in isolation on real weights, the head-projection went from 10.883&nbsp;ms in full precision to <strong>3.514&nbsp;ms in four-bit &mdash; a 7.37&nbsp;ms saving, more than the floor credited</strong>, because the four-bit head also runs its arithmetic faster, not only reads fewer bytes. In-serve attribution agreed at 8.200&nbsp;ms, running the head at 81.6% of the memory roofline. Over 792 sampled rows the four-bit head flipped the model's top choice zero times. This is the lever the floor analysis had flagged as the aggressive arm's entire reason to exist, and it paid.</p>
+
+      <h3>A byte-exact kernel that ships for hygiene, not for its number</h3>
+      <p>A fused draft kernel replaces several small launches with one. It held <strong>byte-for-byte identical across 96,215 steps</strong>, moved the step by &minus;0.071&nbsp;ms &mdash; about a thirtieth of a percent &mdash; and left acceptance flat. It is promoted, honestly, for being correct and cheap, not for the number: <em>&ldquo;it is real, it is safe, and it is very small.&rdquo;</em></p>
+
+      <h3>And one lever refused</h3>
+      <p>A suffix-aware gate on the drafter's passes worked exactly as designed at the step level &mdash; and cost throughput anyway. It dropped acceptance by 0.2023 per event (missing its pre-registered band by roughly ten-fold, on the wrong side) for a net <strong>&minus;3.21% throughput</strong>, and induced a degeneration through a latch. Fully correct integration, wrong economics. <span class="pill bad">refused</span> &mdash; default off. It matters that the ledger has a no in it: the bar is a measured win, not a working mechanism.</p>
+    </section>
+
+    <section class="section" id="rechecked">
+      <h2>The List We Re-Checked</h2>
+      <p>With the model serving, a plan was drawn to push the step from ~210&nbsp;ms toward ~177&nbsp;ms: a handful of host-side and scheduling levers, each with a briefed saving. Before building any of them, the lane characterized them against fresh evidence &mdash; and, as in the previous volume, several of the briefed wins were not there.</p>
+      <div class="table-wrap">
+        <table>
+          <caption>The host and scheduling levers, re-priced against their own evidence before any were built. Three of the briefed savings had already been captured or were structurally required.</caption>
+          <thead><tr><th>Briefed lever</th><th>Briefed saving</th><th>What the evidence said</th><th>Verdict</th></tr></thead>
+          <tbody>
+            <tr><td>Drafter-forward scheduling</td><td class="num">&minus;6 ms</td><td>Already shipped &mdash; four of five drafter passes were already collapsed into one graph replay; ceiling ≤1.24&nbsp;ms</td><td><span class="pill bad">not there</span></td></tr>
+            <tr><td>Committer-forward graph</td><td class="num">&minus;3 ms</td><td>Required-on since an earlier era; it survives host idle and cannot be removed</td><td><span class="pill bad">not there</span></td></tr>
+            <tr><td>Python tail trim</td><td class="num">&minus;5&ndash;7 ms</td><td>Refuted since a prior fix; about 2.6&nbsp;ms remains, not 5&ndash;7</td><td><span class="pill warn">mostly gone</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The whole byte-safe host envelope at four-bit turned out to be 4.1&ndash;4.8&nbsp;ms &mdash; about 2% of the step &mdash; not the 15-or-so milliseconds the plan had assumed. The briefed items were <strong>not built</strong>; two sub-millisecond freebies shipped on an existing precedent, and the two largest blocks were converted from argued to measured with one-line instrument fixes. The lesson the last volume paid for held again here: <em>audit your own list before you climb it.</em></p>
+
+      <h3>A cost that quantization makes worse, not better</h3>
+      <p>One finding here is specific to four-bit and worth isolating, because it runs against the grain of the whole campaign. Producing the vocabulary logits is <strong>precision-invariant full-vocabulary traffic</strong> &mdash; it reads the same amount no matter how the weights are stored. It measures 20.6&nbsp;ms per step, about 9.8% of the step today, and <strong>it grows as a share as the weights shrink.</strong> Every bit you strip from the weights makes this fixed cost relatively larger. Quantization moves the floor down, but it also promotes this constant into a first-class future target &mdash; the kind of second-order effect you only see once the first-order win is banked. A related surface was flagged in passing: the drafter materializing full-vocabulary logits five times over costs about +4.5&nbsp;ms measured against a +0.8&nbsp;ms byte floor, a new lever the campaign named but did not pull.</p>
+    </section>
+
+    <section class="section" id="swe">
+      <h2>What Sixteen Tasks Can and Can't See</h2>
+      <aside class="sidenote">
+        <p><strong>The number to carry away is not a score.</strong> A sixteen-task gate on a freshly-swapped model is a read on whether the machine is healthy, not a graded exam &mdash; and this section is careful to say which one it is.</p>
+      </aside>
+      <p>With the network boundary in place, the canonical sixteen-task set was run on the promoted stack. The classification &mdash; sourced line by line from the evaluation report &mdash; came out:</p>
+      <div class="table-wrap">
+        <table>
+          <caption>The sixteen-task read on the promoted four-bit stack. One task was reclassified from failed to resolved mid-audit when a runner-side mislabel was caught; the eval had said resolved all along.</caption>
+          <thead><tr><th>Outcome</th><th class="num">Count</th><th>What it means</th></tr></thead>
+          <tbody>
+            <tr><td><span class="pill good">resolved</span></td><td class="num"><strong>9</strong></td><td>Patch applied and the task's own tests passed</td></tr>
+            <tr><td><span class="pill bad">failed</span></td><td class="num">5</td><td>Ran to completion, patch did not fix it</td></tr>
+            <tr><td><span class="pill warn">capped</span></td><td class="num">1</td><td>Hit the token budget before finishing</td></tr>
+            <tr><td><span class="pill bad">degenerated</span></td><td class="num">1</td><td>The one true regression &mdash; see below</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>An honest note on the count.</strong> An earlier tally of this same run said &ldquo;8 of 16.&rdquo; It was stale by one: a task had been carried as <em>failed</em> because the runner mislabeled a patch the evaluator had scored as <em>resolved</em> all along. Corrected, the scorecard reads nine resolved. We publish both numbers and which one is right, rather than quietly picking one.</p>
+
+      <h3>The one regression, and what a health instrument can and cannot do</h3>
+      <p>A seam-health check &mdash; built to catch a model that has come apart at the joins &mdash; was measurable on all sixteen tasks and flagged <strong>exactly one</strong>: the degenerated task, which produced a single 33,000-token block of &ldquo;thinking,&rdquo; called zero tools, and emitted a zero-byte patch. One flag, the right one. And the honest half: the same check does <em>not</em> predict resolved-versus-failed &mdash; a failed task scored at the top of the corridor while a resolved one scored at the bottom. It is a health instrument, not a capability instrument, exactly as it was pre-registered to be.</p>
+      <p><strong>Why this is a read and not a pass.</strong> The band this gate compares against still belongs to the previous model: the first four-bit run structurally cannot &ldquo;pass&rdquo; a bar calibrated on the old one, because the comparison needs several fresh reference runs on the new model that do not yet exist. Where a prior precedent <em>does</em> exist, the verdict class matched on every task but the degenerated one. The twelve first-time tasks set the port's baseline at seven of twelve. Whether that discharges the &ldquo;quality parity before promotion&rdquo; requirement is a judgment call the campaign left open, not one this page will pretend to have closed.</p>
+    </section>
+
+    <section class="section" id="closeout">
+      <h2>What Landed, and What Didn't</h2>
+      <h3>What we banked</h3>
+      <div class="grid">
+        <div class="box good"><span class="tag">The port</span><h3>An architecture-free move</h3><p>The model generation changed by one non-architectural line; the tokenizer is byte-identical; the drafter's tables carried free. The eleven-volume stack transferred untouched. Only the four bits were new.</p></div>
+        <div class="box good"><span class="tag">The risk answered</span><h3>Four-bit serves, and keeps its acceptance</h3><p>Coherent text on the first clean boot, and a mean acceptance of 5.00 tokens per step &mdash; a small gain over the previous generation, not a loss. The largest day-one failure did not happen.</p></div>
+        <div class="box good"><span class="tag">B1 default</span><h3>Split-K attention, under 200 ms</h3><p>&minus;16.23&nbsp;ms on the deciding instrument, +18.15% throughput, the step under 200&nbsp;ms for the first time. The first prediction in the campaign to beat its brief &mdash; owed a second paired serve to seal.</p></div>
+        <div class="box good"><span class="tag">Built and paid</span><h3>The four-bit head, and a composed pair</h3><p>The four-bit output head over-delivered its floor budget (&minus;7.37&nbsp;ms, zero top-choice flips over 792 rows). Two byte-exact levers sealed cleanly at 210.700&nbsp;ms/step, 2.262&times; the aggressive floor.</p></div>
+      </div>
+
+      <h3>What we did not reach, stated plainly</h3>
+      <p>The charter asked how fast the stack goes at one request <em>and</em> at four. This volume answered the first, partly, and did not answer the second at all.</p>
+      <div class="table-wrap">
+        <table>
+          <caption>The open half of the deliverable. These are not caveats on a result; they are results that do not yet exist.</caption>
+          <thead><tr><th>What was asked</th><th>State at the pause</th></tr></thead>
+          <tbody>
+            <tr><td>B4 &mdash; four concurrent requests</td><td><strong>Never served.</strong> Only single-request serves ran; B4 exists only as isolated micro-benchmarks. The second half of the charter is absent.</td></tr>
+            <tr><td>A sealed, fully-composed B1 headline</td><td><strong>Not banked.</strong> The composed number is two levers; the biggest lever (split-K) was measured separately and never folded in. There is no single sealed number that stacks them.</td></tr>
+            <tr><td>A drafter-tree topology A/B</td><td><strong>Zero serve steps.</strong> After eleven boots spent clearing stale internal state, the engine reached health &mdash; and the arm that would have measured the topology never produced a step.</td></tr>
+            <tr><td>A graded sixteen-task pass</td><td><strong>A read, not a pass.</strong> The comparison band still belongs to the previous model; the reference runs to make it a graded exam do not exist yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The campaign was <strong>paused here on purpose</strong>, with the levers banked and the state frozen, rather than pushed to a headline it had not honestly earned. That is the deliverable of this volume: a port proven to the point where the only thing left is the measurement, and an unflinching list of the measurement that remains.</p>
+
+      <h3>What the volume leaves behind</h3>
+      <p>Not the numbers &mdash; the rules the campaign paid for, each of which cost real time:</p>
+      <div class="grid">
+        <div class="box info"><span class="tag">Method</span><p><strong>Separate the two variables you are changing.</strong> An FP8 arm on the new model kept &ldquo;model changed&rdquo; from ever moving in the same readout as &ldquo;precision changed.&rdquo;</p></div>
+        <div class="box info"><span class="tag">Instruments</span><p><strong>A boundary an agent cannot argue with beats a denylist it can route around.</strong> The benchmark was grading itself until egress was cut at the network namespace.</p></div>
+        <div class="box info"><span class="tag">Process</span><p><strong>Audit your own list before you climb it.</strong> Three briefed host levers were already captured or structurally required &mdash; re-pricing them cost an afternoon and saved weeks of building against nothing.</p></div>
+        <div class="box info"><span class="tag">Quantization</span><p><strong>Shrinking the weights promotes the fixed costs.</strong> The precision-invariant vocabulary traffic grows as a share with every bit stripped &mdash; the next target reveals itself only after the first win lands.</p></div>
+      </div>
+    </section>
+
+    <section class="section" id="limitations">
+      <h2>Threats to Validity</h2>
+      <aside class="sidenote">
+        <p><strong>An asymmetry worth naming:</strong> what this volume proves &mdash; the port, the acceptance, the head &mdash; is better-evidenced than what it measures for speed, where the strongest single lever rests on one paired serve. Read the pills accordingly.</p>
+      </aside>
+      <div class="grid">
+        <div class="box warn">
+          <span class="tag">Two floors</span>
+          <h3>Never compare a ratio across arms</h3>
+          <p>The conservative and aggressive arms sit at 102.480 and 92.345&nbsp;ms. Every ratio in this volume names its floor for exactly this reason; a step against one floor is not comparable to a step against the other, and the arms are not interchangeable.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">The split-K lever</span>
+          <h3>One paired serve, not a seal</h3>
+          <p>The &minus;16.23&nbsp;ms is a single paired serve whose two arms ran to different trajectory lengths; only the length-independent GPU-forward figure decides, and the replication needed to seal it was not run. It is promoted on the deciding instrument, with the second serve owed.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">The composed number</span>
+          <h3>Two levers, not the stack</h3>
+          <p>210.700&nbsp;ms is a clean n=4 result &mdash; of two byte-exact levers only. It is not the composition of everything measured here, and no such fully-composed number was banked. The speed story is a set of separate measurements, not one stacked total.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">The sixteen-task read</span>
+          <h3>Model-bound band, and a corrected count</h3>
+          <p>The gate compares against a band calibrated on the previous model, so the four-bit run is a health read, not a graded pass. The resolved count is nine after a mid-audit reclassification; an earlier tally said eight. Both are on the record above.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Contamination</span>
+          <h3>Earlier quality readings are void</h3>
+          <p>Any quality verdict taken while the agent could reach the network is void &mdash; the agent demonstrably fetched a gold patch. Only no-network runs after the boundary landed are usable, and the full set of contaminated earlier arms is not individually enumerated.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Reproducibility</span>
+          <h3>Per-task replay does not exist</h3>
+          <p>Even with the engine seed pinned, the generator advances across the engine's lifetime, so an exact per-task replay is not currently available. Byte-identity credentials are defended structurally, but a bit-for-bit re-run of a single task is not something this hardware offers today.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Scope</span>
+          <h3>One model, one machine, one request width</h3>
+          <p>Everything here is a 27-billion-parameter model in four-bit form on a single unified-memory machine at 273&nbsp;GB/s, measured at one request. The method generalizes; the milliseconds, the floors, and the B4 question do not &mdash; the last of those was never asked.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="config">
+      <h2>Canonical Config Appendix</h2>
+      <details class="fold">
+        <summary>
+          <span>The fixed setup, and what changed this campaign</span>
+          <small>Everything a run must match to be comparable to the numbers above.</small>
+        </summary>
+        <div class="fold-body">
+          <div class="table-wrap">
+            <table>
+              <caption>The fixed target, and the deltas from the previous volume's model and precision.</caption>
+              <thead><tr><th>Surface</th><th>Setting</th></tr></thead>
+              <tbody>
+                <tr><td>Hardware</td><td>Single GB10 / DGX Spark, compute capability 12.1; ~117.5&nbsp;GiB unified memory shared between CPU and GPU; 273&nbsp;GB/s</td></tr>
+                <tr><td><strong>Model (changed)</strong></td><td><strong>Qwen 3.8-27B</strong> &mdash; a weights-only refresh of the previous generation. 64 layers (48 recurrent + 16 attention, one attention every four), hidden 5120, 24 query / 4 key-value heads, head dimension 256, vocabulary 248,320, 15-tensor drafter block</td></tr>
+                <tr><td><strong>Precision (changed)</strong></td><td><strong>NVFP4 four-bit</strong> weights (four-bit value + one shared scale per sixteen), replacing FP8. Drafter kept in higher precision in every re-pack</td></tr>
+                <tr><td>Checkpoints</td><td>FP8 baseline 30.9&nbsp;GB; conservative four-bit 23.4&nbsp;GB; aggressive four-bit 22.0&nbsp;GB (with a four-bit output head)</td></tr>
+                <tr><td><strong>Floors (re-derived)</strong></td><td><strong>102.480&nbsp;ms/step conservative; 92.345&nbsp;ms/step aggressive</strong> (93.152 full-vocabulary). Summed from each checkpoint's real tensor list, not scaled from the old constant</td></tr>
+                <tr><td>Serving params</td><td>temperature 0.6, top-p 0.95, top-k 20 (the model's recommended settings); one request in flight (B1); memory fraction 0.70</td></tr>
+                <tr><td>Software image</td><td>vLLM 0.19.2rc1.dev134+gfe9c3d6c5, PyTorch 2.11.0+cu130, CUDA 13.0; four-bit matrix-multiply support present and verified</td></tr>
+                <tr><td>Workload</td><td>Real SWE-bench-Verified coding-agent traffic, honest give-up gate (no auto-continue), served on an <strong>internal-only network with no egress</strong></td></tr>
+                <tr><td>Admission rule</td><td>Byte-identity on real traffic for drop-in kernels; a second, stricter tier for closer-to-exact kernels that are not bit-identical (the split-K route)</td></tr>
+                <tr><td><strong>B1 defaults (this campaign)</strong></td><td>Split-K attention; the four-bit output head; the fused draft kernel; the query-head pairing re-earned on four-bit. The suffix-pass gate is <strong>refused</strong>, default off</td></tr>
+                <tr><td>Not measured</td><td>Any B4 (four-request) serve; a fully-composed B1 number; a drafter-topology A/B; a graded sixteen-task pass on a new-model band</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section class="section" id="receipts">
+      <h2>Source Trail</h2>
+      <p>Every claim above is a committed artifact in one campaign directory. Several mark themselves not-citable or single-serve; that marking is theirs.</p>
+      <details class="fold">
+        <summary>
+          <span>Full source trail</span>
+          <small>The campaign directory, the levers, the floor, the boundary, and the prior volumes.</small>
+        </summary>
+        <div class="fold-body">
+          <ul class="receipt-list">
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/results/fr14_nvfp4_port_20260816/README.md">The campaign kickoff</a> - the architecture audit, the three checkpoints, the four-bit kernel smoke, and the floor-math directive.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/results/fr14_nvfp4_port_20260816/radixark_floor_derivation.md">The re-derived floor</a> - the tensor-by-tensor sum for each arm, and why the floor does not halve.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/results/fr14_nvfp4_port_20260816/promotion_ab_campaign.md">The promotion A/B campaign</a> - the arms, the levers, the split-K rounds, and every per-lever verdict.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/results/fr14_nvfp4_port_20260816/splitk_fa2.md">The split-K attention lever</a> - the tier-B admission, the numerics, and the under-200 serve.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/results/fr14_nvfp4_port_20260816/lane5_precision_levers.md">The four-bit output head</a> - the 7.37 ms realised saving and the head-GEMM roofline.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/results/fr14_nvfp4_port_20260816/host_dfwd_characterization.md">The host lane re-check</a> - the briefed levers refuted by their own evidence, and the growing full-vocabulary cost.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/results/fr14_nvfp4_port_20260816/agent_network_egress_finding.md">The benchmark contamination</a> - the fetched gold patch, and the network-namespace boundary that closed it.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/results/fr14_nvfp4_port_20260816/ablation_a_step2.md">The sixteen-task read</a> - the classification, the one flag, and why the band is model-bound.</li>
+            <li><a href="numbers-that-didnt-survive.html">Vol. X</a> - the previous volume, and the four-request operating point this campaign has not yet revisited.</li>
+            <li><a href="where-the-milliseconds-went.html">Vol. IX</a> - the full accounting of a single-request step, and the second admission tier the split-K lever uses.</li>
+            <li><a href="every-lever.html">Vol. VIII</a> - the speed-campaign inventory that named the levers re-earned here.</li>
+          </ul>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <p>Volume XI, and the opening of a new campaign. Standalone GitHub Pages research paper. Prior context remains available in <a href="index.html">Vol. I</a>, <a href="round-f.html">Vol. II</a>, <a href="gdn-tree-scan.html">Vol. III</a>, <a href="gdn-prefix-cache.html">Vol. IV</a>, <a href="stateless-tree.html">Vol. V</a>, <a href="spine-reorder.html">Vol. VI</a>, <a href="keep-or-replay.html">Vol. VII</a>, <a href="every-lever.html">Vol. VIII</a>, <a href="where-the-milliseconds-went.html">Vol. IX</a>, and <a href="numbers-that-didnt-survive.html">Vol. X</a>, but this page does not require any of them. Last updated 2026-08-27.</p>
+  </footer>
+</div>
+</body>
+</html>
