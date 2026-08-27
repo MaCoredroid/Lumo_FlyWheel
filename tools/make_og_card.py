@@ -32,7 +32,7 @@ MONO = "/System/Library/Fonts/Menlo.ttc"
 # slug -> (kicker, title, stat, stat_label, accent)
 CARDS = {
     "vol11": ("LUMO FLYWHEEL / VOL. XI", "The Port That Was Only Quantization",
-              "1 line", "the entire architectural diff of the model-generation swap — the rest was the four bits", GREEN),
+              "28.8 tok/s", "a 27B model at one request on a desktop GB10 — Qwen 3.8-27B in four-bit NVFP4", GREEN),
     "vol10": ("LUMO FLYWHEEL / VOL. X", "Twenty-Seven Milliseconds, Shipped",
               "−27 ms", "per step, four concurrent requests — byte-identical, shipped", GREEN),
     "vol9": ("LUMO FLYWHEEL / VOL. IX", "Where Every Millisecond Went",
