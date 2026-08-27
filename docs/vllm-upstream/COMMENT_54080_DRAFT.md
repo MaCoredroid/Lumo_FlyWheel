@@ -14,20 +14,28 @@ position it. We've been working the same problem from the serving side
 out-of-tree on a 27B Qwen hybrid at NVFP4, single GB10), and two of our
 results bear directly on the blockers you name.
 
-**1. The CUDA-graph fallback is avoidable with fixed-shape trees.** Our
-implementation serves a fixed 32-slot tree — uniform node count per step,
-padded when the proposer fills fewer — precisely so the branching verify
-step has a static shape and captures in a full graph. With capture held, our
-throughput does *not* fall with width: at batch 1 we measure 5.66 committed
-tokens/step (196 ms steps) against a tuned chain-EAGLE baseline at 3.36
-(115 ms) on the same GPU — throughput parity (28.8 vs 29.2 tok/s; baseline
-is sglang, same silicon, so a same-stack vLLM control is still owed) at +68%
-acceptance, under real agent workloads (SWE-bench). The non-causal ancestor
-mask lives *inside the native attention kernel* as a bias rather than a
-separate tree backend — which is also what makes losslessness provable (see
-2). FA4's `mask_mod` can express the tree visibility mask on
-capability-9/10/11 GPUs in a few hundred lines with no flash-attention fork;
-happy to share the design.
+**1. Your capture wall is solvable — and we can tell you what the next wall
+behind it is, because we hit it.** Our implementation serves a fixed
+32-slot tree — uniform node count per step, padded when the proposer fills
+fewer — so the branching verify step has a static shape and captures in a
+full graph; the non-causal ancestor mask lives *inside the native attention
+kernel* as a bias rather than a separate backend (FA4's `mask_mod` can
+express it on capability-9/10/11 GPUs in a few hundred lines, no
+flash-attention fork — happy to share the design). But we should be honest
+about what that bought us: **our same-stack result has the same sign as
+yours.** With capture held, our chain baseline still beats our tree
+(+48% full-step in our measurements) — the bottleneck just moves from graph
+capture to *committer-replay occupancy* (for us, a ~77 ms floor of
+latency-bound accepted-path replay kernels). We measured and refuted four
+escape routes (native-kernel commit, multi-stream, batched replay, copy-all)
+before finding one still open (fusing the replay into the next step's
+forward). Two teams, different silicon and benchmarks, same conclusion:
+acceptance rises with width, throughput doesn't follow — yet. Where trees
+did pay for us is the latency/acceptance regime under real agent workloads
+(5.66 committed tokens/step vs 3.36 for a tuned chain-EAGLE recipe, batch 1,
+SWE-bench tasks; cross-stack baseline, stated as such). The wall map — which
+routes are dead, with numbers — is probably worth more to this RFC than any
+single win.
 
 **2. Reconstruction-on-commit needs an *output-level* losslessness
 contract — state-level checks pass while outputs diverge.** Three measured
