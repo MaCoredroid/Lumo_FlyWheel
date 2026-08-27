@@ -47,6 +47,20 @@ We have adversarial regression fixtures for all three classes (reduction
 reassociation, sibling-state corruption, tie-break determinism) that we'd
 like to contribute upstream — they're implementation-agnostic.
 
+Worth disclosing because it's directly on point: **we evaluated the WY-form
+tree algebra ourselves and moved off it for the serve path** — not because
+the math is wrong (it isn't; it's elegant) but because for our target the
+verify is a sequential rank-1 recurrence, and the chunked-WY formulation is
+a different *summation tree* than native decode — a different reduction
+order, which is precisely the one-ULP class above. It made our bit-level
+losslessness bar unprovable against the serving kernel, so WY stayed in our
+stack as an **fp32 oracle** while the serve path verifies each branch with
+the native scan and commits via accepted-path replay. That division of
+labor — WY as the memory-optimal/oracle form, native-realization replay as
+the lossless serve form — might be the right shape here too, and it's the
+conversation we'd most like to have with you. (Documented before this RFC in
+[the tree-scan volume](https://macoredroid.github.io/Lumo_FlyWheel/gdn-tree-scan.html).)
+
 The campaign is written up publicly in our engineering volumes
 ([index](https://macoredroid.github.io/Lumo_FlyWheel/)); most relevant here:
 [the branch-local GDN tree scan](https://macoredroid.github.io/Lumo_FlyWheel/gdn-tree-scan.html)
