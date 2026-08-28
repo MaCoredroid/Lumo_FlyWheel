@@ -47,20 +47,20 @@ reduction-order reassociation, and greedy tie-break determinism aimed at
 byte-identical claim rests on. Implementation-agnostic; they'd cover #47572
 equally and I'd like to contribute them either way.
 
-One question, and I read the branch before asking. Of the three substrate
-pieces I have ready — per-node parent indexing, a declared carry budget, a
-replay-on-commit hook — your branch already has working equivalents of all
-three: `SpecDecodeMetadata.draft_parents`/`draft_depths`, the stash shape
-with `num_speculative_blocks = 0`, and the lazy commit keyed on
-`accepted_leaf_ids`. They're private to TreeWY, and #47576 and #54103 are
-each growing their own. Your own framing is the argument for sharing them:
-if a commit is "an ancestor-masked reduction rather than a cursor move,"
-then a shared hook has to carry a mask, not a cursor — which is the one
-thing none of the three in-flight commit paths agree on. So the question
-isn't whether you need these; it's whether yours become the shared ones.
-Under this RFC as its substrate piece, or a separate interface RFC yours
-depends on? You mention wanting to collaborate with the ReplaySSM team —
-this is the smallest surface that makes that mechanical.
+Last thing, and I read the branch first here too. Of the three substrate
+pieces we have ready — per-node parent indexing, a declared carry budget, a
+replay-on-commit hook — your branch already has working private equivalents:
+`SpecDecodeMetadata.draft_parents`/`draft_depths`, the stash shape with
+`num_speculative_blocks = 0`, and the lazy commit keyed on
+`accepted_leaf_ids`. #47576 and #54103 are each growing their own too. Your
+own framing is the argument for a shared surface: if a commit is "an
+ancestor-masked reduction rather than a cursor move," a shared hook has to
+carry a mask, not a cursor — the one thing none of the in-flight commit
+paths agree on. We've filed an interface RFC proposing that shared surface,
+with a draft PR: #NNNNN (fill at posting). One question that is yours to
+answer: do those shapes fit TreeWY's commit path as-is, or does the
+ancestor-masked reduction need something the hook doesn't carry yet? That's
+the feedback worth having before anyone builds on them.
 
 _Disclosure: AI-assisted analysis; I ran the benchmarks and reviewed the
 traces myself._
