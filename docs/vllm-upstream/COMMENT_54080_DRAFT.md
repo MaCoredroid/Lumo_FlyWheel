@@ -20,15 +20,21 @@ score tile inside an FA2 varlen fork rather than as a separate backend. Full
 CUDA-graph capture held — no PIECEWISE fallback. So width > 1 doesn't have
 to cost you capture.
 
-It didn't make the tree win, and our sign matches yours. The cost moved to
-the recurrent commit — replaying the accepted path is a train of small
-latency-bound per-layer kernels. We cut the committer ~100 → ~17 ms and
-native still won, because the cost moved into the verify forward: our tree
-accepts 4.29 tokens/event against our own native MTP-5 chain's 3.42 and is
-still ~23% slower on decode throughput (32.9 vs 42.7 tok/s). Four escape
-routes measured, all lost; written up here if it saves you the builds:
-https://macoredroid.github.io/Lumo_FlyWheel/keep-or-replay.html. Different
-silicon and a different benchmark — a second data point, not a rebuttal of
+It didn't make the tree win at first, and our early sign matches yours: on
+our FP8 generation the tree accepted 4.29 tokens/event against our native
+MTP-5 chain's 3.42 and was still ~23% slower at B=1 (32.9 vs 42.7 tok/s),
+worse at B=4. The wall was the recurrent commit — replaying the accepted
+path is a train of small latency-bound per-layer kernels; we cut the
+committer ~100 → ~17 ms and native still won. Four escape routes measured,
+all lost; written up here if it saves you the builds:
+https://macoredroid.github.io/Lumo_FlyWheel/keep-or-replay.html. Then a
+further ladder of levers on our NVFP4 generation — pair-merged GQA loads, a
+fused draft top-k, a split-K attention kernel — took the tree to 28.8 tok/s
+at under 200 ms/step, B=1, serving a 27B on one GB10
+(https://macoredroid.github.io/Lumo_FlyWheel/only-quantization.html). The
+same-stack native control for that generation is a measurement we still owe
+ourselves, so our honest summary is: gap mostly closed, not won. Different
+silicon and benchmark throughout — a second data point, not a rebuttal of
 your capture diagnosis.
 
 Separately, and independent of whose verify mechanism wins: byte-exact state
