@@ -1,10 +1,9 @@
 # Paste-ready RFC issue for vllm-project/vllm — v3 (Phase-0-only, post-audit, post-#54080)
 
-> **v3 restructure:** cut to the Phase-0 substrate ask; positioned as shared
-> infrastructure under #54080 (TreeWY) and #47572 (ReplaySSM) rather than a
-> competing program. Full evidence table incl. the throughput number. Sequence:
-> Mark posts the #54080 comment FIRST (COMMENT_54080_DRAFT.md), ideally gets a
-> reply, then files this. CC list is live handles. ~900 words.
+> **v3.1:** Phase-0 substrate ask only, positioned under #54080 (TreeWY) and
+> #47572 (ReplaySSM); facts-only voice, no war stories, same-stack numbers
+> stated plainly. Sequence: Mark posts the #54080 comment first
+> (COMMENT_54080_DRAFT.md), then files this. CC list is live handles.
 
 ---
 
@@ -27,17 +26,16 @@ This RFC proposes those three interfaces and nothing else. No tree kernel,
 no mask, no proposer: just the state-layer contracts the tree work will sit
 on.
 
-We have been running tree speculative decoding for GDN hybrids out-of-tree
-(27B Qwen hybrid, NVFP4, single GB10, agentic workloads — publicly documented
-in [our engineering volumes](https://macoredroid.github.io/Lumo_FlyWheel/))
-and hit the failure modes these interfaces prevent:
+We run tree speculative decoding for GDN hybrids out-of-tree (27B Qwen
+hybrid, NVFP4, single GB10, agentic workloads — publicly documented in
+[our engineering volumes](https://macoredroid.github.io/Lumo_FlyWheel/)).
+The interfaces below correspond to what that took in practice:
 
 - **Branch-local parent selection.** A recurrent layer's state at tree node
-  *n* must descend from *n*'s parent, not the physically previous row. The
-  failure is not a crash: it substitutes a *sibling draft's* state — a
-  plausible near-neighbor — and in our worst case corrupted ~40% of
-  identifiers in generated code while passing every numerical closeness gate.
-  Only output-level and task-level contracts caught it.
+  *n* must descend from *n*'s parent, not the physically previous row. A
+  wrong selection substitutes a sibling branch's state; the error is
+  invisible to numerical closeness checks and surfaces only under
+  output-level and task-level contracts.
 - **Carry accounting.** A branched accept cannot pre-export every node's
   state (for our 27B config that is ~13.7 GB/step of traffic), and the
   accepted leaf is unknown until after the rejection walk. #51855 already
@@ -115,8 +113,8 @@ Two weeks for direction. The draft PR is open now for concreteness.
 ## Any Other Things.
 
 Risks: the main risk of *not* standardizing is each tree/replay effort
-hand-rolling parent selection and commit semantics — the corruption class
-above is silent and survives numerical gates. Risk of this proposal:
+hand-rolling parent selection and commit semantics, whose failure modes
+are silent to numerical checks (above). Risk of this proposal:
 interface churn if TreeWY's design moves; mitigated by the no-op-for-chains
 contract and by co-owning the shape with the CC'd authors.
 
