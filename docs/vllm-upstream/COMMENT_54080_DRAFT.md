@@ -33,14 +33,11 @@ On the correctness axis we hold one enforced result: greedy output is
 byte-exact against native decode at fan-out 1, checked as a boot-time and
 per-generation contract in our stack (the 10/16 task tie above is the
 task-level check). And independent of whose verify mechanism wins:
-byte-exact state does not imply byte-exact output. A reduction-order change in our attention
-kernel cost 0.087 tok/event of acceptance at greedy, and sibling-state
-selection errors are invisible to numerical closeness checks — a wrong
-ancestor-mask entry blends a sibling into the solve and every state-level
-closeness test still passes. We have CPU regression fixtures for that class
-(reduction-order reassociation, sibling-state selection, tie-break
-determinism); they'd cover #47572 equally and I'd like to contribute them
-upstream either way.
+byte-exact state does not imply byte-exact output — a reduction-order
+change alone cost us 0.087 tok/event of acceptance at greedy, which is why
+our contracts bind at the output level. We have CPU regression fixtures for
+this (reduction-order reassociation, tie-break determinism); they'd cover
+#47572 equally and I'd like to contribute them upstream either way.
 
 One question. We have a small substrate change ready that TreeWY would need
 too — per-node parent indexing, a declared carry budget, and a replay hook

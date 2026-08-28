@@ -94,8 +94,10 @@ tests), each a provable no-op for today's chain path:
 Interface + tests only. Draft PR: <insert live link — the PR is opened
 immediately before this files>. We also offer, as contributed CPU tests, the
 adversarial regression fixtures from our campaign (reduction-order
-reassociation, sibling-state corruption, tie-break determinism) —
-implementation-agnostic; they apply to TreeWY and ReplaySSM alike.
+reassociation, tie-break determinism) plus an output-level equivalence
+harness — the check that catches state-identity mistakes numerical
+closeness misses. Implementation-agnostic; they apply to TreeWY and
+ReplaySSM alike.
 Losslessness contracts are output-level; byte-exactness claims are scoped to
 fan-out 1, where they are provable against native decode.
 
