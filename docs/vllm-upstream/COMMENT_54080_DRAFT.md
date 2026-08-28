@@ -32,14 +32,18 @@ different summation order than native decode, so bit-exact equality with the
 served model can't hold. We kept WY as an fp32 oracle
 ([writeup](https://macoredroid.github.io/Lumo_FlyWheel/gdn-tree-scan.html),
 predates this RFC). Related traps we hit while getting the tree lossless:
-byte-exact state does not imply byte-exact output; a pure reduction-order
-change cost us 0.087 tok/event of acceptance; and the worst one, branch
-state selection picking a sibling's state, produced ~40% wrong identifiers
-in generated code while every numerical check passed
-([negative results](https://macoredroid.github.io/Lumo_FlyWheel/numbers-that-didnt-survive.html)).
-We have regression tests for these three failure classes and would like to
-contribute them upstream. They don't depend on the verify mechanism, so they
-apply to TreeWY as-is.
+byte-exact state does not imply byte-exact output, and a pure
+reduction-order change cost us 0.087 tok/event of acceptance. One more is
+worth flagging because it maps onto your ancestor mask: early on, a wiring
+bug in our parent selection loaded a sibling branch's state, and nothing
+numerical caught it — the output just quietly degraded (found and fixed via
+output-level checks; the story is in the
+[negative-results volume](https://macoredroid.github.io/Lumo_FlyWheel/numbers-that-didnt-survive.html)).
+In your design the equivalent mistake is a wrong ancestor-mask entry
+blending a sibling's contribution into the solve, which would be just as
+silent. We have regression tests for these three failure classes and would
+like to contribute them upstream; they don't depend on the verify mechanism,
+so they apply to TreeWY as-is.
 
 We were about to file an RFC for the state-layer interfaces this work needs:
 per-node parent indexing, a declared carry budget, and a replay hook on
