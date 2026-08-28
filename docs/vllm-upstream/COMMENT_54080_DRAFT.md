@@ -20,22 +20,14 @@ score tile inside an FA2 varlen fork rather than as a separate backend. Full
 CUDA-graph capture held — no PIECEWISE fallback. So width > 1 doesn't have
 to cost you capture.
 
-Where we ended up, on published numbers: on our FP8 3.6 model at B=4, a
-matched three-arm control ran the tree at 32.85 tok/s vs native MTP-5's
-42.74 (accept 4.286 vs 3.422, tied 10/16 on tasks resolved) — same sign as
-your sweep. The cost sat in the recurrent commit; we cut the committer
-~100 → ~17 ms
-(https://macoredroid.github.io/Lumo_FlyWheel/keep-or-replay.html). After
-the full lever stack, the best tree arm measured 43.57 tok/s at accept
-4.749, where our native fit predicts ~43.7 — parity read literally, though
-that comparator is a projection, so we don't claim the win
-(https://macoredroid.github.io/Lumo_FlyWheel/every-lever.html). We never
-ran a B=1 tree-vs-native race on that generation. On our NVFP4 3.8 model,
-after pair-merged GQA loads, a fused draft top-k, and a split-K attention
-kernel, the tree serves 28.8 tok/s at 196 ms/step at B=1 — a 27B on one
-GB10 (https://macoredroid.github.io/Lumo_FlyWheel/only-quantization.html);
-the native control for that generation is still owed. A second data point,
-not a rebuttal of your capture diagnosis.
+Our sign matches yours: in our matched B=4 control the tree accepted 4.286
+vs native MTP-5's 3.422 yet ran 32.85 vs 42.74 tok/s (tied 10/16 on tasks
+resolved), and a later lever stack brought the best tree arm to ~parity
+with our native fit. Our NVFP4 arm now serves 28.8 tok/s at 196 ms/step at
+B=1 — a 27B on one GB10. The numbers, the committer story, and what didn't
+work are in our volume series:
+https://macoredroid.github.io/Lumo_FlyWheel/. A second data point, not a
+rebuttal of your capture diagnosis.
 
 On the correctness axis we hold one enforced result: greedy output is
 byte-exact against native decode at fan-out 1, checked as a boot-time and

@@ -60,11 +60,13 @@ The interfaces correspond to what that took in practice:
 For context on where our numbers stand: in our matched B=4 control the tree
 accepted 4.286 tokens/event against native MTP-5's 3.422 yet ran 32.85 vs
 42.74 tok/s — the same sign #54080 reports — and our best lever stack later
-measured 43.57 tok/s against a ~43.7 native fit. On correctness: greedy
-output is byte-exact against native decode at fan-out 1, enforced as a
-boot-time and per-generation contract, and tree and native resolved the same
-10/16 tasks in that control. The point of this RFC is not a throughput
-claim. It is that fixed shape held CUDA-graph capture through a branching
+measured 43.57 tok/s against a ~43.7 native fit (a projection, so we do not
+claim the win). We have no FP8 B=1 tree-vs-native comparison; our NVFP4 3.8
+arm serves 28.8 tok/s at 196 ms/step at B=1 on one GB10, with its
+native-chain control still owed. On correctness: greedy output is byte-exact
+against native decode at fan-out 1, enforced as a boot-time and
+per-generation contract, and tree and native resolved the same 10/16 tasks
+in that control. The point of this RFC is not a throughput claim. It is that fixed shape held CUDA-graph capture through a branching
 verify step, and that the failure modes above are real, silent, and
 preventable at the interface layer.
 
