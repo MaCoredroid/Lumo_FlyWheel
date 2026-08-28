@@ -1,9 +1,12 @@
 # Paste-ready RFC issue for vllm-project/vllm — v3 (Phase-0-only, post-audit, post-#54080)
 
-> **v3.1:** Phase-0 substrate ask only, positioned under #54080 (TreeWY) and
-> #47572 (ReplaySSM); facts-only voice, no war stories, same-stack numbers
-> stated plainly. Sequence: Mark posts the #54080 comment first
-> (COMMENT_54080_DRAFT.md), then files this. CC list is live handles.
+> **v3.2:** Phase-0 substrate ask only, positioned under #54080 (TreeWY,
+> author: Sneha Ghantasala — NOT NVIDIA; the NVIDIA/Dao mechanism is
+> ReplaySSM) and #47572 (ReplaySSM); facts-only voice, verified numbers.
+> Sequence: Mark posts the #54080 comment first, then HOLD this filing until
+> the comment draws a reply or ~3 days pass (talk before filing). The
+> piggyback/fused-forward derivation and the bit-exact-spine proof are HELD
+> for our own arXiv — they appear in no public thread.
 
 ---
 
@@ -48,10 +51,10 @@ The interfaces below correspond to what that took in practice:
   (position is implicit in scan order). ReplaySSM and TreeWY both already
   implement variants of this — the hook standardizes where it runs.
 
-For context on where our numbers stand: our fixed-shape 32-node tree commits
-5.66 tokens/step where a chain commits 3.36, but the chain still wins
-end-to-end in our own stack, the same sign #54080 reports. The point of this
-RFC is not a throughput claim. It is that fixed shape held CUDA-graph
+For context on where our numbers stand: our fixed-shape 32-node tree raises
+acceptance well above our chain, but the chain still wins end-to-end in our
+own stack (+52% full-step) — the same sign #54080 reports. The point of
+this RFC is not a throughput claim. It is that fixed shape held CUDA-graph
 capture through a branching verify step, and that the failure modes above
 are real, silent, and preventable at the interface layer.
 
@@ -106,7 +109,7 @@ Two weeks for direction. The draft PR is open now for concreteness.
 
 ## CC List.
 
-@sneha5gsm (#54080 TreeWY) @Johnny-Liou (#47572 ReplaySSM, GDN kernels)
+@sneha5gsm (#54080 TreeWY) @Johnny-Liou (#47572 ReplaySSM)
 @ZJY0516 (#52959) @roikoren755 (#52817) @benchislett (speculators)
 @LucasWilkinson (spec-decode attention, #42121/#52795)
 
