@@ -144,10 +144,6 @@ Open questions:
 2. (Pointer only) RNG node-identity keying for vectorized tree sampling is
    a sampler-layer question raised where its consumer lives, in #54080's
    thread.
-3. **Process:** should this proceed as a standalone interface PR series, or
-   folded under #54080's thread as its substrate piece? We are equally happy
-   either way.
-
 Risks: the main risk of *not* standardizing is each replay effort
 hand-rolling parent selection and commit semantics, whose failure modes are
 silent to numerical checks (above); three implementations are already in
