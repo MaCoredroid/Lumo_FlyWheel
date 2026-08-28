@@ -20,20 +20,28 @@ score tile inside an FA2 varlen fork rather than as a separate backend. Full
 CUDA-graph capture held — no PIECEWISE fallback. So width > 1 doesn't have
 to cost you capture.
 
-Where we ended up: on our FP8 3.6 model the tree lost to our native MTP-5
-chain at both B=1 (32.9 vs 42.7 tok/s, accept 4.29 vs 3.42) and B=4 — same
-sign as your sweep. The cost sat in the recurrent commit; we cut the
-committer ~100 → ~17 ms and native still won, and four other routes lost
-too (https://macoredroid.github.io/Lumo_FlyWheel/keep-or-replay.html). On
-our NVFP4 3.8 model, after pair-merged GQA loads, a fused draft top-k, and
-a split-K attention kernel, the tree serves 28.8 tok/s at under 200 ms/step
-at B=1 — a 27B on one GB10
-(https://macoredroid.github.io/Lumo_FlyWheel/only-quantization.html); the
-native control for that config is still owed. A second data point, not a
-rebuttal of your capture diagnosis.
+Where we ended up, on published numbers: on our FP8 3.6 model at B=4, a
+matched three-arm control ran the tree at 32.85 tok/s vs native MTP-5's
+42.74 (accept 4.286 vs 3.422, tied 10/16 on tasks resolved) — same sign as
+your sweep. The cost sat in the recurrent commit; we cut the committer
+~100 → ~17 ms
+(https://macoredroid.github.io/Lumo_FlyWheel/keep-or-replay.html). After
+the full lever stack, the best tree arm measured 43.57 tok/s at accept
+4.749, where our native fit predicts ~43.7 — parity read literally, though
+that comparator is a projection, so we don't claim the win
+(https://macoredroid.github.io/Lumo_FlyWheel/every-lever.html). We never
+ran a B=1 tree-vs-native race on that generation. On our NVFP4 3.8 model,
+after pair-merged GQA loads, a fused draft top-k, and a split-K attention
+kernel, the tree serves 28.8 tok/s at 196 ms/step at B=1 — a 27B on one
+GB10 (https://macoredroid.github.io/Lumo_FlyWheel/only-quantization.html);
+the native control for that generation is still owed. A second data point,
+not a rebuttal of your capture diagnosis.
 
-Separately, and independent of whose verify mechanism wins: byte-exact state
-does not imply byte-exact output. A reduction-order change in our attention
+On the correctness axis we hold one enforced result: greedy output is
+byte-exact against native decode at fan-out 1, checked as a boot-time and
+per-generation contract in our stack (the 10/16 task tie above is the
+task-level check). And independent of whose verify mechanism wins:
+byte-exact state does not imply byte-exact output. A reduction-order change in our attention
 kernel cost 0.087 tok/event of acceptance at greedy, and sibling-state
 selection errors are invisible to numerical closeness checks — a wrong
 ancestor-mask entry blends a sibling into the solve and every state-level

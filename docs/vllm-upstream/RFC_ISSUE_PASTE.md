@@ -57,12 +57,16 @@ The interfaces correspond to what that took in practice:
   are now in flight (#47576, #54080's branch, #54103); the hook names where
   it runs.
 
-For context on where our numbers stand: our tree accepts 4.29 tokens/event
-against our native MTP-5 chain's 3.42 and is still ~23% slower on decode
-throughput — the same sign #54080 reports. The point of this RFC is not a
-throughput claim. It is that fixed shape held CUDA-graph capture through a
-branching verify step, and that the failure modes above are real, silent,
-and preventable at the interface layer.
+For context on where our numbers stand: in our matched B=4 control the tree
+accepted 4.286 tokens/event against native MTP-5's 3.422 yet ran 32.85 vs
+42.74 tok/s — the same sign #54080 reports — and our best lever stack later
+measured 43.57 tok/s against a ~43.7 native fit. On correctness: greedy
+output is byte-exact against native decode at fan-out 1, enforced as a
+boot-time and per-generation contract, and tree and native resolved the same
+10/16 tasks in that control. The point of this RFC is not a throughput
+claim. It is that fixed shape held CUDA-graph capture through a branching
+verify step, and that the failure modes above are real, silent, and
+preventable at the interface layer.
 
 ## Proposed Change.
 
