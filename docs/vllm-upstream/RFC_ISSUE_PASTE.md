@@ -130,11 +130,11 @@ Open questions:
 1. **Carry-budget shape:** a struct (`temporal_slots`, `conv_tokens`,
    `max_branch_depth` — the honest model of two carry geometries) or a
    single integer (one-line change, over-allocates conv columns for trees)?
-2. **RNG node identity** (a hazard worth deciding early, relevant to any
-   tree method including TreeWY): sibling nodes at one tree depth share
-   `pos`, so a position-keyed Gumbel stream gives siblings perfectly
-   correlated draws. Re-key on `(request, node_index)`, a path hash, or
-   `(pos, sibling_ordinal)`?
+2. **RNG node identity** (a hazard worth deciding before per-node sampling
+   loops get vectorized — today's host loops draw independently, but any
+   position-keyed vectorized stream gives sibling nodes at one depth
+   perfectly correlated draws). Re-key on `(request, node_index)`, a path
+   hash, or `(pos, sibling_ordinal)`?
 3. **Process:** should this proceed as a standalone interface PR series, or
    folded under #54080's thread as its substrate piece? We are equally happy
    either way.
