@@ -66,16 +66,21 @@ arm serves 28.8 tok/s at 196 ms/step at B=1 on one GB10, with its
 native-chain control still owed. On correctness: greedy output is byte-exact
 against native decode at fan-out 1, enforced as a boot-time and
 per-generation contract, and tree and native resolved the same 10/16 tasks
-in that control. The point of this RFC is not a throughput claim. It is that fixed shape held CUDA-graph capture through a branching
-verify step, and that the failure modes above are real, silent, and
-preventable at the interface layer.
+in that control. The point of this RFC is not a throughput claim. It is that a branching verify step can be fully CUDA-graph captured
+when the ancestor mask is a kernel-argument bias on a persistent buffer
+rather than a host-planned mask (#54080's PIECEWISE fallback is a property
+of FlashInfer's `plan(custom_mask=)` channel, not of branching verify), and
+that the failure modes above are real, silent, and preventable at the
+interface layer.
 
 ## Proposed Change.
 
 Three Phase-0 interfaces (~130 net lines across four existing files, plus
 tests), each a provable no-op for today's chain path:
 
-1. **Per-node parent indexing.** `MambaSpecDecodeGPUContext` (in
+1. **Per-node parent indexing** (#54080's branch reaches this through
+   `SpecDecodeMetadata.draft_parents`; the proposal is that that table
+   become the shared one rather than per-method). `MambaSpecDecodeGPUContext` (in
    `vllm/v1/worker/mamba_utils.py`, imported by both the V1 model runner and
    Model Runner V2) gains an optional `node_parent_slot` table. Phase 0
    threads it through state-copy source selection only (no kernel changes)
@@ -94,9 +99,9 @@ tests), each a provable no-op for today's chain path:
 Interface + tests only. Draft PR: <insert live link — the PR is opened
 immediately before this files>. We also offer, as contributed CPU tests, the
 adversarial regression fixtures from our campaign (reduction-order
-reassociation, tie-break determinism) plus an output-level equivalence
-harness — the check that catches state-identity mistakes numerical
-closeness misses. Implementation-agnostic; they apply to TreeWY and
+reassociation, tie-break determinism) plus an acceptance-length parity
+harness — the check that catches what numerical closeness misses, on the
+axis #54080's paper itself claims ("identical acceptance length"). Implementation-agnostic; they apply to TreeWY and
 ReplaySSM alike.
 Losslessness contracts are output-level; byte-exactness claims are scoped to
 fan-out 1, where they are provable against native decode.
