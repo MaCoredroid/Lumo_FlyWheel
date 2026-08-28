@@ -4,11 +4,11 @@
 > said out loud in each bullet); published-site numbers only; #48018 (merged)
 > and #54103 cited; template mechanics fixed (title is a form field; open
 > questions live under Any Other Things; body headers are plain text).
-> **Sequence (enforced):** Mark posts the #54080 comment first → HOLD until
-> reply or ~3 days → open the Phase-0 PR upstream → file this with the live
-> PR link → backfill + Slack. Note: the piggyback direction is already
-> public on the site (Family C), so the only genuinely held asset is the
-> unpublished derivation detail and fixture implementations.
+> **Sequence (enforced, peer posture — v7.1):** (optional) stride_indices_tok
+> bugfix PR first → open the Phase-0 PR upstream → file this RFC with the
+> live PR link → Mark posts the #54080 comment citing the RFC number →
+> Slack #contributors. No hold: the comment states, it does not ask.
+> Held assets: the piggyback derivation detail and fixture implementations.
 
 ---
 
