@@ -1,5 +1,9 @@
 # vLLM Upstreaming — Execution Plan (v1, 2026-08-24)
 
+> **Stale in parts (2026-08-28):** PR-1 died to duplicate #53059; the RFC is
+> now Phase-0-only under #54080 (TreeWY) — see RFC_ISSUE_PASTE.md. Tier
+> structure and escort-PR specs remain valid; internal reference only.
+
 > Companion to `RFC_hybrid_tree_lossless_spec_decode.md`. All file:line references are
 > against vLLM HEAD `23ab0cfdb` (2026-08-24), verified by the five-checker recheck.
 > Our pin was `fe9c3d6c5` (0.19.2rc1.dev134); 4,332 commits behind — every anchor here
