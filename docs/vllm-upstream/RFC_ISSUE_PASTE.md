@@ -22,17 +22,21 @@ Tree speculative decoding for hybrid (attention + linear-recurrent) models
 is an active area this month: #54080 (TreeWY, with paper arXiv:2608.20961)
 proposes tree decoding for GDN models via WY/UT reconstruction-on-commit;
 #47572/#47576 (ReplaySSM) proposes cache-inputs-and-replay for spec decode,
-and #48018 (merged) already lands replay-on-commit for standard decode
-in-tree behind `--use-replayssm`; #52959 proposes internal state checkpoints
+and #48018 (merged) lands the cache-inputs ReplaySSM for Mamba2 standard
+decode (no spec path yet); #52959 proposes internal state checkpoints
 on `MambaSpec` (and #51855, also ZJY0516's, made per-algorithm slot demand a
 declared quantity); #52817 covers last-block replay with spec decode and
 APC; #54103, opened three hours after #54080, adds a third
 `replayssm_commit()` entry point with an explicit CUDA/ROCm fork over which
-committer runs. The fragmentation this RFC addresses is happening this week:
-three replay-on-commit entry points are in flight with no shared interface.
+committer runs. The fragmentation this RFC addresses is happening now: four commit-time
+state-rewrite implementations exist — one merged (#51855, Kimi-K3-scoped) —
+with no shared interface, and #54103 explicitly forks around #51855's.
 
 This RFC proposes three state-layer interfaces and nothing else. No tree
-kernel, no mask, no proposer.
+kernel, no mask, no proposer. The scope line, stated plainly: everything a
+tree needs below the proposer, in files both runners share, that can be a
+provable no-op for chains — and nothing #54080's branch already owns above
+that line.
 
 We run tree speculative decoding for GDN hybrids out-of-tree (27B Qwen
 hybrid on a single GB10; NVFP4 serving, tree measurements below from our FP8
@@ -49,13 +53,16 @@ The interfaces correspond to what that took in practice:
   state (for our 27B config at 21 nodes, ~13.7 GB/step of traffic), and the
   accepted leaf is unknown until after the rejection walk. A node count and
   a branch depth are different carry geometries; the allocator should hear
-  the difference declared, not implied.
+  the difference declared, not implied. This is already contested ground:
+  #51855 (merged) and #54080's branch write different booleans onto the same
+  `abstract.py` expression, and in #52959 review the preference on this
+  dataclass was a declared integer over a capability bool.
 - **Replay on commit.** After accepting a path, every state a later read can
   touch must be rewritten as if the path had been decoded natively.
   Attention KV does not need this (positions are explicit); recurrent state
-  does (position is implicit in scan order). Three implementations of this
-  are now in flight (#47576, #54080's branch, #54103); the hook names where
-  it runs.
+  does (position is implicit in scan order). Four implementations exist
+  (#51855 merged, #47576, #54080's branch, #54103); the hook names where it
+  runs.
 
 For context on where our numbers stand: in our matched B=4 control the tree
 accepted 4.286 tokens/event against native MTP-5's 3.422 yet ran 32.85 vs
@@ -75,8 +82,11 @@ interface layer.
 
 ## Proposed Change.
 
-Three Phase-0 interfaces (~130 net lines across four existing files, plus
-tests), each a provable no-op for today's chain path:
+Three Phase-0 interfaces (≈183 net production lines across five existing
+files, plus ~291 lines of tests), each a provable no-op for today's chain
+path. No tree-shape producer exists at HEAD — that channel is the tree
+effort's to add, and #54080's branch has already started
+(`spec_decode/metadata.py`):
 
 1. **Per-node parent indexing** (#54080's branch reaches this through
    `SpecDecodeMetadata.draft_parents`; the proposal is that that table
@@ -91,10 +101,11 @@ tests), each a provable no-op for today's chain path:
    generalizing the declared-slot-demand precedent (#51855). Chain default:
    `None`; today's `num_speculative_blocks` accounting remains authoritative
    and is asserted consistent.
-3. **Accepted-path replay hook.** An `AcceptedPath` type threaded through
-   the RecoverSSM committers, which rejects non-linear paths loudly rather
-   than mis-committing them. Adoption by the ReplaySSM and TreeWY commit
-   mechanisms is the follow-on this RFC exists to coordinate.
+3. **Accepted-path replay hook.** Widen #51855's `RecoverSSMMetadata` ABC
+   beyond its Kimi-K3 scoping with an `AcceptedPath` type that rejects
+   non-linear paths loudly rather than mis-committing them. Stated plainly:
+   neither TreeWY nor #54103 implements that ABC today — this hook is the
+   invitation this RFC exists to extend, not an existing adoption.
 
 Interface + tests only. Draft PR: <insert live link — the PR is opened
 immediately before this files>. We also offer, as contributed CPU tests, the
@@ -130,11 +141,9 @@ Open questions:
 1. **Carry-budget shape:** a struct (`temporal_slots`, `conv_tokens`,
    `max_branch_depth` — the honest model of two carry geometries) or a
    single integer (one-line change, over-allocates conv columns for trees)?
-2. **RNG node identity** (a hazard worth deciding before per-node sampling
-   loops get vectorized — today's host loops draw independently, but any
-   position-keyed vectorized stream gives sibling nodes at one depth
-   perfectly correlated draws). Re-key on `(request, node_index)`, a path
-   hash, or `(pos, sibling_ordinal)`?
+2. (Pointer only) RNG node-identity keying for vectorized tree sampling is
+   a sampler-layer question raised where its consumer lives, in #54080's
+   thread.
 3. **Process:** should this proceed as a standalone interface PR series, or
    folded under #54080's thread as its substrate piece? We are equally happy
    either way.
