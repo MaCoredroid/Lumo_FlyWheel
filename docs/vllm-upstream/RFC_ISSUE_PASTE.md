@@ -42,7 +42,10 @@ We run tree speculative decoding for GDN hybrids out-of-tree (27B Qwen
 hybrid on a single GB10; NVFP4 serving, tree measurements below from our FP8
 configuration — publicly documented in
 [our engineering volumes](https://macoredroid.github.io/Lumo_FlyWheel/)).
-The interfaces correspond to what that took in practice:
+Nothing below is new design: each interface is the upstream adaptation of a
+mechanism our serving stack runs in production — slot-table parent
+selection, per-profile declared slot ledgers, accepted-path replay —
+reshaped to be a no-op for chains:
 
 - **Branch-local parent selection.** A recurrent layer's state at tree node
   *n* must descend from *n*'s parent, not the physically previous row. A
@@ -97,10 +100,13 @@ effort's to add, and #54080's branch has already started
    and consumes the root column; the per-node columns are the seam a tree
    scan would read. Chain default: `None`, which reproduces today's
    accepted-depth selection exactly.
-2. **Declared carry budget.** An optional `SpecCarryBudget` on `MambaSpec`,
-   generalizing the declared-slot-demand precedent (#51855). Chain default:
-   `None`; today's `num_speculative_blocks` accounting remains authoritative
-   and is asserted consistent.
+2. **Declared carry budget.** Our stack declares slot demand per profile as
+   a ledger the audit derives from; upstream, #51855 (merged) established
+   the same declared-demand direction. The adaptation: an optional
+   `SpecCarryBudget` on `MambaSpec`. Chain default: `None`; today's
+   `num_speculative_blocks` accounting remains authoritative and is asserted
+   consistent. The declaration's shape — scalar or struct — is open question
+   1; we are equally ready to land the scalar.
 3. **Accepted-path replay hook.** Widen #51855's `RecoverSSMMetadata` ABC
    beyond its Kimi-K3 scoping with an `AcceptedPath` type that rejects
    non-linear paths loudly rather than mis-committing them. Stated plainly:
