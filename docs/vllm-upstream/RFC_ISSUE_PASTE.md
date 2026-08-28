@@ -23,9 +23,9 @@ replay-instead-of-snapshot as the state primitive for chain spec decode;
 four need the same three things from the recurrent spec-state layer, and none
 of them currently has a home for them.
 
-This RFC proposes those three interfaces — nothing else. It contributes the
-*recurrent-state correctness discipline* the tree threads will need, not
-another tree kernel.
+This RFC proposes those three interfaces and nothing else. No tree kernel,
+no mask, no proposer: just the state-layer contracts the tree work will sit
+on.
 
 We have been running tree speculative decoding for GDN hybrids out-of-tree
 (27B Qwen hybrid, NVFP4, single GB10, agentic workloads — publicly documented
@@ -50,16 +50,12 @@ and hit the failure modes these interfaces prevent:
   (position is implicit in scan order). ReplaySSM and TreeWY both already
   implement variants of this — the hook standardizes where it runs.
 
-Measured context (all first-party, batch 1, real agent tasks — SWE-bench
-subsets; baseline caveat stated honestly): our fixed-shape 32-node tree
-commits **5.66 tokens/step at 196 ms** vs a tuned chain-EAGLE baseline at
-**3.36 tokens/step at 115 ms** — decode throughput 28.8 vs 29.2 tok/s.
-The baseline is sglang's EAGLE recipe on the same GPU and checkpoint family;
-a same-stack vLLM control is owed and planned. The relevant point for this
-RFC is not the throughput (parity, not a win, at width 31 — consistent with
-#54080's finding that capture, not acceptance, is the bottleneck) but that
-fixed shape held CUDA-graph capture through a branching verify step, and
-that the correctness failures above are what the interfaces exist to prevent.
+For context on where our numbers stand: our fixed-shape 32-node tree commits
+5.66 tokens/step where a chain commits 3.36, but the chain still wins
+end-to-end in our own stack, the same sign #54080 reports. The point of this
+RFC is not a throughput claim. It is that fixed shape held CUDA-graph
+capture through a branching verify step, and that the failure modes above
+are real, silent, and preventable at the interface layer.
 
 ## Proposed Change.
 
