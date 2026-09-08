@@ -85,11 +85,16 @@ interface layer.
 
 ## Proposed Change.
 
-Three Phase-0 interfaces (≈183 net production lines across five existing
-files, plus ~291 lines of tests), each a provable no-op for today's chain
-path. No tree-shape producer exists at HEAD — that channel is the tree
-effort's to add, and #54080's branch has already started
-(`spec_decode/metadata.py`):
+Three Phase-0 interfaces (≈197 net production lines across five existing
+files, plus ~304 lines of tests), each a provable no-op for today's chain
+path. Substrate: Model Runner V2 for anything runner-specific — we do not
+propose new V1 spec-decode surface; the shared files below are simply
+imported by both runners today. This is complementary to the varlen-GDN
+track (#51869, with #53929 in flight at the batch/verification layer):
+that work makes ragged verify batches reach GDN, this one gives the state
+layer the vocabulary to commit them correctly. No tree-shape producer
+exists at HEAD — that channel is the tree effort's to add, and #54080's
+branch has already started (`spec_decode/metadata.py`):
 
 1. **Per-node parent indexing** (#54080's branch reaches this through
    `SpecDecodeMetadata.draft_parents`; the proposal is that that table
@@ -101,12 +106,17 @@ effort's to add, and #54080's branch has already started
    scan would read. Chain default: `None`, which reproduces today's
    accepted-depth selection exactly.
 2. **Declared carry budget.** Our stack declares slot demand per profile as
-   a ledger the audit derives from; upstream, #51855 (merged) established
-   the same declared-demand direction. The adaptation: an optional
-   `SpecCarryBudget` on `MambaSpec`. Chain default: `None`; today's
-   `num_speculative_blocks` accounting remains authoritative and is asserted
-   consistent. The declaration's shape — scalar or struct — is open question
-   1; we are equally ready to land the scalar.
+   a ledger the audit derives from; upstream, the declared-demand direction
+   already exists (`num_speculative_blocks` from #41233,
+   `num_prefill_checkpoint_blocks` from #52789). The adaptation: an optional
+   `SpecCarryBudget` on `MambaSpec`, deliberately scoped to
+   allocator-visible geometry only — state carried inside a page
+   (RecoverSSM's records) or in side buffers (ReplaySSM's ring) stays owned
+   by its algorithm and is declared by nothing here. Default `None` means
+   no declaration and no synthesized semantics; a declared budget is
+   asserted consistent with the allocator number it refines. The shape —
+   scalar or struct — is open question 1; we are equally ready to land the
+   scalar.
 3. **Accepted-path replay hook.** Widen #51855's `RecoverSSMMetadata` ABC
    beyond its Kimi-K3 scoping with an `AcceptedPath` type that rejects
    non-linear paths loudly rather than mis-committing them. Stated plainly:
@@ -137,8 +147,9 @@ Two weeks for direction. The draft PR is open for concreteness.
 ## CC List.
 
 @sneha5gsm (#54080 TreeWY) @Johnny-Liou (#47572 ReplaySSM)
-@ZJY0516 (#52959, #51855) @roikoren755 (#52817) @benchislett (speculators)
-@LucasWilkinson (spec-decode attention, #42121/#52795)
+@ZJY0516 (#52959, #51855) @roikoren755 (#52817) @benchislett (speculators,
+#51869) @LucasWilkinson (spec-decode attention, #42121/#52795)
+@MatthewBonanni (attention backends) @njhill (model runner)
 
 ## Any Other Things.
 
