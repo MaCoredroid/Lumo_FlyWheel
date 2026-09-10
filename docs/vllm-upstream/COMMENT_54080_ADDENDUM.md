@@ -1,4 +1,5 @@
 # Design addendum for #54080 (TreeWY RFC) — v2 (Codex round-1 applied)
+> **POSTED 2026-09-10 23:06 UTC (Mark greenlight, Codex final check #2 GO):** https://github.com/vllm-project/vllm/issues/54080#issuecomment-5626620604
 
 > Plan v3 item P2. One substantive comment on the existing tree-for-GDN RFC;
 > our public design home. v2 = Codex's 529-word replacement (v1 was 785

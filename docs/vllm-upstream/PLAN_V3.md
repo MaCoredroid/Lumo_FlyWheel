@@ -68,7 +68,7 @@ fixtures are bound to our endpoint/kernels); comments on #42910/#40809/
   tok/event" is not public.
 
 ## 30-day sequence (Sep 10 – Oct 9)
-- d1: P1, P11 (+ping), P3 POSTED 2026-09-10 (see file headers). d8–14: finish
+- d1: P1, P11 (+ping), P3, P2 addendum POSTED 2026-09-10 (see file headers); Slack pointer ready. d8–14:
   P2 + Slack; choose P5|P4′ and approve its card. d15–21: the one funded
   run (half-day + one more only for a named uncertainty). d22–26: respond;
   reserve-slot decision. d27–30: ledger; Mark decides next month.
