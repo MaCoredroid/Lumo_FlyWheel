@@ -1,12 +1,12 @@
-# Slack #contributors pointer — v1 (post AFTER the #54080 addendum is up)
+# Slack #contributors pointer — v2 (Codex round-1 applied; post AFTER the #54080 addendum is up)
 
-> Plan v3 item 3. One message, one channel, no cross-posting. Mark posts.
+> Plan v3 item 3. One message, one channel, no cross-posting. Fill the real
+> permalink after publication; never post the placeholder. Mark posts.
 
 ---
 
-Posted a design addendum on the TreeWY RFC (#54080): how we run tree
-verification and accepted-state publication for GDN hybrids out-of-tree,
-where it agrees with TreeWY and with #55688's ReplaySSM lifecycle, and one
-design recommendation (keep accepted-row identity separate from replay
-storage). Not a proposal to merge; a record for whoever picks trees up.
-<link to the comment>
+Posted a design addendum on #54080 covering our existing GDN tree verifier,
+its state-publication boundary, and the unresolved relationship to #55688.
+It records the implementation, evidence limits, and maintenance questions
+for future work.
+<link to the posted addendum comment>
