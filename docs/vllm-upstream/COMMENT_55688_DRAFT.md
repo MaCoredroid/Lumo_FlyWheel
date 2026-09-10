@@ -1,4 +1,5 @@
 # Review comment for PR #55688 (FI ReplaySSM lifecycle unification) — v2 (codex round-1 applied)
+> **POSTED 2026-09-10 22:54 UTC (Mark greenlight, Codex final GO):** https://github.com/vllm-project/vllm/pull/55688#issuecomment-5626523659
 
 > v2 (2026-09-10): codex red-team round 1 returned NO-GO on v1 with one
 > blocker (v1 quoted `plan_flush_count = accept_token_bias + 1 +

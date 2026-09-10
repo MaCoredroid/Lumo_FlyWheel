@@ -1,4 +1,5 @@
 # Review of #53798 — "[Bugfix] Seed align-mode Mamba state_idx in Mamba blocks" — draft v1
+> **POSTED 2026-09-10 22:54 UTC as a GitHub review (Comment):** https://github.com/vllm-project/vllm/pull/53798#pullrequestreview-5173038006
 
 > Plan v3 item P3. Reviewed head `af5357c2b90b37bd2033578bbc97d0ddfa6cc69f`.
 > Local test run and merge check: see "Verification". Posting form: one

@@ -1,4 +1,5 @@
 # PR #53651 — description rewrite (v2.1, Codex round-1 applied) + single status ping
+> **POSTED 2026-09-10 (Mark greenlight, Codex final GO):** title + body applied via REST PATCH at 22:55:03Z (gh pr edit failed on a GraphQL deprecation and was retried); ping https://github.com/vllm-project/vllm/pull/53651#issuecomment-5626523964
 
 > Plan v3 item P11. Head 66ab2231c, rebased over #54160 on 2026-08-29.
 > Residual on current main (verified 2026-09-10): `_get_untied_lm_head`
