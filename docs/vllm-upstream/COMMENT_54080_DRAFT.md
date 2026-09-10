@@ -1,5 +1,12 @@
 # Comment for RFC #54080 (TreeWY) — v8 (owners-audit edit pass applied). Mark posts.
 
+> **STATUS 2026-09-10: RETIRED — DO NOT POST.** Codex red-team NO-GO (B4: quoted
+> an Aug-28 post as "today" + unsound resolution argument; B5: "no FP8 B=1
+> comparison" contradicted by Vol III, "byte-exact enforced at boot" not
+> publicly supported). Upstream Plan v2 moves the tree question to #55688
+> (COMMENT_55688_DRAFT.md), which references #54080 in one clause. Kept for
+> the record only.
+
 > DECOUPLED: posts FIRST, no RFC number ("I'll link it here"). One item needs
 > Mark's confirmation before posting: the capture-set qualifier "decode-only
 > ragged batches" — confirm that matches what our fixed32 serve actually

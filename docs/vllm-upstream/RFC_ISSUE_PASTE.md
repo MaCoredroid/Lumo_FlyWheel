@@ -1,5 +1,12 @@
 # Paste-ready RFC issue for vllm-project/vllm — v4 (red-team verified, Phase-0-honest)
 
+> **STATUS 2026-09-10: RETIRED IN THIS FORM — DO NOT FILE.** Codex red-team
+> (tmp-scratch/rfc_redteam_report.md) returned NO-GO; #55688 (askliar/NVIDIA,
+> unified FI ReplaySSM lifecycle, V1+V2) now owns the ground interfaces 2+3
+> proposed here. Upstream Plan v2: attach the tree accepted-node question to
+> #55688 as a peer comment (COMMENT_55688_DRAFT.md), fixtures PR standalone,
+> Phase-0 branch stays a local prototype. Kept for the record only.
+
 > **v4:** every claim now matches the branch at `e4638b334` (Phase-0 scoping
 > said out loud in each bullet); published-site numbers only; #48018 (merged)
 > and #54103 cited; template mechanics fixed (title is a form field; open
