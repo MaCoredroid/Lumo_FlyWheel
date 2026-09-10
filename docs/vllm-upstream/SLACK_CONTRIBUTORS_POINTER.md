@@ -1,5 +1,5 @@
 # Slack #contributors pointer — v2 (Codex round-1 applied; post AFTER the #54080 addendum is up)
-> **READY TO POST (permalink filled 2026-09-10; Mark posts in #contributors — Slack connector is disconnected on the agent side).**
+> **POSTED 2026-09-11 in #contributors (C07R5Q1Q2BB) via the reconnected Slack connector, Mark greenlight:** https://vllm-dev.slack.com/archives/C07R5Q1Q2BB/p1789083059393539
 
 > Plan v3 item 3. One message, one channel, no cross-posting. Fill the real
 > permalink after publication; never post the placeholder. Mark posts.
