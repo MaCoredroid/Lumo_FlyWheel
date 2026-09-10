@@ -77,3 +77,63 @@ fixtures are bound to our endpoint/kernels); comments on #42910/#40809/
 #53651 review decision; external reviews the author acts on;
 reproductions that resolve a stated uncertainty; distinct maintainer
 decisions; cost (sessions, GPU time, threads, open commitments).
+
+## Phase 2 — days 2–30 (Sep 11 – Oct 9). Authored by Codex, red-teamed by Claude, converged 2026-09-11.
+
+Principle: do not wait for replies to do useful work. Convert what is posted
+into reproducible evidence and mergeable changes. Success = a merged fix, an
+author acting on a review, or a resolved maintainer question.
+
+ACT-NOW, in priority order:
+1. **#54928 matrix → evidence audit → report** (GPU-time funded; analysis
+   in-scope, no extra GO). Analyzer corrections applied (all repetitions,
+   per-token ID verification, tied margin = 0, failures reported). Draft the
+   report Sep 11 once the audit is complete; one independent (Codex) review
+   Sep 11–12; Mark GO; publish on #54928 (evidence reports are exempt from
+   the ask quota). Per outcome: reproduces → publish first-divergence
+   evidence, then fund ONE discriminator; non-reproduction → publish exact
+   scope, not equivalence; unstable → preserve within/between-launch
+   variation; unattributable → report the limit, never infer acceptance
+   failure. E = unique V ≠ A localizes a ranking discrepancy, not its cause.
+2. **#53651: own the missing re-tying regression** (new-code, ≤2 h cap —
+   MARK GO). `tests/model_executor/model_loader/test_weight_tying.py` at
+   main already holds three CPU tests; add `test_excluded_lm_head_is_retied`
+   (quant_method = `UnquantizedLinearMethod()`), fail-before/pass-after with
+   the existing controls. Push to our PR (Mark GO per update). Inspect
+   #55494's composition privately; if it lands first, rebase/reconcile
+   (compatibility, not activity).
+3. **P8 investigation** (zero-code, half-day of reading — credit is Mark's
+   call). Pin main; trace scheduler boundary → stored state → cache hash →
+   resumed request across the heterogeneous-geometry cluster; inventory
+   assertions and reachability. Deliver one missing invariant with its
+   smallest upstream test location, or a documented non-gap. A test is a
+   separate bounded new-code GO. #54076 review only with a distinct finding.
+4. **P4′ prep** (zero-code reading). Inspect #55122's kernel suite for one
+   uncovered GB10 case; dense targets cannot validate MoE-finalize #54948.
+   One concrete offer only if it resolves missing evidence (Mark GO before
+   contact); a run needs a named case + ~2 h GPU GO.
+
+WAIT only at: #53651/#53798 review decisions (monitor; no status-only ping
+this week); #55688/#54080 answers (monitor; no tree port/interface/custom-
+mask project without a consumer + separate GO); P4′ execution (free GPU,
+distinct case, run GO). Answered-thread branch: within 48 h of a
+substantive reply, bring Mark the reply, a proposed response, and any new
+scope/budget decision; private triage and funded work continue; only
+unfunded implementation/GPU waits. Every public response needs Mark GO.
+
+Rules (replace Plan v3 §Rules): drop the six-thread ceiling — count
+outstanding promises; ONE new unsolicited ask per week (evidence reports and
+substantive reviews exempt); day-1 overrun acknowledged — no further
+unsolicited ask before Sep 17; one author + one independent review for
+substantive artifacts (routine factual replies: Mark's review only, to
+conserve credit); Mark GO per public item; isolation, one GPU workload,
+immutable evidence, funding ≠ publication; two active deliverables (one
+measurement, one code/review).
+
+Calendar: Sep 11 audit matrix + draft report + specify re-tying test →
+Sep 12 implement regression (if funded) → Sep 13 validate, prepare PR
+update → Sep 14 P8 inventory → Sep 15–16 resolve feedback/composition →
+Sep 17 score outcomes; choose one P4′ case or a P8 regression → Sep 18–24
+finish the selected contribution → Sep 25–Oct 1 pursue merge/review
+decisions → Oct 2–9 close commitments, record outcomes; no new speculative
+project.
