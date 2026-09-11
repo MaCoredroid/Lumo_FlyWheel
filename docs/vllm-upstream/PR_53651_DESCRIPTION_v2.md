@@ -1,5 +1,6 @@
 # PR #53651 — description rewrite (v2.1, Codex round-1 applied) + single status ping
 > **POSTED 2026-09-10 (Mark greenlight, Codex final GO):** title + body applied via REST PATCH at 22:55:03Z (gh pr edit failed on a GraphQL deprecation and was retried); ping https://github.com/vllm-project/vllm/pull/53651#issuecomment-5626523964
+> **UPDATE 2026-09-11 00:03 UTC (Phase 2 item 2, Mark greenlight, Codex GO):** regression test `test_excluded_lm_head_is_retied` pushed as 38f7bcef2 (PR head; 2 commits); fail-before (main predicate: 1 failed/4 passed) / pass-after (5 passed) proven; description Validation section patched via REST with Codex's exact paragraph.
 
 > Plan v3 item P11. Head 66ab2231c, rebased over #54160 on 2026-08-29.
 > Residual on current main (verified 2026-09-10): `_get_untied_lm_head`

@@ -95,7 +95,7 @@ ACT-NOW, in priority order:
    scope, not equivalence; unstable → preserve within/between-launch
    variation; unattributable → report the limit, never infer acceptance
    failure. E = unique V ≠ A localizes a ranking discrepancy, not its cause.
-2. **#53651: own the missing re-tying regression** (new-code, ≤2 h cap —
+2. **#53651: own the missing re-tying regression** — DONE 2026-09-11 (38f7bcef2, ~40 min) (new-code, ≤2 h cap —
    MARK GO). `tests/model_executor/model_loader/test_weight_tying.py` at
    main already holds three CPU tests; add `test_excluded_lm_head_is_retied`
    (quant_method = `UnquantizedLinearMethod()`), fail-before/pass-after with
