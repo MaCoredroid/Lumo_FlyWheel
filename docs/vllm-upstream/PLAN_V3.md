@@ -137,3 +137,20 @@ Sep 17 score outcomes; choose one P4′ case or a P8 regression → Sep 18–24
 finish the selected contribution → Sep 25–Oct 1 pursue merge/review
 decisions → Oct 2–9 close commitments, record outcomes; no new speculative
 project.
+
+### Phase 2 items 3–4 — findings (2026-09-11, agents read-only; Codex independent review; Mark decides)
+- **P8 (item 3): gap confirmed.** Unit mismatch verified at main 8359e15a
+  (core.py:345–349 resets the global block size; mamba_hybrid.py:121–122
+  seeds in global units; mamba_utils.py:534–545 advances in spec units). No
+  unequal-geometry admission→preprocess→state-content test exists upstream
+  or in #54076/#53798/#55688/#53803. Agent report corrected by Codex
+  (#53803 binds the same spec size, not a third divisor; #55688's
+  mamba_block_size is FlashInfer-ReplaySSM-only; a tensor oracle cannot
+  distinguish equal divisors). Concrete test spec + ask: P8_REVIEW_codex.md.
+  Funding ask: ≤1 engineering day incl. ≤1 h exclusive GPU after #54928.
+- **P4′ (item 4): one zero-code review finding GO** (#55122 head 7cfd04a3:
+  RADIX_THRESHOLD=22016 but test_persistent_topk_path_transition still
+  brackets 16384 — exact text in P4PRIME_REVIEW_codex.md; needs Mark posting
+  GO). The GB10 low-smem fallback case is real but the agent's coverage and
+  exclusivity claims were overstated and its script is unfit; corrected
+  ≤2 h feasibility/validation ask + replacement offer text in the review.
