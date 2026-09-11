@@ -1,4 +1,5 @@
 # Experiment card — controlled GB10 reproduction of #54928 (Plan v3 item P5) — v2 (Codex round-1 applied)
+> **RESULT 2026-09-11 00:29 UTC: run complete (4 launches, 40 responses, zero errors). Reproduces: E == V != A at G@69 (A exact tie), T@53 (0.125-nat swap); deterministic within and across launches. Report: COMMENT_54928_REPORT_DRAFT.md; evidence results/upstream/54928/.**
 
 > For Mark's FUNDING decision. Nothing runs and nothing posts without it.
 > Funding the run is separate from approving its report. v2 = Codex's
