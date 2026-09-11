@@ -1,5 +1,6 @@
 # #54928 reproduction report — v2 (Codex review applied verbatim) (Phase 2 item 1; funded run complete 2026-09-11 00:29 UTC)
 
+> **POSTED 2026-09-11 23:18 UTC (Mark GO, Codex GO):** https://github.com/vllm-project/vllm/issues/54928#issuecomment-5641733441
 > v2 = Codex's 324-word replacement (v1 was 573 words; cut: bf16-ulp
 > attribution [gap ~12.0625 is a counterexample], loose E==V!=A for G [A
 > argmax is a tie], unfunded follow-up offer). Results-only, cause-neutral, scoped as a RELATED reproduction (FP8,

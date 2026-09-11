@@ -154,3 +154,9 @@ project.
   GO). The GB10 low-smem fallback case is real but the agent's coverage and
   exclusivity claims were overstated and its script is unfit; corrected
   ≤2 h feasibility/validation ask + replacement offer text in the review.
+
+### 2026-09-11 23:18 UTC — Mark ruled on the four Phase-2 decisions: 1 GO, 2 FUND, 3 GO, 4 FUND
+- #54928 report POSTED: https://github.com/vllm-project/vllm/issues/54928#issuecomment-5641733441 (thread 5 of the month).
+- #55122 review finding POSTED (Comment): https://github.com/vllm-project/vllm/pull/55122#pullrequestreview-5184175591 (substantive review, quota-exempt).
+- P8 regression test FUNDED (≤1 day incl. ≤1 h GPU): Opus agent on branch p8-restore-fidelity off pr-53798; spec = P8_REVIEW_codex.md; no push, no PR — Codex review + Mark GO before any submission.
+- P4′ kernel check FUNDED (≤2 h): Opus agent in /home/mark/shared/p4prime-55122; protocol = P4PRIME_REVIEW_codex.md; result recorded only; offer/comment needs Codex review + Mark GO.
