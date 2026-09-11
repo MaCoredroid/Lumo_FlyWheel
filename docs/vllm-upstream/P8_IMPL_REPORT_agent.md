@@ -632,3 +632,124 @@ index 81fd793ee..5ba443b87 100644
  @pytest.mark.parametrize(("num_sampled", "expected_value"), [(0, 1), (3, 3)])
  def test_postprocess_state_scalar_with_int32_mapping(
 ```
+
+---
+
+# Trim pass (post-review)
+
+Bounded trim requested by Codex after its independent GO on `ca1d410ae`. New commit on top
+(not an amend): **`bb9d7569d`** — `[Test] Trim the align resume restore-fidelity fixture`
+(DCO signed, Fable co-author trailer). Branch is now `af5357c2b` → `ca1d410ae` → `bb9d7569d`.
+
+Squashed branch diff vs `af5357c2b90b37bd2033578bbc97d0ddfa6cc69f` written to
+`/home/mark/shared/tmp-scratch/p8_test_patch_v2.diff` — **368 lines** of unified diff,
+`1 file changed, 334 insertions(+), 1 deletion(-)` (was 358 insertions before the trim).
+
+## What changed
+
+1. **Framing (SHOULD-FIX).** Every "mirrors `MambaSpec.page_size_padded`" /
+   "as `unify_kv_cache_spec_page_size` leaves them" claim is gone. `_make_state_pool` now says:
+   the padding is *synthetic per-state slack, not a modelled allocation*; it exercises the real
+   copy metadata by giving each state a block stride wider than its contents, which is what the
+   kernel's "size by `inner_size`, not by block stride" rule exists for; **allocation and page
+   unification are not tested here**. Codex is right that the fixture never sets
+   `page_size_padded` and that the conv/SSM pools have different byte strides — the oracle is
+   unaffected, only the claim was overreaching. The commit message carries the same framing.
+2. **One layer.** `_NUM_LAYERS = 2` is gone. Distinct per-layer markers never actually existed —
+   every pool used the same `b + 1` marker scheme, so the second layer was a byte-for-byte
+   duplicate. One layer still holds two states, and what differs between them is the conv
+   (windowed) versus temporal (whole-block) copy path, plus two distinct dtypes/strides and two
+   metadata slots. Nothing is lost.
+3. **Negative-hook plumbing consolidated.** The two module-level hook functions and the
+   module-level `_REAL_RUN_FUSED_PRECOPY` capture collapse into one `_broken_precopy(mode)`
+   factory that closes over the real `MambaSpecDecodeGPUContext.run_fused_precopy`. The test
+   parametrizes over `["suppressed", "misdirected"]` instead of over function objects.
+4. **Smaller mechanics.** `_slot_buffer(fill, device)` replaces four wrapped
+   `torch.full`/`torch.zeros` allocations (and the `num_computed_tokens` buffer); the block
+   table is built with `arange().reshape().flip(1)` instead of a Python loop; the padded inner
+   strides are one `math.prod` comprehension instead of an accumulator loop; docstrings and
+   comments were tightened throughout.
+
+Net: −24 lines and materially less scaffolding, with no production-code change.
+
+## Retained properties (all verified present after the trim)
+
+- Real metadata path: `set_kv_cache_config` → `add_request` → `preprocess_state`, both real
+  Triton kernels, real `get_mamba_groups` / `validate_mamba_state_copy_funcs` /
+  `MambaSpecDecodeGPUContext.create` / `_populate_metadata`. Nothing about the copy is mocked.
+- Nonzero request slot (`_REQ_SLOT = 1`, batch row 0).
+- Non-identity block table (columns reversed per row).
+- Padding oracle (`_StatePool.padding_bytes`, compared separately).
+- Byte-view content oracle, running **before** the index checks.
+- Equal-geometry control (M == `cache_config.block_size`).
+- Both negative controls (`suppressed`, `misdirected`).
+
+Nothing on the retain list had to be given up, so no stop was required.
+
+## Re-validation (all commands `flock`-serialized; ~26 s GPU this pass, ~76 s cumulative)
+
+### Target file at the #53798 head
+
+```
+$ time flock /home/mark/shared/exp54928/gpu.lock .venv/bin/python -m pytest \
+    tests/v1/worker/test_mamba_hybrid_model_state.py -v
+... test_prepare_attn_forwards_positions PASSED                                     [ 10%]
+... test_add_request_seeds_state_idx_in_mamba_blocks PASSED                         [ 20%]
+... test_align_resume_restores_committed_state_bitwise[unequal_geometry] PASSED     [ 30%]
+... test_align_resume_restores_committed_state_bitwise[equal_geometry_control] PASSED [ 40%]
+... test_align_resume_restore_oracle_rejects_broken_precopy[suppressed] PASSED      [ 50%]
+... test_align_resume_restore_oracle_rejects_broken_precopy[misdirected] PASSED     [ 60%]
+... test_postprocess_state_scalar_with_int32_mapping[0-1] PASSED                    [ 70%]
+... test_postprocess_state_scalar_with_int32_mapping[3-3] PASSED                    [ 80%]
+... test_recoverssm_commits_accepted_window_after_v2_sampling PASSED                [ 90%]
+... test_recoverssm_align_tracks_mixed_batch_state_and_neutralizes_copy_bias PASSED [100%]
+======================= 10 passed, 14 warnings in 2.32s ========================
+
+real    0m7.294s
+```
+
+The two negative controls pass only because the oracle raised — they are wrapped in
+`pytest.raises(AssertionError, match="blocks differing from that image")`.
+
+### Old-divisor substitution (temporary, uncommitted; restored afterwards)
+
+`// mamba_spec.block_size` → `// self.cache_config.block_size` in
+`vllm/v1/worker/gpu/model_states/mamba_hybrid.py::add_request`:
+
+```
+$ time flock /home/mark/shared/exp54928/gpu.lock .venv/bin/python -m pytest \
+    "tests/v1/worker/test_mamba_hybrid_model_state.py::test_align_resume_restores_committed_state_bitwise" -q
+... seeded_col=6, src_col=2, dst_col=3)
+FAILED tests/v1/worker/test_mamba_hybrid_model_state.py::test_align_resume_restores_committed_state_bitwise[unequal_geometry]
+  - AssertionError: state pool 0: expected block 6 (column 2) restored into blo...
+1 failed, 1 passed, 14 warnings in 1.16s
+
+real    0m5.894s
+```
+
+Still the **CONTENT** assertion (`_assert_restore_is_bit_identical`, state pool 0), not an index
+assertion, and `equal_geometry_control` still passes. Production file restored with
+`git checkout --`; `add_request` verified back on `mamba_spec.block_size` and the tree is clean
+apart from the test file.
+
+### Neighbouring suites
+
+```
+$ time flock /home/mark/shared/exp54928/gpu.lock .venv/bin/python -m pytest \
+    tests/v1/worker/test_mamba_utils.py tests/v1/worker/test_gpu_model_runner_v2.py -q
+50 passed, 14 warnings in 7.79s
+
+real    0m12.522s
+```
+
+### Lint
+
+```
+$ .venv/bin/pre-commit run ruff-check  --files tests/v1/worker/test_mamba_hybrid_model_state.py
+ruff check...............................................................Passed
+$ .venv/bin/pre-commit run ruff-format --files tests/v1/worker/test_mamba_hybrid_model_state.py
+ruff format..............................................................Passed
+```
+
+Repo left on `fix/modelopt-lmhead-quant-gaps` with a clean working tree. No push, no GitHub
+writes at any point in this pass.
