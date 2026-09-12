@@ -1,4 +1,5 @@
 # #55122 low-smem fallback result comment — v3 (Codex GO; nits applied; logs added to artifact, URL re-pinned)
+> **POSTED 2026-09-12 (Mark GO):** https://github.com/vllm-project/vllm/pull/55122#issuecomment-5648007112
 
 > Funded P4′ run (Mark, 2026-09-11). Codex GO on this text; NEEDS MARK GO TO POST as a PR comment on #55122. Artifacts: https://github.com/MaCoredroid/Lumo_FlyWheel/tree/a4c38b9c1d3830ad9128186932497edf8d613e58/results/upstream/55122
 
