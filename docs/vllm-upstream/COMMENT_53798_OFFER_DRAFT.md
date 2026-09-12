@@ -1,4 +1,4 @@
-# Offer to ptorsten on #53798 — the align-mode restore-fidelity regression (P8, route 1) — v1
+# Offer to ptorsten on #53798 — the align-mode restore-fidelity regression (P8, route 1) — v2 (Codex replacement verbatim: two-commit series stated; rerun scope accurate; AI disclosure)
 
 > Mark: "B go" (2026-09-12). Branch p8-restore-fidelity pushed to MaCoredroid/vllm
 > as staging (af5357c2b → ca1d410ae → bb9d7569d, test-only, DCO-signed).
@@ -8,8 +8,8 @@
 
 ---
 
-Following up on the review above with something you can take or leave: a test-only commit on top of `af5357c2b` that exercises the unequal-geometry case end to end rather than as an integer check — https://github.com/vllm-project/vllm/compare/af5357c2b90b37bd2033578bbc97d0ddfa6cc69f...MaCoredroid:vllm:p8-restore-fidelity (one file, `tests/v1/worker/test_mamba_hybrid_model_state.py`, DCO-signed).
+Following up on the review: here is a two-commit, test-only addition atop `af5357c2b`, through `bb9d7569d`: [diff](https://github.com/vllm-project/vllm/compare/af5357c2b90b37bd2033578bbc97d0ddfa6cc69f...MaCoredroid:vllm:p8-restore-fidelity). Both commits are DCO-signed and touch only `tests/v1/worker/test_mamba_hybrid_model_state.py`.
 
-It builds a model-free padded state pool, runs the real `set_kv_cache_config → add_request → preprocess_state` path with both Triton kernels (M=1648, global block 816, admission at 3M, one scheduled token, non-identity block table, slot 1), and compares byte views of the logical state: column 2 must be restored into column 3 with every other block and the padding untouched. With the pre-fix seed it fails on the content check (the seed lands on column 6); on this head it passes; an equal-geometry control and two negative controls (suppressed / misdirected copy) are included. Verified twice independently on a GB10.
+Model-free conv/SSM pools with synthetic padding exercise real `set_kv_cache_config → add_request → preprocess_state` and both Triton kernels. With M=1648/global=816, admission at 3M, one scheduled token, a nonidentity table and slot 1, the byte oracle requires column 2 restored into column 3, preserving other blocks and padding. The old divisor seeds column 6 and fails on contents; the equal-geometry control passes. Suppressed/misdirected-copy controls check the oracle. GB10 runs passed all 10 tests before and after trimming; the original commit also received an independent rerun. AI assistance was used.
 
-Scope is worker restore fidelity only, not scheduler publication. If it's useful, cherry-pick it or tell me a shape you'd prefer; if not, no action needed.
+This covers worker restore fidelity, not scheduler publication or model outputs. If useful, cherry-pick `ca1d410ae` then `bb9d7569d`; otherwise no action needed.
