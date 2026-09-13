@@ -1,4 +1,5 @@
 # Offer to ptorsten on #53798 — the align-mode restore-fidelity regression (P8, route 1) — v2 (Codex replacement verbatim: two-commit series stated; rerun scope accurate; AI disclosure)
+> **POSTED 2026-09-13T18:29:59Z (Mark GO):** https://github.com/vllm-project/vllm/pull/53798#issuecomment-5655221523
 
 > Mark: "B go" (2026-09-12). Branch p8-restore-fidelity pushed to MaCoredroid/vllm
 > as staging (af5357c2b → ca1d410ae → bb9d7569d, test-only, DCO-signed).
