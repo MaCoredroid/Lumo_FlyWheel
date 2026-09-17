@@ -11,7 +11,7 @@
 
 ---
 
-Source cross-check at main `80447d2765`, #48475 `f70b0ffe66`, #50021 `9a198c0f84`, and this PR `54b69f5dd5`: the [probe sources and logs](https://github.com/MaCoredroid/Lumo_FlyWheel/tree/PINNED/results/upstream/51508) preserve each gating kernel except its imports. They plant a live block ID before the index-tensor view, within the backing allocation.
+Source cross-check at main `80447d2765`, #48475 `f70b0ffe66`, #50021 `9a198c0f84`, and this PR `54b69f5dd5`: the [probe sources and logs](https://github.com/MaCoredroid/Lumo_FlyWheel/tree/37de8398fb436be20dedf51dc561c2f3429c4e71/results/upstream/51508) preserve each gating kernel except its imports. They plant a live block ID before the index-tensor view, within the backing allocation.
 
 For that injected zero-count/live-row case, main's negative-column load selects the planted state and then writes updated state. #48475 clamps to slot 0 and still updates. This PR's kernel clamp does likewise; its builder-level NULL_BLOCK_ID fill is what makes the existing guard skip the row. #50021 instead masks the load with other=0, reaches that guard, leaves state untouched and zeroes output. Thus #50021 is not clamp-only. This distinction does not select which PR should merge.
 
