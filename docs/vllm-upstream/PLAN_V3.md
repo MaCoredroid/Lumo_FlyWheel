@@ -172,3 +172,8 @@ project.
 
 ### 2026-09-13 18:34 UTC — jschmied acknowledged the P4′ result on #55122
 Quoted: "the case we could argue for but not demonstrate … says more about the fallback than anything in the PR body. Publishing the harness and source hashes is what makes it checkable, and your scope note is right." PR rebased to ef5d2d953 with kernel sources byte-identical (our pinned result still applies). **Metric: evidence used / acknowledged by the author (second confirmed engagement on #55122).** No reply needed; no action.
+
+### 2026-09-17 — day-7 checkpoint
+- Upstream quiet since Sep 15 on all six threads; three of four target PRs now `needs-rebase`; scoreboard unchanged (1 review acted on + 1 evidence acknowledged on #55122; 1 reproduction on #54928; 1 test offered on #53798; 0 merges).
+- #53651 second route POSTED in Slack #pr-reviews (sanctioned 7-day ping; Codex-corrected text — format checks are gated, not green): https://vllm-dev.slack.com/archives/C07QT0LUF4K/p1789603743165569
+- Slack watch re-armed at 3-hour cadence (Mark's decision). Contribution scan running (Codex + independent Opus agent) for the next bounded play.
