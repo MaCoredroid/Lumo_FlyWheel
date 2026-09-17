@@ -29,12 +29,18 @@ def run(fn, nacc_list):
     torch.cuda.synchronize()
     return state[5].clone()
 
-print(f"{'variant':10s} {'block5 after Z(=0) vs Z1(=1)':34s} max|diff|")
+print(f"{'variant':10s} {'block5 after Z(=0) vs Z1(=1)':36s} max|diff|")
 for name in P.VARIANTS:
     fn = P.load(name)
     z  = run(fn, [0, 2])
     z1 = run(fn, [1, 2])
     same = torch.equal(z, z1)
     d = (z - z1).abs().max().item()
-    verdict = "same (correct slot-0 resume)" if same else "DIFFERENT -> wrong initial state"
-    print(f"{name:10s} {verdict:34s} {d:.6g}")
+    untouched = torch.equal(z, torch.full_like(z, 5.5))  # block 5 still at its planted fill
+    if untouched:
+        verdict = "UNTOUCHED (row skipped, no write)"
+    elif same:
+        verdict = "same as count-1 resume (slot 0)"
+    else:
+        verdict = "DIFFERENT -> wrote from wrong state"
+    print(f"{name:10s} {verdict:36s} {d:.6g}")
