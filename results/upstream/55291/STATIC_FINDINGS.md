@@ -1,3 +1,5 @@
+> **CORRECTION 2026-09-18 (independent Codex check, see F8 in STATIC_FINDINGS.md):** the kernel-path conclusion in F2/F7 (and the 'likely why' in RESULT.md / DRAFT_COMMENT.md) is WRONG. The startup line 'GDN decode kernel: cuda' is configuration only; the fused CUDA MTP path additionally requires speculative metadata and 8:1 V/K heads, and this run had neither (speculative_config=None; 48:16 = 3:1). Default decode-only batches use the packed Triton path; mixed decode/prefill batches can call #54146's readout. No per-batch kernel trace was captured. The L20-D bypass prediction is withdrawn. The negative result itself stands. The evidence tarball is the pristine agent output and still contains the uncorrected text.
+
 # Static findings — stock vLLM 0.28.0 wheel (read-only; no source patched)
 
 Wheel sha256 `817b8181f7f61b4a62dc1d5d9ab39f2bfb60a6cb86c29879a78a147b85756787`.
@@ -116,3 +118,13 @@ Two caveats kept explicit:
   `Falling back to the Triton GDN decode path: <reason>` and the unfixed readout is
   back in play. That single log line is the cheapest thing the reporter can check, and
   it is worth asking them for.
+
+## F8. [CORRECTION of F2 and F7, 2026-09-18] The fused CUDA decode kernel was not selected in this run
+
+Independent source check (Codex, against the installed 0.28.0 wheel in the rig venv and live main `2bbdfcfc`), no GPU:
+
+- `qwen_gdn_linear_attn.py:1798–1811` (0.28.0 wheel): the fused CUDA MTP decode path requires speculative-decoding metadata **and** an 8:1 V/K head ratio in addition to the conditions F2 listed. This run had `speculative_config=None` and 48 V / 16 K heads (3:1). So the startup line `GDN decode kernel: cuda` records the configured preference, not the executed kernel.
+- `_forward_core` falls through to the packed Triton path for default decode-only batches (`:1271`, `:1672`); a mixed decode/prefill batch can call the readout that #54146 patches (`:1472`). No per-batch kernel trace was captured, so which path each batch took is unknown.
+- Live main `2bbdfcfc` accepts a 3:1 ratio but still requires speculative metadata; #54146 remains OPEN and `fused_sigmoid_gating.py:225` is unchanged.
+- Consequences: F7's claim that the reporter's L20-D would take the fused kernel on 0.28.0 is withdrawn. F4 holds only for the specific FP16 65504 threshold (BF16 activations), not for every overflow/NaN mechanism. F5: conditional prefill zeroes the gathered initial SSM state, not the complete recycled page; this does not establish universal recycling safety or #51483/#51562 as the only remaining cause.
+- Unchanged: F1, F3 (`auto` → float32, pinned `mamba_ssm_dtype`), F6, and every measured number in RESULT.md (recomputed independently from `runs/soak/records.jsonl`: 298 records, 249,544 generated tokens, 0 collapses/errors, longest `!` run 1, max repeated-token run 4, peak 36,496; traffic 23:14:24–02:30:58 UTC). Exposure detail: the 20-worker phase lasted 49m58s, P3 used four workers, P4 sent no requests; all 26 canaries avoided collapse but exhausted their 100 tokens inside reasoning (greedy/seed settings were added to the issue's probe, so requests were not verbatim).

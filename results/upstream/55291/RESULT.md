@@ -1,3 +1,5 @@
+> **CORRECTION 2026-09-18 (independent Codex check, see F8 in STATIC_FINDINGS.md):** the kernel-path conclusion in F2/F7 (and the 'likely why' in RESULT.md / DRAFT_COMMENT.md) is WRONG. The startup line 'GDN decode kernel: cuda' is configuration only; the fused CUDA MTP path additionally requires speculative metadata and 8:1 V/K heads, and this run had neither (speculative_config=None; 48:16 = 3:1). Default decode-only batches use the packed Triton path; mixed decode/prefill batches can call #54146's readout. No per-batch kernel trace was captured. The L20-D bypass prediction is withdrawn. The negative result itself stands. The evidence tarball is the pristine agent output and still contains the uncorrected text.
+
 # RESULT — vllm-project/vllm #55291 reproduction attempt
 
 **Verdict: DOES NOT REPRODUCE** on stock vLLM 0.28.0, one GB10, TP=1.
