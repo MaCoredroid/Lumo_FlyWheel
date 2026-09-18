@@ -1,4 +1,5 @@
 # #55291 negative-result comment (funded item C) — v1 (Codex GO on this exact text after the bundle correction, 2026-09-18)
+> **POSTED 2026-09-18T02:46:06Z (Mark GO "go" 2026-09-18):** https://github.com/vllm-project/vllm/issues/55291#issuecomment-5724389616
 > Codex C_review.md: NO-GO on the agent's kernel-path conclusion; GO on the
 > corrected negative-result comment. Placement: ONE evidence comment on issue
 > #55291 (answers sizzlecar's "reproduce on 0.28.0" request; exempt from the

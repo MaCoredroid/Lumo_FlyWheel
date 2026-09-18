@@ -184,3 +184,14 @@ Shortlist for Mark: (1) adjudicating review of #51508 vs #48475/#50021 with GB10
 
 ### 2026-09-17 22:20 UTC — Mark: "fund all"
 Funded: (A) #55122 harness re-run on the ported head 85f61e24b (GPU ~1 h); (B) #51508 vs #48475/#50021 adjudicating review with GB10 test runs (≤1 h GPU); (C) #55291 Qwen3.6-27B-FP8 collapse reproduction (GPU half-day, soak; runs last); (D) #55507 review linking the align-seed cluster + offering our test (zero-code). GPU serialized via exp54928/gpu.lock in order A → B → C. Each deliverable → Codex review → Mark GO before posting.
+
+## Checkpoint 2026-09-18 — fund-all posted (Mark GO "go")
+
+All four Sep 17 funded items were executed by Opus agents, independently checked by Codex (each got at least one NO-GO/correction before GO), archived on this branch, and posted on Mark's GO:
+
+- A #55122 — port re-run positive on 85f61e24b + static launcher-args question, posted inline at persistent_topk.cuh:1693: https://github.com/vllm-project/vllm/pull/55122#discussion_r4043382139
+- B #51508 — adjudicating review (main OOB-read+advance; #48475 clamp+advance; #51508 kernel clamp with builder NULL fill as the real protection; #50021 masked load → untouched): https://github.com/vllm-project/vllm/pull/51508#issuecomment-5724389453. No sibling pointers on #48475/#50021.
+- C #55291 — negative result on stock 0.28.0/GB10 (298 req, 249,544 tok, 3h16m, 0 collapses). Agent's kernel-path "why" was wrong (fused CUDA GDN decode needs spec metadata + 8:1 heads); corrected in bundle F8 before posting: https://github.com/vllm-project/vllm/issues/55291#issuecomment-5724389616
+- D #53142 — align-seed cluster cross-reference + restore-fidelity test, once, no pings: https://github.com/vllm-project/vllm/issues/53142#issuecomment-5724389784
+
+Threads now used: 55688, 53651, 53798, 54080, 54928, 55122, 51508, 55291, 53142. Weekly unsolicited-ask budget: the #53651 #pr-reviews post (Sep 17) is this week's ask; all four above are evidence/review posts (exempt). Next: watch replies; no further pings; if #53798 rebases, refresh the P8 branch; if #55122's author answers the launcher-args question, follow up only with evidence.

@@ -1,4 +1,5 @@
 # #51508 adjudicating review comment (funded item B) — v2 (Codex amended text verbatim, 2026-09-17)
+> **POSTED 2026-09-18T02:46:06Z (Mark GO "go" 2026-09-18):** https://github.com/vllm-project/vllm/pull/51508#issuecomment-5724389453
 > Codex B_review.md: NO-GO on agent draft as written; GO on source-based
 > replacement. B_amend.md: GO on the amended text after the probe logs were
 > published. Placement: ONE ordinary review COMMENT on #51508; no pointers on

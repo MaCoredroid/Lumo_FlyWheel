@@ -1,4 +1,5 @@
 # #55122 follow-up (funded item A) — port re-run on 85f61e24b + static launcher-args question — v1 (Codex GO verbatim, 2026-09-17)
+> **POSTED 2026-09-18T02:46:06Z (Mark GO "go" 2026-09-18):** https://github.com/vllm-project/vllm/pull/55122#discussion_r4043382139 (inline, persistent_topk.cuh:1693, head 85f61e24b)
 > Codex verdict (A_review.md): GO. Placement: ONE inline COMMENT on the added
 > `csrc/libtorch_stable/persistent_topk.cuh:1693` call in PR #55122 (the
 > `det_select_row` call), containing both paragraphs; no separate general post;

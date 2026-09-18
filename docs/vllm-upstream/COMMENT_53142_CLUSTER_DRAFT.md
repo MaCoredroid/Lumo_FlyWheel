@@ -1,4 +1,5 @@
 # Align-seed duplicate-cluster cross-reference — for issue #53142 (funded item D) — v1 (Codex replacement verbatim)
+> **POSTED 2026-09-18T02:46:06Z (Mark GO "go" 2026-09-18):** https://github.com/vllm-project/vllm/issues/53142#issuecomment-5724389784
 
 > Codex GO (2026-09-17): post ONCE on #53142; exempt from the weekly ask cap (code/test evidence); no pings; do not duplicate across PRs. NEEDS MARK GO. Body below the separator.
 
