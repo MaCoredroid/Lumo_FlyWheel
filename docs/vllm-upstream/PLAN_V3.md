@@ -195,3 +195,6 @@ All four Sep 17 funded items were executed by Opus agents, independently checked
 - D #53142 — align-seed cluster cross-reference + restore-fidelity test, once, no pings: https://github.com/vllm-project/vllm/issues/53142#issuecomment-5724389784
 
 Threads now used: 55688, 53651, 53798, 54080, 54928, 55122, 51508, 55291, 53142. Weekly unsolicited-ask budget: the #53651 #pr-reviews post (Sep 17) is this week's ask; all four above are evidence/review posts (exempt). Next: watch replies; no further pings; if #53798 rebases, refresh the P8 branch; if #55122's author answers the launcher-args question, follow up only with evidence.
+
+### 2026-09-18 05:54Z — jschmied acted on the #55122 inline comment
+jschmied (review 5244681149, inline reply 4044179893): "You are right on both counts, and the shared-memory one is a real bug. Fixed in `19588c89`." Kernel now takes `max_seq_len, smem_bytes`; `length` floored at 0 and clamped to `min(max_len, max_seq_len)`; `det_select_row` receives the granted `smem_bytes`. Author notes the fix is compile-only verified (sm_121a) and latent on GB10 (FilteredTopK never selected at 101,376 B). Credit line in the source comment. Persistent namespace untouched by the commit → no harness re-run needed. Scoreboard: **2 reviews acted on + 1 evidence acknowledged (all #55122)**.
