@@ -11,6 +11,6 @@ Did not reproduce in this bounded 0.28.0 run: 298 requests, 249,544 generated to
 
 Kernel path (the bundle's F2/F7 are corrected in F8): startup `cuda` is configuration. The 0.28.0 fused CUDA MTP path requires speculative metadata and 8:1 heads; this run had neither (3:1). Default decode-only uses packed Triton; mixed decode/prefill can call #54146's readout. No runtime kernel trace was captured. Auto SSM dtype resolves to FP32; activations were BF16, so the specific FP16 overflow threshold does not apply. Prefill conditionally zeroes initial SSM state; that does not prove all recycling paths safe.
 
-Untested: 0.21.0, TP2/L20-D, filled 128k contexts. P3 used repeated assistant snippets. [Artifacts and deviations](https://github.com/MaCoredroid/Lumo_FlyWheel/tree/1e03bf4acafac1ce50340542febb072746618167/results/upstream/55291). This negative result does not identify the cause or prove absence.
+Untested: 0.21.0, TP2/L20-D, filled 128k contexts. P3 used repeated assistant snippets. [Artifacts and deviations](https://github.com/MaCoredroid/Lumo_FlyWheel/tree/2f91527dfca0908ace46fa259c70021557beaae2/results/upstream/55291). This negative result does not identify the cause or prove absence.
 
 AI assistance was used.
