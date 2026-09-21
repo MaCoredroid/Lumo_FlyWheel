@@ -1,4 +1,5 @@
 # #55122 scope note after jschmied's 2026-09-21 reframing — v2 (Codex replacement verbatim: NO-GO on v1 — dropped "re-run stands for the current head" and "No objection to the reframing"; GO on this text; AWAITING MARK GO)
+> **POSTED 2026-09-21T21:31:05Z (Mark GO 2026-09-21):** https://github.com/vllm-project/vllm/pull/55122#issuecomment-5767796407
 > Trigger: jschmied retitled #55122 ("persistent_topk: deterministic select, faster than the
 > exact-topk workaround"), reframed it as a performance PR with a correctness side-benefit, and
 > @-mentioned MaCoredroid: "your measurements and review are what the remaining case rests on;

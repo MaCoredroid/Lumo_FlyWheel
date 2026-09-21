@@ -198,3 +198,6 @@ Threads now used: 55688, 53651, 53798, 54080, 54928, 55122, 51508, 55291, 53142.
 
 ### 2026-09-18 05:54Z — jschmied acted on the #55122 inline comment
 jschmied (review 5244681149, inline reply 4044179893): "You are right on both counts, and the shared-memory one is a real bug. Fixed in `19588c89`." Kernel now takes `max_seq_len, smem_bytes`; `length` floored at 0 and clamped to `min(max_len, max_seq_len)`; `det_select_row` receives the granted `smem_bytes`. Author notes the fix is compile-only verified (sm_121a) and latent on GB10 (FilteredTopK never selected at 101,376 B). Credit line in the source comment. Persistent namespace untouched by the commit → no harness re-run needed. Scoreboard: **2 reviews acted on + 1 evidence acknowledged (all #55122)**.
+
+### 2026-09-21T21:31:05Z — #55122 scope note posted (Mark GO)
+After jschmied's 2026-09-21 reframing (performance PR with correctness side-benefit; @-mentioned MaCoredroid), posted the Codex-approved scope note: our GB10 results are correctness-only, do not validate the 21–28 % speedup, not executed on the current head b2312b2d (kernel sources byte-identical to 19588c89). https://github.com/vllm-project/vllm/pull/55122#issuecomment-5767796407. k3dani posted the equivalent scope confirmation for the speed number at 07:08Z.
