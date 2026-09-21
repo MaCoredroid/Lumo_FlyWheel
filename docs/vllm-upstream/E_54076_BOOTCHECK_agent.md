@@ -1,3 +1,5 @@
+> **CORRECTIONS 2026-09-21 (Codex check):** see results/upstream/54076/CORRECTIONS.md — hook wording (it does monkeypatch, logging-only), stale arm-4 line numbers, 'only one difference' on main unsupported, 'dead code' overstated, bounded scope of the DFlash negative.
+
 # Item E — #54076 boot check: is the divergent block-size geometry reachable?
 Mark Ma / vLLM upstream campaign. Run 2026-09-21. GitHub read-only; **nothing was posted anywhere.**
 Work dir `/home/mark/shared/exp54928/exp54076/` (CARD.md written before any GPU work, RESULT.md,
