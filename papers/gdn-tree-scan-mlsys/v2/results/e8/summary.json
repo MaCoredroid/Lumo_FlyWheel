@@ -1,0 +1,28 @@
+{
+  "source_run": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T215254Z-e8-timing",
+  "source_aggregate_sha256": "74b0988b191bb68fad43d41f76f520d49d529e86753ac0f18535721f6c3757fb",
+  "timing_manifest_sha256": "8bbb5b486fa9e11ff0bc0ef6d0373de65bbd8217392e973a02de015df39c2ab1",
+  "qualification_pass_sha256": "815b348bdb95c455122e7f1232449d4e12dd339edbd6c3c8e2b9a980c6342513",
+  "primary_mean_paired_relative_difference": 0.30898881397051053,
+  "primary_95pct_percentile_interval": [
+    0.2980503507605761,
+    0.32903198715014453
+  ],
+  "diagnostic_ratio_of_arm_means_minus_one": 0.30898951305761435,
+  "arm_mean_rates": {
+    "on": 12.69119070946222,
+    "off": 9.695410530690497
+  },
+  "stream_comparisons": {
+    "within_pair_across_arms": {
+      "equal": 16,
+      "total": 24
+    },
+    "across_blocks_within_arm": {
+      "equal": 32,
+      "total": 48
+    }
+  },
+  "offline_reconstruction": "exact semantic match except explicit local qualification root mapping",
+  "limits": "fixed B1 prefixes, three paired blocks, retained-decode rate, sampled ownership; no general quality or full-model equivalence claim"
+}

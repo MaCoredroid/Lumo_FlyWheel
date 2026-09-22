@@ -1,0 +1,104 @@
+{
+  "checked_utc": "2026-09-22T22:55:47.718490+00:00",
+  "status": "PASS",
+  "scope": "Latest qualified design and completed E8 integration; superseded implementation narratives and pilot-only quantitative summaries removed; immutable raw evidence retained",
+  "source_hashes": {
+    "main.tex": "8a39045767c72099fd9678d2867eca466e3f01277e0fc7e2cb0066a1abd5d461",
+    "abstract.tex": "224eb1a5505205b0a4319ebea0c346fc38f8c6197ef90342cd1c27780218850b",
+    "ref.bib": "88ceccadbd0376d694f6037181ebf0dacd71f0936558d6c88f856666ccc05fc8",
+    "main.pdf": "768551ee818c9ad5b6d6e1de21ce46dafcc067c05aa8748db54338e26f01273b",
+    "main.bbl": "ea81730045d2bd581a36dfb1ce3ebbede44d52dac3327f348016ca256e9abf2d",
+    "figures/pipeline.tikz": "8c9dbd43516be8703d4ba841a06d1f2d17caad2c434a61ec29ede40035f0762b",
+    "results/e8/paired-rates.tex": "c5af31c6e91fa80e61becefb370693c47f8c8e87559098f5b2b0bdcba2d17d89"
+  },
+  "pages": 14,
+  "citation_lint": {
+    "bib_entries": 24,
+    "cited_keys": 24,
+    "unresolved_keys": [],
+    "uncited_entries": [],
+    "bibliography_policy": "No formal replacement required; lint0FAIL0WARN"
+  },
+  "abstract": {
+    "environment_present": true,
+    "words": 223,
+    "maximum": 250
+  },
+  "visual_qa": {
+    "final_pages_inspected": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14
+    ],
+    "clipping_or_overlap": false,
+    "render_root": "/tmp/lumo-latest-e8-pdf",
+    "last_page": "Appendix validation table and remaining bibliography"
+  },
+  "undefined_references_or_overflow": false,
+  "historical_value_absence_check": {
+    "status": "PASS",
+    "excluded_examples": [
+      "32.85",
+      "42.74",
+      "39.95",
+      "15/15",
+      "0/15"
+    ]
+  },
+  "current_results": {
+    "e1": "All18originalcells and mean rates unchanged; fixedqualifiedconfigurations/B4aggregate clarified",
+    "e7a": "Final31/32confirmation and frozencriteriafailures govern; pilot-onlypassingnumerical summaries removed",
+    "e8": {
+      "source_run": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T215254Z-e8-timing",
+      "source_aggregate_sha256": "74b0988b191bb68fad43d41f76f520d49d529e86753ac0f18535721f6c3757fb",
+      "timing_manifest_sha256": "8bbb5b486fa9e11ff0bc0ef6d0373de65bbd8217392e973a02de015df39c2ab1",
+      "qualification_pass_sha256": "815b348bdb95c455122e7f1232449d4e12dd339edbd6c3c8e2b9a980c6342513",
+      "primary_mean_paired_relative_difference": 0.30898881397051053,
+      "primary_95pct_percentile_interval": [
+        0.2980503507605761,
+        0.32903198715014453
+      ],
+      "diagnostic_ratio_of_arm_means_minus_one": 0.30898951305761435,
+      "arm_mean_rates": {
+        "on": 12.69119070946222,
+        "off": 9.695410530690497
+      },
+      "stream_comparisons": {
+        "within_pair_across_arms": {
+          "equal": 16,
+          "total": 24
+        },
+        "across_blocks_within_arm": {
+          "equal": 32,
+          "total": 48
+        }
+      },
+      "offline_reconstruction": "exact semantic match except explicit local qualification root mapping",
+      "limits": "fixed B1 prefixes, three paired blocks, retained-decode rate, sampled ownership; no general quality or full-model equivalence claim"
+    }
+  },
+  "prose_review": {
+    "skill": "latex-rhythm-refiner",
+    "result": "Reviewed all sections and tightened remaining obsolete scope phrases; numerical claims and citation context preserved"
+  },
+  "source_audit": "notes/latest-design-supersession-audit-2026-09-22.md",
+  "independent_reviews": {
+    "p0/monitor/paper-latest-design-e8-redteam.md": "2d850bcee52b40b590041357a3b1e5cb30dc36e9b4bd120788b7f842438ab7a7",
+    "p0/monitor/e8-timing-final-redteam.md": "8f246e660beca4d5d601c7ba23a6e2040861b33052a6ade52fad8bc576b26364",
+    "p0/monitor/paper-e8-results-redteam.md": "62893b6033f668417f990ab6ed4759d31fff11c6c2a76e4d4b0998904b3991bd",
+    "p0/monitor/e8-artifact-final-redteam.md": "ec0b8b357d211559f4cadaf82c7f5e9f4137994c4a7efc5aae4483d1bd51d898"
+  },
+  "no_publication_or_submission": true,
+  "issues_validation": "PASS;6DONE issues, dependencies satisfied; original-results sections correctly expect0externalcitations"
+}

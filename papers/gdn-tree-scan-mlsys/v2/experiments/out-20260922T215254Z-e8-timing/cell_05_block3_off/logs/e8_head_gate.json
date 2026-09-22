@@ -1,0 +1,15 @@
+{
+  "arm": "off",
+  "checked_heads": 0,
+  "closed": true,
+  "failures": [],
+  "legacy_head_calls": 1800,
+  "loop_heads": 0,
+  "owner_pid": 191,
+  "primary_head_calls": 1800,
+  "proposals": 360,
+  "qualified_proposals": 0,
+  "qualify": false,
+  "root_heads": 0,
+  "schema": "e8.head.v1"
+}

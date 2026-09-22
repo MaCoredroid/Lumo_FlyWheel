@@ -1,3 +1,9 @@
+# Current closure update — 22 September 2026
+
+The design reframe and latest-source supersession audit are complete. Both final manuscript reviews PASS at main8a390457/abstract224eb1a5. E8 completed two qualification and six timing boots, independently verified. Its measured paired rate change is+30.90% with continuation differences retained; E1 already had reuseON. Current methods supersede oldFA2/layout/pilot-only narratives in the manuscript. All original evidence remains immutable. No further experiment is needed for the bounded claims. Final PDF is14pages and all pages were visually inspected. Artifact export and final receipt close the task; no publication or submission.
+
+## Original planning record
+
 # Approved system-design reframing
 
 User approved the proposed shift from an audit-led paper to the mechanism, implementation and optimization of the tree verifier. Approval: "go ahead with those" on 2026-09-22. Existing source revisions and evidence remain preserved.
@@ -26,3 +32,7 @@ Audit exact current source and E1 snapshots before selecting any new experiment.
 ## QA
 
 Independent source/route audit and manuscript red team; unchanged fresh-results checks; citation lint; LaTeX compile; render and inspect all revised pages; preserve prior receipt and export a new private review package when settled.
+
+## Author freshness requirement, 22 September (after3:30p.m. Pacific)
+
+The author asks that the paper reflect the most recent design, method and results, never superseded ones. Audit repository HEAD, current upstream integration branch and exact served source snapshots. Remove superseded implementations/repairs from the current-method narrative; retain immutable raw failures and prior manuscripts as provenance. Cite the latest authoritative implementation for each current claim and use the latest completed evidence for that same question. Distinct scoped experiments do not supersede one another merely by date: E8 head-work attribution supplements E1's three-configuration comparison. Explicitly identify counterfactual ablation controls and qualified versus implemented routes. Do not advertise the current three-boot means as maximum tuned performance; identify B4 as aggregate throughput. No unreviewed rate, historic number or untested latest implementation becomes a result.

@@ -1,0 +1,9 @@
+{
+  "status": "PASS",
+  "archive_sha256": "b670d8902b42e4dbd7cda08186bfc1aa5758459fb29979b83a8747039f69bc9a",
+  "verified_files": 177,
+  "companions": 5,
+  "scratch": "/private/tmp/lumo-paper-latest-design-e8-final-20260922T2259Z",
+  "extracted_rebuild_pages": 14,
+  "no_undefined_references_or_overflow": true
+}

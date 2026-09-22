@@ -1,19 +1,19 @@
 {
-  "completed_utc": "2026-09-22T21:12:08.862446+00:00",
-  "status": "DESIGN_REFRAME_VERIFIED_E8_QUALIFICATION_PREPARING",
-  "scope": "Private system-design revision, 14 pages; architecture, GPU scan/replay and optimization mechanisms independently reviewed; all fresh P0/E7/E2/E1 evidence unchanged; historical quantitative results excluded; separate E8 qualification in preparation, no E8 GPU result or attributed optimization gain; no public release",
+  "completed_utc": "2026-09-22T23:00:46.674214+00:00",
+  "status": "COMPLETE_LATEST_DESIGN_E8_VERIFIED",
+  "scope": "Private14page latest-qualified-design revision; final E7 confirmation governs, superseded method narratives and pilot-only numerical summaries removed; E1 original18cells unchanged; E8twoqualification+sixtiming complete; historical quantitative results excluded",
   "paper_archive": {
-    "file": "artifacts/paper-design-20260922T2112Z.tar.gz",
-    "sha256": "54e92c779dc2fc1da514f41f05a8b8d2acbd99a5801f5d0df3b51278b0cbaf17",
-    "files": 160,
-    "bytes": 1599648
+    "file": "artifacts/paper-latest-design-e8-20260922T2259Z.tar.gz",
+    "sha256": "b670d8902b42e4dbd7cda08186bfc1aa5758459fb29979b83a8747039f69bc9a",
+    "files": 177,
+    "bytes": 1671380
   },
-  "paper_manifest_sha256": "6f79ca7bdc7293906fb477cb6875177ff7b3f1794c45e8f1e9d37a744fe7632a",
+  "paper_manifest_sha256": "734c983cc4079ce2b65d026bb3ff0bdd3af8c7313094ecbeac2c09fa903456ad",
   "paper": {
-    "main_tex_sha256": "0d7bab3835839559797213a42c892c11e10002d93c23eb3d9897babf9e2cc642",
-    "abstract_sha256": "887f36b63b62f07784a3b9a2f767e9960ca31ea6b4dbb076d031b92ee202180a",
-    "bib_sha256": "64ca0fc74b5185f2f61358945a2f1250de76a7ec7c2ad793504dff0fc22693c0",
-    "pdf_sha256": "0295c3f6f287e1bfadd3bf68a2349910f0a043081cbad86e7a67ffd4a5cdbf05",
+    "main_tex_sha256": "8a39045767c72099fd9678d2867eca466e3f01277e0fc7e2cb0066a1abd5d461",
+    "abstract_sha256": "224eb1a5505205b0a4319ebea0c346fc38f8c6197ef90342cd1c27780218850b",
+    "bib_sha256": "88ceccadbd0376d694f6037181ebf0dacd71f0936558d6c88f856666ccc05fc8",
+    "pdf_sha256": "768551ee818c9ad5b6d6e1de21ce46dafcc067c05aa8748db54338e26f01273b",
     "pages": 14
   },
   "all_companions": [
@@ -44,24 +44,40 @@
       "bytes": 12955447,
       "manifest": "e1-timing-20260922T1225Z.tar.gz.manifest.json",
       "manifest_sha256": "47936b8a7cb22bf389b452ce2f013e5092d9f9c34b639b640f54768b3ecd4414"
+    },
+    {
+      "file": "e8-single-logits-20260922T2255Z.tar.gz",
+      "sha256": "b4c0a5cbcd2592ce5ddfdc823243f0e99dc15ef412d238a096068d6bae11ebf4",
+      "bytes": 16237576,
+      "manifest": "e8-single-logits-20260922T2255Z.tar.gz.manifest.json",
+      "manifest_sha256": "d2512b2141628c77746d5f1ddc0de025bb3de525fba5dd375226a60427c70439"
     }
   ],
   "canonical_build": {
-    "checked_utc": "2026-09-22T21:08:52.364779+00:00",
+    "checked_utc": "2026-09-22T22:55:47.718490+00:00",
     "status": "PASS",
-    "scope": "Author-approved system-design reframe; no empirical result added or removed",
+    "scope": "Latest qualified design and completed E8 integration; superseded implementation narratives and pilot-only quantitative summaries removed; immutable raw evidence retained",
     "source_hashes": {
-      "main.tex": "0d7bab3835839559797213a42c892c11e10002d93c23eb3d9897babf9e2cc642",
-      "abstract.tex": "887f36b63b62f07784a3b9a2f767e9960ca31ea6b4dbb076d031b92ee202180a",
-      "ref.bib": "64ca0fc74b5185f2f61358945a2f1250de76a7ec7c2ad793504dff0fc22693c0",
-      "main.pdf": "0295c3f6f287e1bfadd3bf68a2349910f0a043081cbad86e7a67ffd4a5cdbf05"
+      "main.tex": "8a39045767c72099fd9678d2867eca466e3f01277e0fc7e2cb0066a1abd5d461",
+      "abstract.tex": "224eb1a5505205b0a4319ebea0c346fc38f8c6197ef90342cd1c27780218850b",
+      "ref.bib": "88ceccadbd0376d694f6037181ebf0dacd71f0936558d6c88f856666ccc05fc8",
+      "main.pdf": "768551ee818c9ad5b6d6e1de21ce46dafcc067c05aa8748db54338e26f01273b",
+      "main.bbl": "ea81730045d2bd581a36dfb1ce3ebbede44d52dac3327f348016ca256e9abf2d",
+      "figures/pipeline.tikz": "8c9dbd43516be8703d4ba841a06d1f2d17caad2c434a61ec29ede40035f0762b",
+      "results/e8/paired-rates.tex": "c5af31c6e91fa80e61becefb370693c47f8c8e87559098f5b2b0bdcba2d17d89"
     },
     "pages": 14,
     "citation_lint": {
-      "bib_entries": 27,
-      "cited_keys": 27,
+      "bib_entries": 24,
+      "cited_keys": 24,
       "unresolved_keys": [],
-      "uncited_entries": []
+      "uncited_entries": [],
+      "bibliography_policy": "No formal replacement required; lint0FAIL0WARN"
+    },
+    "abstract": {
+      "environment_present": true,
+      "words": 223,
+      "maximum": 250
     },
     "visual_qa": {
       "final_pages_inspected": [
@@ -81,7 +97,8 @@
         14
       ],
       "clipping_or_overlap": false,
-      "last_page": "Final bibliography continues on page 14"
+      "render_root": "/tmp/lumo-latest-e8-pdf",
+      "last_page": "Appendix validation table and remaining bibliography"
     },
     "undefined_references_or_overflow": false,
     "historical_value_absence_check": {
@@ -92,107 +109,431 @@
         "39.95",
         "15/15",
         "0/15"
-      ],
-      "full_source_include_review": "p0/monitor/design-reframe-redteam.md"
+      ]
     },
-    "fresh_results": {
-      "numeric_sequence_unchanged": true,
-      "only_wording_change": "Clarify no per-node tree state is exported for the reference comparison; tile-local verification states exist"
+    "current_results": {
+      "e1": "All18originalcells and mean rates unchanged; fixedqualifiedconfigurations/B4aggregate clarified",
+      "e7a": "Final31/32confirmation and frozencriteriafailures govern; pilot-onlypassingnumerical summaries removed",
+      "e8": {
+        "source_run": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T215254Z-e8-timing",
+        "source_aggregate_sha256": "74b0988b191bb68fad43d41f76f520d49d529e86753ac0f18535721f6c3757fb",
+        "timing_manifest_sha256": "8bbb5b486fa9e11ff0bc0ef6d0373de65bbd8217392e973a02de015df39c2ab1",
+        "qualification_pass_sha256": "815b348bdb95c455122e7f1232449d4e12dd339edbd6c3c8e2b9a980c6342513",
+        "primary_mean_paired_relative_difference": 0.30898881397051053,
+        "primary_95pct_percentile_interval": [
+          0.2980503507605761,
+          0.32903198715014453
+        ],
+        "diagnostic_ratio_of_arm_means_minus_one": 0.30898951305761435,
+        "arm_mean_rates": {
+          "on": 12.69119070946222,
+          "off": 9.695410530690497
+        },
+        "stream_comparisons": {
+          "within_pair_across_arms": {
+            "equal": 16,
+            "total": 24
+          },
+          "across_blocks_within_arm": {
+            "equal": 32,
+            "total": 48
+          }
+        },
+        "offline_reconstruction": "exact semantic match except explicit local qualification root mapping",
+        "limits": "fixed B1 prefixes, three paired blocks, retained-decode rate, sampled ownership; no general quality or full-model equivalence claim"
+      }
     },
     "prose_review": {
       "skill": "latex-rhythm-refiner",
-      "result": "PASS; reviewed current prose, no further edit required; citations and technical meaning unchanged"
+      "result": "Reviewed all sections and tightened remaining obsolete scope phrases; numerical claims and citation context preserved"
     },
-    "independent_review": {
-      "file": "p0/monitor/design-reframe-redteam.md",
-      "sha256": "dfed0d850c913b0a3e1eb842c452d475f96ef9b5ef2dfffbeb0ffd545576f4b0"
+    "source_audit": "notes/latest-design-supersession-audit-2026-09-22.md",
+    "independent_reviews": {
+      "p0/monitor/paper-latest-design-e8-redteam.md": "2d850bcee52b40b590041357a3b1e5cb30dc36e9b4bd120788b7f842438ab7a7",
+      "p0/monitor/e8-timing-final-redteam.md": "8f246e660beca4d5d601c7ba23a6e2040861b33052a6ade52fad8bc576b26364",
+      "p0/monitor/paper-e8-results-redteam.md": "62893b6033f668417f990ab6ed4759d31fff11c6c2a76e4d4b0998904b3991bd",
+      "p0/monitor/e8-artifact-final-redteam.md": "ec0b8b357d211559f4cadaf82c7f5e9f4137994c4a7efc5aae4483d1bd51d898"
     },
-    "new_e8_status": "Isolated harness staging; no GPU results yet; separate qualification required before timing",
-    "no_publication_or_submission": true
+    "no_publication_or_submission": true,
+    "issues_validation": "PASS;6DONE issues, dependencies satisfied; original-results sections correctly expect0externalcitations"
   },
   "extracted_rebuild": {
     "status": "PASS",
-    "pages": 14,
-    "directory": "/tmp/lumo-v2-design-extracted-20260922T2112Z",
-    "verified_archive_members": 160
+    "archive_sha256": "b670d8902b42e4dbd7cda08186bfc1aa5758459fb29979b83a8747039f69bc9a",
+    "verified_files": 177,
+    "companions": 5,
+    "scratch": "/private/tmp/lumo-paper-latest-design-e8-final-20260922T2259Z",
+    "extracted_rebuild_pages": 14,
+    "no_undefined_references_or_overflow": true
   },
-  "inherited_evidence_checks": {
-    "prior_receipt": "artifacts/FINAL-DELIVERY-before-design-reframe.json",
-    "sha256": "00d4bcb9fc077e312f49649cc86f46c76ff2fab5b64788cfbd758d34ce16df04",
-    "scope": "Four core evidence companions unchanged; previous extracted E1 aggregate and raw-join checks preserved without reanalysis",
-    "extracted_e1_replay": {
-      "scratch": "/tmp/lumo-v2-e1-extracted-final",
-      "aggregate_semantic_match_except_mapped_root": true,
-      "original_campaign_path": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells",
-      "cells": 18,
-      "all_six_contrasts_match": true,
-      "raw_join_smokes": [
+  "e8_extracted_replay": {
+    "status": "EXTRACTED_MEMBERS_AND_CPU_REPLAY_PASS",
+    "files": 702,
+    "validation": {
+      "cells": [
         {
-          "cell": "cell_01_b1_native-5_B1_a1",
-          "raw_join_entire_json_exact_match": true
+          "name": "cell_01_block1_off",
+          "status": "VALID",
+          "terminal_sha256": "663bfff9db54293591412a298adb1cbc65141bca7f7c916d5ca489c8f6118dd8"
         },
         {
-          "cell": "cell_06_b1_tree_B4_a1",
-          "raw_join_entire_json_exact_match": true
+          "name": "cell_02_block1_on",
+          "status": "VALID",
+          "terminal_sha256": "a6ada9632ae7f0777bdfbddb500ca4ac715a8b2ff1ffc7d14f99f091b847ee1f"
+        },
+        {
+          "name": "cell_03_block2_on",
+          "status": "VALID",
+          "terminal_sha256": "bbd9eab691e4d13622fc89a5e6c2e31a223b04de5b94fc269fd87d7da1f88b5f"
+        },
+        {
+          "name": "cell_04_block2_off",
+          "status": "VALID",
+          "terminal_sha256": "8775180416812662aa4aa4c67939baa27a7eb8789e9f94cda29929bd9db4f007"
+        },
+        {
+          "name": "cell_05_block3_off",
+          "status": "VALID",
+          "terminal_sha256": "5cd3b9d04db26a1adba7a38fe32d065348ecf4caf61fc4981386ff5a96353d07"
+        },
+        {
+          "name": "cell_06_block3_on",
+          "status": "VALID",
+          "terminal_sha256": "b7815faf73876e01b90e2214c08892cbb756465ddae1515cbeffb9b37ac3eb53"
         }
-      ]
+      ],
+      "reproduction": {
+        "status": "PASS",
+        "joins": [
+          {
+            "root": "experiments/out-20260922T213142Z-e8-single-logits-v2/qualification_on",
+            "rc": 3,
+            "join_sha256": "ccb6f18fce1bc0ec454ea0952c075339f3093c23a6c99f00175bfcd9c49a2d9b"
+          },
+          {
+            "root": "experiments/out-20260922T213142Z-e8-single-logits-v2/qualification_off",
+            "rc": 3,
+            "join_sha256": "0b70e5446b7545e44f0e4a138c7e1f729243a1ab4fd1204f2d1574090245d922"
+          },
+          {
+            "root": "experiments/out-20260922T215254Z-e8-timing/cell_01_block1_off",
+            "rc": 0,
+            "join_sha256": "f4411d9c9f0d1e07999eac24bc51e495a0de30c4e4d4803c06dcb36c0a7b013d"
+          },
+          {
+            "root": "experiments/out-20260922T215254Z-e8-timing/cell_02_block1_on",
+            "rc": 0,
+            "join_sha256": "eb8fd3e5ef462d787cde152004f165918c69cfff2948b891e6f4b16978f40c1e"
+          },
+          {
+            "root": "experiments/out-20260922T215254Z-e8-timing/cell_03_block2_on",
+            "rc": 0,
+            "join_sha256": "d5c075b9e649187a95a2f6ca0f4e44778312828523611f73b87b950ff89f31c7"
+          },
+          {
+            "root": "experiments/out-20260922T215254Z-e8-timing/cell_04_block2_off",
+            "rc": 0,
+            "join_sha256": "8be4e1db3adb4bce17cf3553e3897c3dccd04e021b03a1acb3afebdc205dd776"
+          },
+          {
+            "root": "experiments/out-20260922T215254Z-e8-timing/cell_05_block3_off",
+            "rc": 0,
+            "join_sha256": "8c233712f809530af63d7a4e70aa229e36d2c83e6d8b189d49c024fa40544065"
+          },
+          {
+            "root": "experiments/out-20260922T215254Z-e8-timing/cell_06_block3_on",
+            "rc": 0,
+            "join_sha256": "1187026c4d87dfd292a05ad05e75b86cf461f858825ccaa9e5fc03e38d412e10"
+          }
+        ],
+        "aggregate_sha256": "74b0988b191bb68fad43d41f76f520d49d529e86753ac0f18535721f6c3757fb",
+        "normalization": "comparison only: qualification.root absolute prefix; archived bytes are unchanged"
+      }
+    }
+  },
+  "inherited_evidence_checks": {
+    "prior_receipt": "artifacts/FINAL-DELIVERY-before-latest-design-e8.json",
+    "sha256": "11eb7b045de0a47ba60e23cb22de09b9a577c739709a3d22f38c4591b84f30eb",
+    "scope": "Four core raw companions unchanged; their previous extraction and numerical checks remain applicable",
+    "details": {
+      "prior_receipt": "artifacts/FINAL-DELIVERY-before-design-reframe.json",
+      "sha256": "00d4bcb9fc077e312f49649cc86f46c76ff2fab5b64788cfbd758d34ce16df04",
+      "scope": "Four core evidence companions unchanged; previous extracted E1 aggregate and raw-join checks preserved without reanalysis",
+      "extracted_e1_replay": {
+        "scratch": "/tmp/lumo-v2-e1-extracted-final",
+        "aggregate_semantic_match_except_mapped_root": true,
+        "original_campaign_path": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells",
+        "cells": 18,
+        "all_six_contrasts_match": true,
+        "raw_join_smokes": [
+          {
+            "cell": "cell_01_b1_native-5_B1_a1",
+            "raw_join_entire_json_exact_match": true
+          },
+          {
+            "cell": "cell_06_b1_tree_B4_a1",
+            "raw_join_entire_json_exact_match": true
+          }
+        ]
+      }
     }
   },
   "reviews": {
-    "design": "p0/monitor/design-reframe-redteam.md",
-    "route_audit": "notes/optimization-route-audit-2026-09-22.md"
+    "p0/monitor/paper-latest-design-e8-redteam.md": "2d850bcee52b40b590041357a3b1e5cb30dc36e9b4bd120788b7f842438ab7a7",
+    "p0/monitor/e8-timing-final-redteam.md": "8f246e660beca4d5d601c7ba23a6e2040861b33052a6ade52fad8bc576b26364",
+    "p0/monitor/paper-e8-results-redteam.md": "62893b6033f668417f990ab6ed4759d31fff11c6c2a76e4d4b0998904b3991bd",
+    "p0/monitor/e8-artifact-final-redteam.md": "ec0b8b357d211559f4cadaf82c7f5e9f4137994c4a7efc5aae4483d1bd51d898"
   },
   "monitor": {
     "id": "review-lumo-v2-experiments-every-10-minutes",
-    "status": "ACTIVE",
-    "verified_utc": "2026-09-22T21:21:11.297480+00:00",
-    "method": "automation_update tool and persisted status check",
-    "scope": "E8 extension only; completed paper/core evidence unchanged"
+    "status": "PAUSED",
+    "verified_utc": "2026-09-22T23:00:46.674214+00:00",
+    "method": "automation_update and persisted TOML verification"
   },
-  "e8_status": "Qualification harness reviewed; exact two-boot handoff delivered to existing Claude worker; timing separately gated",
+  "e8_status": "Two qualification boots and six timing boots independently PASS; archive source regeneration and raw replay PASS",
+  "gpu_jobs_remaining": 0,
+  "memory_cleanup": {
+    "schema": "e8.postcampaign_memory.v1",
+    "authorization": "existing user memory-cleanup authorization (between-run guarded recovery); parent instruction after the E8 campaign",
+    "hook": "lumo_flywheel_serving.model_server.recover_host_memory() (the same hook the launchers call), PYTHONPATH=/home/mark/lumo-paper-v2-20260921/src, no credential sourced",
+    "idle_evidence_before": {
+      "utc": "2026-09-22T22:43:33Z",
+      "containers": 0,
+      "gpu_compute_processes": 0,
+      "driver_or_loop_processes": 0
+    },
+    "before": {
+      "MemTotal_GiB": 117.51,
+      "MemFree_GiB": 7.0,
+      "MemAvailable_GiB": 40.09,
+      "Buffers_GiB": 0.05,
+      "Cached_GiB": 34.19,
+      "SwapCached_GiB": 0.0,
+      "SwapTotal_GiB": 16.0,
+      "SwapFree_GiB": 14.49,
+      "free_g": "Mem: 117 77 6 0 34 40;Swap: 15 1 14;"
+    },
+    "hook_output": "module: /home/mark/lumo-paper-v2-20260921/src/lumo_flywheel_serving/model_server.py command: sync; echo 3 > /proc/sys/vm/drop_caches; swapoff -a || true; swapon -a || true; echo 3 > /proc/sys/vm/drop_caches recover_host_memory: returned OK in 5.4s ",
+    "hook_python_rc": 0,
+    "after": {
+      "utc": "2026-09-22T22:43:39Z",
+      "MemTotal_GiB": 117.51,
+      "MemFree_GiB": 102.71,
+      "MemAvailable_GiB": 102.29,
+      "Buffers_GiB": 0.0,
+      "Cached_GiB": 1.06,
+      "SwapCached_GiB": 0.0,
+      "SwapTotal_GiB": 16.0,
+      "SwapFree_GiB": 16.0,
+      "free_g": "Mem: 117 15 102 0 1 102;Swap: 15 0 15;"
+    },
+    "idle_evidence_after": {
+      "containers": 0,
+      "gpu_compute_processes": 0
+    },
+    "untouched": "no experiment artifact modified or deleted; no unrelated process/session/model touched"
+  },
   "no_publication_or_submission": true,
   "limits": [
-    "Three paired boot blocks and fixed selected prefixes; no broad workload precision",
-    "T1 native/tree engine seed difference; no isolated causal speedup estimate",
-    "Full API continuations differ; no matched-output or quality-preservation claim",
-    "No full-model sequential-equivalence proof",
-    "E7a frozen criteria failed; no compact candidate promoted",
-    "Local mechanism reimplementations, not a benchmark of the Bole/TreeWY authors systems",
-    "Conditional composed-stack and broader task-quality studies remain deferred"
+    "E1 fixedqualified threebootmeans; not a tuning ceiling; B4aggregate",
+    "E1 T1 engine-seed deviation and continuation divergence retained",
+    "E8+30.89888% paired rate with coarse95%interval[29.80504%,32.90320%]; lastONall8streamsdiverge andEOS101 retained",
+    "E1 alreadyreuseON; no E8 multiplier or B4/composed gain",
+    "No full-model equivalence, equal-output latency, quality preservation, or authors-system head-to-head claim",
+    "Final E7a frozen criteria fail; neither compact candidate promoted"
   ],
   "remote_copy": {
     "status": "VERIFIED",
+    "files": 185,
+    "exact_hash_matches": [
+      "FR13_DIFFUSE_GDN_EXPLAINED.md",
+      "FR13_POSTSNAPFIX3_CLOSEOUT.md",
+      "FR13_REALIZATION_AGREEMENT.md",
+      "FR13_REMAP_SHIP_RESULTS.md",
+      "FR13_REPLAY_CHASEDOWN_BANK.md",
+      "FR13_SLOT_REORDER_ARTIFACTS/VERDICT_TABLE.md",
+      "docs/archive/wy/FR13_WY_VS_SEQUENTIAL_VERDICT.md",
+      "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/deploy_speed_kvr1.json",
+      "output/fr13_kvremap_tail6/native11_control_kvr1/deploy_speed_kvr1.json",
+      "output/fr13_kvremap_tail6/native5_control_kvr1/deploy_speed_kvr1.json",
+      "papers/gdn-tree-scan-mlsys/v2/FINAL-REVIEW.md",
+      "papers/gdn-tree-scan-mlsys/v2/IEEEtran.cls",
+      "papers/gdn-tree-scan-mlsys/v2/README.md",
+      "papers/gdn-tree-scan-mlsys/v2/abstract.tex",
+      "papers/gdn-tree-scan-mlsys/v2/artifacts/FINAL-DELIVERY-before-latest-design-e8.json",
+      "papers/gdn-tree-scan-mlsys/v2/artifacts/README.md",
+      "papers/gdn-tree-scan-mlsys/v2/artifacts/e8-single-logits-20260922T2255Z.tar.gz",
+      "papers/gdn-tree-scan-mlsys/v2/artifacts/e8-single-logits-20260922T2255Z.tar.gz.manifest.json",
+      "papers/gdn-tree-scan-mlsys/v2/artifacts/paper-latest-design-e8-20260922T2259Z.tar.gz",
+      "papers/gdn-tree-scan-mlsys/v2/artifacts/paper-latest-design-e8-20260922T2259Z.tar.gz.manifest.json",
+      "papers/gdn-tree-scan-mlsys/v2/experiments/STATUS.md",
+      "papers/gdn-tree-scan-mlsys/v2/experiments/e1/E1_ASEXECUTED_DEVIATIONS.md",
+      "papers/gdn-tree-scan-mlsys/v2/figures/cost-breakdown.tikz",
+      "papers/gdn-tree-scan-mlsys/v2/figures/e1-timing.json",
+      "papers/gdn-tree-scan-mlsys/v2/figures/e1-timing.pdf",
+      "papers/gdn-tree-scan-mlsys/v2/figures/e1-timing.png",
+      "papers/gdn-tree-scan-mlsys/v2/figures/pipeline.tikz",
+      "papers/gdn-tree-scan-mlsys/v2/figures/scan-replay.tikz",
+      "papers/gdn-tree-scan-mlsys/v2/figures/spine-layout.tikz",
+      "papers/gdn-tree-scan-mlsys/v2/figures/state-contract.tikz",
+      "papers/gdn-tree-scan-mlsys/v2/issues/2026-09-21-v2.csv",
+      "papers/gdn-tree-scan-mlsys/v2/issues/2026-09-22-latest-design-e8.csv",
+      "papers/gdn-tree-scan-mlsys/v2/issues/2026-09-22-system-design-reframe.csv",
+      "papers/gdn-tree-scan-mlsys/v2/main.bbl",
+      "papers/gdn-tree-scan-mlsys/v2/main.pdf",
+      "papers/gdn-tree-scan-mlsys/v2/main.tex",
+      "papers/gdn-tree-scan-mlsys/v2/notes/arxiv-registry.sqlite3",
+      "papers/gdn-tree-scan-mlsys/v2/notes/citation-verification.json",
+      "papers/gdn-tree-scan-mlsys/v2/notes/claim-evidence-ledger.md",
+      "papers/gdn-tree-scan-mlsys/v2/notes/closest-work-reading.md",
+      "papers/gdn-tree-scan-mlsys/v2/notes/design/baselines.csv",
+      "papers/gdn-tree-scan-mlsys/v2/notes/design/experiment-matrix.csv",
+      "papers/gdn-tree-scan-mlsys/v2/notes/design/method-components.csv",
+      "papers/gdn-tree-scan-mlsys/v2/notes/design/optimization-evidence-map.md",
+      "papers/gdn-tree-scan-mlsys/v2/notes/e1-methods-for-final.tex",
+      "papers/gdn-tree-scan-mlsys/v2/notes/e1-protocol-deviations.md",
+      "papers/gdn-tree-scan-mlsys/v2/notes/e1-results-for-final.tex",
+      "papers/gdn-tree-scan-mlsys/v2/notes/e8-packaging-plan.md",
+      "papers/gdn-tree-scan-mlsys/v2/notes/evidence-sources.json",
+      "papers/gdn-tree-scan-mlsys/v2/notes/latest-design-supersession-audit-2026-09-22.md",
+      "papers/gdn-tree-scan-mlsys/v2/notes/numerical-comparison-decision.md",
+      "papers/gdn-tree-scan-mlsys/v2/notes/optimization-route-audit-2026-09-22.md",
+      "papers/gdn-tree-scan-mlsys/v2/notes/plot-runtime-requirements.txt",
+      "papers/gdn-tree-scan-mlsys/v2/notes/verified-e7b-p072-r13.md",
+      "papers/gdn-tree-scan-mlsys/v2/notes/web-source-verification.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/P0-MEASUREMENT-ERRATUM.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/P0-REPORT.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/capture-inventory.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/fa2-load-check.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/historical-run-manifests.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/model-weight-hashes.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-claude-results-e1-campaign.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-design-reframe-build.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-e1-artifact-checkpoint.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-e7b-artifact-checkpoint.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-e8-artifact-checkpoint.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-final-source-qa.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-historical-removal-build.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-historical-removal-edit.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-latest-design-e8-build.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-latest-design-e8-paper-checkpoint.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-memory-cleanup-final.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-paper-final-build.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-paper-redteam2-build.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-paper-review18-build.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-paper-review18-kv-build.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-paper-review20-build.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-paper-review23-build.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-paper-review28-build.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-review-14-frozen-audit.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-selected-route-artifact-checkpoint.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/artifact-redteam-round1.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/closure-ledger.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/design-reframe-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-artifact-final-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-campaign-final-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-campaign-launch-approved.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-campaign-launch-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-first-native-cell-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-first-tree-timing-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-measurement-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-methods-candidate-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-native-qualification-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-parent-source-checkpoint1001.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-remaining-cells-redteam.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-remaining-cells-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-reply26-parent-stub.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-seed-scope-paper-review.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e2-b4-api-inversion-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e2-b4-duplicate-path-review.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e2-b4-final-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e2-closure-decision.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e2-closure-fixture-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e2-fixture-final-recheck.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e2-minimal-qualification-review.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e2-policyB-b1-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e8-artifact-final-independent-review.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e8-artifact-final-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e8-export-sources-final.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e8-postcampaign-memory.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e8-timing-final-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e8-worker-status.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/historical-numbers-removal-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-e8-results-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-final-e1-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-latest-design-e8-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-redteam-round1.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-redteam-round2.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-selected-route-redteam.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-whole-draft-redteam-pre-e1.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/e7a_capture_launch.diff",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/e7a_capture_launch.sh",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/e7a_core.py",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/e7a_device.py",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/e7a_kernels.py",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/e7a_reduce.py",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/e7a_selftest_core.py",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/e7a_test_core.py",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/historical_payload_manifest.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/legacy_wy_8a975837.py",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/prefix_pool.py",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/run_in_image.sh",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/serve_drivers.sh",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/telemetry/gpu_contention_20260921T220600Z.txt",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/tests_out/review02_regression_20260921T222045Z.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/tests_out/review03_regression_20260921T223637Z.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/tests_out/selftest_l62_20260921T222045Z.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/tests_out/v3_regression_20260921T225908Z.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/monitor/validation-redteam-round18.md",
+      "papers/gdn-tree-scan-mlsys/v2/p0/remote-readiness.json",
+      "papers/gdn-tree-scan-mlsys/v2/p0/stock-image/reconstructed-current.py",
+      "papers/gdn-tree-scan-mlsys/v2/p0/stock-image/reconstructed-kvremap_tail6_kvr1.py",
+      "papers/gdn-tree-scan-mlsys/v2/p0/stock-image/reconstructed-native11_control_kvr1.py",
+      "papers/gdn-tree-scan-mlsys/v2/p0/stock-image/reconstructed-native5_control_kvr1.py",
+      "papers/gdn-tree-scan-mlsys/v2/p0/stock-image/sampling-source.json",
+      "papers/gdn-tree-scan-mlsys/v2/paper.config.yaml",
+      "papers/gdn-tree-scan-mlsys/v2/plan/2026-09-22-system-design-reframe.md",
+      "papers/gdn-tree-scan-mlsys/v2/ref.bib",
+      "papers/gdn-tree-scan-mlsys/v2/results/derived-accounting.json",
+      "papers/gdn-tree-scan-mlsys/v2/results/e1/aggregate.json",
+      "papers/gdn-tree-scan-mlsys/v2/results/e1/api-stream-diagnostic.json",
+      "papers/gdn-tree-scan-mlsys/v2/results/e1/cells.csv",
+      "papers/gdn-tree-scan-mlsys/v2/results/e1/contrasts.csv",
+      "papers/gdn-tree-scan-mlsys/v2/results/e1/independent-aggregate-review.json",
+      "papers/gdn-tree-scan-mlsys/v2/results/e1/support-exclusions.json",
+      "papers/gdn-tree-scan-mlsys/v2/results/e1/tables-source.json",
+      "papers/gdn-tree-scan-mlsys/v2/results/e2-policyA-first-forward-audit.json",
+      "papers/gdn-tree-scan-mlsys/v2/results/e7b-r16/fixture_commit_only_vs_none.json",
+      "papers/gdn-tree-scan-mlsys/v2/results/e7b-r16/fixture_commit_only_vs_sham.json",
+      "papers/gdn-tree-scan-mlsys/v2/results/e7b-r16/fixture_none_fidelity.json",
+      "papers/gdn-tree-scan-mlsys/v2/results/e7b-route-environments.json",
+      "papers/gdn-tree-scan-mlsys/v2/results/e8/aggregate.json",
+      "papers/gdn-tree-scan-mlsys/v2/results/e8/blocks.csv",
+      "papers/gdn-tree-scan-mlsys/v2/results/e8/cells.csv",
+      "papers/gdn-tree-scan-mlsys/v2/results/e8/paired-rates.tex",
+      "papers/gdn-tree-scan-mlsys/v2/results/e8/summary.json",
+      "papers/gdn-tree-scan-mlsys/v2/results/historical-macros.tex",
+      "papers/gdn-tree-scan-mlsys/v2/results/historical-metrics.csv",
+      "papers/gdn-tree-scan-mlsys/v2/results/historical-supports.json",
+      "papers/gdn-tree-scan-mlsys/v2/review-experiments.md",
+      "papers/gdn-tree-scan-mlsys/v2/scripts/audit_evidence.py",
+      "papers/gdn-tree-scan-mlsys/v2/scripts/audit_p0.py",
+      "papers/gdn-tree-scan-mlsys/v2/scripts/build_review_bundle.py",
+      "papers/gdn-tree-scan-mlsys/v2/scripts/export_completed_e7a.py",
+      "papers/gdn-tree-scan-mlsys/v2/scripts/export_e1.py",
+      "papers/gdn-tree-scan-mlsys/v2/scripts/export_e7b_diagnostics.py",
+      "papers/gdn-tree-scan-mlsys/v2/scripts/export_e8.py",
+      "papers/gdn-tree-scan-mlsys/v2/scripts/export_e8_paper_results.py",
+      "papers/gdn-tree-scan-mlsys/v2/scripts/export_selected_route.py",
+      "papers/gdn-tree-scan-mlsys/v2/scripts/plot_e1_results.py",
+      "papers/gdn-tree-scan-mlsys/v2/scripts/tabulate_e1.py",
+      "results/fr13_b4_exact16_qc_20260814/fr13_b4_exact16_qc.json",
+      "results/fr13_series_closeout_20260815/README.md",
+      "results/fr14_nvfp4_port_20260816/REDTEAM_20260816.md",
+      "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"
+    ],
     "host": "mark@100.103.10.122",
     "worktree": "/home/mark/lumo-paper-v2-20260921",
-    "checked_utc": "2026-09-22T21:12:46.876327+00:00",
-    "exact_hash_matches": [
-      "main.tex",
-      "abstract.tex",
-      "main.bbl",
-      "main.pdf",
-      "README.md",
-      "FINAL-REVIEW.md",
-      "paper.config.yaml",
-      "figures/pipeline.tikz",
-      "figures/scan-replay.tikz",
-      "notes/claim-evidence-ledger.md",
-      "notes/design/baselines.csv",
-      "notes/design/method-components.csv",
-      "notes/design/experiment-matrix.csv",
-      "notes/design/optimization-evidence-map.md",
-      "notes/optimization-route-audit-2026-09-22.md",
-      "plan/2026-09-22-system-design-reframe.md",
-      "issues/2026-09-22-system-design-reframe.csv",
-      "scripts/build_review_bundle.py",
-      "experiments/STATUS.md",
-      "p0/monitor/NEXT.md",
-      "p0/monitor/state.json",
-      "p0/monitor/design-reframe-redteam.md",
-      "p0/monitor/2026-09-22-design-reframe-build.json",
-      "artifacts/README.md",
-      "artifacts/FINAL-DELIVERY-before-design-reframe.json",
-      "artifacts/paper-design-20260922T2112Z.tar.gz",
-      "artifacts/paper-design-20260922T2112Z.tar.gz.manifest.json"
-    ]
+    "checked_utc": "2026-09-22T22:59:42.062591+00:00"
   }
 }

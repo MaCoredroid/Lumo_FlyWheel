@@ -1,13 +1,13 @@
 topic: GDN Tree-Scan v2
 paper_type: empirical
-status: design_reframe_review_complete_e8_timing_handoff
+status: latest_design_e8_reviewed_complete
 format: IEEEtran conference
 main_tex: main.tex
 bibliography: ref.bib
 runtime:
   python: /Users/zhiyuanma/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3
-  experiment_execution: bounded_core_complete_e8_qualification_pass_timing_handoff
-  experiment_scope: completed_core_plus_authorized_single_logits_qualification_and_conditional_six_B1_cells
+  experiment_execution: bounded_core_and_e8_complete
+  experiment_scope: completed_core_plus_two_E8_qualification_and_six_B1_timing_boots
   p0_report: p0/P0-REPORT.md
   remote_worktree: /home/mark/lumo-paper-v2-20260921
   handoff_status: p0/handoff-status.json

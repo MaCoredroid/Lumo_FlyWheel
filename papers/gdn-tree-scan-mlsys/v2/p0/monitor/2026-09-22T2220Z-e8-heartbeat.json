@@ -1,0 +1,30 @@
+{
+  "checked_utc": "2026-09-22T22:21:04.298835+00:00",
+  "qualification": {
+    "completed": 2,
+    "independently_verified": 2,
+    "planned": 2
+  },
+  "timing": {
+    "completed": 3,
+    "independent_raw_checks_passed": 3,
+    "planned": 6,
+    "aggregate_estimate": null
+  },
+  "active_job": {
+    "count": 1,
+    "container": "e8-sl-out-20260922T215254Z-e8-timing-4-off",
+    "cell": 4,
+    "stage": "model loading",
+    "driver_pid": 3599073,
+    "worker": "existing Claude Fable/xhigh; transition monitor active"
+  },
+  "source_manifest_sha256": "8bbb5b486fa9e11ff0bc0ef6d0373de65bbd8217392e973a02de015df39c2ab1",
+  "raw_review": "e8-timing-cells01-03-parent-replay-20260922T2220Z.json",
+  "independent_reviewer_narrative": "PASS cells01-03; no material finding; d3345981f26d51cea7aba0ed8f082fc380e588c83abb785e645895763c70b084",
+  "blockers": [],
+  "eta": "remaining GPU campaign about20-25minutes; source durations7.5-8.2min/cell",
+  "next": "Review remaining sealed cells; full3pairedblockanalysis only after all6; integrate fresh supported component result and package; keep monitor active.",
+  "reviewer_received_utc": "2026-09-22T22:21:29.930211+00:00",
+  "stream_diagnostic": "All eight complete128-ID streams match OFF01/ON02 and ON02/ON03; descriptive only, no partial aggregate."
+}

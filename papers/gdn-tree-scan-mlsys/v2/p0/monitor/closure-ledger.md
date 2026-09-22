@@ -1,5 +1,12 @@
 # V2 closure ledger
 
+
+## Current completion — 22 September 22:40:39 UTC
+
+E8 is complete: two qualification boots and all six fixed B1 timing boots independently PASS. ON/OFF mean rates are 12.69119/9.69541 tokens/s; the frozen mean of three paired relative changes is +30.89888%, with coarse 95% paired-block bootstrap interval [29.80504%, 32.90320%]. All original cells remain included. The last ON boot differs on all eight continuations, including p021 EOS at 101 tokens. This is an instrumented rate comparison, not equal-output acceleration or quality evidence. E1 already enabled reuse; E8 does not increase its Cat10 row again.
+
+No GPU job remains. Final worker exit0; post-campaign cleanup restored102.29GiB available and zero swap. Current manuscript uses latest qualified method and final results. Entries below preserve execution history and may describe superseded pending states.
+
 Created UTC: 2026-09-22T06:29:36.802397+00:00
 Owner: Codex coordinator. Implementation/GPU owner: existing Claude tmux lumo-v2-20260921. Independent paper review: Codex subagent paper_redteam_round1 (read-only source/evidence).
 

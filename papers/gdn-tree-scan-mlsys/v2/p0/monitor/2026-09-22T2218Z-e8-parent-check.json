@@ -1,0 +1,31 @@
+{
+  "checked_utc": "2026-09-22T22:18:46.604113+00:00",
+  "scope": "Parent receipt/source-head/API sampling spot check; complete independent raw interval reconstruction is separate",
+  "cells": [
+    {
+      "cell": "cell_01_block1_off",
+      "artifact_count": 45,
+      "status": "VALID",
+      "head_proposals": 360,
+      "head_calls": 3600,
+      "min_prefix_intervals": 34
+    },
+    {
+      "cell": "cell_02_block1_on",
+      "artifact_count": 45,
+      "status": "VALID",
+      "head_proposals": 360,
+      "head_calls": 1800,
+      "min_prefix_intervals": 34
+    },
+    {
+      "cell": "cell_03_block2_on",
+      "artifact_count": 45,
+      "status": "VALID",
+      "head_proposals": 360,
+      "head_calls": 1800,
+      "min_prefix_intervals": 34
+    }
+  ],
+  "aggregate": null
+}

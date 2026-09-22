@@ -1,0 +1,8 @@
+{"root": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T215254Z-e8-timing/qualification_evidence", "pass_sha256": "815b348bdb95c455122e7f1232449d4e12dd339edbd6c3c8e2b9a980c6342513", "source_manifest_sha256": "bc2feab326cb67c916ea418b0399499f4986e18d6bba3e4efc7a20a50f0ce030"}
+{"status": "STAGE_HASHES_PASS", "files": 23}
+[launch] serving /models/qwen3.6-27b-fp8 as 'qwen3.6-27b' (checkpoint identity d053823784d5db6f)
+[launch] REPO OVERRIDDEN BY CALLER: /home/mark/lumo-paper-v2-20260921 (head 984f613d7885d9bf7898866827552b68a3199d0c)
+               total        used        free      shared  buff/cache   available
+Mem:           117Gi        15Gi       102Gi       667Mi       1.2Gi       102Gi
+Swap:           15Gi          0B        15Gi
+f35ad687b1d7dddff88c3e155619b617d62e56d06c2c7e7182a7f81bdbaaf991

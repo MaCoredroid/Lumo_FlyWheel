@@ -1,23 +1,17 @@
-# System-design review — 22 September 2026
+# Latest design and completed E8 review — 22 September 2026
 
-The author-approved reframing is complete. The paper now develops the integrated tree verifier, GPU scan/replay execution, and implemented optimization mechanisms. The accounting audit supports the methods and appendix. No material manuscript finding remains at the reviewed source hashes.
+The manuscript describes the exact qualified serving route and its architecture, sequential scan/replay, state publication and active optimizations. Superseded FA2 implementation narratives and pilot-only numerical summaries have been removed; original failures and immutable data remain in the evidence archive. No historical quantitative result has been restored.
 
-- [Paper PDF](main.pdf): 14 pages, compiled and all pages visually inspected.
-- [Design manuscript review](p0/monitor/design-reframe-redteam.md): PASS at main `0d7bab38` and abstract `887f36b6`.
-- [Build and preservation checks](p0/monitor/2026-09-22-design-reframe-build.json): clean build, all citations resolved, historical numbers excluded, fresh numerical results unchanged.
-- [Implementation/evidence map](notes/design/optimization-evidence-map.md): implemented mechanisms, actual measured routes, and missing attribution experiments.
-- [Independent route audit](notes/optimization-route-audit-2026-09-22.md): exact frozen-source and live-route boundaries.
+E8 is complete: two qualification boots and all six fixed B1 timing boots independently PASS. ON/OFF mean rates are 12.69119/9.69541 tokens/s; the frozen mean of three paired relative changes is +30.89888%, with coarse 95% paired-block bootstrap interval [29.80504%, 32.90320%]. All original cells remain included. The last ON boot differs on all eight continuations, including p021 EOS at 101 tokens. This is an instrumented rate comparison, not equal-output acceleration or quality evidence. E1 already enabled reuse; E8 does not increase its Cat10 row again.
 
-| Completed core scope | Outcome |
-| --- | --- |
-| P0 | Provenance and measurement audit complete; historical unknowns retained |
-| E7a | Eight pilot inputs and 31 eligible confirmation inputs out of 32 originals; original frozen criteria failed and no compact candidate promoted |
-| E7b | Six corrected diagnostic boots; narrow stage-isolated and offline continuation observations |
-| E2 | Selected synchronous flat-map B1/B4 routes pass bounded helper/live checks; incompatible policy A retained as a failure witness |
-| E1 | All 18 original timing cells independently verified; no replacement or extension; all six prespecified precision targets met |
+The E1 means remain native MTP-5 / MTP-11 / Cat10 = 13.67 / 11.44 / 12.69 tokens/s at B1 and 55.38 / 42.15 / 47.28 at B4. These are fixed-configuration means, not best-case tuning results. B4 is aggregate throughput. E1 retains the engine-seed deviation and full-stream divergence. E7a reports the final 31/32 eligible confirmation result and failed frozen criteria; neither compact candidate is promoted. Local Bole/TreeWY realizations remain distinct from their authors' systems.
 
-The fresh measured rates for native chain-5 / native chain-11 / tree remain 13.67 / 11.44 / 12.69 tokens/s at B1 and 55.38 / 42.15 / 47.28 at B4. These are as-executed instrumented configuration measurements on fixed prefixes. Engine seeds and output streams differ, and three-block intervals are coarse. No matched-output, quality-preservation, full-model equivalence or isolated algorithm-speedup claim follows. Local Bole/TreeWY mechanism realizations are distinct from those authors' serving systems.
+Review and verification records:
 
-E8 qualification is independently PASS on both actual boots, with515paired head checks per arm and all eight32-ID API streams equal across arms. The exact six-cell B1 timing harness also passes independent review and has been handed to the existing worker. There is no E8 timing result yet, and qualification supplies no performance estimate. It does not establish universal full-model state equivalence. The initial pre-container launcher failure remains preserved; the corrected qualification changed launcher plumbing only.
+- `notes/latest-design-supersession-audit-2026-09-22.md`: repository/source freshness and route applicability.
+- `p0/monitor/e8-timing-final-redteam.md`: complete independent raw six-cell reconstruction.
+- `p0/monitor/paper-latest-design-e8-redteam.md` and `paper-e8-results-redteam.md`: final manuscript reviews.
+- `p0/monitor/2026-09-22-latest-design-e8-build.json`: canonical build and visual QA.
+- `artifacts/FINAL-DELIVERY.json`: final source, PDF, archive and extraction identities.
 
-The preceding dated packages and receipts remain preserved. The current delivery receipt identifies the most recently packaged revision; compare its source hashes to the build proof above. Historical quantitative results remain excluded from the paper, while raw historical audit files are retained. External pinned model/image/runtime dependencies and explicit DGX path mapping remain necessary for fresh execution. This is a private review draft; no publication or submission was performed.
+E8 has no B4 or composed-optimization result, and no full-model equivalence or quality result. No further GPU experiment is needed for these bounded claims. All owned GPU work is stopped; the final recovery receipt records 102.29 GiB available RAM and zero swap. No publication, submission, external message or push was performed.

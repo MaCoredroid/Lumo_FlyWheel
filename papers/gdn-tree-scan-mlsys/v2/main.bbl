@@ -58,12 +58,11 @@ Y.~Wu, Z.~Qin, A.~Wong, and S.~Soatto, ``Stree: Speculative tree decoding for
   \url{https://arxiv.org/abs/2505.14969}
 \BIBentrySTDinterwordspacing
 
-\bibitem{lumo2026receipts}
-Z.~Ma, ``{GDN Tree-Scan consolidated implementation and measurement
-  receipts},''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/tree/55f55854328b37f262e97d57b5863d8fadd7ff76},
-  2026, commit-pinned repository receipts for deploy TPS, equivalence gates,
-  runtime, launchers, kernels, and configuration.
+\bibitem{lumo2026archive}
+Z.~Ma, ``{Lumo FlyWheel implementation and experiment archive},''
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/tree/984f613d7885d9bf7898866827552b68a3199d0c},
+  2026, revision evidence snapshot; individual campaigns retain their own run
+  identities.
 
 \bibitem{lumo2026stateless}
 ------, ``{Stateless Tree Speculative Decoding: A Branched Verifier That Caches
@@ -164,24 +163,6 @@ S.~M. Ghantasala, ``{TreeWY: Speculative Verification for Gated DeltaNet
 {Dao AI Lab and NVIDIA}, ``{ReplaySSM: Cache SSM Inputs Instead of State},''
   \url{https://github.com/vllm-project/vllm/issues/47572}, 2026, implementation
   RFC; accessed 2026-09-21.
-
-\bibitem{lumo2026archive}
-Z.~Ma, ``{Lumo FlyWheel implementation and experiment archive},''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/tree/984f613d7885d9bf7898866827552b68a3199d0c},
-  2026, revision evidence snapshot; individual campaigns retain their own run
-  identities.
-
-\bibitem{lumo2026cost}
-------, ``{Keep or Replay: Why a Speculative Tree That Accepts More Still Loses
-  to the Linear Chain},''
-  \url{https://macoredroid.github.io/Lumo_FlyWheel/keep-or-replay.html}, 2026,
-  author experiment archive; accessed 2026-09-21.
-
-\bibitem{lumo2026spine}
-------, ``{One Bit in the Last Place: Why a Wider Speculative Tree Accepted
-  Fewer Tokens},''
-  \url{https://macoredroid.github.io/Lumo_FlyWheel/spine-reorder.html}, 2026,
-  author experiment archive; accessed 2026-09-21.
 
 \bibitem{qwen2026qwen36fp8}
 {Qwen Team}, ``{Qwen3.6-27B-FP8},''

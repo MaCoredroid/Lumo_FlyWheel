@@ -1,5 +1,5 @@
 {
-  "last_check_utc": "2026-09-22T22:06:10.913160+00:00",
+  "last_check_utc": "2026-09-22T22:21:04.298835+00:00",
   "automation_id": "review-lumo-v2-experiments-every-10-minutes",
   "session": "lumo-v2-20260921",
   "reviewed_files": {
@@ -129,7 +129,7 @@
     "e1_artifact_source_coverage": "CLOSED six exact dependencies archived;1482member hashes verified; independent essential completeness pass",
     "historical_results_removal": "CLOSED independent source/include review; old numerical results excluded, raw audit evidence preserved",
     "design_reframe": "CLOSED independent review dfed0d85",
-    "e8_single_logits": "Qualification2/2 independentlyverified; timing1/6sealedVALIDandindependentlyverified; secondcellONloading; aggregatepending"
+    "e8_single_logits": "Qualification2/2verified; timing3/6sealedVALIDandindependentrawcheckerPASS; cell04OFFloading; aggregatepending"
   },
   "resource_snapshot": {
     "observed_utc": "2026-09-22T21:10:28Z",
@@ -180,13 +180,13 @@
     "e7b_superseded_protocol_boots": 3,
     "e8_qualification_completed": 2,
     "e8_qualification_planned": 2,
-    "e8_timing_completed": 1,
+    "e8_timing_completed": 3,
     "e8_timing_planned_if_qualified": 6,
     "e8_infrastructure_attempts_failed": 1,
     "e8_model_boots_started": 1,
     "e8_qualification_verified": 2,
     "e8_timing_planned": 6,
-    "e8_timing_independently_verified": 1
+    "e8_timing_independently_verified": 3
   },
   "running_jobs": [
     {
@@ -247,14 +247,45 @@
     "runner_exit_utc": "2026-09-22T12:16:37Z",
     "status": "18/18 original cells sealed VALID and independently verified"
   },
-  "resume_note": "COMPLETE. No open material finding or necessary experiment for stated claims. Monitor paused; review FINAL-REVIEW.md and artifacts/FINAL-DELIVERY.json. Reopen only for new user scope or new evidence.",
+  "resume_note": "COMPLETE. Latest-qualified-design paper and E8 source/data/manuscript/artifact reviews PASS;14pagePDF visuallychecked; fivecompanions verified; DGXcopy185hashesverified. No required experiment remains. Reopen only for new user scope or material evidence.",
   "latest_paper_checkpoint": {
-    "archive": "artifacts/paper-final-20260922T1239Z.tar.gz",
-    "sha256": "a9bc52b1cbacba54c105f0061113646420fefec2ef34083235e9969600555e0a",
-    "files": 149,
-    "receipt": "artifacts/FINAL-DELIVERY.json"
+    "file": "artifacts/paper-latest-design-e8-20260922T2259Z.tar.gz",
+    "sha256": "b670d8902b42e4dbd7cda08186bfc1aa5758459fb29979b83a8747039f69bc9a",
+    "files": 177,
+    "bytes": 1671380
   },
   "delivery_pending": [],
-  "monitor_status": "ACTIVE",
-  "last_editorial_check_utc": "2026-09-22T19:45:23.049712+00:00"
+  "monitor_status": "PAUSED",
+  "last_editorial_check_utc": "2026-09-22T19:45:23.049712+00:00",
+  "updated_utc": "2026-09-22T23:00:46.674214+00:00",
+  "e8": {
+    "created_utc": "2026-09-22T21:19:58.843032+00:00",
+    "phase": "complete",
+    "root": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T215254Z-e8-timing",
+    "manifest_sha256": "8bbb5b486fa9e11ff0bc0ef6d0373de65bbd8217392e973a02de015df39c2ab1",
+    "qualification_planned": 2,
+    "timing_planned_if_qualified": 6,
+    "tmux": "lumo-v2-20260921",
+    "worker_session": "c8955ff9-f3ae-4551-869b-1a98b38ca2c3",
+    "updated_utc": "2026-09-22T23:00:46.674214+00:00",
+    "failed_attempts": 1,
+    "model_boots_started": 8,
+    "qualification_completed": 2,
+    "qualification_verified": 2,
+    "timing_completed": 6,
+    "blocking_issue": null,
+    "stage": "papers/gdn-tree-scan-mlsys/v2/experiments/e8-single-logits-timing-v1",
+    "prior_failed_root": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T2119Z-e8-single-logits",
+    "running_container": null,
+    "qualification_root": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T213142Z-e8-single-logits-v2",
+    "timing_verified": 6,
+    "handoff": "p0/E8-HANDOFF-TIMING.md",
+    "timing_started_utc": "2026-09-22T21:54:04Z",
+    "driver_pid": null,
+    "first_cell_review": "p0/monitor/e8-timing-cell01-redteam.md",
+    "current_raw_review": "p0/monitor/e8-timing-final-redteam.md",
+    "finished_utc": "2026-09-22T22:40:39Z",
+    "remaining_gpu_jobs": 0,
+    "monitor_status": "PAUSED"
+  }
 }

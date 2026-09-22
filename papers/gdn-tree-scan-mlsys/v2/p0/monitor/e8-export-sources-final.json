@@ -1,0 +1,19 @@
+{
+  "p0/monitor/e8-timing-final-redteam.md": "8f246e660beca4d5d601c7ba23a6e2040861b33052a6ade52fad8bc576b26364",
+  "p0/monitor/e8-timing-final-independent-review.json": "274566f0a0efec3c108931a329a54cc514bd0c5e783e7ec72415210669574544",
+  "p0/monitor/e8_timing_independent_check.py": "1f22d65b7145144ad44f7bcc8a836f939fe3132c44408b7675c3ed283431cf9b",
+  "p0/monitor/e8-timing-final-parent-replay-20260922T2242Z.json": "274566f0a0efec3c108931a329a54cc514bd0c5e783e7ec72415210669574544",
+  "p0/monitor/e8-packaging-redteam.md": "49a6443ad54ee447329bf85eb264865c2eef1600d162aa5009b16db689c85bf3",
+  "p0/monitor/e8-postcampaign-memory.json": "b116677717520c9a13d2d37e96c24d699cdf8ba0e74972c5a3a01293f3afc904",
+  "p0/monitor/e8-worker-status.json": "bb77f1ffa099058c5f412d8b182fe796542720fc8ec7aba70f5427801a2048ed",
+  "p0/monitor/e8-timing-worker-20260922T215254Z.receipt.json": "eeac433495fd42fb3784d64dbe8dc44e3dbfe75f0dc3d4eb24a76ab0523024fc",
+  "p0/monitor/e8-timing-worker-20260922T215254Z.log": "72fe1ccd3376222aedca8e096bf01f5c6a51493e812a899513f356268ea2351d",
+  "notes/latest-design-supersession-audit-2026-09-22.md": "a4591dd72084f1bacd34d60e2fd993cd7bb6fb28467dadc10f17a26f9c5f85c2",
+  "scripts/export_e8_paper_results.py": "2e10f80044ed42a4222254374a15af2afabad50908c7253567f5186f30d9146b",
+  "p0/E8-HANDOFF-TIMING.md": "d2aec9902225d20895382c1c5a75fd7bae761276a2e99411309f71a63b3d8126",
+  "results/e8/summary.json": "4b8f8aca86891c932779b812ca5ef8bd3f301ce39dc5e4d393cf5a3581fdde8d",
+  "results/e8/aggregate.json": "74b0988b191bb68fad43d41f76f520d49d529e86753ac0f18535721f6c3757fb",
+  "results/e8/paired-rates.tex": "c5af31c6e91fa80e61becefb370693c47f8c8e87559098f5b2b0bdcba2d17d89",
+  "results/e8/blocks.csv": "8fa6a03ae43173c9dcf38685d8f4429f2eab3393a43b2a2af85ba2cd9f99849c",
+  "results/e8/cells.csv": "2245308540e18438e8a4dc2a76e5154f45c74a2508dd0f81196b417081179665"
+}

@@ -1,0 +1,45 @@
+{
+  "schema": "e8.shim.v1",
+  "arm": "on",
+  "qualify": false,
+  "input_sha256": "aa022e2a1fc7993d0f7d4223f8366471e02e3c0e2740934c7a9490f7b45b01d7",
+  "output_sha256": "7a1f20b0897ec488f0a1e168105ce392cac566e79dbd206a1edeee527c0060c8",
+  "edits": [
+    {
+      "anchor_sha256": "b91a3bc5e2064d025a8ae122555c96948ec5b4895d53d809c4b66b71a4915133",
+      "count": 1
+    },
+    {
+      "anchor_sha256": "9831b54202b19f98385ad33f68da9e79fe91c7bed59d748fb46e4d8a4e102c24",
+      "count": 1
+    },
+    {
+      "anchor_sha256": "7e1fdbfd0d1728551f75db0e60da1b8d3f0651de68e2fd41b285ecef2839a1ba",
+      "count": 1
+    },
+    {
+      "anchor_sha256": "72e4a435ec95b72e5eb1093e24d1695fe4727b5fec1713d6e4c0a52782d28321",
+      "count": 1
+    },
+    {
+      "anchor_sha256": "12aa510d6d7f7454fb107ebc9f2bbe0f00956f29816b18fbbd4b480ff3b17050",
+      "count": 1
+    },
+    {
+      "anchor_sha256": "947274bea4eb8c003082f979bb4e2eb8ae2c684668de4a165d00b636670213ea",
+      "count": 1
+    },
+    {
+      "anchor_sha256": "e49697d1c6399713019940c956ce9a605bf1c3a7830eb9dd5f7814c834f6ac0d",
+      "count": 1
+    },
+    {
+      "anchor_sha256": "e5a43bb56906670b3b7890db1fb719178880d4dc7356614d6110b64c2e469927",
+      "count": 2
+    },
+    {
+      "anchor_sha256": "5cacd2da7dc421fa650ed2068fad0213f8188b226e6089765d20777824222fb5",
+      "count": 1
+    }
+  ]
+}

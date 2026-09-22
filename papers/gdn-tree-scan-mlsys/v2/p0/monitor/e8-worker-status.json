@@ -1,5 +1,5 @@
 {
- "stage": "E8 TIMING campaign (6 fresh B1 cells: block1 OFF/ON, block2 ON/OFF, block3 OFF/ON; 2 warm-ups of 32 tokens + 8 requests of 128 tokens per cell) \u2014 RUNNING",
+ "stage": "E8 TIMING campaign CLOSED \u2014 6/6 cells sealed VALID; independent raw/aggregate checks PASS (parent); no further inference or retries; raw artifacts and snapshots preserved",
  "handoff": "p0/E8-HANDOFF-TIMING.md",
  "manifest_sha256_rechecked": "bc2feab326cb67c916ea418b0399499f4986e18d6bba3e4efc7a20a50f0ce030",
  "source_gate": "e8_verify.py --stage STAGE_HASHES_PASS (23 files) at 21:32:00Z; launcher line 11 is a comment",
@@ -11,28 +11,23 @@
   "status_copy": "p0/monitor/e8-worker-status.original-failure-20260922T2119Z.json",
   "preserved": true
  },
- "running_jobs": [
-  {
-   "driver_pid": 3599073,
-   "wrapper_pid": 3599070,
-   "start_utc": "2026-09-22T21:54:04Z",
-   "command": "python3 -u -B papers/gdn-tree-scan-mlsys/v2/experiments/e8-single-logits-timing-v1/timing_driver.py --repo /home/mark/lumo-paper-v2-20260921 --run /home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T215254Z-e8-timing --qualification /home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T213142Z-e8-single-logits-v2 --execute",
-   "log": "p0/monitor/e8-timing-worker-20260922T215254Z.log",
-   "receipt": "p0/monitor/e8-timing-worker-20260922T215254Z.receipt.json",
-   "run_root": "papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T215254Z-e8-timing"
-  }
- ],
+ "running_jobs": [],
  "counts": {
   "cells_planned": 6,
-  "cells_sealed": 0,
-  "requests_completed": 0,
-  "warmups_completed": 0
+  "cells_sealed": 6,
+  "cells_valid": 6,
+  "requests_completed": 60,
+  "warmups_completed": 12,
+  "timed_requests": 48,
+  "retained_intervals_total": 1868,
+  "api_bound_tokens_total": 5940,
+  "ownership_pass": 6
  },
- "eta": "handoff estimate 45\u201370 min after 2026-09-22T21:54:04Z; refined from observed cell durations",
- "exit_code": null,
- "terminal_file": null,
- "updated_utc": "2026-09-22T21:54:07Z",
- "end_utc": "2026-09-22T21:46:03Z",
+ "eta": "none",
+ "exit_code": 0,
+ "terminal_file": "papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T215254Z-e8-timing/CAMPAIGN_COMPLETE.json",
+ "updated_utc": "2026-09-22T22:44:04Z",
+ "end_utc": "2026-09-22T22:40:39Z",
  "qualification_pass": {
   "status": "QUALIFICATION_PASS",
   "timing_authorized_by_this_driver": false,
@@ -50,5 +45,162 @@
  "timing_verify": "timing_verify.py --stage --qualification rc 0 before execution",
  "qualification_admitted": "out-20260922T213142Z-e8-single-logits-v2/QUALIFICATION_PASS.json (815b348b\u2026)",
  "previous_status_copy": "p0/monitor/e8-worker-status.qualification-pass-20260922T213142Z.json",
- "current_cell": "cell 1 (block 1, OFF) \u2014 booting"
+ "current_cell": null,
+ "observed": {
+  "cell_1_block1_off": "boot 21:54:0xZ \u2192 container replaced 22:02:25Z (\u2248 8.3 min per cell incl. boot, warm-ups, requests, shutdown)"
+ },
+ "last_driver_line": "{\"status\": \"PLAN\", \"cells\": [{\"index\": 1, \"block\": 1, \"arm\": \"off\", \"name\": \"cell_01_block1_off\"}, {\"index\": 2, \"block\": 1, \"arm\": \"on\", \"name\": \"cell_02_block1_on\"}, {\"index\": 3, \"block\": 2, \"arm\": \"on\", \"name\": \"cell_03_block2_on\"}, {\"index\": 4, \"block\": 2, \"arm\": \"off\", \"name\": \"cell_04_block2_of",
+ "cells": {
+  "cell_01_block1_off": {
+   "terminal_seal": true,
+   "requests": 10,
+   "warmup": 2,
+   "timed": 8,
+   "retained_intervals": 314,
+   "excluded": 32,
+   "wall_s": 102.7218893384561,
+   "api_bound_tokens": 995,
+   "tokens_per_wall_second": 9.686348317850701,
+   "ownership": "PASS",
+   "invalid": null,
+   "refused": null
+  },
+  "cell_02_block1_on": {
+   "terminal_seal": true,
+   "requests": 10,
+   "warmup": 2,
+   "timed": 8,
+   "retained_intervals": 314,
+   "excluded": 32,
+   "wall_s": 79.02388299256563,
+   "api_bound_tokens": 995,
+   "tokens_per_wall_second": 12.59113020418912,
+   "ownership": "PASS",
+   "invalid": null,
+   "refused": null
+  },
+  "cell_03_block2_on": {
+   "terminal_seal": true,
+   "requests": 10,
+   "warmup": 2,
+   "timed": 8,
+   "retained_intervals": 314,
+   "excluded": 32,
+   "wall_s": 78.9974324265495,
+   "api_bound_tokens": 995,
+   "tokens_per_wall_second": 12.595346069318577,
+   "ownership": "PASS",
+   "invalid": null,
+   "refused": null
+  },
+  "cell_04_block2_off": {
+   "terminal_seal": true,
+   "requests": 10,
+   "warmup": 2,
+   "timed": 8,
+   "retained_intervals": 314,
+   "excluded": 32,
+   "wall_s": 102.54264487046748,
+   "api_bound_tokens": 995,
+   "tokens_per_wall_second": 9.70328004760254,
+   "ownership": "PASS",
+   "invalid": null,
+   "refused": null
+  },
+  "cell_05_block3_off": {
+   "terminal_seal": true,
+   "requests": 10,
+   "warmup": 2,
+   "timed": 8,
+   "retained_intervals": 314,
+   "excluded": 32,
+   "wall_s": 102.6132529862225,
+   "api_bound_tokens": 995,
+   "tokens_per_wall_second": 9.696603226618251,
+   "ownership": "PASS",
+   "invalid": null,
+   "refused": null
+  },
+  "cell_06_block3_on": {
+   "terminal_seal": true,
+   "requests": 10,
+   "warmup": 2,
+   "timed": 8,
+   "retained_intervals": 298,
+   "excluded": 30,
+   "wall_s": 74.88110671844333,
+   "api_bound_tokens": 965,
+   "tokens_per_wall_second": 12.887095854878957,
+   "ownership": "PASS",
+   "invalid": null,
+   "refused": null
+  }
+ },
+ "campaign_complete": {
+  "status": "COMPLETE",
+  "aggregate_sha256": "74b0988b191bb68fad43d41f76f520d49d529e86753ac0f18535721f6c3757fb",
+  "timing_manifest_sha256": "8bbb5b486fa9e11ff0bc0ef6d0373de65bbd8217392e973a02de015df39c2ab1"
+ },
+ "aggregate_sha256_recomputed": "74b0988b191bb68fad43d41f76f520d49d529e86753ac0f18535721f6c3757fb",
+ "aggregate": {
+  "status": "COMPLETE_FROZEN_ANALYSIS",
+  "n_complete_valid_blocks": 3,
+  "paired_blocks": [
+   {
+    "block": 1,
+    "rate_on": 12.59113020418912,
+    "rate_off": 9.686348317850701,
+    "paired_relative_difference": 0.2998841040008109
+   },
+   {
+    "block": 2,
+    "rate_on": 12.595346069318577,
+    "rate_off": 9.70328004760254,
+    "paired_relative_difference": 0.2980503507605761
+   },
+   {
+    "block": 3,
+    "rate_on": 12.887095854878957,
+    "rate_off": 9.696603226618251,
+    "paired_relative_difference": 0.32903198715014453
+   }
+  ],
+  "primary_mean_paired_relative_difference": 0.30898881397051053,
+  "primary_95pct_percentile_interval": [
+   0.2980503507605761,
+   0.32903198715014453
+  ],
+  "diagnostic_ratio_of_arm_means_minus_one": 0.30898951305761435,
+  "bootstrap_draws": 10000,
+  "bootstrap_seed": 20260921
+ },
+ "wrapper_receipt": {
+  "exit_code": 0,
+  "start_utc": "2026-09-22T21:54:04Z",
+  "end_utc": "2026-09-22T22:40:39Z",
+  "driver_pid": 3599073
+ },
+ "notes": {
+  "cell_06_block3_on": "timed request t3 (p021) stopped at EOS after 101 API tokens (finish 'stop'); retained per the frozen rules (298 intervals, 965 API-bound tokens); no replacement or extension",
+  "output_divergence": "descriptive stream diagnostic (aggregate.json 'stream_diagnostic', 72 comparisons): blocks 1 and 2 are token-equal within each ON/OFF pair on all 8 prefixes (16/16) and the OFF arm is token-equal across all three blocks (24/24); the block 3 ON cell (cell 6) differs from its OFF pair on all 8 prefixes and from the block 1 and block 2 ON cells on all 8 prefixes, first divergence at token 0 (p017), 2 (p015, p021), 5 (p072), 8 (p058), 19 (p095), 32 (p085), 74 (p083); p021 additionally 101 vs 128 tokens. NO matched-output claim is made for the ON arm; matched prefixes do not imply identical continuations; the rate estimand does not depend on stream equality",
+  "postcampaign_memory_recovery": {
+   "file": "p0/monitor/e8-postcampaign-memory.json",
+   "hook": "recover_host_memory() (launcher hook), worktree PYTHONPATH, no credential",
+   "idle_before": {
+    "utc": "2026-09-22T22:43:33Z",
+    "containers": 0,
+    "gpu_compute_processes": 0,
+    "driver_or_loop_processes": 0
+   },
+   "MemAvailable_GiB_before_after": [
+    40.09,
+    102.29
+   ],
+   "SwapFree_GiB_before_after": [
+    14.49,
+    16.0
+   ],
+   "hook_rc": 0
+  }
+ }
 }

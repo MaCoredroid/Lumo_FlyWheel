@@ -181,6 +181,12 @@ def collect(paper, sources):
         p=safe(paper,E1_CELL+'/'+rel);require(p.is_file(),'missing E1 CPU fixture '+rel);files.add(p)
     require(digest(paper/E1_CELL/'loaded_backend/eagle.py')=='aa022e2a1fc7993d0f7d4223f8366471e02e3c0e2740934c7a9490f7b45b01d7','E8 shim input source differs')
     q=load(paper/QUAL_STAGE/'manifest.json')
+    # The generator globs all five original loaded modules; retain the four
+    # unchanged modules as well as eagle.py so regeneration preserves their pins.
+    for name,h in q['unchanged_loaded_modules'].items():
+        original=safe(paper,E1_CELL+'/loaded_backend/'+name)
+        require(original.is_file() and digest(original)==h,'original loaded module differs '+name)
+        files.add(original)
     for rel,h in q['files'].items():
         if rel.startswith('frozen/repository/'):
             mapped='p0/monitor/e1-source-20260922T1150Z/'+rel.removeprefix('frozen/repository/')
