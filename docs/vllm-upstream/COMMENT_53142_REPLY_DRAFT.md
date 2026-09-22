@@ -1,4 +1,5 @@
 # #53142 reply to Karl0007's 2026-09-22 fixture-adaptation report — v2 (Codex replacement verbatim: "which column is restored" imprecise; "not on initialisation seams" too categorical; GO; AWAITING MARK GO)
+> **POSTED 2026-09-22T19:54:01Z (Mark GO 2026-09-22):** https://github.com/vllm-project/vllm/issues/53142#issuecomment-5783063303
 > Karl0007 (#55507 author) adapted our P8 restore-fidelity fixture to #55507's lazy binding, ran it on
 > the tree of our branch: #53798 as-is 10 passed; #55507 as written 2 FAILED (seed column 6709 vs 121;
 > unequal-geometry restore into the wrong block); #55507 + fallback fix Karl0007/vllm@adc7d30

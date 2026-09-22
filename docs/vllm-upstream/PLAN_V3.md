@@ -212,3 +212,5 @@ Answered jschmied's request for a configuration where `cache_config.block_size <
 
 ### 2026-09-22 15:52Z — our restore-fidelity fixture caught a real bug in #55507 (Karl0007 on #53142)
 Karl0007 adapted the P8 fixture to #55507's lazy binding: #53798 10/10; #55507 as written 2 FAILED (unbound-fallback divisor — the exact gap item D flagged); fixed in Karl0007/vllm@adc7d30 → 10/10. "your fixture caught a real hole in our variant". Offers to push the adapted fixture + arm patches. Scoreboard: evidence acted on in 4 threads (#55122 ×2, #54076, #53142/#55507). Reply draft v1 → Codex → Mark GO.
+
+### 2026-09-22T19:54:01Z — #53142 reply posted (Mark GO): accepted Karl0007's offer to push the adapted fixture + arm patches; scoped what the fixture checks; stated we have not run adc7d30. https://github.com/vllm-project/vllm/issues/53142#issuecomment-5783063303
