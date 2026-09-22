@@ -204,3 +204,6 @@ After jschmied's 2026-09-21 reframing (performance PR with correctness side-bene
 
 ### 2026-09-21T22:39:19Z — item E posted: #54076 reply (Mark funded 2026-09-21, GO)
 Answered jschmied's request for a configuration where `cache_config.block_size < MambaSpec.block_size` is reachable: `extract_hidden_states` + ExampleHiddenStatesConnector on Qwen3.8-27B-FP8 with align mode + prefix caching gives 200 vs 800 on stock 0.28.0 (two stock INFO lines); main read (382970ee6c) keeps the path open, not executed; DFlash2 drafter arm did NOT diverge (832/832), contradicting the PR body's 816/1648 attribution. Startup geometry only. https://github.com/vllm-project/vllm/pull/54076#issuecomment-5768495023. Evidence results/upstream/54076 (with CORRECTIONS.md). Threads used now: +54076 (10). Related new PR #58021 (resolved geometry propagation) noted, not engaged.
+
+### 2026-09-22 15:24Z — jschmied REPRODUCED item E's configuration on #54076 and retracted his negative
+"It reproduces, and my 2026-09-20 comment here was wrong." Identical 800/200 lines on his 0.28.1rc1.dev524 build (same build as his negative). He offers a current-main run (aarch64 nightly 1ea7c63f4). Scoreboard: evidence acted on in a third thread (#55122 ×2 + #54076). Reply-2 draft v1 → Codex → Mark GO.
