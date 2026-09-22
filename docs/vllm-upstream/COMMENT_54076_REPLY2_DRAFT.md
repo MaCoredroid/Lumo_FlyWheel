@@ -1,4 +1,5 @@
 # #54076 reply to jschmied's 2026-09-22 reproduction + question — v2 (Codex replacement verbatim: NO-GO on "unchanged in source" — 382970ee6c adds the prefix-cacheable filter, packed-group bypass and minimum-page scaling; GO on this text; AWAITING MARK GO)
+> **POSTED 2026-09-22T15:35:37Z (Mark GO 2026-09-22):** https://github.com/vllm-project/vllm/pull/54076#issuecomment-5779353800
 > jschmied (2026-09-22T15:24Z) ran our config on his 0.28.1rc1.dev524 build: identical 800/200 lines,
 > "It reproduces, and my 2026-09-20 comment here was wrong." He asks: "If a current-main run is what
 > you need, say so — I have the aarch64 nightly wheel for 1ea7c63f4 on the box." He also notes that

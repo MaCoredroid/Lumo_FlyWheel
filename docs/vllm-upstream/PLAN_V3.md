@@ -207,3 +207,5 @@ Answered jschmied's request for a configuration where `cache_config.block_size <
 
 ### 2026-09-22 15:24Z — jschmied REPRODUCED item E's configuration on #54076 and retracted his negative
 "It reproduces, and my 2026-09-20 comment here was wrong." Identical 800/200 lines on his 0.28.1rc1.dev524 build (same build as his negative). He offers a current-main run (aarch64 nightly 1ea7c63f4). Scoreboard: evidence acted on in a third thread (#55122 ×2 + #54076). Reply-2 draft v1 → Codex → Mark GO.
+
+### 2026-09-22T15:35:37Z — #54076 reply-2 posted (Mark GO): accepted jschmied's offer of a 1ea7c63f4 nightly run; scoped the 382970ee6c static claim; confirmed nested argv form. https://github.com/vllm-project/vllm/pull/54076#issuecomment-5779353800
