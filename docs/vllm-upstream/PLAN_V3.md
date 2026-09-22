@@ -209,3 +209,6 @@ Answered jschmied's request for a configuration where `cache_config.block_size <
 "It reproduces, and my 2026-09-20 comment here was wrong." Identical 800/200 lines on his 0.28.1rc1.dev524 build (same build as his negative). He offers a current-main run (aarch64 nightly 1ea7c63f4). Scoreboard: evidence acted on in a third thread (#55122 ×2 + #54076). Reply-2 draft v1 → Codex → Mark GO.
 
 ### 2026-09-22T15:35:37Z — #54076 reply-2 posted (Mark GO): accepted jschmied's offer of a 1ea7c63f4 nightly run; scoped the 382970ee6c static claim; confirmed nested argv form. https://github.com/vllm-project/vllm/pull/54076#issuecomment-5779353800
+
+### 2026-09-22 15:52Z — our restore-fidelity fixture caught a real bug in #55507 (Karl0007 on #53142)
+Karl0007 adapted the P8 fixture to #55507's lazy binding: #53798 10/10; #55507 as written 2 FAILED (unbound-fallback divisor — the exact gap item D flagged); fixed in Karl0007/vllm@adc7d30 → 10/10. "your fixture caught a real hole in our variant". Offers to push the adapted fixture + arm patches. Scoreboard: evidence acted on in 4 threads (#55122 ×2, #54076, #53142/#55507). Reply draft v1 → Codex → Mark GO.
