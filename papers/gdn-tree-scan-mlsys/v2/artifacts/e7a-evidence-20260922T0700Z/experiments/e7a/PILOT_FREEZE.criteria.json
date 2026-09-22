@@ -1,0 +1,286 @@
+{
+  "candidate_selection": {
+    "candidates": [
+      "A_prod: production sequential scan (fp32 store; deployed bf16 store reported)",
+      "B_fs[ieee]: ancestor-masked triangular solve (forward substitution) + compact reconstruction, fp32 ieee (bf16-store variant reported)",
+      "C_nm[ieee]: Bole finite-Neumann (d terms) + compact reconstruction, fp32 ieee (bf16-store variant reported)"
+    ],
+    "excluded": [
+      "B_fs[tf32], C_nm[tf32]: 3\u20134 orders worse on all 8 pilot sets (out32 vs oracle max 1.34e-4 vs 4.45e-8); reported as ablation only, never promoted",
+      "A_legacy (June-8 vendored scan export skips the root update; source-inspected), B_legacyWY bf16-bnd: excluded as before"
+    ],
+    "rationale": "Pilot (8 VERIFIED-FRESH sets, out-20260922T012554Z-e7a-fresh-pilot): A_prod fp32 out bit-identical to the pinned native spec-update kernel on 8/8 (integer view, fp32 and bf16 stores); B/C fp32-ieee out vs fp64 oracle \u2264 4.447e-08 (A \u2264 2.724e-08); compact-commit state vs oracle \u2264 7.867e-07; bf16-store B/C agreement with native \u2265 0.999788; sibling-reorder and padding controls bitwise-invariant on 8/8; replay repeat-launch bitwise-equal on 8/8. Served output (live server, tree step 1) byte-identical to the production scan and native spec-update bf16 outputs on 8/8 (fresh-pilot-v2)."
+  },
+  "tolerances": {
+    "scan_fp32_out_vs_native_specupdate_bitwise": {
+      "pilot_max": 0,
+      "tolerance": 0,
+      "rule": "0 ULP, integer view (bit-identical), production scan fp32 store vs pinned native spec-update kernel; pilot 8/8 bitwise_frac = 1.0"
+    },
+    "scan_bf16_out_vs_native_specupdate_bitwise": {
+      "pilot_max": 0,
+      "tolerance": 0,
+      "rule": "0 ULP, integer view, deployed bf16 store vs native spec-update bf16 store; pilot 8/8 bitwise_frac = 1.0"
+    },
+    "fp32_ieee_realizations_out_vs_fp64_oracle_max_abs": {
+      "pilot_max": 4.44652720754668e-08,
+      "margin": 2.0,
+      "tolerance": 8.89305441509336e-08
+    },
+    "compact_commit_state_vs_fp64_oracle_max_abs": {
+      "pilot_max": 7.867071634137801e-07,
+      "margin": 2.0,
+      "tolerance": 1.5734143268275602e-06
+    },
+    "compact_commit_state_vs_native_specupdate_max_abs": {
+      "pilot_max": 1.9073486328125e-06,
+      "margin": 2.0,
+      "tolerance": 3.814697265625e-06
+    },
+    "replay_state_vs_fp64_oracle_max_abs": {
+      "pilot_max": 1.2969487670488888e-06,
+      "margin": 2.0,
+      "tolerance": 2.5938975340977777e-06
+    },
+    "replay_state_vs_native_specupdate_max_abs": {
+      "pilot_max": 2.384185791015625e-07,
+      "margin": 2.0,
+      "tolerance": 4.76837158203125e-07
+    },
+    "bf16_store_realizations_disagreement_with_native (1 - bitwise frac)": {
+      "pilot_max": 0.00021158854166669627,
+      "margin": 1.5,
+      "tolerance": 0.0003173828125000444
+    },
+    "served_bf16_out_vs_fp64_oracle_max_abs (CPU self-test on the payload's serving_out)": {
+      "pilot_max": 0.0004850037775502025,
+      "margin": 1.5,
+      "tolerance": 0.0007275056663253038
+    },
+    "served_bf16_out_vs_fp64_oracle_ulp16_on_significant": {
+      "pilot_max": 1,
+      "tolerance": 1,
+      "rule": "<= 1 ULP (bf16) on significant elements; pilot max = 1"
+    },
+    "native_specupdate_bf16_out_vs_fp64_oracle_max_abs": {
+      "pilot_max": 0.0004850037775502025,
+      "margin": 1.5,
+      "tolerance": 0.0007275056663253038
+    },
+    "served_bf16_out_bytes_equal_production_scan_out16": {
+      "pilot_max": 0,
+      "tolerance": 0,
+      "rule": "byte-identical (integer view): the payload's live served bf16 output equals the production scan's bf16 output AND the native spec-update bf16 output on the captured operands; pilot 8/8 (fresh-pilot-v2)"
+    }
+  },
+  "unacceptable_decision_changes": [
+    "any confirmation set where the production-scan fp32 or bf16 store is not bit-identical (integer view) to the pinned native spec-update kernel",
+    "any confirmation set where the payload's served bf16 output is not byte-identical to the production scan bf16 output (and to the native spec-update bf16 output) on the captured operands",
+    "any confirmation set where a candidate's fp32-ieee out vs fp64 oracle, compact-commit state vs oracle/native, or replay state exceeds its frozen tolerance",
+    "bf16-store B/C disagreement with native above the frozen class (agreement floor 0.999683) on any confirmation set",
+    "served bf16 output vs fp64 oracle > 1 ULP16 on significant elements or above the frozen max-abs class on any confirmation set",
+    "any non-finite comparison cell; any sibling-reorder / padding control not bitwise-invariant; any replay repeat-launch not bitwise-equal",
+    "any change in the ordering of A_prod, B_fs[ieee], C_nm[ieee] by worst-case class error relative to the pilot (pilot: A <= B == C for out vs oracle; B == C for compact state)",
+    "provenance FAIL on any confirmation prefix (counted as a failure; never dropped or re-run silently); any second passing run for the same prefix (refused by the fill script)",
+    "tf32 realizations promoted into the deployed comparison"
+  ],
+  "timing_precision_target": {
+    "relative_half_width_max": 0.05,
+    "probe_drift_max": 0.05,
+    "basis": "half-width = (p90 - p10) / (2 * median) of CUDA-event sync timings, iters 200 / warmup 20, per set. Applies to the VERIFY-class kernels (A_prod scan out16, B_fs/C_nm verify out16, native spec-update chain): pilot max 0.0623 (met). COMMIT-class kernels (~18\u2013105 us: B/C compact commit, A replay commit, native one-token) are REPORTED, not gated: pilot half-width max 0.216 on 3/8 sets exceeded 0.05 because of sub-20-us jitter; confirmation rows above 0.05 are labeled imprecise. Probe drift pilot max 0.0370. Timing remains a shared-device diagnostic; attribution label required per run."
+  },
+  "metric_variance": {
+    "classes_min_median_max_over_8_sets": {
+      "A_prod_out32_vs_native_sg32_bitwise_frac": {
+        "min": 1.0,
+        "median": 1.0,
+        "max": 1.0
+      },
+      "A_prod_out16_vs_native_sg16_bitwise_frac": {
+        "min": 1.0,
+        "median": 1.0,
+        "max": 1.0
+      },
+      "A_prod_out32_vs_oracle_max_abs": {
+        "min": 9.9375310272376e-09,
+        "median": 1.4111590063148327e-08,
+        "max": 2.7237625183085257e-08
+      },
+      "B_fs_ieee_out32_vs_oracle_max_abs": {
+        "min": 1.949136478607283e-08,
+        "median": 2.7423754683786328e-08,
+        "max": 4.44652720754668e-08
+      },
+      "C_nm_ieee_out32_vs_oracle_max_abs": {
+        "min": 1.949136478607283e-08,
+        "median": 2.7423754683786328e-08,
+        "max": 4.44652720754668e-08
+      },
+      "B_fs_ieee_out16_vs_native_sg16_bitwise_frac": {
+        "min": 0.9997884114583333,
+        "median": 0.99990234375,
+        "max": 0.9999348958333333
+      },
+      "C_nm_ieee_out16_vs_native_sg16_bitwise_frac": {
+        "min": 0.9998046875,
+        "median": 0.99990234375,
+        "max": 0.9999186197916666
+      },
+      "B_fs_ieee_compact_own_vs_oracle_max_abs": {
+        "min": 3.971868167695902e-07,
+        "median": 4.67146986427025e-07,
+        "max": 7.867071634137801e-07
+      },
+      "C_nm_ieee_compact_own_vs_oracle_max_abs": {
+        "min": 3.971868167695902e-07,
+        "median": 4.67146986427025e-07,
+        "max": 7.867071634137801e-07
+      },
+      "B_fs_ieee_compact_own_vs_native_sg_max_abs": {
+        "min": 4.76837158203125e-07,
+        "median": 7.152557373046875e-07,
+        "max": 1.9073486328125e-06
+      },
+      "C_nm_ieee_compact_own_vs_native_sg_max_abs": {
+        "min": 4.76837158203125e-07,
+        "median": 7.152557373046875e-07,
+        "max": 1.9073486328125e-06
+      },
+      "A_prod_replay_vs_oracle_max_abs": {
+        "min": 5.062497452357206e-07,
+        "median": 7.632924501344007e-07,
+        "max": 1.2969487670488888e-06
+      },
+      "A_prod_replay_vs_native_sg_state_max_abs": {
+        "min": 2.9802322387695312e-08,
+        "median": 5.960464477539063e-08,
+        "max": 2.384185791015625e-07
+      },
+      "native_sg_out16_vs_oracle_max_abs": {
+        "min": 0.00012107269665396353,
+        "median": 0.0002402906287333889,
+        "max": 0.0004850037775502025
+      },
+      "B_fs_tf32_out32_vs_oracle_max_abs": {
+        "min": 4.2456228120713035e-05,
+        "median": 7.390512690130108e-05,
+        "max": 0.00013426760018381279
+      },
+      "sibling_reverse_B_out_bitwise": {
+        "min": 1.0,
+        "median": 1.0,
+        "max": 1.0
+      },
+      "sibling_reverse_C_out_bitwise": {
+        "min": 1.0,
+        "median": 1.0,
+        "max": 1.0
+      },
+      "sibling_reverse_A_out_bitwise": {
+        "min": 1.0,
+        "median": 1.0,
+        "max": 1.0
+      }
+    },
+    "timing_median_us_min_median_max": {
+      "A_prod_scan_verify_out16": {
+        "min": 88.41600269079208,
+        "median": 89.80799838900566,
+        "max": 90.27200192213058
+      },
+      "A_prod_replay_commit_deepest": {
+        "min": 101.69599950313568,
+        "median": 103.80800068378448,
+        "max": 105.82400113344193
+      },
+      "B_fs[ieee]_verify_out16": {
+        "min": 104.8320010304451,
+        "median": 105.8720014989376,
+        "max": 106.88000172376633
+      },
+      "B_fs[ieee]_commit_deepest": {
+        "min": 17.983999103307724,
+        "median": 18.81599985063076,
+        "max": 18.848000094294548
+      },
+      "C_nm[ieee]_verify_out16": {
+        "min": 99.29600358009338,
+        "median": 100.51199793815613,
+        "max": 100.60799866914749
+      },
+      "C_nm[ieee]_commit_deepest": {
+        "min": 17.952000722289085,
+        "median": 18.5120003297925,
+        "max": 18.751999363303185
+      },
+      "native_sg_chain_depth5_verify(context)": {
+        "min": 115.00799655914307,
+        "median": 115.77600240707397,
+        "max": 116.95999652147293
+      },
+      "native_pk_one_token(context)": {
+        "min": 23.96799996495247,
+        "median": 24.064000695943832,
+        "max": 24.800000712275505
+      }
+    },
+    "timing_rel_half_width_min_median_max": {
+      "A_prod_scan_verify_out16": {
+        "min": 0.01463761667197137,
+        "median": 0.016400766450043354,
+        "max": 0.019182067574815696
+      },
+      "A_prod_replay_commit_deepest": {
+        "min": 0.0147601522248428,
+        "median": 0.030921764202889734,
+        "max": 0.15225279310522782
+      },
+      "B_fs[ieee]_verify_out16": {
+        "min": 0.009522372012124086,
+        "median": 0.010139246739885966,
+        "max": 0.01159952873827327
+      },
+      "B_fs[ieee]_commit_deepest": {
+        "min": 0.008488930118491625,
+        "median": 0.026970311288499783,
+        "max": 0.03108346069059722
+      },
+      "C_nm[ieee]_verify_out16": {
+        "min": 0.011032948253148482,
+        "median": 0.014633371353214446,
+        "max": 0.025604335863539912
+      },
+      "C_nm[ieee]_commit_deepest": {
+        "min": 0.024955418225139546,
+        "median": 0.03041022981850942,
+        "max": 0.19150778514816977
+      },
+      "native_sg_chain_depth5_verify(context)": {
+        "min": 0.021001389406380286,
+        "median": 0.036805672265134606,
+        "max": 0.06225841089426249
+      },
+      "native_pk_one_token(context)": {
+        "min": 0.003989353261819445,
+        "median": 0.022606380302528116,
+        "max": 0.21605748728322205
+      }
+    },
+    "probe_drift_min_median_max": {
+      "min": 0.0010285414201605114,
+      "median": 0.010414769150480008,
+      "max": 0.03703821709304611
+    },
+    "served_bf16_out_vs_oracle_max_abs_per_prefix": {
+      "p072": 0.00012107269665398435,
+      "p017": 0.00024081768380034008,
+      "p015": 0.0002298629817051312,
+      "p021": 0.00024118581192209,
+      "p085": 0.00026933581935575934,
+      "p095": 0.0004850037775502025,
+      "p058": 0.0002241708359878719,
+      "p083": 0.0002397635736664655
+    }
+  },
+  "notes": "Analysis/resampling unit = frozen prefix. Confirmation = 32 disjoint frozen prefixes (16 x 256 tokens, 16 x 4096 tokens), layer language_model.model.layers.62.linear_attn, same served configuration (FP8 checkpoint read-only, pinned image, FIXED patcher a7f8f094..., capture-only shim, tree_mtp caterpillar 9 drafts, TREE_ATTN, FR13_REPLAY_ROUTE=1, B1, eager, seed 20260921, temperature 0, max_tokens 32, one request per boot), inspector 59c5b2b9... . Run only via capture_loop.v5.sh SET=confirmation. Evidence limits: served tree state is N/A on the stateless route; cross-boot greedy divergence recorded, not attributed; API/server correlation binding is not a state-continuation qualification. Harness run of record for the freeze: out-20260922T013313Z-e7a-fresh-pilot-v2 (adds the served-output rows; first run out-20260922T012554Z retained, identical numerics)."
+}

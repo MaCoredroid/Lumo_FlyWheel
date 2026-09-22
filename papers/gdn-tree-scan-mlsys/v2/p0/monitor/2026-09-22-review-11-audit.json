@@ -1,0 +1,76 @@
+{
+  "utc": "2026-09-22T00:55:47.540924+00:00",
+  "capture_revalidations": {
+    "capture_03_p015": {
+      "rc": 0,
+      "all_pass": true,
+      "n_checks": 48,
+      "failed": [],
+      "payload_sha256": "6742e2d92016f061e5bfb562b87ad5ac1a45494ebcc0129ed18f107d8c267f8a",
+      "inspector_sha256": "e888b7160f11b8951945061c76c30c38cb5371855ba7389fe33047d12e6b3d53"
+    },
+    "capture_04_p021": {
+      "rc": 0,
+      "all_pass": true,
+      "n_checks": 48,
+      "failed": [],
+      "payload_sha256": "d8307e795dc7dac1a77c2f81caa40f5b16c3f725f273be2a86f95f334c62a023",
+      "inspector_sha256": "e888b7160f11b8951945061c76c30c38cb5371855ba7389fe33047d12e6b3d53"
+    }
+  },
+  "freeze_controls": {
+    "rc": 0,
+    "n_checks": 21,
+    "all_pass": true,
+    "failed": [],
+    "stderr": ""
+  },
+  "augmented_fixture_rc": 1,
+  "nonfinite_tolerance_control": {
+    "pass": false,
+    "detail": []
+  },
+  "final_check_utc": "2026-09-22T00:58:37.604946+00:00",
+  "resources": {
+    "observed_utc": "2026-09-22T00:58:37.604946+00:00",
+    "available_gib": 40.94249725341797,
+    "free_gib": 7.01092529296875,
+    "swap_used_gib": 2.02099609375,
+    "compute_apps": {
+      "rc": 0,
+      "stdout": ""
+    },
+    "docker": {
+      "rc": 0,
+      "stdout": ""
+    }
+  },
+  "reviewed_files": {
+    "experiments/STATUS.md": "3ecca5590419809b9a2ac3a86507058053cc8e5dc5d5b5c92ea23ff7feab0a2f",
+    "experiments/e7a/check_pilot_freeze.py": "d4b62e2a73c7d754cba622bf083cde6849694465549cbc2c996f058d408545b6",
+    "experiments/e7a/fill_pilot_freeze.py": "839227167fffc7a2bd3f7bd4354f88d593253c63dd93c04889d43b96f3db948e",
+    "experiments/e7a/test_pilot_freeze_gate.py": "b75baaebf435bbb391f00d89ca74545f8c898880b37be51bc9e66f9ed83e7c91",
+    "experiments/e7a/e7a_reduce.py": "d05fd0f0829e6a68ea0425df8965ce15d560049196c345fee983006f60f9dff7",
+    "experiments/e7a/capture_loop.v5.sh": "39a09b3364fe676ea9454abcadae87b6682fae770e64e2eb7cf73cdf21ba271d",
+    "experiments/e7a/PILOT_FREEZE.json": "5974b708d6902e6cc4fa290adb3747791d661b0a774eb0f495b665ba2350b779",
+    "p0/HANDOFF-CLAUDE.md": "a06f3a3530963e599037013eb73beabf37d9abd2324e77f0adb02d43211fa7b2",
+    "p0/P0-REPORT.md": "9999aecafc19d1a3de981229d8f281e15d730b924713437a9abef4aaed7d2c44",
+    "main.tex": "a78861718e9556772d6c909f836614a245f1851031accd29814ac8d1edd3673b",
+    "abstract.tex": "ede112b273147fe736e8e7a736cb3d9157b1e2983cd8c04e1b4fe9d16668f001"
+  },
+  "progress_counts": {
+    "pilot_verified": 4,
+    "pilot_planned": 8,
+    "fresh_harness_completed": 0,
+    "fresh_harness_planned": 8,
+    "confirmation_verified": 0,
+    "confirmation_planned": 32,
+    "failed_capture_attempts": 3,
+    "initial_kernel_campaigns_verified": 2,
+    "e1_completed": 0,
+    "e1_planned": 18,
+    "e2_e7b_qualified": 0
+  },
+  "late_revalidations": [],
+  "running": []
+}

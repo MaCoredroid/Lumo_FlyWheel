@@ -1,0 +1,14 @@
+{
+  "checked_utc": "2026-09-21T23:49:18.251254+00:00",
+  "run": "experiments/out-20260921T234125Z-e7a-step2-captures-eager/capture_01_p072",
+  "docker_log_sha256": "84d94c7f928a945364c23805ccaffd1e0c4177b5d3c9a394338821cd28a2ada1",
+  "error_lines": [
+    "(EngineCore pid=190) ERROR 09-21 23:47:01 [core.py:1131]   File \"/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/eagle.py\", line 1174, in propose",
+    "(EngineCore pid=190) ERROR 09-21 23:47:01 [core.py:1131] NameError: name '_FR13_FIXED32_MODE' is not defined",
+    "(EngineCore pid=190)   File \"/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/eagle.py\", line 1174, in propose",
+    "(EngineCore pid=190) NameError: name '_FR13_FIXED32_MODE' is not defined"
+  ],
+  "driver_trace": "start_utc=2026-09-21T23:41:25Z cmd=capture prefix=p072 layer=language_model.model.layers.62.linear_attn\nguard_pid=2790797 container_id=2c9ff99dd5ac7482eb288e50251ff56b6631809ff48034126632b94ea3ff113b container_name=e7a-capture-234125 alive=true utc=2026-09-21T23:41:32Z\nrequest_start_utc=2026-09-21T23:46:59.241926972Z\ncleanup: removed owned container e7a-capture-234125 (rc=1)\nexit_utc=2026-09-21T23:47:03Z rc=1\n",
+  "health": "healthy after 320s (container e7a-capture-234125 maps 0.0.0.0:9950)\n",
+  "no_completed_request_record": true
+}

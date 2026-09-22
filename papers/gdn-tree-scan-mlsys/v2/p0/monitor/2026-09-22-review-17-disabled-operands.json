@@ -1,0 +1,63 @@
+{
+  "utc": "2026-09-22T07:15:32.097593+00:00",
+  "finding": "capture_operands disabled despite requested capture batch; completed baseline unusable for requested layer continuation; stop and repair driver fail-closed preflight",
+  "runs": [
+    {
+      "run": "e7b_001_p072_arm1_none-B_fs_ieee-all",
+      "written_spec": {
+        "mode": "none",
+        "realization": "B_fs_ieee",
+        "steps": "all",
+        "layers": [
+          "language_model.model.layers.62.linear_attn"
+        ],
+        "log": "/logs/e7b_substitute.jsonl",
+        "shadow": null,
+        "sanity_min_bitwise_frac_vs_production": 0.99,
+        "sanity_max_abs_state_delta": 0.0001,
+        "arm_id": "none:B_fs_ieee:all",
+        "capture_state": true,
+        "state_dir": "/logs/e7b_state"
+      },
+      "n_operand_files": 0,
+      "n_state_files": 13,
+      "loaded_spec": {
+        "mode": "none",
+        "realization": "B_fs_ieee",
+        "steps": "all",
+        "layers": [
+          "language_model.model.layers.62.linear_attn"
+        ],
+        "log": "/logs/e7b_substitute.jsonl",
+        "shadow": null,
+        "sanity_min_bitwise_frac_vs_production": 0.99,
+        "sanity_max_abs_state_delta": 0.0001,
+        "arm_id": "none:B_fs_ieee:all",
+        "capture_state": true,
+        "state_dir": "/logs/e7b_state",
+        "capture_operands": false,
+        "operands_dir": "/logs/e7b_operands"
+      }
+    },
+    {
+      "run": "e7b_002_p072_arm2_sham-B_fs_ieee-all-commit_only",
+      "written_spec": {
+        "mode": "sham",
+        "realization": "B_fs_ieee",
+        "steps": "all",
+        "layers": [
+          "language_model.model.layers.62.linear_attn"
+        ],
+        "log": "/logs/e7b_substitute.jsonl",
+        "shadow": "commit_only",
+        "sanity_min_bitwise_frac_vs_production": 0.99,
+        "sanity_max_abs_state_delta": 0.0001,
+        "arm_id": "sham:B_fs_ieee:all:commit_only",
+        "capture_state": true,
+        "state_dir": "/logs/e7b_state"
+      },
+      "n_operand_files": 0,
+      "n_state_files": 0
+    }
+  ]
+}

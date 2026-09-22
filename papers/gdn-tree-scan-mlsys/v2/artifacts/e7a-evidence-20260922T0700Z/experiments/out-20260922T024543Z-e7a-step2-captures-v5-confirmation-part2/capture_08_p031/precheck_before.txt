@@ -1,0 +1,13 @@
+utc=2026-09-22T02:45:43Z
+               total        used        free      shared  buff/cache   available
+Mem:             117          78           5           0          34          39
+Swap:             15           0          15
+NAME      TYPE SIZE   USED PRIO
+/swap.img file  16G 565.2M   -2
+--- containers ---
+--- vllm/EngineCore procs ---
+  90019 10-03:26:25  3004 /bin/bash -c source /home/mark/.claude/shell-snapshots/snapshot-bash-1789082331006-6puqoi.sh 2>/dev/null || true && shopt -u extglob 2>/dev/null || true && { \builtin unalias
+4033064 11-03:26:43  3020 /bin/bash -c source /home/mark/.claude/shell-snapshots/snapshot-bash-1789082331006-6puqoi.sh 2>/dev/null || true && shopt -u extglob 2>/dev/null || true && { \builtin unalias
+--- compute apps (nvidia-smi rc=0) ---
+
+MemAvailable_GiB=39 SwapUsed_GiB=0

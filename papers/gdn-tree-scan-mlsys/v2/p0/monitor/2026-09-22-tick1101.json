@@ -1,0 +1,99 @@
+{
+  "utc": "2026-09-22T11:03:32.308661+00:00",
+  "new_cells": [
+    {
+      "cell": "cell_07_b2_tree_B1_a1",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 12.607309482129649,
+        "sum_wall_s_unique_physical_steps": 78.92246965225786,
+        "sum_emitted_tokens_api_bound_pure_support": 995,
+        "n_usable": 314,
+        "n_excluded": 32
+      },
+      "seal": {
+        "sealed": true,
+        "utc": "2026-09-22T10:54:54Z",
+        "gates": {
+          "verify": "PASS",
+          "summary": "VALID"
+        },
+        "campaign_snapshot_sha256sums": "d1ab57c53464ef814c7eed3b87ebd21a670cf8278541b8adc4864e5cf6dc2ecd",
+        "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+      },
+      "result_sha256": "afacaea3ce3fd38a6b905c1493697e8d89d5da5c041f29ff2ff57b83abc40740",
+      "image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+      "read_only_model_mount": true,
+      "engine_seed": [
+        [
+          "0"
+        ]
+      ]
+    },
+    {
+      "cell": "cell_08_b2_tree_B4_a1",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 46.68934818318858,
+        "sum_wall_s_unique_physical_steps": 17.22020185086876,
+        "sum_emitted_tokens_api_bound_pure_support": 804,
+        "n_usable": 61,
+        "n_excluded": 36
+      },
+      "seal": {
+        "sealed": true,
+        "utc": "2026-09-22T11:01:15Z",
+        "gates": {
+          "verify": "PASS",
+          "summary": "VALID"
+        },
+        "campaign_snapshot_sha256sums": "d1ab57c53464ef814c7eed3b87ebd21a670cf8278541b8adc4864e5cf6dc2ecd",
+        "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+      },
+      "result_sha256": "10ce7db48befe05f77574a6eaaadb32d6f10fab71f1f27d46288f47714f9e878",
+      "image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+      "read_only_model_mount": true,
+      "engine_seed": [
+        [
+          "0"
+        ]
+      ]
+    }
+  ],
+  "current_trace": [
+    "start_utc=2026-09-22T11:01:15Z cell=9 block=2 arm=native-5 batch=B4 max_num_seqs=4 gpu_util_frozen=0.6 max_model_len_frozen=16384 spec_config_frozen={\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":5}",
+    "driver_exec=e1_cell_driver.v1.sh sha256=25aa6c2195957630 from_snapshot=1 snapshot_dir=/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_09_b2_native-5_B4_a1/script_snapshot",
+    "guard_pid=3396153 container_id=c013c6fdd9bcac1924063882f0cfa729d98bc00cd6894cd299620ec2a709dad6 container_name=e1-cell09-110115 alive=true utc=2026-09-22T11:01:33Z"
+  ],
+  "source_hashes": {
+    "p0/HANDOFF-CLAUDE.md": "a06f3a3530963e599037013eb73beabf37d9abd2324e77f0adb02d43211fa7b2",
+    "p0/P0-REPORT.md": "9999aecafc19d1a3de981229d8f281e15d730b924713437a9abef4aaed7d2c44",
+    "main.tex": "f52a828f4cb13aca925be7d081da0c4c438072762b673de9a2933b7396032212",
+    "abstract.tex": "0eddd1990dfe88aa1b0251526448d24983c7d0f67821d2f2921bb63df18755ce",
+    "experiments/e1/e1_aggregate.py": "98beec9efac26f560783d9d77af3e2154edbd6b24ebadfe141b0cafce6e48a68",
+    "experiments/e1/e1_run_cells.v2.sh": "910e2dac38a8661361da7f011f8a6a48563b84f6799eb5b1257fc558fa765d72"
+  },
+  "status_latest": [
+    "| 2026-09-22T11:01:15Z | E1 cell 8 (b2 tree B4) SEALED VALID: 46.69 tok/s over 61 four-request intervals (17.22 s, 804 tokens), cohorts A 30 / B 31 (floor PASS), 0 over-cap, verify PASS; cell 9 (native-5 B4) next | `\u2026/cell_08_b2_tree_B4_a1/` |",
+    "| 2026-09-22T10:54:54Z | E1 cell 7 (b2 tree B1) SEALED VALID: 12.61 tok/s over 314 intervals (78.92 s, 995 tokens), min 34 per prompt (floor PASS), 0 over-cap, verify PASS; cell 8 (tree B4) next | `\u2026/cell_07_b2_tree_B1_a1/` |",
+    "| 2026-09-22T10:47:25Z | E1 cell 6 (b1 tree B4) SEALED VALID \u2014 block 1 complete (6/6 VALID): verify PASS; primary 47.65 tok/s over 51 four-request intervals (14.35 s, 684 API-bound tokens), cohorts A 26 / B 25 (floor PASS), 0 over-cap. Block 2 starts with cell 7 (tree B1) | `\u2026/cell_06_b1_tree_B4_a1/` |"
+  ],
+  "inventory_utc": "2026-09-22T11:01:47Z",
+  "inventory": {
+    "experiment_jobs": 1,
+    "container": "e1-cell09-110115",
+    "compute_processes_at_early_start": [],
+    "available_gib": 101.125,
+    "swap_used_gib": 0
+  },
+  "progress": {
+    "completed": 8,
+    "planned": 18,
+    "independent_review_report": "e1-remaining-cells-redteam.md",
+    "previous_stages": "2 kernel campaigns; 8/8 pilot; 31/32 confirmation eligible; 6/6 diagnostic boots; 2/2 tree routes",
+    "independently_verified": 8,
+    "independent_report_sha256": "ab43447c47306ce115f30109bd15e47bbf1c8d1d6b545e980a32d25df1037bb4"
+  },
+  "findings": "No new campaign defect. T1 engine-seed deviation remains disclosed. Auditor quote-format correction is local to the independent checker, not a measurement failure.",
+  "eta": "Current cell9 expected around11:08Z; remaining timing approximately65-85minutes from11:03Z if gates keep passing, then paper integration and final review."
+}

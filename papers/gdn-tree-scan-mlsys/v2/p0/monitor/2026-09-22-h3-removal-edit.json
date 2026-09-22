@@ -1,0 +1,12 @@
+{
+  "edited_utc": "2026-09-22T19:35:36.295861+00:00",
+  "reason": "User requested removal of H3 historical proxy numbers from paper",
+  "before_main_sha256": "9de0d3464994c6392ce0991f8e062005ccd41dbf48635aa42fb0134d30ae86c7",
+  "after_main_sha256": "3bb0ddd84ac0a919dd0b101dc3bae21dc612d81752ca17c6fa7f7969b0ed28f5",
+  "scope": [
+    "Remove H3 displayed rate table, dependent component chart and proxy break-even calculation",
+    "Remove H3 proxy headline values from introduction and conclusion",
+    "Retain concise exclusion rationale, raw evidence and audit history",
+    "Fresh E1 outcomes, abstract, original B1 context, H4 and all numerical/state results unchanged"
+  ]
+}

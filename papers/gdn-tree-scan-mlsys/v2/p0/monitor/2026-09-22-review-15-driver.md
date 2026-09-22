@@ -1,0 +1,9 @@
+# Review 15 driver handoff
+
+User explicitly asks us to drive to closure with repeated independent red-team; do not pause for another user permission gate. The three-boot GPU gate remains until independent interpretation, currently underway by parent and paper-redteam-round1. Continue CPU/source work now.
+
+1. Preserve completed none/sham/verify-only batch and report maximum logits/hidden/state deltas and identity support. No old 28-boot sweep. Parent independent reviewer checking it now.
+2. Complete minimal source-supported state-preserving continuation fixture. Re-prefilling a generated string does not restore the actual substituted state. Document exactly which recurrent, convolution, KV and pending-token state is held fixed; begin horizon1. Fix the known B4/graph stale tests against emitted runtime API rather than marking them xfail or hiding failures. Keep current 3-boot runtime snapshot immutable; new version staging okay.
+3. Freeze an E2 coverage ledger for the sequential route and minimal remaining tests. Sequential E1 must proceed independently of B/C deployment failure once its own baseline route qualifies. Need exact remaining CPU/GPU work and a realistic next checkpoint.
+4. Independent second manuscript reviewer found H3 measurement support mismatch, reproduced by parent against historical revisions. In fr13_measure.py global accepted/drafts+1 combines with consecutive-pure-wall intervals; forward timer and ungated draft/commit spans have other supports. Unit normalization alone was insufficient. Parent is correcting main/abstract/figure and adding P0 erratum. E1 must bind actual emitted tokens, wall intervals and any component spans to the same event IDs. Preserve raw historical output.
+5. Parent owns paper/README/closure-ledger. Independent read-only agent audits freeze checker v2/erratum. You own experiment source/status and necessary minimal qualification implementation.

@@ -1,0 +1,151 @@
+{
+ "stage": "E8 qualification v2 COMPLETE \u2014 QUALIFICATION_PASS (both arms); waiting for the parent's independent review; NO timing",
+ "handoff": "p0/E8-HANDOFF-QUALIFICATION-V2.md",
+ "manifest_sha256_rechecked": "bc2feab326cb67c916ea418b0399499f4986e18d6bba3e4efc7a20a50f0ce030",
+ "source_gate": "e8_verify.py --stage STAGE_HASHES_PASS (23 files) at 21:32:00Z; launcher line 11 is a comment",
+ "weight_preflight": "p0/monitor/e8-weight-preflight-20260922.json PASS 21:18:26Z",
+ "idle_checks_utc": "2026-09-22T21:32:05Z (0 containers, 0 GPU processes, 0 e8/loop processes, 102 GiB available, swap 0, new root/log absent)",
+ "original_failure": {
+  "root": "papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T2119Z-e8-single-logits",
+  "manifest": "45da9147\u2026",
+  "status_copy": "p0/monitor/e8-worker-status.original-failure-20260922T2119Z.json",
+  "preserved": true
+ },
+ "running_jobs": [],
+ "counts": {
+  "boots_started": 2,
+  "boots_completed": 2,
+  "arms_qualified": 2,
+  "requests_completed": 16,
+  "per_arm": {
+   "on": {
+    "status": "PASS",
+    "requests": 8,
+    "prefixes": [
+     "p015",
+     "p017",
+     "p021",
+     "p058",
+     "p072",
+     "p083",
+     "p085",
+     "p095"
+    ],
+    "api_tokens_per_request": {
+     "p072": 32,
+     "p017": 32,
+     "p015": 32,
+     "p021": 32,
+     "p085": 32,
+     "p095": 32,
+     "p058": 32,
+     "p083": 32
+    },
+    "finish_reasons": {
+     "length": 8
+    },
+    "api_map_requests": 8,
+    "api_tokens_total": 256,
+    "proposals": 103,
+    "qualified_proposals": 103,
+    "root_heads": 103,
+    "loop_heads": 412,
+    "primary_head_calls": 515,
+    "legacy_head_calls": 515,
+    "checked_heads": 515,
+    "dispatch_ops_checked": 2060,
+    "head_report_closed": true,
+    "recorder": {
+     "events": 311,
+     "forwards": 103,
+     "physical_steps": 91,
+     "ledger_tokens": 271,
+     "invalid": null,
+     "refused": null,
+     "retained_support": 0,
+     "note": "qualification-only: all requests are the untimed exclusion; no rate retained"
+    },
+    "fix1_selfcheck": {
+     "steps_checked": 515,
+     "rows_checked": 515,
+     "mismatch_steps": 0
+    },
+    "workload_elapsed_s": 54.68243273999542,
+    "kv_remap_engaged_lines": 1,
+    "slot_reorder_engaged_lines": 0,
+    "receipt_sha256": "1fa9e1a21a9d319a1c2015fccd3d9b88264b4ce0cf015edc34c503845c09caf5"
+   },
+   "off": {
+    "status": "PASS",
+    "requests": 8,
+    "prefixes": [
+     "p015",
+     "p017",
+     "p021",
+     "p058",
+     "p072",
+     "p083",
+     "p085",
+     "p095"
+    ],
+    "api_tokens_per_request": {
+     "p072": 32,
+     "p017": 32,
+     "p015": 32,
+     "p021": 32,
+     "p085": 32,
+     "p095": 32,
+     "p058": 32,
+     "p083": 32
+    },
+    "finish_reasons": {
+     "length": 8
+    },
+    "api_map_requests": 8,
+    "api_tokens_total": 256,
+    "proposals": 103,
+    "qualified_proposals": 103,
+    "root_heads": 103,
+    "loop_heads": 412,
+    "primary_head_calls": 515,
+    "legacy_head_calls": 515,
+    "checked_heads": 515,
+    "dispatch_ops_checked": 2060,
+    "head_report_closed": true,
+    "recorder": {
+     "events": 311,
+     "forwards": 103,
+     "physical_steps": 91,
+     "ledger_tokens": 271,
+     "invalid": null,
+     "refused": null,
+     "retained_support": 0,
+     "note": "qualification-only: all requests are the untimed exclusion; no rate retained"
+    },
+    "fix1_selfcheck": null,
+    "workload_elapsed_s": 54.24923094175756,
+    "kv_remap_engaged_lines": 1,
+    "slot_reorder_engaged_lines": 0,
+    "receipt_sha256": "20d718c832bee5514cf9ce9bede8bc431a0374481222a662e6ee1ccb6e058a60"
+   }
+  }
+ },
+ "eta": "none; parent review next",
+ "exit_code": "0 (inferred: terminal QUALIFICATION_PASS.json written by the driver, no traceback in the log; the detached job's raw status was not captured by the launching shell)",
+ "terminal_file": "papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T213142Z-e8-single-logits-v2/QUALIFICATION_PASS.json",
+ "updated_utc": "2026-09-22T21:46:53Z",
+ "end_utc": "2026-09-22T21:46:03Z",
+ "qualification_pass": {
+  "status": "QUALIFICATION_PASS",
+  "timing_authorized_by_this_driver": false,
+  "stage_manifest_sha256": "bc2feab326cb67c916ea418b0399499f4986e18d6bba3e4efc7a20a50f0ce030",
+  "arms": [
+   "on",
+   "off"
+  ],
+  "receipts": {
+   "on": "1fa9e1a21a9d319a1c2015fccd3d9b88264b4ce0cf015edc34c503845c09caf5",
+   "off": "20d718c832bee5514cf9ce9bede8bc431a0374481222a662e6ee1ccb6e058a60"
+  }
+ }
+}

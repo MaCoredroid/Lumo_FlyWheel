@@ -1,0 +1,43 @@
+{
+  "utc": "2026-09-22T11:50:14.495776+00:00",
+  "scope": "Exact copies of the six repository runtime/guard dependencies listed in the immutable pre-data campaign identity. No running source or campaign snapshot was changed. Original absolute provenance paths remain unchanged.",
+  "campaign_identity_sha256": "28c91e906fc0f6592b623ba442d21a575c2544de36763f13a2f792654e94d164",
+  "files": [
+    {
+      "original_repo_relative_path": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+      "v2_archive_path": "p0/monitor/e1-source-20260922T1150Z/scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+      "sha256": "a7f8f0943d1a13ac4742e824ea4e126c6ff341342aba677db5169e712c7e7281",
+      "bytes": 2118800
+    },
+    {
+      "original_repo_relative_path": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+      "v2_archive_path": "p0/monitor/e1-source-20260922T1150Z/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+      "sha256": "98f7c8511c1fa991fd36526e69a8b753a5205716bf5b0a53c058177c965cdb20",
+      "bytes": 732096
+    },
+    {
+      "original_repo_relative_path": "src/lumo_flywheel_serving/fr10_decode_modes.py",
+      "v2_archive_path": "p0/monitor/e1-source-20260922T1150Z/src/lumo_flywheel_serving/fr10_decode_modes.py",
+      "sha256": "9111854366d4856559d9b42c23d5ca6c84800638c08f98d9f15bbeb09d93499b",
+      "bytes": 6387
+    },
+    {
+      "original_repo_relative_path": "scripts/fr13_device_multidraft_kernel.py",
+      "v2_archive_path": "p0/monitor/e1-source-20260922T1150Z/scripts/fr13_device_multidraft_kernel.py",
+      "sha256": "648ff0e33e8a7cdd0fbe8ebb3d2befaa27002a3347f94f9bdc0668365ed2e8e9",
+      "bytes": 376224
+    },
+    {
+      "original_repo_relative_path": "src/lumo_flywheel_serving/fr13_tree_conv_fused.py",
+      "v2_archive_path": "p0/monitor/e1-source-20260922T1150Z/src/lumo_flywheel_serving/fr13_tree_conv_fused.py",
+      "sha256": "564c7dc7ba61ccd9579f2fb7a4af9a2cdaaa1753dfb98434f2011457d90d9a6e",
+      "bytes": 41113
+    },
+    {
+      "original_repo_relative_path": "scripts/gpu_oom_guard.sh",
+      "v2_archive_path": "p0/monitor/e1-source-20260922T1150Z/scripts/gpu_oom_guard.sh",
+      "sha256": "6148206a024c17746bce91c6c3e065275a8d47c24d660c665d7e3d8e29ad265b",
+      "bytes": 7380
+    }
+  ]
+}

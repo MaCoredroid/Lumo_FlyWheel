@@ -1,0 +1,141 @@
+{
+  "set": "pilot",
+  "run_dir": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T013313Z-e7a-fresh-pilot-v2",
+  "freeze": "PILOT_FREEZE.json",
+  "n_sets": 8,
+  "prefix_ids": [
+    "p072",
+    "p017",
+    "p015",
+    "p021",
+    "p085",
+    "p095",
+    "p058",
+    "p083"
+  ],
+  "classes": {
+    "scan_fp32_out_vs_native_specupdate_bitwise": {
+      "observed_worst": 0.0,
+      "tolerance": 0,
+      "pilot_max": 0,
+      "rule": "0 ULP, integer view (bit-identical), production scan fp32 store vs pinned native spec-update kernel; pilot 8/8 bitwise_frac = 1.0",
+      "pass": true,
+      "n_sets": 8,
+      "note": null
+    },
+    "scan_bf16_out_vs_native_specupdate_bitwise": {
+      "observed_worst": 0.0,
+      "tolerance": 0,
+      "pilot_max": 0,
+      "rule": "0 ULP, integer view, deployed bf16 store vs native spec-update bf16 store; pilot 8/8 bitwise_frac = 1.0",
+      "pass": true,
+      "n_sets": 8,
+      "note": null
+    },
+    "fp32_ieee_realizations_out_vs_fp64_oracle_max_abs": {
+      "observed_worst": 4.44652720754668e-08,
+      "tolerance": 8.89305441509336e-08,
+      "pilot_max": 4.44652720754668e-08,
+      "rule": null,
+      "pass": true,
+      "n_sets": 8,
+      "note": null
+    },
+    "compact_commit_state_vs_fp64_oracle_max_abs": {
+      "observed_worst": 7.867071634137801e-07,
+      "tolerance": 1.5734143268275602e-06,
+      "pilot_max": 7.867071634137801e-07,
+      "rule": null,
+      "pass": true,
+      "n_sets": 8,
+      "note": null
+    },
+    "compact_commit_state_vs_native_specupdate_max_abs": {
+      "observed_worst": 1.9073486328125e-06,
+      "tolerance": 3.814697265625e-06,
+      "pilot_max": 1.9073486328125e-06,
+      "rule": null,
+      "pass": true,
+      "n_sets": 8,
+      "note": null
+    },
+    "replay_state_vs_fp64_oracle_max_abs": {
+      "observed_worst": 1.2969487670488888e-06,
+      "tolerance": 2.5938975340977777e-06,
+      "pilot_max": 1.2969487670488888e-06,
+      "rule": null,
+      "pass": true,
+      "n_sets": 8,
+      "note": null
+    },
+    "replay_state_vs_native_specupdate_max_abs": {
+      "observed_worst": 2.384185791015625e-07,
+      "tolerance": 4.76837158203125e-07,
+      "pilot_max": 2.384185791015625e-07,
+      "rule": null,
+      "pass": true,
+      "n_sets": 8,
+      "note": null
+    },
+    "bf16_store_realizations_disagreement_with_native (1 - bitwise frac)": {
+      "observed_worst": 0.00021158854166669627,
+      "tolerance": 0.0003173828125000444,
+      "pilot_max": 0.00021158854166669627,
+      "rule": null,
+      "pass": true,
+      "n_sets": 8,
+      "note": null
+    },
+    "served_bf16_out_vs_fp64_oracle_max_abs (CPU self-test on the payload's serving_out)": {
+      "observed_worst": 0.0004850037775502025,
+      "tolerance": 0.0007275056663253038,
+      "pilot_max": 0.0004850037775502025,
+      "rule": null,
+      "pass": true,
+      "n_sets": 8,
+      "note": null
+    },
+    "served_bf16_out_vs_fp64_oracle_ulp16_on_significant": {
+      "observed_worst": 1,
+      "tolerance": 1,
+      "pilot_max": 1,
+      "rule": "<= 1 ULP (bf16) on significant elements; pilot max = 1",
+      "pass": true,
+      "n_sets": 8,
+      "note": null
+    },
+    "native_specupdate_bf16_out_vs_fp64_oracle_max_abs": {
+      "observed_worst": 0.0004850037775502025,
+      "tolerance": 0.0007275056663253038,
+      "pilot_max": 0.0004850037775502025,
+      "rule": null,
+      "pass": true,
+      "n_sets": 8,
+      "note": null
+    },
+    "served_bf16_out_bytes_equal_production_scan_out16": {
+      "observed_worst": 0.0,
+      "tolerance": 0,
+      "pilot_max": 0,
+      "rule": "byte-identical (integer view): the payload's live served bf16 output equals the production scan's bf16 output AND the native spec-update bf16 output on the captured operands; pilot 8/8 (fresh-pilot-v2)",
+      "pass": true,
+      "n_sets": 8,
+      "note": null
+    }
+  },
+  "decision_change_checks": {
+    "all_sets_verified_fresh": true,
+    "set_coverage_equals_frozen_set": true,
+    "no_duplicate_prefix": true,
+    "no_invalid_cells": true,
+    "sibling_reorder_bitwise_invariant_all_sets": true,
+    "replay_repeat_bitwise_equal_all_sets": true,
+    "ordering_A_le_B_eq_C_out_vs_oracle": true,
+    "source_hashes_start_end_match": true,
+    "probe_drift_all_pass": true
+  },
+  "attribution": "NO FOREIGN COMPUTE PROCESS SAMPLED (1 Hz inventory; only container PID(s) ['2883522'] seen; sampled observation, not a guarantee)",
+  "all_classes_pass": true,
+  "all_decision_checks_pass": true,
+  "verdict": "WITHIN FROZEN CRITERIA"
+}

@@ -1,0 +1,2 @@
+[04:50:56] gpu_oom_guard START floor=9000MiB poll=2s id=5c6055441e09d9fe6502363785061e616320f2508e697ab0761927eb242be6a1 expected_name=e7a-capture-045049 pid=3076944
+[04:56:39] immutable container disappeared, stopped, or changed name; guard EXIT

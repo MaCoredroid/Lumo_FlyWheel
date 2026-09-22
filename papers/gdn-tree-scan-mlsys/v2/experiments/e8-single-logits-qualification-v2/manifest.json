@@ -1,0 +1,97 @@
+{
+  "schema": "e8.freeze.v1",
+  "status": "STAGED_NOT_EXECUTED",
+  "batch": 1,
+  "image": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+  "model_path": "/models/qwen3.6-27b-fp8",
+  "model_name": "qwen3.6-27b",
+  "seed": 20260921,
+  "checkpoint_identity": "d053823784d5db6f1dbc255bd9ef041e3825efbcfa10ff3e32011671e979c578",
+  "engine_seed": 20260921,
+  "temperature": 0,
+  "qualification_order": [
+    "on",
+    "off"
+  ],
+  "qualification_prefixes": 8,
+  "qualification_max_tokens": 32,
+  "deadlines_seconds": {
+    "launch": 300,
+    "health": 1500,
+    "workload_per_arm": 600,
+    "other_subprocess": 180
+  },
+  "clean_timing": {
+    "enabled": false,
+    "reason": "independent review and successful qualification required",
+    "blocks": [
+      [
+        "off",
+        "on"
+      ],
+      [
+        "on",
+        "off"
+      ],
+      [
+        "off",
+        "on"
+      ]
+    ],
+    "warmup": {
+      "requests": 2,
+      "prompt": "pilot[0]",
+      "max_tokens": 32
+    },
+    "timed": {
+      "requests": 8,
+      "max_tokens": 128
+    },
+    "min_intervals": 8,
+    "min_per_prefix": 1,
+    "max_cells": 6,
+    "no_replacements": true,
+    "replication_unit": "paired block",
+    "contrast": "mean(cell_rate_on)/mean(cell_rate_off)-1; ratio of arm means, not mean of block ratios",
+    "bootstrap": "10000 paired-block draws, seed20260921; recompute ratio of arm means each draw; three blocks coarse",
+    "slow_valid_intervals": "retain",
+    "api_stream_differences": "report; not a same-input correctness failure"
+  },
+  "unchanged_loaded_modules": {
+    "tree_attn.py": "a6d4ae3000f248ec2b9fd37546a1f90b96145c3078e5a98e696b5bda49a1af97",
+    "gdn_linear_attn.py": "723974c703d1ad1545399b78526e5d50ae7f7f362e434bad384a0a3327595b28",
+    "rejection_sampler.py": "5be4ad43409da82b63bfd0177926467e9a2b59da553ee6dd04d3130a5d77b12f",
+    "gpu_model_runner.py": "b2975681fe888b72854a25ba377ceb5c1287aa53e16327feab80e3155f25ef40"
+  },
+  "eagle_variants": {
+    "on_qualification": "3cdf64ba92bd24bdd3d6e8255277186f2fd211f3de54c5cfd4394a558e115358",
+    "on_clean": "7a1f20b0897ec488f0a1e168105ce392cac566e79dbd206a1edeee527c0060c8",
+    "off_qualification": "364b767f6003cac1cd021e82249438edef4e0f87ba49a6aa6887506b8c9dc9e5",
+    "off_clean": "959a7e9f46dc239403c8c5ed42e78e3208d80d2f3e762235c570b6ed5e837101"
+  },
+  "files": {
+    "INFRASTRUCTURE_FIX.md": "fb5d77ab78f8fe9411d26742a2f466e8f212f8655a88f70d6ea422b9cbf0c3de",
+    "README.md": "c7fd080023b04ceba5d9c14ab928804390ced6d0e7c8aacdc42156a4ec219ef8",
+    "e8_head_gate.py": "ab66067f0148a138b9fddea3494e4b76c1525259504d2445b38093c18166cd67",
+    "e8_launch.v1.sh": "37392279706b080d3d7b694cd4cf31cbf7b08bf947ce269672557b9054269d96",
+    "e8_prepare.py": "79183f68d02d2b4cfe3453ccf17e772399cc0aee7e5b4ca368b8755b32b2faae",
+    "e8_qualify.py": "f0cbbd6097eb77bd2233a42dcac2bf86caef9cff02971ae4cc71cf9c674bb5c0",
+    "e8_shim.py": "b6c69fd47170d072ee1649a2be5ade7ff03214fa44a9caf18a85715c4ef362af",
+    "e8_verify.py": "d8f4ee02021d568a3d88eaa025c1ad43c7b8dc66b1c976f1fcc890e8a38c4dbf",
+    "frozen/e1/e1_api_tokens_from_capture.v2.py": "6d36ee15d8b5b6289c24ebc437f621dfd32adc010aae9ff1495fb34af0121f9f",
+    "frozen/e1/e1_event_recorder_shim.py": "06344718f035949ea7f1cea49e4677e9acc2a71a460bbbc7b94e01a1bbbbc1df",
+    "frozen/e1/e1_join.py": "cbee2ae70947f1adb4073bd151a7148fcb05cbc02d1c5dff37b381ffadf1e766",
+    "frozen/e1/e1_recorder.py": "1cf3f53552e008c44f7b7e5e6187d8052bcfd4c75bd6f81e2e07d1f70fbf65a0",
+    "frozen/e1/e1_workload.py": "bcc5af170fd16599223ad7286f0367c82f978faf640ac4acebe0e9c36d001594",
+    "frozen/e1/frozen_prefixes.json": "8329672628828d35b4768732ed93b855335bc7576801890b0195957a2459973e",
+    "frozen/e1/prefix_pool.json": "05e731fd02b937970d05695ef2ee836a76efc463481a3a0ce4eeaa237f877d09",
+    "frozen/repository/scripts/fr10_phase4_patch_vllm_tree_gdn.py": "a7f8f0943d1a13ac4742e824ea4e126c6ff341342aba677db5169e712c7e7281",
+    "frozen/repository/scripts/fr13_device_multidraft_kernel.py": "648ff0e33e8a7cdd0fbe8ebb3d2befaa27002a3347f94f9bdc0668365ed2e8e9",
+    "frozen/repository/scripts/gpu_oom_guard.sh": "6148206a024c17746bce91c6c3e065275a8d47c24d660c665d7e3d8e29ad265b",
+    "frozen/repository/src/lumo_flywheel_serving/fr10_decode_modes.py": "9111854366d4856559d9b42c23d5ca6c84800638c08f98d9f15bbeb09d93499b",
+    "frozen/repository/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "98f7c8511c1fa991fd36526e69a8b753a5205716bf5b0a53c058177c965cdb20",
+    "frozen/repository/src/lumo_flywheel_serving/fr13_tree_conv_fused.py": "564c7dc7ba61ccd9579f2fb7a4af9a2cdaaa1753dfb98434f2011457d90d9a6e",
+    "test_e8_cpu.py": "7264e5d25762fc3c79d02626683c1f1f4716caffe02cc727e17648887a20862a",
+    "test_launcher_execution.py": "7658338f30aceb7ef0572650372e389fbf2429637e22b4b58f20a28e8ebcc82b"
+  }
+}

@@ -1,0 +1,16 @@
+\begin{tikzpicture}[font=\scriptsize,
+ box/.style={draw=inkblue,fill=inkblue!7,rounded corners,align=center,text width=3.1cm,minimum height=0.65cm},
+ arr/.style={-{Latex[length=1.7mm]},thick,draw=inkblue}]
+\node[box] (draft) at (0,0) {Draft tokens and probabilities};
+\node[box] (desc) at (0,-1.0) {Parent / mask / physical-slot descriptor};
+\node[box] (verify) at (0,-2.0) {Path-local target verification};
+\node[box] (select) at (0,-3.0) {Device selection and accepted path};
+\node[box,draw=mutedgreen,fill=mutedgreen!8] (commit) at (0,-4.0) {Replay / remap / continuation};
+\foreach \a/\b in {draft/desc,desc/verify,verify/select,select/commit} \draw[arr] (\a)--(\b);
+\node[box,text width=2.65cm,draw=mutedamber,fill=mutedamber!8] (spine) at (3.85,-1.5) {Fixed shared-spine layout};
+\node[box,text width=2.65cm,draw=mutedamber,fill=mutedamber!8] (metrics) at (3.85,-3.3) {Separate physical-step and request-event counters};
+\draw[arr] (desc.east) -| (spine.north);
+\draw[arr] (spine.west) -| (verify.north east);
+\draw[arr,dashed] (verify.east) -- (metrics.north west);
+\draw[arr,dashed] (commit.east) -- (metrics.south west);
+\end{tikzpicture}

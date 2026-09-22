@@ -1,0 +1,50 @@
+{
+  "observed_utc": "2026-09-22T00:27:54.150504+00:00",
+  "resources": {
+    "observed_utc": "2026-09-22T00:27:54.150504+00:00",
+    "compute_apps": {
+      "rc": 0,
+      "stdout": "2816253, VLLM::EngineCore",
+      "stderr": ""
+    },
+    "docker": {
+      "rc": 0,
+      "stdout": "e7a-capture-002242 Up 5 minutes",
+      "stderr": ""
+    },
+    "available_gib": 63.532230377197266,
+    "free_gib": 27.556198120117188,
+    "swap_used_gib": 0.0
+  },
+  "reviewed_files": {
+    "experiments/STATUS.md": "caf58a15c42d273b0b0de9962441ecb0c25ebcfc1b227844ae2e842f6f91c5d3",
+    "experiments/e7a/inspect_capture.py": "d8776f4e5841ba45c29b4c69622aee5001867c2413beaf7b59b7ffa1326e8886",
+    "experiments/e7a/serve_drivers.v4.sh": "b02e677b07849058a0279b25c2d71b18108738e543afaacea1b0268e5c4f329a",
+    "experiments/e7a/capture_loop.v4.sh": "25f05bdb10088646978bd33d7e1eefa032d42ede1be71e4d71c05b0e3393a0e4",
+    "experiments/e7a/test_capture_selector.py": "fc56a6cd90c93cebdfe079dbee3f461ec314b6475cb8b972a73d2995a679649c",
+    "experiments/e7a/test_inspector_controls.py": "f549df4cc5954452b47ed1f01fa8a696e19ddc6dd9a723b6541590f1a653fb9f",
+    "experiments/e2/COVERAGE_MAP.md": "b5989678ca8b87fd5227bc9931341fe8f1c85c7dbca3e7df37216bacb3e265af",
+    "p0/HANDOFF-CLAUDE.md": "a06f3a3530963e599037013eb73beabf37d9abd2324e77f0adb02d43211fa7b2",
+    "p0/P0-REPORT.md": "9999aecafc19d1a3de981229d8f281e15d730b924713437a9abef4aaed7d2c44"
+  },
+  "progress_counts": {
+    "pilot_verified": 0,
+    "pilot_planned": 8,
+    "confirmation_verified": 0,
+    "confirmation_planned": 32,
+    "failed_capture_attempts": 3,
+    "initial_kernel_campaigns_verified": 2,
+    "e1_completed": 0,
+    "e1_planned": 18,
+    "e2_e7b_qualified": 0
+  },
+  "running_attempt4_trace": "start_utc=2026-09-22T00:22:42Z cmd=capture prefix=p072 layer=language_model.model.layers.62.linear_attn\nguard_pid=2815581 container_id=7aea0bce354b6b0abda32a0ce26d69e17edbc27ae2a18e0d715e04c5813fd962 container_name=e7a-capture-002242 alive=true utc=2026-09-22T00:22:48Z\n",
+  "health": "",
+  "payload_exists": false,
+  "payload_bytes": null,
+  "independent_cpu_checks": {
+    "selector_passed": 9,
+    "inspector_controls_passed": 18,
+    "inspector_tested_sha256": "d8776f4e5841ba45c29b4c69622aee5001867c2413beaf7b59b7ffa1326e8886"
+  }
+}

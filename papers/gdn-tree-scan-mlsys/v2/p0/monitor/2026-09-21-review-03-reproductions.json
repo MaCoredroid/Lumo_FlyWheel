@@ -1,0 +1,42 @@
+{
+  "observed_utc": "2026-09-21T22:29:02.342007+00:00",
+  "core_sha256": "93c915d388d9544cb27ac90fdcd58dfa17e01f6483d9ffcb5857e4b1ba14e7ed",
+  "scope": "CPU review only; no inference",
+  "signed_zero_ulp": 0,
+  "negative_min_subnormal_to_zero_ulp": 1,
+  "decay_finite": true,
+  "mixed_nonfinite_compare": {
+    "nonfinite_candidate": 1,
+    "nonfinite_reference": 0,
+    "max_abs": 1.0,
+    "rms": 0.7071067811865476,
+    "ref_max_abs": 1.0,
+    "max_rel_to_refmax": 1.0,
+    "rms_rel": 1.0,
+    "n": 2,
+    "ulp_significant_frac": 0.5,
+    "ulp32_max_sig": 8388608,
+    "ulp32_mean_sig": 8388608.0,
+    "ulp32_frac_ge1_sig": 1.0,
+    "ulp32_frac_ge4_sig": 1.0,
+    "ulp32_frac_ge64_sig": 1.0,
+    "exact_frac_all": 0.5
+  },
+  "all_nonfinite_compare": {
+    "nonfinite_candidate": 1,
+    "nonfinite_reference": 0,
+    "max_abs": 0.0,
+    "rms": 0.0,
+    "ref_max_abs": 0.0,
+    "max_rel_to_refmax": "nan",
+    "rms_rel": 0.0,
+    "n": 1,
+    "ulp_significant_frac": 1.0,
+    "ulp32_max_sig": 0,
+    "ulp32_mean_sig": 0.0,
+    "ulp32_frac_ge1_sig": 0.0,
+    "ulp32_frac_ge4_sig": 0.0,
+    "ulp32_frac_ge64_sig": 0.0,
+    "exact_frac_all": 1.0
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "utc": "2026-09-22T06:01:31.798781+00:00",
+  "scope": "Independent CPU negative controls; no model inference",
+  "prestate_alias_control": {
+    "shares_data_ptr": true,
+    "changed_after_bank_mutation": true,
+    "fix": "explicit clone before stashing"
+  },
+  "logit_different_row_identity_control": [
+    {
+      "call": 0,
+      "max_abs": 2.0,
+      "mean_abs": 2.0,
+      "argmax_changes": 0,
+      "n_rows": 1,
+      "margin_base_min": 1.0,
+      "margin_delta_max_abs": 0.0,
+      "logprob_of_base_argmax_delta_max": 0.0
+    }
+  ],
+  "hidden_different_input_position_control": [
+    {
+      "call": 0,
+      "layers": [
+        {
+          "layer_idx": 0,
+          "hidden_max_abs": 2.0,
+          "hidden_ref_max": 1.0,
+          "residual_max_abs": 2.0,
+          "residual_ref_max": 2.0
+        }
+      ]
+    }
+  ],
+  "source_hashes": {
+    "experiments/e2/e7b_runtime.py": "804127d129af69dfa6f043c53781f9e04211fc1511a2aa1d61ee082c87f56a04",
+    "experiments/e2/e7b_reduce.py": "4a302e65a584e65ab9517bf9f4a05dfa8e8b9dea2cb0ac1207149b8f34690ae2"
+  },
+  "p085_frozen_inspector": {
+    "rc": 0,
+    "all_pass": true,
+    "n_checks": 51,
+    "failed": [],
+    "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+  }
+}

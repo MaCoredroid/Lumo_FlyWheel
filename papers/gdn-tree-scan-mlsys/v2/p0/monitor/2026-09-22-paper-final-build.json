@@ -1,0 +1,39 @@
+{
+  "checked_utc": "2026-09-22T12:37:48.115191+00:00",
+  "source_sha256": "9de0d3464994c6392ce0991f8e062005ccd41dbf48635aa42fb0134d30ae86c7",
+  "abstract_sha256": "9c4061adc247f22c297a8f05627958a4f564e1c38b5803a79ab91df5a7cae0a5",
+  "pdf_sha256": "fd5f2ce85165c81a8dcd75105a6e939d4daf4b64b5588eabd3ad79996937968a",
+  "pages": 15,
+  "build_command": "latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex",
+  "build_cwd": "p0/monitor/paper-build-review1",
+  "undefined_references": 0,
+  "overflow_warnings": 0,
+  "underfull_hbox_warnings": 4,
+  "underfull_vbox_warnings": 4,
+  "visual_review": {
+    "all_15_preceding_E1_pages_inspected": true,
+    "final_renders": "p0/monitor/review-final-e1v2-*.png",
+    "pixel_identical_pages_to_preceding_E1_render": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      8,
+      9,
+      10,
+      11,
+      13,
+      14,
+      15
+    ],
+    "changed_pages_inspected": [
+      7,
+      12
+    ],
+    "result": "PASS; readable text, tables and figures, no clipping or overlap"
+  },
+  "final_source_review": "paper-final-e1-redteam.md",
+  "final_source_review_sha256": "c1eff492271f0354afe0fa38ff75e061a7bfdbeccbb6f5726eef3a8804acc8c2"
+}

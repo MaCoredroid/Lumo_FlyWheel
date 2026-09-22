@@ -1,0 +1,8 @@
+{
+  "edited_utc": "2026-09-22T19:38:32.087293+00:00",
+  "reason": "User requested removal of all historical numerical results",
+  "before_main_sha256": "9de0d3464994c6392ce0991f8e062005ccd41dbf48635aa42fb0134d30ae86c7",
+  "after_main_sha256": "a55a36f9f43d0af9a7a8cba8faa11b512b4a66a7ddc38f0fde3fdc84af8ee5d8",
+  "after_abstract_sha256": "36983c20ae3fd466dc485abb4e59baf84cbfd364df9011d27095bfdb70a04899",
+  "scope": "Old campaign metrics/counts/error magnitudes/settings and quantitative archived-operand/legacy-kernel comparisons removed. Fresh pilot/confirmation, fresh synthetic stress, E2/E7b/E1 data and all adverse fresh findings retained. Raw evidence unchanged."
+}

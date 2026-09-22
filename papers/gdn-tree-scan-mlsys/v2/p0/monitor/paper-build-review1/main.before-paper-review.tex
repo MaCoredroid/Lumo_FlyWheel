@@ -1,0 +1,398 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{cite,amsmath,amssymb,graphicx,booktabs,array,tabularx}
+\usepackage{algorithm,algorithmic}
+\usepackage{tikz,pgfplots}
+\usepackage[hyphens]{url}
+\usepackage{xurl}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+\usetikzlibrary{arrows.meta,positioning,calc}
+\pgfplotsset{compat=1.17}
+\definecolor{inkblue}{RGB}{42,97,130}
+\definecolor{mutedgreen}{RGB}{71,123,103}
+\definecolor{mutedamber}{RGB}{173,124,52}
+\definecolor{mutedred}{RGB}{153,77,82}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcommand{\sys}{GDN Tree-Scan}
+\newcommand{\pending}[1]{\textit{Planned; results pending: #1.}}
+\input{results/historical-macros}
+\begin{document}
+\title{GDN Tree-Scan: Correct State Commitment and Performance Limits of Tree Speculation in Recurrent Hybrids}
+\author{\IEEEauthorblockN{Zhiyuan Ma}
+\IEEEauthorblockA{\texttt{zhiyuanma0520@gmail.com}}
+\thanks{Working revision, September 21, 2026. Quantitative findings are archived observations; proposed validation is identified explicitly.}}
+\maketitle
+\input{abstract}
+\begin{IEEEkeywords}
+speculative decoding, Gated DeltaNet, state commitment, numerical reproducibility, language-model serving
+\end{IEEEkeywords}
+
+\section{Introduction}
+Speculative decoding reduces serial target-model invocations by verifying draft tokens in parallel. Its sampling guarantee assumes that verification supplies the intended target probabilities. Tree speculation expands the candidate set, but it does not relax that assumption~\cite{leviathan2023fast,chen2023sampling,miao2023specinfer}. For recurrent-hybrid models, realizing the verifier requires more than an attention mask: a candidate must inherit the state of its ancestors, and the next serving iteration must inherit exactly the path selected for continuation~\cite{yang2024gated,wu2025stree}.
+
+This paper studies that boundary in \sys{}, a Gated DeltaNet verifier integrated with vLLM and a fork of FlashAttention-2. The implementation uses branch-local recurrent computation, device-side multidraft selection, and accepted-path publication across recurrent state, convolution history, and attention key--value (KV) storage~\cite{lumo2026receipts,lumo2026stateless}. An attention-KV mapping error demonstrates why repairing only the recurrent state is insufficient: a valid selected token path can still read a rejected sibling on the next iteration. A second failure arises even when masked branches contribute zero attention weight. Moving the visible spine keys changes floating-point reduction association and can alter a near-tied verification decision~\cite{lumo2026spine}.
+
+Acceptance length also leaves the performance question incomplete. In one archived campaign configured for batch four, a tree committed 5.286 tokens per request verification event against native five-step multi-token prediction's 4.422. Its event-normalized complete decode cost increased from 103.45 to 160.88\,ms, and the corresponding decode-step rate fell from 42.74 to 32.85 tokens/s~\cite{lumo2026cost,lumo2026archive}. This result describes that implementation and configuration. It neither establishes an impossibility result for trees nor compares the current code. It motivates explicit accounting for drafting, verification, commitment, host work, and serving-memory pressure.
+
+\begin{figure}[t]
+\centering
+\input{figures/state-contract.tikz}
+\caption{A selected token path must have a matching continuation state. Recurrent, convolution, and attention-KV state must all describe the same materialized prefix. A newly sampled token can remain pending until the next forward, just as in native decoding.}
+\label{fig:contract}
+\end{figure}
+
+The revision makes three bounded contributions. First, it states the accepted-prefix contract at the actual serving boundary and associates it with concrete regression witnesses. Second, it explains a physical-layout source of numerical spine disagreement and the tested repair. Third, it reconciles archived acceptance and timing results, including a strong depth-matched chain control and a later paired attention-kernel improvement. The latter reduced its tested batch-four step time by 27.03\,ms, but does not establish tree-over-chain superiority~\cite{lumo2026paired}.
+
+Parallel GDN tree verification and compact accepted-state reconstruction are already addressed by direct related work. Section~\ref{sec:related} positions this study accordingly. We do not claim a first hybrid-tree system, general bitwise equivalence, or a measured advantage over those implementations. Section~\ref{sec:planned} separates the experiments needed for stronger current-system claims from the historical findings already available.
+
+\section{Background and Related Work}
+\label{sec:related}
+\subsection{Drafting, verification, and serving}
+Speculative sampling constructs an exact target sample from proposal and residual distributions, conditional on the probabilities actually supplied~\cite{leviathan2023fast,chen2023sampling}. SpecInfer supplies the tree-verification framing; Sequoia, EAGLE-2, and OPT-Tree investigate tree construction and its performance consequences~\cite{miao2023specinfer,chen2024sequoia,li2024eagle,wang2024opt}. Our study keeps these algorithmic questions separate from whether a deployed kernel and cache return the intended probabilities.
+
+PagedAttention and SGLang address the scheduling, memory, and execution substrate~\cite{kwon2023efficient,zheng2024sglang}. Hybrid serving additionally manages recurrent-state pools alongside KV storage, as documented by SGLang's hybrid-model integration~\cite{pytorch2025sglang,sglang2026qwen}. Thus neither a fast isolated recurrent kernel nor low transient state memory alone determines user-visible latency. FlashAttention-2's work partitioning supplies the attention substrate examined here~\cite{dao2023flashattention}.
+
+\subsection{Recurrent and hybrid speculation}
+Gated DeltaNet augments a decayed recurrent state with a data-dependent delta update~\cite{yang2024gated}. Parallel delta-rule formulations provide relevant algebraic background~\cite{yang2024delta}. Stateful speculation is established territory: STree studies speculative trees for hybrid state-space models, SpecMamba targets an FPGA implementation, and component-aware self-speculation studies how hybrid components affect the design~\cite{wu2025stree,zhong2025specmamba,borobia2026component}. These works motivate an explicit state lineage; they do not justify treating every recurrent update or numerical implementation as interchangeable.
+
+\subsection{Direct GDN comparisons}
+\textbf{Bole} derives a tree-structured closed form and evaluates it with a value-tiled finite-polynomial solver. It stores compact update factors and reconstructs the accepted state. Its SGLang integration combines batch-wide verification budgeting with captured GPU execution. Evaluation includes unquantized Qwen3.5-27B on GB10 and online replay of agent sessions~\cite{wang2026bole}. Its state and serving mechanisms directly overlap the problem studied here. Our measured replay cost is therefore not a lower bound on alternative implementations.
+
+Concretely, Bole's correction system is $(I+G)U=R$, where $G$ contains strict-ancestor interactions and $R$ is the source correction. Tree depth $d$ gives $G^{d+1}=0$, so $U=\sum_{m=0}^{d}(-G)^mR$. This finite identity changes the arithmetic schedule from sequential updates to matrix propagation~\cite{wang2026bole}. Our path preserves sequential updates and replays accepted operands; Section~\ref{sec:reconstruction-numerics} explains why the numerical comparison remains an empirical question.
+
+\textbf{TreeWY} expresses GDN tree verification as a triangular system and reconstructs the accepted state from pseudo-values. Its vLLM evaluation uses Qwen3.5-35B and 397B on B200, greedy verification, and disabled prefix caching. It explicitly permits finite-precision disagreement with the baseline and reports that wider trees improve acceptance without yet winning throughput~\cite{ghantasala2026treewy}. Consequently, shared-spine byte checks in our particular route neither establish that TreeWY is incorrect nor replace its serving comparison.
+
+\textbf{ReplaySSM} caches recurrent inputs and changes when state is materialized; its implementation RFC includes GDN and Mamba2~\cite{replayssm2026}. Reconstruction and replay are not claimed as new concepts here. Table~\ref{tab:related} states the comparison boundary. Published speed ratios from different checkpoints, precision formats, workloads, and software builds are not combined into a performance ranking.
+
+\begin{table}[t]
+\caption{Direct comparison scope. External methods were read, not executed in this revision.}
+\label{tab:related}
+\centering\footnotesize
+\begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}p{0.22\columnwidth}YY@{}}
+\toprule
+Method & Overlapping mechanism & Boundary for this study \\
+\midrule
+Bole~\cite{wang2026bole} & Parallel verifier; factorized commit & Different stack and precision; no matched run \\
+TreeWY~\cite{ghantasala2026treewy} & Tree solve; accepted-state reconstruction & Different models and operating regime; no matched run \\
+ReplaySSM~\cite{replayssm2026} & Input caching; deferred state work & Alternative state policy; no matched run \\
+\sys{} & Scan/replay; accepted-path remapping & Specific numerical and lifecycle witnesses; historical cost evidence \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{The Accepted-Prefix Contract}
+\label{sec:contract}
+\subsection{State and the execution boundary}
+Let $m$ be a materialized token prefix: the tokens already consumed by the target's forward computation. Write its persistent state as
+\begin{equation}
+\mathcal{S}(m)=\bigl(R(m),C(m),K(m)\bigr),
+\end{equation}
+where $R$ collects recurrent matrices, $C$ collects convolution histories, and $K$ collects attention KV entries. The logical emitted prefix can also include a newly sampled token $b$ that has not yet been consumed. The continuation boundary is then $(\mathcal{S}(m),b)$, not a claim that $\mathcal{S}(mb)$ has already been computed. This distinction is essential when counting the correction or bonus token while checking cache state.
+
+A tree descriptor contains candidate token IDs, parent indices, depth/position information, attention visibility, and maps between logical nodes and physical slots. For a candidate node $i$, each target layer must consume the state obtained from the candidate's root-to-parent path. At publication, the selected materialized path, pending-token convention, and next-drafter input row must agree. Figure~\ref{fig:contract} illustrates the three state surfaces documented by the implementation audit~\cite{lumo2026stateless,lumo2026archive}.
+
+\subsection{The recurrence and path locality}
+For one GDN head, let $R\in\mathbb{R}^{d_v\times d_k}$. Queries and keys are in $\mathbb{R}^{d_k}$ and values in $\mathbb{R}^{d_v}$. With decay $\alpha_i$ and write strength $\beta_i$, a node applies the standard update~\cite{yang2024gated}
+\begin{align}
+R'_i &= \alpha_i R_{\pi(i)}, &
+\delta_i &= \beta_i\bigl(v_i-R'_i k_i\bigr),\\
+R_i &= R'_i+\delta_i k_i^\top, &
+o_i &= R_iq_i,
+\end{align}
+where $\pi(i)$ is its parent. A previous node in the packed buffer need not be $\pi(i)$. The causal convolution likewise requires path predecessors rather than adjacent packed rows. The attention visibility relation must select the same logical prefix and ancestry. These requirements follow from the model's computation; a correct attention mask cannot repair a wrong recurrent parent.
+
+The implementation verifies nodes with branch-local scratch and makes the selected continuation durable through replay and remapping. This is an implementation route, not the only way to satisfy the contract~\cite{lumo2026receipts,lumo2026stateless}. In particular, rejecting a branch requires that its contents cannot influence future computation; it does not require zeroing every scratch byte if future reads are correctly restricted.
+
+\subsection{Four different correctness questions}
+\textit{Algebraic correctness} asks whether the recurrence or its reformulation computes the same real-arithmetic function. \textit{Numerical agreement} asks whether particular kernels, layouts, and precisions agree with a selected reference. \textit{Sampler correctness} asks whether the acceptance/residual rule returns its supplied target distribution. \textit{Serving correctness} asks whether these properties survive cache restoration, row reuse, batching, and the next iteration~\cite{yang2024delta,chen2023sampling,lumo2026archive}.
+
+For example, for target probabilities $p$ and proposal probabilities $q$, accepted mass is $\min(p,q)$ under ordinary rejection sampling. Sampling the remaining mass proportional to $(p-q)_+$ gives the target marginal. The argument is conditional on the actual proposal law and target probabilities; substituting stale logits or an incorrect state changes the distribution being sampled~\cite{leviathan2023fast,chen2023sampling}. The same distinction applies to the multidraft reference used here~\cite{miao2023specinfer,lumo2026receipts}.
+
+If every iteration supplies the reference conditional probabilities and publishes an equivalent continuation boundary, an induction over emitted tokens gives the reference joint distribution. This is a conditional argument, not a proof that the implemented system satisfies its premises. A tolerance test, zero observed garble, or equal task outcomes does not discharge all those premises.
+
+\section{Implementation and Failure Mechanisms}
+\subsection{A descriptor shared by verification and commitment}
+Figure~\ref{fig:pipeline} shows the served path. Native multi-token prediction (MTP) supplies the principal draft chain; selected variants add runner-up candidates. The descriptor maps each candidate through the attention mask, recurrent scan, sampler, and selected-path publication. Historical variants also use a heuristic suffix predictor; this changes the proposal source and must be recorded separately from tree topology~\cite{lumo2026receipts,lumo2026cost}.
+
+\begin{figure}[t]
+\centering
+\input{figures/pipeline.tikz}
+\caption{One descriptor connects the target forward and the continuation state. The selected row also controls the next drafter input. Timing records must identify whether they count a physical step or a request verification event.}
+\label{fig:pipeline}
+\end{figure}
+
+The attention fork applies an additive ancestry bias to speculative suffix scores while leaving the context visible. It retains the native prefill route. Recurrent nodes obtain their parent state from the pre-tree state or node-local scratch. After device selection, accepted-path replay and remapping establish the continuation state~\cite{lumo2026receipts}. Cache checkpoints and restored rows must obey the same contract; a correct cold first request does not establish correctness after a checkpoint hit or page reuse~\cite{lumo2026stateless}.
+
+\begin{algorithm}[t]
+\caption{Logical verifier and continuation boundary}
+\label{alg:verify}
+\begin{algorithmic}[1]
+\REQUIRE Reference-aligned state boundary, candidate descriptor $T$
+\STATE Map logical candidates to physical slots and positions.
+\STATE Verify using path-local convolution, GDN, and attention.
+\STATE Apply the configured sampler to matching target/proposal rows.
+\STATE Obtain the accepted path and any pending correction token.
+\STATE Publish recurrent and convolution state for the materialized path.
+\STATE Map its attention KV entries to the native continuation layout.
+\STATE Map the selected hidden-state row to the next drafter input.
+\STATE Preserve the native pending-token and position convention.
+\RETURN Continuation boundary and emitted-token accounting
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Accepted state with the wrong attention KV}
+The archived remap failure left recurrent and convolution state aligned with the selected path, while attention read a neighboring sibling's KV entry after a non-contiguous path was accepted~\cite{lumo2026stateless}. The fix copies each selected node's KV entry from its verification slot into its linear continuation slot. Its role is state movement rather than a new attention equation. Algorithm~\ref{alg:verify} makes the missing step explicit.
+
+The associated token fixture changed from 15/15 failures to 0/15 across the reported eager, graph, and cold-cache checks. In served-script checks, the repaired cat8 and cat6 arms had zero observed corrupted-identifier flags among 84 and 61 scripts respectively~\cite{lumo2026stateless}. The pre-fix observations came from earlier runs, so their rates should not be treated as a randomized estimate of the repair's effect. The fixture supplies the more direct causal witness.
+
+A later launcher audit found that previously validated remap and reorder flags were enabled in narrow launchers but disabled in the general campaign launcher. The corrected campaign therefore records post-boot engagement, not merely source-code availability~\cite{lumo2026archive}. This is why the identity of a compiled implementation and the effective configuration belong to the evidence boundary.
+
+\subsection{Masked branches can change the shared spine}
+In exact arithmetic, adding masked keys contributes zero to attention. In the tested FlashAttention-2 route, however, physical score columns also determine the association of the online-softmax reduction~\cite{dao2023flashattention,lumo2026spine}. Interleaving extra branch slots changes the positions of surviving spine keys. The visible values are unchanged, but their partial sums need not be associated identically.
+
+\begin{figure}[t]
+\centering
+\input{figures/spine-layout.tikz}
+\caption{Illustrative physical slot layouts for one spine query. Blue entries are visible spine keys and amber entries are masked branches. The repair keeps shared-spine positions fixed within the tested execution layout. The drawing is a mechanism illustration, not a new numerical measurement.}
+\label{fig:layout}
+\end{figure}
+
+The recorded witness shows a one-unit-in-the-last-place discrepancy in a bfloat16 output at magnitude eight: $2^{3-7}=0.0625$. The diagnostic identifies the shared attention spine and reports a greedy acceptance difference of 0.087 drafts/event between the compared tree variants~\cite{lumo2026spine}. Independent stochastic task traces cannot establish the same claim. A meaningful superset check fixes the common prefix, proposals, target reference, and decision rule. Under greedy longest-matching-path selection with unchanged shared-node outputs, adding candidates cannot remove an existing matching path. A numerical change can violate that premise.
+
+The repair places the shared spine contiguously before other tree slots and propagates the permutation through the relevant maps. In the recorded observation harness and in-process check, the reordered shared spine matched the spine-only reference byte-for-byte; an interleaved control retained the discrepancy~\cite{lumo2026spine}. This is evidence for the tested route and shape family. Different compiler choices, kernel buckets, quantization formats, or sampling operations require their own checks. A fixed layout alone is not a universal floating-point identity theorem.
+
+\subsection{Reconstruction, rounding, and accumulated disagreement}
+\label{sec:reconstruction-numerics}
+The archive includes an earlier local WY prototype. Its investigation reports a recurrent-state error of approximately $1.66\times10^{-3}$ and a subsequent maximum logit discrepancy of 3.32. The diagnosed state-write path reused an excessively rounded output representation. A separate state calculation reduced the isolated error; later assessments retained the algebraic equivalence and left broader acceptance-based validation open~\cite{lumo2026archive}. These are documentary observations about our historical prototype, not a reproduction or refutation of TreeWY. The evidence manifest identifies both the failure record and its later correction.
+
+Other archived layer-localization studies examined our sequential tree route as well. They motivate a distinction between a local numerical discrepancy and its effect after further model layers or recurrent steps. A first-order explanatory model is $e_{\ell+1}\approx J_\ell e_\ell+\delta_\ell$: later layers can amplify an existing residual while introducing additional error. This expression is not a fitted error bound. Small local errors, or matching current outputs, do not establish matching future logits~\cite{lumo2026archive}.
+
+The numerical reference must also be named. The pinned native speculative-update and one-token decode paths differ in gate rounding and state-storage boundaries. Our scan and replay share a sequential update body, but their compiled agreement still requires GPU checks~\cite{lumo2026archive}. Thus a real-arithmetic reconstruction identity does not by itself establish deployment agreement; conversely, disagreement with our selected reference does not establish an algebraic defect. E7a and E7b isolate verification arithmetic, state commitment, and subsequent continuation before measuring any deployment benefit. The E7a kernel-level pilot (Section~\ref{sec:e7a-pilot}) measures the first two of these boundaries: the two pinned native paths differ from each other by $2.2\times10^{-4}$ to $1.7\times10^{-3}$ of the state maximum on the tested operands, and an isolated ablation shows the difference is the decode kernel's documented bfloat16 rounding of the write gate (an oracle applying only that rounding matches it at the fp32 floor).
+
+\section{Evaluation Protocol and Evidence Status}
+\label{sec:protocol}
+\subsection{Campaigns are separate experimental objects}
+The main empirical material concerns Qwen3.6-27B-FP8 on GB10/DGX Spark~\cite{qwen2026qwen36fp8,lumo2026archive}. Table~\ref{tab:evidence} distinguishes the archived campaigns. They use different implementation stages and, in some cases, different harnesses. They are not replicates of a single final system. The accompanying evidence manifest records file paths and SHA-256 hashes; the accounting script recomputes the H3 table from stored JSON without running inference.
+
+\begin{table*}[t]
+\caption{Evidence carried into this draft. ``Verified archive'' means the reported observation was checked against an available source; it does not mean the experiment was rerun on the current code. P0 and a kernel-level E7a pilot are executed; E2/E7b, E1, and conditional E3 remain planned; E7c is a deferred external comparison.}
+\label{tab:evidence}
+\centering\footnotesize
+\begin{tabularx}{\textwidth}{@{}p{0.05\textwidth}p{0.17\textwidth}Yp{0.25\textwidth}@{}}
+\toprule
+ID & Evidence & Supported statement & Important boundary \\
+\midrule
+H1 & KV-remap report~\cite{lumo2026stateless} & Fixture repair and observed post-fix script checks & Not a distribution proof or a randomized quality comparison \\
+H2 & Spine-layout report~\cite{lumo2026spine} & Numerical witness, shared-spine repair, later acceptance values & Byte agreement scoped to tested reference and route \\
+H3 & Postfix3 JSON and closeout~\cite{lumo2026archive} & Three-arm acceptance and complete decode-step accounting & Historical nominal-B4 campaign; duplicated constraints reconstructed \\
+H4 & Paired attention optimization~\cite{lumo2026paired} & 27.03 ms local step reduction in its configuration & Different stage from H3; not a composed tree-over-chain result \\
+H5 & Repeated-task audit~\cite{lumo2026archive} & Limits of the 16-task quality sample & Same Astropy subset; heterogeneous historical arms \\
+H6 & Archived numerical investigations & Failure mechanism and later correction & Documentary evidence; original captures not reproduced \\
+P0 & Configuration audit (Section~\ref{sec:protocol}) & Sampling reconstruction; no new model measurements & Historical binary gaps retained \\
+E7a & Kernel-level pilot (Section~\ref{sec:e7a-pilot}) & Same-operand arithmetic of three local realizations against a float64 oracle and both pinned native kernels & Dependent historical operand sets and labeled synthetic inputs; no fresh prefixes; not the authors' systems \\
+E2/E7b; E1; E3 & Planned & --- & Not executed \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+The H3 campaign configures four concurrent requests, enables prefix caching, and runs a 16-task Astropy subset drawn from SWE-bench Verified through qwen-code. Native MTP-5 uses five draft steps. MTP-11 matches the maximum draft depth of the tail6 tree, whose later suffix uses a different proposal source~\cite{lumo2026cost,lumo2026archive}. It is a useful strong control, but not a pure topology ablation. Task resolution follows the benchmark evaluation; the small chosen subset does not represent the full benchmark~\cite{jimenez2024swe}.
+
+\subsection{Sampling provenance remains an explicit limitation}
+Historical reports label several campaigns with requested temperature 0.6. The archive documents duplicated sampling constraints~\cite{lumo2026levers}. P0 reconstructs the three July patchers at their recorded, distinct source revisions against the launchers' pinned image: each produces two target-logit constraint calls, while the selected current revision produces one. This is source reconstruction, not recovery of the original patched runtime. The target-row temperature divisors compound to 0.36, but top-k/top-p filtering also repeats and bonus paths differ; the run is not equivalent to uniform temperature-0.36 sampling. We retain the requested settings as \emph{nominal}. Historical loaded-extension and model-file identities remain unresolved; current file hashes cannot establish July identity. The artifact includes the source reconstructions and per-arm audit manifests.
+
+The stored numbers remain observations of the archived runs, useful for describing behavior and diagnosing cost. They do not provide a controlled-temperature estimate of the final system's advantage. Likewise, an available correctness test counts as a current passing result only when its execution record establishes the relevant route~\cite{lumo2026archive}.
+
+\subsection{Tokens, events, physical steps, and service time}
+Let $a_e$ be accepted drafts and $c_e$ be actual emitted tokens in request verification event $e$. For ordinary nonterminal events, $c_e=a_e+1$ because of a correction/bonus token. End-of-sequence and truncation must instead use the actual count. A physical GPU step can contain several request events. All cost components must use a common denominator before addition.
+
+Writing bars for quantities normalized to one request event, the decode-step accounting rate is
+\begin{equation}
+R_{\mathrm{decode}}=
+\frac{\bar c}{\bar t_{\mathrm{draft}}+\bar t_{\mathrm{verify}}+
+\bar t_{\mathrm{commit}}+\bar t_{\mathrm{host}}}.
+\label{eq:rate}
+\end{equation}
+The H3 wall instrument uses start-to-start intervals between consecutive pure-decode steps, caps idle intervals, and breaks the chain on mixed or prefill steps. Thus it includes decode-step host work but is \emph{not} total generated output divided by end-to-end service time~\cite{lumo2026archive}. Time to first token (TTFT), time per output token (TPOT), queueing, cache misses, and campaign wall time are separate quantities.
+
+An earlier analysis combined draft/commit timings per physical step with verification timings per request event. The corrected raw files divide the former by measured events/step before summation. That is an accounting repair, not a kernel speedup. The resulting GPU-only-rate/wall-rate ratios are 1.017--1.025; a ratio slightly above one is consistent with excluded host cost. The older approximately 0.53 mismatch is superseded~\cite{lumo2026archive}.
+
+\section{Results}
+\label{sec:results}
+\subsection{State and layout findings}
+Table~\ref{tab:correctness} summarizes H1 and H2. The repaired state mapping eliminates the fixture's observed failure, while the layout investigation identifies a separate numerical cause. These results address distinct failure modes. A system can satisfy the recurrent-path equation yet violate attention-KV publication, and can satisfy an abstract mask yet change the finite-precision output~\cite{lumo2026stateless,lumo2026spine}.
+
+\begin{table}[t]
+\caption{Archived correctness and acceptance observations. Counts have different units; they are not pooled into one failure rate.}
+\label{tab:correctness}
+\centering\footnotesize
+\begin{tabularx}{\columnwidth}{@{}Yp{0.35\columnwidth}@{}}
+\toprule
+Observation & Recorded result \\
+\midrule
+KV-remap token fixture & 15/15 failures to 0/15 \\
+Post-fix cat8 script flags & 0/84 corrupted identifiers \\
+Post-fix cat6 script flags & 0/61 corrupted identifiers \\
+Reordered shared spine & Byte match in tested checks \\
+Later B4 cat8 acceptance & 3.4996 drafts/event \\
+Later B4 cat6 acceptance & 3.3332 drafts/event \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+After the layout repair, the recorded B4 cat8--cat6 acceptance difference is 0.1664 drafts/event. This is consistent with the restored opportunity of the wider tree, but it is not a paired estimate of the greedy witness's effect: the deployed arms follow different stochastic trajectories~\cite{lumo2026spine}. Equal task counts in that campaign likewise cannot establish equivalence. A direct structural claim rests on the matched-input numerical check.
+
+\subsection{The later tree loses to both chain controls}
+Table~\ref{tab:three-arm} reports H3. The tree commits about 19.5\% more tokens/event than native MTP-5, but costs about 55.5\% more per event. The larger numerator does not compensate for the denominator. MTP-11 commits the most tokens per event of the three, yet its longer drafting path makes it slower than MTP-5 on the same decode-step measure~\cite{lumo2026cost,lumo2026archive}.
+
+\begin{table*}[t]
+\caption{H3: historical nominal-B4 campaign, prefix cache enabled, 16 Astropy tasks. Values are recomputed from the corrected raw JSON. Nominal temperature was 0.6; effective sampling provenance remains under audit. Tokens/s here is Eq.~\eqref{eq:rate}, not full-service throughput.}
+\label{tab:three-arm}
+\centering\small
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Arm & Accepted/event & Committed/event & ms/event & Decode tokens/s & Events/step & Resolved \\
+\midrule
+Native MTP-5 & \NativeFiveAccepted & \NativeFiveCommitted & \NativeFiveEventMs & \NativeFiveTPS & \NativeFiveOccupancy & 10/16 \\
+Native MTP-11 & \NativeElevenAccepted & \NativeElevenCommitted & \NativeElevenEventMs & \NativeElevenTPS & \NativeElevenOccupancy & 8/16 \\
+Tree, tail6 & \TreeAccepted & \TreeCommitted & \TreeEventMs & \TreeTPS & \TreeOccupancy & 10/16 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{figure}[t]
+\centering
+\input{figures/cost-breakdown.tikz}
+\caption{H3 cost components on a common per-request-event basis. The source records milliseconds per physical step for draft and commit; these are divided by the measured request events/step. Different campaigns' component estimates are not combined.}
+\label{fig:cost}
+\end{figure}
+
+Figure~\ref{fig:cost} shows where the difference arises. Verification costs 106.28\,ms/event for the tree and 66.68\,ms/event for MTP-5; commitment costs 16.89 versus 2.49\,ms/event. Drafting is 35.04 versus 31.72\,ms/event. The MTP-11 draft cost is 68.26\,ms/event~\cite{lumo2026archive}. These identify expensive operations in this route. They do not establish that another representation must pay the same replay or verification cost.
+
+Configured batch size is not realized occupancy. The measured request events per pure-decode step range from 2.74 to 2.80 in this campaign. Larger nominal capacity cannot be substituted for the observed denominator. The recorded task totals are also descriptive: one run per arm on the same selected subset does not support a significance claim or a quality ranking~\cite{lumo2026cost,lumo2026archive}.
+
+\subsection{A conditional break-even calculation}
+At fixed comparison conditions, Eq.~\eqref{eq:rate} gives the acceptance threshold
+\begin{equation}
+\bar a_{\mathrm{tree}}^{\star}
+= (\bar a_{\mathrm{native}}+1)
+\frac{\bar t_{\mathrm{tree}}}{\bar t_{\mathrm{native}}}-1.
+\end{equation}
+Using the unrounded H3 values yields \BreakEvenAccepted{} accepted drafts/event for parity with MTP-5. Alternatively, at the observed tree acceptance, its event-normalized time would need to fall to \BreakEvenEventMs{}\,ms, a \RequiredReduction\% reduction. The implementation of this calculation in the paper artifact corrects a historical note that omitted the bonus token~\cite{lumo2026archive}.
+
+This is a local accounting threshold. Increasing depth, changing the drafter, changing batch occupancy, or reducing cache capacity can change both numerator and denominator. It is not a forecast that the tree can reach the threshold at unchanged cost, nor a claim that no alternative tree algorithm can do better.
+
+\subsection{A reliable local optimization, with composition still open}
+H4 examines attention work partitioning at a later implementation stage. Pairing query-head work uses previously idle query-tile capacity and reduces the number of thread blocks in the tested B4 route~\cite{lumo2026paired}. Its paired timing summary reports a mean reduction of 27.03\,ms/step across four passes, with standard deviation 13.77\,ms and a reported one-sided 95\% lower bound of 10.82\,ms. The summarized baseline and optimized times are 408.313 and 381.284\,ms. These are physical-step values for that campaign; subtracting 27.03\,ms from H3's event-normalized time would mix experiments and units.
+
+\begin{table}[t]
+\caption{Later optimization evidence. Provisional and unmeasured items are excluded from factual combined-speed claims.}
+\label{tab:optimization}
+\centering\footnotesize
+\begin{tabularx}{\columnwidth}{@{}YY@{}}
+\toprule
+Change & Evidence status \\
+\midrule
+B4 query-head pairing & Verified archive: 27.03 ms paired mean reduction \\
+B4 single-pass GDN scan & Provisional 8.984 ms observation; final paired validation pending \\
+Batched tree-accept walk & Correctness checks archived; deployment timing pending \\
+Combined final stack vs. chains & Planned E1/E3; no measured conclusion \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The later archive also contains a provisional single-pass GDN result and correctness work on a batched tree-accept walk, but not the completed composed comparison~\cite{lumo2026paired,lumo2026archive}. Table~\ref{tab:optimization} deliberately preserves those statuses. Kernel interactions, changed bottlenecks, and workload variation make addition of individual best deltas unjustified.
+
+\subsection{Quality and the original B1 observation}
+The original manuscript reported 23.88 versus 18.80 token-weighted request-decode tokens/s for a small June B1 gate, with 18.51 versus 17.80 under a per-request-equal view~\cite{lumo2026receipts}. Those are different metrics and a different campaign from H3. We retain them as historical context, subject to the sampling audit, rather than as the current revision's acceleration headline. Its recurrent-oracle rescore sample was not a distribution-distance proof.
+
+H5 summarizes 21 historical arms on the same 16 Astropy tasks: seven tasks always resolved, four never resolved, and five varied~\cite{lumo2026archive}. Implementations differ across arms, so these cannot be pooled as 21 independent replications of one system. The sample is useful for detecting gross regressions; it is weak evidence for non-inferiority or general task quality. An optional newer quantization campaign also records external retrieval of a benchmark gold patch, requiring provenance review before its affected outcomes can be used. No such outcome supports the core conclusions here.
+
+
+\subsection{E7a pilot: three arithmetic realizations on identical operands}
+\label{sec:e7a-pilot}
+After P0 we executed the E7a comparison at the kernel level on 21 September 2026 (artifacts of record, with hashed sources, compiled-kernel hashes, integer-view equality metrics, and telemetry, under \path{experiments/out-20260921T230026Z-e7a-ladder-v3/}; the earlier same-operand run \path{out-20260921T222616Z-e7a-ladder/} is retained). Inputs are the rounded operands of one GDN layer step: bfloat16 $q,k,v$, bfloat16 raw gates, fp32 $A_{\log}$, bfloat16 gate bias, the fp32 pre-tree state, and the tree descriptor. Four operand sets are historical June-2026 captures at layers 62, 1, 12, and 0 of the served ten-node caterpillar (depth 5, B1). They are dependent operand sets whose independent-prefix count cannot be recovered from the files; they are not fresh prefixes and contribute nothing to the planned eight- and 32-prefix sets. Five further sets are labeled synthetic with historical-like gate statistics: chains of depth 1, 5, and 11, a binary tree of depth 3, and the caterpillar; a synthetic four-request batch exercises the batched kernels. Three references are kept apart: a float64 serial recurrence on the same rounded operands, the pinned native speculative-update kernel run per root-to-node chain, and the pinned one-token decode kernel run token by token.
+
+A fresh eight-prefix pilot followed on 22 September 2026 on the intended configuration: the audited Qwen3.6-27B FP8 checkpoint (read-only), the pinned vLLM image, the served ten-node caterpillar on the stateless production tree route, and a documented one-hunk repair of the source patcher that made that route runnable at HEAD (a drafter constant emitted only under a fixed-tree mode; recorded with original and repaired hashes). Ninety-six candidate prefixes were cut from local repositories in three context strata and scored once by a native MTP reference server; eight pilot and 32 disjoint confirmation prefixes were frozen from native-reference behavior alone (top-1/top-2 margin and context strata) before any tree output was read. Each pilot prefix received one boot and one greedy request, and one one-shot capture of layer 62's first tree step after the full prefill (two prefill forwards for the 4096-token prompts under the server's logged 2048-token budget). A fail-closed provenance inspector (51 checks per capture: hashed prefix and prompt-token binding, payload written inside the first tree step, the per-request scheduler trace carrying the response identifier, per-step alignment of the accepted draft paths with the API-returned token identifiers, exact decoding of those identifiers to the response text, exact geometry and dtypes, non-trivial pre-state) passed on all eight (four prompts of 256 tokens, four of 4096), with three earlier boots retained as failed captures. The eight sets are independent frozen prefixes; the harness run of record is \path{experiments/out-20260922T013313Z-e7a-fresh-pilot-v2/}.
+
+Mechanism A is this worktree's production scan and accepted-path replay. Mechanisms B and C are our Triton reimplementations of the two published families on the same masked system $(I+G)U=R$: forward substitution (the WY/TreeWY family) and the finite Neumann series with $d$ terms (the Bole family), each followed by the compact reconstruction $S_a=P_aS_0+\sum_{j\preceq a}(P_a/P_j)\,u_jk_j^\top$. Dense products run either in fp32 or in tf32 tensor-core precision; the corrected June-2026 WY kernel is included as a historical realization. Every accepted prefix, including zero acceptance, is committed, first from each method's own factors and then from identical oracle factors.
+
+\begin{table*}[t]
+\caption{E7a kernel-level pilot across nine operand sets (four historical, five synthetic); the eight fresh, independently verified prefixes reproduce these ranges (text). Errors are maxima relative to the reference maximum, given as the range over sets; ``fp32'' and ``tf32'' denote the precision of the dense products in B and C. Commit rows compare the committed state for every accepted prefix. bf16 agreement is the fraction of deployed-width bfloat16 output elements bit-identical (integer view) to the native speculative-update kernel's. Local reimplementations only; not the authors' systems.}
+\label{tab:e7a}
+\centering\small
+\begin{tabularx}{\textwidth}{@{}p{0.29\textwidth}YYYY@{}}
+\toprule
+Realization & Verify out & Commit (own) & Commit (oracle factors) & bf16 agreement \\
+\midrule
+A scan + replay (production) & 0.9--3.1e-7 & 1.0--3.7e-7 & --- & 0.99998--1 \\
+B forward subst.\ fp32 & 2.8--5.2e-7 & 1.0--2.8e-7 & 1.0--2.1e-7 & 0.9997--0.9999 \\
+C finite Neumann fp32 & 2.8--5.2e-7 & 1.0--2.8e-7 & 1.0--2.1e-7 & 0.9997--0.9999 \\
+B forward subst.\ tf32 & 6.9e-4--1.4e-3 & 3.0--8.1e-4 & 2.6--8.9e-4 & 0.744--0.786 \\
+C finite Neumann tf32 & 6.5e-4--1.4e-3 & 3.0--8.1e-4 & 2.6--8.9e-4 & 0.745--0.788 \\
+June-2026 WY kernel (fp32 closed form) & 1.4--2.1e-7 & 0.9--2.2e-7 (materialized) & --- & --- \\
+\midrule
+Native speculative update (reference) & = A & 1.0--3.7e-7 & --- & 1 \\
+Native one-token decode vs.\ oracle & --- & 2.2e-4--1.7e-3 & --- & 0.751--0.937 \\
+Native one-token decode vs.\ its own seam oracle & --- & 1.2--4.0e-7 & --- & --- \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+Table~\ref{tab:e7a} summarizes. In float64 the three mechanisms and the oracle agree to about $10^{-15}$. With fp32 products every realization sits at the fp32 floor against the oracle on all nine sets: verifier outputs within $0.9$--$5.2\times10^{-7}$ of the reference maximum, correction factors within $1.7$--$3.4\times10^{-7}$, committed states within $1.0$--$3.7\times10^{-7}$. Commit from identical oracle factors is at the same floor, so on these operands the compact reconstruction adds no error beyond fp32 roundoff. In a diagnostic comparison with fp32 output stores (a separately compiled specialization of both kernels, not the deployed bfloat16 path), the production scan's outputs are bit-identical to the native speculative-update kernel's on every element of all nine sets (integer-view equality); the deployed bfloat16-store outputs are bit-identical in 99.998--100\% of elements (two sets each differ in a single element by one unit in the last place), and the bfloat16 outputs of B and C are bit-identical to native's in 99.97--99.99\% of elements. With tf32 products the same kernels lose three orders of magnitude (outputs $6.5\times10^{-4}$--$1.4\times10^{-3}$; bfloat16 agreement 74--79\%). The precision of the dense products, which the Bole paper does not state, decides whether a reconstruction route can meet a native reference.
+
+The two pinned native paths disagree with each other by $2.2\times10^{-4}$--$1.7\times10^{-3}$ of the state maximum, with 75--94\% bfloat16-output agreement. An isolated oracle-convention ablation attributes the gap: a float64 oracle that applies only the decode kernel's documented bfloat16 rounding of the write gate matches it at $1.2$--$4.0\times10^{-7}$, whereas an oracle that applies only its $x/\sqrt{\cdot}$ normalization leaves the full gap ($2.2\times10^{-4}$--$1.7\times10^{-3}$) in place; in float64 the normalization convention moves the state by at most $5\times10^{-15}$ (this identifies which declared convention the fp32 kernel follows; it does not measure the two fp32 kernels' entire implementation difference). On these operands the gap is therefore the declared gate rounding, not an implementation error, and for the outputs where the two paths differ no single result can lie within the fp32 floor of both. Controls: sibling reordering is bitwise-invariant for A on all sets and for B and C on eight of nine (last-bit differences on the bushy binary tree from changed accumulation order); changing the padded node count changes last bits ($\le1.2\times10^{-7}$ absolute); dropping one Neumann term fails (factor error up to 0.29), so the nilpotency term is load-bearing; for all four requests of a synthetic batch, the batched outputs, factors, and commits are bit-identical (integer view) to the single-request results. Along the depth-11 chain the committed-state error grows from $5\times10^{-7}$ to $1.0$--$1.3\times10^{-6}$ absolute, still about $10^{-7}$ relative. A separate synthetic tiny-gate pass (\path{out-20260921T231030Z-e7a-tinygates-v3/}; chains of depth 11 and 5 and the caterpillar with cumulative log-decay down to $-912$, so that the path decay $P_i$ underflows to exactly zero in fp32) produced no non-finite value in any realization: outputs and committed states stayed within $0.9$--$5.8\times10^{-7}$ of the oracle because every implementation evaluates path-decay ratios as $\exp(\log P_i-\log P_j)$ with the exponent masked before exponentiation, never as a literal quotient of underflowed products. The same run shows that with vanishing gates the strict-ancestor coupling vanishes too, so even the truncated Neumann series is accurate there; the truncation control fails only when coupling is present.
+
+On the eight fresh sets the picture is unchanged and now bound to the live server. The production scan's fp32-store output is bit-identical (integer view) to the native speculative-update kernel's on every element of all eight sets, and so is its deployed bfloat16 store; the bfloat16 output the server actually emitted at that step (the payload's served output) is byte-identical to both. Against the float64 oracle the production scan sits at $1.1$--$2.2\times10^{-7}$ of the output maximum, B and C with fp32 products at $2.2$--$3.6\times10^{-7}$, their compact commits at $1.1$--$1.7\times10^{-7}$, and the replay commit at $1.5$--$2.9\times10^{-7}$; the bfloat16 outputs of B and C are bit-identical to native's in at least 99.979\% of elements; tf32 products again lose three orders ($6.7$--$8.6\times10^{-4}$; bfloat16 agreement 77--81\%). The two native paths disagree by $1.3\times10^{-4}$--$1.3\times10^{-3}$ of the state maximum and the write-gate rounding again explains it ($1.3$--$2.9\times10^{-7}$ against the seam oracle). Sibling reordering is bitwise-invariant on all eight sets and every replay repeats bitwise. Two limits are specific to the fresh operands: the stateless production route materializes no per-node tree state, so a served-state comparison is not available (only the served output is); and two boots of the same 256-token prefix at temperature zero diverged at the sixth emitted token, after the captured step, with different diagnostics active in each boot, which we record without attributing (cross-boot greedy divergence on this stack is a known limit and belongs to E2/E7b). Before reading any confirmation output we froze, from these eight sets, the candidates (A, B, and C with fp32 products), per-class tolerances at the pilot maximum times a declared margin (zero units in the last place for the bitwise classes), the decision changes that would alter the claims, a timing-precision target (5\% relative half-width for the verify-class kernels; the sub-20-microsecond commit kernels are reported but not gated), and the resampling unit (the frozen prefix); the 32-prefix confirmation captures were then taken under that frozen record.
+
+The confirmation set (artifacts of record \path{experiments/out-20260922T051611Z-e7a-fresh-confirmation/}, with the frozen record and its machine check beside it) was 32 disjoint frozen prefixes, sixteen of 256 and sixteen of 4096 prompt tokens, one boot and one capture each, 34 boots in all: one boot hung after autotuning and was retired by the driver's timeout, and one capture (p087) failed the frozen provenance inspector at a single check---its step-9 draft tree carried the same token on a spine node and a leaf, the served committer took the leaf, and the inspector's path walk took the spine---which the pre-registered rules count as a failure and forbid re-running; a revised inspector that admits any consistent path re-verdicts all 40 captures, including that one, as passing, and is reported beside, not instead of, the frozen verdict. On the 31 verified sets the picture is the pilot's: the production scan's fp32-store output is bit-identical to the native speculative-update kernel's on every set; the served bfloat16 output is byte-identical to the production scan's on every set; compact-commit states are within $7.8\times10^{-7}$ of the oracle and $1.9\times10^{-6}$ of native, replay states within $1.3\times10^{-6}$ and $2.4\times10^{-7}$; the bfloat16 outputs of B and C agree with native's on at least 99.980\% of elements; the served output is within $4.9\times10^{-4}$ (one unit in the last place) of the oracle; sibling reordering stays bitwise-invariant and every replay repeats bitwise. Three pre-registered criteria were nevertheless missed, and we report them as such rather than relax them after the fact. The native kernel's own bfloat16-store specialization differs from the production scan's bfloat16 store in exactly one of 61,440 elements on two of 31 sets (the frozen class demanded zero, because the pilot's eight sets happened to agree everywhere; the nine historical sets had shown the same single-element differences), while the fp32 stores agree everywhere. One set (p086) exceeds the frozen absolute output tolerance by 3\% ($9.2\times10^{-8}$ against $8.9\times10^{-8}$, twice the pilot maximum) at a relative error of $3.8\times10^{-7}$, still the fp32 floor. And the pilot's exact equality of B and C, written into the frozen ordering statement, does not generalize: B and C differ by $2\times10^{-11}$ and $1.5\times10^{-9}$ on two sets and A exceeds B by $7\times10^{-10}$ on one. Three of 31 timing blocks exceeded the 5\% probe-drift ceiling and are reported as imprecise. Under the frozen decision rules these misses are numerical findings about tolerances set from an eight-set pilot, not deployment qualifications; no candidate is promoted by this section.
+
+Cost is reported as kernel timing only, for one layer at B1, from the v3 run, whose 1\,Hz compute-process inventory sampled no process other than our container and whose in-band probe drifted by at most 4.8\% across timing blocks (2.7\% in the tiny-gate run); rows perform different work and are not speedups. On the four historical sets (CUDA-event medians): the production scan takes 89\,$\mu$s with its deployed bfloat16 output store and no state export; the B and C verifiers take 107--108 and 101--103\,$\mu$s with matched bfloat16 output stores (109--111 and 101\,$\mu$s with fp32 stores), both also writing their factors, and 41--42 and 31--32\,$\mu$s with tf32 products; the replay commit of a depth-5 path writes six state rows in 102--105\,$\mu$s, while the compact commit writes one row in 18--19\,$\mu$s (54\,$\mu$s for a zero-accept replay); the native speculative-update kernel run on the depth-5 chain with preallocated inputs takes 113--121\,$\mu$s (its wrapper still allocates its outputs), and the native one-token decode kernel takes 24--25\,$\mu$s per token. Across the tiny-gate sets, the sequential scan grows with node count (59\,$\mu$s at six nodes, 90 at ten, 134 at twelve) while the B and C verifiers stay at 106--107 and 95--99\,$\mu$s because their padded system is fixed. Transient memory per request and layer is 396\,KB of factors for the compact route, $(d{+}1)\times3.1$\,MB of committed rows for replay, and 50\,MB for any route that materializes every node state. Fresh-set kernel timings (shared-device diagnostic; owned container only sampled): production scan 88--90\,$\mu$s, B 105--107 and C 101--103\,$\mu$s with bfloat16 stores. Neither pilot shows model-level propagation, sampler acceptance, or continuation (E2/E7b), any serving effect (E1), or anything about the authors' implementations.
+
+\section{Limitations and Planned Validation}
+\label{sec:planned}
+The measured conclusions apply to archived implementation stages, one main checkpoint family, and a limited task subset. The state contract is more general than its test coverage. Native-reference numerical agreement, sampler-law correctness, and deployment quality must remain separate claims. Instrumentation also has limits: the pure-decode wall metric intentionally excludes mixed/prefill intervals and cannot establish full-service throughput by itself.
+
+Table~\ref{tab:planned} lists the selected validation scope and deferred extensions. After configuration reconciliation (P0), three core experiments compare arithmetic on identical inputs (E7a), test numerical propagation and accepted-prefix continuation (E2/E7b), and measure the frozen implementation against strong chains (E1). E3 is conditional on promoting unfinished optimizations. Except for the E7a kernel-level pilot reported in Section~\ref{sec:e7a-pilot}, these are planned experiments; no other new measured results are implied.
+
+\begin{table*}[t]
+\caption{Final recommended scope. Core experiments are E7a, E2/E7b, and E1, preceded by P0; E3 is conditional. The remaining entries are deferred. E7a is executed: kernel-level pilot, verified eight-prefix fresh-operand pilot, and 32-prefix confirmation against a frozen record (Section~\ref{sec:e7a-pilot}); the remaining new measurements are planned, not executed.}
+\label{tab:planned}
+\centering\footnotesize
+\begin{tabularx}{\textwidth}{@{}p{0.08\textwidth}p{0.22\textwidth}Y>{\raggedright\arraybackslash}p{0.20\textwidth}@{}}
+\toprule
+ID & Question & Minimum comparison & Claim enabled \\
+\midrule
+P0 & What actually ran? & Archived binary, flags, sampling and denominator reconciliation & Correct configuration labels \\
+E1 & Does the final tree beat strong chains? & Tree, MTP-5, depth-matched chain; B1/B4; paired independent boots & Current-stack performance \\
+E7a & Do arithmetic realizations agree? & Same operands: sequential, triangular solve, finite-Neumann; output and commit isolated & Numerical and local-cost characterization \\
+E2/E7b & Do errors amplify or corrupt continuation? & Fixed-prefix stage substitutions; layer/final logits; state/KV/conv, sampler and cache fixtures & Scoped continuation and implementation agreement \\
+E3 & Do optimizations combine? & Conditional scan/accept-walk toggles, individually and together & Composed local speedup \\
+E4 & How does memory affect service latency? & Deferred: identical arrival trace and cache-capacity controls & Serving and cache explanation \\
+E5 & Is broader task quality preserved? & Deferred: held-out tasks and powered quality design; exact sampler checks stay in E2 & Broader quality evidence \\
+E6 & Does the result extend to NVFP4? & Deferred: matched native control and repeated composed tests & Quantization extension \\
+E7c & How do authors' systems compare? & Deferred: feasible matched external implementations & Competitive system comparison \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+E7a compares local reimplementations of published mechanisms, not the authors' systems. Identical captured operands and chosen paths isolate solver error from commit error. High-precision recurrence and each pinned native GPU path serve distinct reference roles. Its kernel-level pilot, the verified eight-prefix fresh-operand pilot, and the 32-prefix confirmation set evaluated against the record frozen from that pilot are reported in Section~\ref{sec:e7a-pilot}, including the three pre-registered criteria the confirmation missed. E7b holds teacher-forced inputs fixed while replacing verification, commitment, and their combination separately; only then does it test actual acceptance and continuation. An eight-prefix diagnostic pilot sets the analysis and costs before a separate 32-prefix confirmation set is frozen. These are bounded diagnostic samples, not a powered task-quality study. Errors beyond the declared criteria preclude deployment promotion but remain reportable numerical findings.
+
+E1 uses controlled prefix replay rather than conflating it with fixed-arrival serving or live agent execution. Three arms, two actual batch sizes, and three independent paired boots give an initial 18 timing cells. If a reconstruction route passes E2/E7b and is integrated, retain the sequential tree as an ablation and add that route as a fourth arm, yielding 24 cells. Replication is set from pilot variance and a prespecified practical precision target; the final test is not repeated until a favorable result appears.
+
+E2 should map existing coverage before adding tests. The repository already includes an analytic multidraft sampler identity, multistep sampling tests, a biased-selector negative control, and accepted-path state fixtures~\cite{lumo2026archive}. Missing coverage concerns their connection to the current deployed GPU route, including zero/full acceptance, sibling paths, page reuse, and pending-token continuation. Source availability alone is not a passing execution record. No proof of full distribution preservation is inferred from the historical numerical or garble checks.
+
+\section{Conclusion}
+\sys{} studies the implementation boundary between tree verification and the next native serving iteration. A correct continuation requires agreement among recurrent state, convolution history, attention KV, physical row mappings, and the sampler. The archived failures show that satisfying one surface can leave another inconsistent.
+
+The KV-remap fixture improved from 15/15 failures to 0/15, and the numerical investigation produced a shared-spine repair with byte agreement in its tested checks (Table~\ref{tab:correctness}). In the later three-arm campaign, however, the tree's 5.286 committed tokens/event did not repay its 160.88\,ms event cost: its decode-step rate was 32.85 versus native MTP-5's 42.74 tokens/s (Table~\ref{tab:three-arm}). A separate paired attention optimization reduced its tested B4 step by 27.03\,ms (Table~\ref{tab:optimization})~\cite{lumo2026archive}.
+
+These findings support a scoped account of state integrity, numerical execution, and serving cost. They do not establish superiority over direct GDN tree methods or a distribution-preservation guarantee for the current implementation. Effective-configuration reconciliation, matched current-stack timing, and composed correctness checks are the next validation steps.
+
+\label{ReferencesStart}
+\IEEEtriggeratref{24}
+\bibliographystyle{IEEEtran}
+\bibliography{ref}
+\end{document}

@@ -1,0 +1,169 @@
+{
+  "completed_utc": "2026-09-22T19:46:39.757502+00:00",
+  "status": "HISTORICAL_NUMBER_REMOVAL_AND_DELIVERY_VERIFIED",
+  "scope": "Historical quantitative results removed from manuscript; fresh v2 results and original failures retained; raw historical audit evidence preserved",
+  "paper_archive": {
+    "file": "artifacts/paper-final-20260922T194605Z.tar.gz",
+    "sha256": "682d84891febcd4c958032a490954874e60773c500276e9cb37d49829e2fe0a4",
+    "files": 153,
+    "bytes": 1554349,
+    "members_verified": 153
+  },
+  "paper_manifest_sha256": "563e452da26bde2082f4ef3602111e552e050570f87cf8868879325075e685c2",
+  "paper": {
+    "main_tex_sha256": "09d5fbd626233c5f363aaa94f3fce6dd9e06164d01b419c63d1d1fa8e2285d92",
+    "abstract_sha256": "36983c20ae3fd466dc485abb4e59baf84cbfd364df9011d27095bfdb70a04899",
+    "bib_sha256": "64ca0fc74b5185f2f61358945a2f1250de76a7ec7c2ad793504dff0fc22693c0",
+    "pdf_sha256": "a6ea40498508018780d6baac4f916218d78be6fb9744243e9d25f3dc07568fc9",
+    "pages": 11
+  },
+  "all_companions": [
+    {
+      "file": "e7a-evidence-20260922T0709Z.tar.gz",
+      "sha256": "776ddcaf5d938cc665bafca20f46e29d1e9a550a34914d798e78f70636cd180b",
+      "bytes": 268871594,
+      "manifest": "e7a-evidence-20260922T0709Z.tar.gz.manifest.json",
+      "manifest_sha256": "50dd06ea612e00caec86e84db0b49321d3fd9878e8e4f79d68bb95dfa88c0e7d"
+    },
+    {
+      "file": "e7b-diagnostics-20260922T0801Z.tar.gz",
+      "sha256": "c573b5064d944547df280e314520a97dd0c10678fb877c8d75b3a898d548ad05",
+      "bytes": 2179735658,
+      "manifest": "e7b-diagnostics-20260922T0801Z.tar.gz.manifest.json",
+      "manifest_sha256": "f36db7f4f0b16f9f43a0d70b535ca664a66f1ef447789985b82f3a78db8b4682"
+    },
+    {
+      "file": "selected-route-20260922T0930Z.tar.gz",
+      "sha256": "7f127f0c2e8198f067eb0f59737e1a58afc34991aa562dacbc11d7d147d25a30",
+      "bytes": 1735458237,
+      "manifest": "selected-route-20260922T0930Z.tar.gz.manifest.json",
+      "manifest_sha256": "d1fe338b3bae56a755725a622fa679692377156b56be0d85952fd654d9e386b8"
+    },
+    {
+      "file": "e1-timing-20260922T1225Z.tar.gz",
+      "sha256": "bf50b33386eb9614cf7874039f60cb62a484ee62bc0882e32ab32731857318d6",
+      "bytes": 12955447,
+      "manifest": "e1-timing-20260922T1225Z.tar.gz.manifest.json",
+      "manifest_sha256": "47936b8a7cb22bf389b452ce2f013e5092d9f9c34b639b640f54768b3ecd4414"
+    }
+  ],
+  "canonical_build": {
+    "checked_utc": "2026-09-22T19:45:23.049712+00:00",
+    "status": "PASS",
+    "scope": "Remove historical quantitative results from the v2 manuscript; preserve raw audit evidence and fresh adverse findings",
+    "source_hashes": {
+      "main.tex": "09d5fbd626233c5f363aaa94f3fce6dd9e06164d01b419c63d1d1fa8e2285d92",
+      "abstract.tex": "36983c20ae3fd466dc485abb4e59baf84cbfd364df9011d27095bfdb70a04899",
+      "ref.bib": "64ca0fc74b5185f2f61358945a2f1250de76a7ec7c2ad793504dff0fc22693c0",
+      "main.pdf": "a6ea40498508018780d6baac4f916218d78be6fb9744243e9d25f3dc07568fc9"
+    },
+    "pages": 11,
+    "citation_lint": {
+      "returncode": 0,
+      "output": "BibTeX lint: ref.bib (27 entries) vs main.tex (27 unique citations)\nSummary: 0 FAIL, 0 WARN",
+      "cited_keys": 27,
+      "bib_entries": 27
+    },
+    "visual_qa": {
+      "initial_removal_pages_inspected": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "final_changed_pages_inspected": [
+        1,
+        2,
+        6
+      ],
+      "other_pages_pixel_identical": true,
+      "clipping_or_overlap": false
+    },
+    "undefined_references_or_overflow": false,
+    "historical_value_absence_check": "PASS on extracted PDF text; full source/include review by independent reviewer",
+    "fresh_e1_section_unchanged": true,
+    "evidence_companions_unchanged": true,
+    "independent_delta_review": {
+      "file": "p0/monitor/historical-numbers-removal-redteam.md",
+      "sha256": "4128141b4a4c5fdc51378dc3319641195cdcb9ebc42f6cbb4ab514bc7db59f3c"
+    },
+    "no_new_experiments": true,
+    "no_publication_or_submission": true
+  },
+  "inherited_evidence_checks": {
+    "prior_receipt": "artifacts/FINAL-DELIVERY-before-historical-removal.json",
+    "sha256": "7f819510fef5affd11c388c2d96d8a85ab7b12785268519295cf69f4ca434342",
+    "scope": "Raw evidence companions byte-identical; previous extracted E1 aggregate and raw-join checks preserved without rerun",
+    "extracted_e1_replay": {
+      "scratch": "/tmp/lumo-v2-e1-extracted-final",
+      "aggregate_semantic_match_except_mapped_root": true,
+      "original_campaign_path": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells",
+      "cells": 18,
+      "all_six_contrasts_match": true,
+      "raw_join_smokes": [
+        {
+          "cell": "cell_01_b1_native-5_B1_a1",
+          "raw_join_entire_json_exact_match": true
+        },
+        {
+          "cell": "cell_06_b1_tree_B4_a1",
+          "raw_join_entire_json_exact_match": true
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "historical-numbers-removal-redteam.md": "4128141b4a4c5fdc51378dc3319641195cdcb9ebc42f6cbb4ab514bc7db59f3c"
+  },
+  "monitor": {
+    "id": "review-lumo-v2-experiments-every-10-minutes",
+    "status": "PAUSED",
+    "verified_utc": "2026-09-22T12:44:22.760395+00:00",
+    "method": "automation_update tool; persisted status independently checked"
+  },
+  "no_new_experiments": true,
+  "no_publication_or_submission": true,
+  "limits": [
+    "Three paired boot blocks and fixed selected prefixes; no broad workload precision",
+    "T1 native/tree engine seed difference; no isolated causal speedup estimate",
+    "Full API continuations differ; no matched-output or quality-preservation claim",
+    "No full-model sequential-equivalence proof",
+    "E7a frozen criteria failed; no compact candidate promoted",
+    "Local mechanism reimplementations, not a benchmark of the Bole/TreeWY authors systems",
+    "Conditional composed-stack and broader task-quality studies remain deferred"
+  ],
+  "remote_copy": {
+    "host": "mark@100.103.10.122",
+    "worktree": "/home/mark/lumo-paper-v2-20260921",
+    "checked_utc": "2026-09-22T19:47:01.587805+00:00",
+    "exact_hash_matches": [
+      "main.tex",
+      "abstract.tex",
+      "ref.bib",
+      "main.bbl",
+      "main.pdf",
+      "README.md",
+      "FINAL-REVIEW.md",
+      "notes/claim-evidence-ledger.md",
+      "issues/2026-09-21-v2.csv",
+      "scripts/build_review_bundle.py",
+      "p0/monitor/NEXT.md",
+      "p0/monitor/state.json",
+      "p0/monitor/closure-ledger.md",
+      "p0/monitor/historical-numbers-removal-redteam.md",
+      "p0/monitor/2026-09-22-historical-removal-edit.json",
+      "p0/monitor/2026-09-22-historical-removal-build.json",
+      "artifacts/README.md",
+      "artifacts/FINAL-DELIVERY-before-historical-removal.json",
+      "artifacts/paper-final-20260922T194605Z.tar.gz",
+      "artifacts/paper-final-20260922T194605Z.tar.gz.manifest.json"
+    ]
+  }
+}

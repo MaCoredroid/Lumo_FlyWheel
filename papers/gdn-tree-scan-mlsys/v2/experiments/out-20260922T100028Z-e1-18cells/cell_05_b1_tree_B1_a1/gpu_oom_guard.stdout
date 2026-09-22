@@ -1,0 +1,2 @@
+[10:33:32] gpu_oom_guard START floor=9000MiB poll=2s id=ef4c861571acffba68194363a8b939834dea7b30576fff1c8f5f62c01e13cf8d expected_name=e1-cell05-103321 pid=3368378
+[10:40:51] immutable container disappeared, stopped, or changed name; guard EXIT

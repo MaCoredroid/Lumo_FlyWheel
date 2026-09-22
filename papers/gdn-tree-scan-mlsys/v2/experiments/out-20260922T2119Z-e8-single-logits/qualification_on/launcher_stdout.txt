@@ -1,0 +1,2 @@
+{"status": "STAGE_HASHES_PASS", "files": 21}
+/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T2119Z-e8-single-logits/stage/e8_launch.v1.sh: line 11: ,: command not found

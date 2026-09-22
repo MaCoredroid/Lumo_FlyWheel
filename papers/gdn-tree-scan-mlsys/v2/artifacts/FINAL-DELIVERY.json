@@ -1,0 +1,198 @@
+{
+  "completed_utc": "2026-09-22T21:12:08.862446+00:00",
+  "status": "DESIGN_REFRAME_VERIFIED_E8_QUALIFICATION_PREPARING",
+  "scope": "Private system-design revision, 14 pages; architecture, GPU scan/replay and optimization mechanisms independently reviewed; all fresh P0/E7/E2/E1 evidence unchanged; historical quantitative results excluded; separate E8 qualification in preparation, no E8 GPU result or attributed optimization gain; no public release",
+  "paper_archive": {
+    "file": "artifacts/paper-design-20260922T2112Z.tar.gz",
+    "sha256": "54e92c779dc2fc1da514f41f05a8b8d2acbd99a5801f5d0df3b51278b0cbaf17",
+    "files": 160,
+    "bytes": 1599648
+  },
+  "paper_manifest_sha256": "6f79ca7bdc7293906fb477cb6875177ff7b3f1794c45e8f1e9d37a744fe7632a",
+  "paper": {
+    "main_tex_sha256": "0d7bab3835839559797213a42c892c11e10002d93c23eb3d9897babf9e2cc642",
+    "abstract_sha256": "887f36b63b62f07784a3b9a2f767e9960ca31ea6b4dbb076d031b92ee202180a",
+    "bib_sha256": "64ca0fc74b5185f2f61358945a2f1250de76a7ec7c2ad793504dff0fc22693c0",
+    "pdf_sha256": "0295c3f6f287e1bfadd3bf68a2349910f0a043081cbad86e7a67ffd4a5cdbf05",
+    "pages": 14
+  },
+  "all_companions": [
+    {
+      "file": "e7a-evidence-20260922T0709Z.tar.gz",
+      "sha256": "776ddcaf5d938cc665bafca20f46e29d1e9a550a34914d798e78f70636cd180b",
+      "bytes": 268871594,
+      "manifest": "e7a-evidence-20260922T0709Z.tar.gz.manifest.json",
+      "manifest_sha256": "50dd06ea612e00caec86e84db0b49321d3fd9878e8e4f79d68bb95dfa88c0e7d"
+    },
+    {
+      "file": "e7b-diagnostics-20260922T0801Z.tar.gz",
+      "sha256": "c573b5064d944547df280e314520a97dd0c10678fb877c8d75b3a898d548ad05",
+      "bytes": 2179735658,
+      "manifest": "e7b-diagnostics-20260922T0801Z.tar.gz.manifest.json",
+      "manifest_sha256": "f36db7f4f0b16f9f43a0d70b535ca664a66f1ef447789985b82f3a78db8b4682"
+    },
+    {
+      "file": "selected-route-20260922T0930Z.tar.gz",
+      "sha256": "7f127f0c2e8198f067eb0f59737e1a58afc34991aa562dacbc11d7d147d25a30",
+      "bytes": 1735458237,
+      "manifest": "selected-route-20260922T0930Z.tar.gz.manifest.json",
+      "manifest_sha256": "d1fe338b3bae56a755725a622fa679692377156b56be0d85952fd654d9e386b8"
+    },
+    {
+      "file": "e1-timing-20260922T1225Z.tar.gz",
+      "sha256": "bf50b33386eb9614cf7874039f60cb62a484ee62bc0882e32ab32731857318d6",
+      "bytes": 12955447,
+      "manifest": "e1-timing-20260922T1225Z.tar.gz.manifest.json",
+      "manifest_sha256": "47936b8a7cb22bf389b452ce2f013e5092d9f9c34b639b640f54768b3ecd4414"
+    }
+  ],
+  "canonical_build": {
+    "checked_utc": "2026-09-22T21:08:52.364779+00:00",
+    "status": "PASS",
+    "scope": "Author-approved system-design reframe; no empirical result added or removed",
+    "source_hashes": {
+      "main.tex": "0d7bab3835839559797213a42c892c11e10002d93c23eb3d9897babf9e2cc642",
+      "abstract.tex": "887f36b63b62f07784a3b9a2f767e9960ca31ea6b4dbb076d031b92ee202180a",
+      "ref.bib": "64ca0fc74b5185f2f61358945a2f1250de76a7ec7c2ad793504dff0fc22693c0",
+      "main.pdf": "0295c3f6f287e1bfadd3bf68a2349910f0a043081cbad86e7a67ffd4a5cdbf05"
+    },
+    "pages": 14,
+    "citation_lint": {
+      "bib_entries": 27,
+      "cited_keys": 27,
+      "unresolved_keys": [],
+      "uncited_entries": []
+    },
+    "visual_qa": {
+      "final_pages_inspected": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14
+      ],
+      "clipping_or_overlap": false,
+      "last_page": "Final bibliography continues on page 14"
+    },
+    "undefined_references_or_overflow": false,
+    "historical_value_absence_check": {
+      "status": "PASS",
+      "excluded_examples": [
+        "32.85",
+        "42.74",
+        "39.95",
+        "15/15",
+        "0/15"
+      ],
+      "full_source_include_review": "p0/monitor/design-reframe-redteam.md"
+    },
+    "fresh_results": {
+      "numeric_sequence_unchanged": true,
+      "only_wording_change": "Clarify no per-node tree state is exported for the reference comparison; tile-local verification states exist"
+    },
+    "prose_review": {
+      "skill": "latex-rhythm-refiner",
+      "result": "PASS; reviewed current prose, no further edit required; citations and technical meaning unchanged"
+    },
+    "independent_review": {
+      "file": "p0/monitor/design-reframe-redteam.md",
+      "sha256": "dfed0d850c913b0a3e1eb842c452d475f96ef9b5ef2dfffbeb0ffd545576f4b0"
+    },
+    "new_e8_status": "Isolated harness staging; no GPU results yet; separate qualification required before timing",
+    "no_publication_or_submission": true
+  },
+  "extracted_rebuild": {
+    "status": "PASS",
+    "pages": 14,
+    "directory": "/tmp/lumo-v2-design-extracted-20260922T2112Z",
+    "verified_archive_members": 160
+  },
+  "inherited_evidence_checks": {
+    "prior_receipt": "artifacts/FINAL-DELIVERY-before-design-reframe.json",
+    "sha256": "00d4bcb9fc077e312f49649cc86f46c76ff2fab5b64788cfbd758d34ce16df04",
+    "scope": "Four core evidence companions unchanged; previous extracted E1 aggregate and raw-join checks preserved without reanalysis",
+    "extracted_e1_replay": {
+      "scratch": "/tmp/lumo-v2-e1-extracted-final",
+      "aggregate_semantic_match_except_mapped_root": true,
+      "original_campaign_path": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells",
+      "cells": 18,
+      "all_six_contrasts_match": true,
+      "raw_join_smokes": [
+        {
+          "cell": "cell_01_b1_native-5_B1_a1",
+          "raw_join_entire_json_exact_match": true
+        },
+        {
+          "cell": "cell_06_b1_tree_B4_a1",
+          "raw_join_entire_json_exact_match": true
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "design": "p0/monitor/design-reframe-redteam.md",
+    "route_audit": "notes/optimization-route-audit-2026-09-22.md"
+  },
+  "monitor": {
+    "id": "review-lumo-v2-experiments-every-10-minutes",
+    "status": "ACTIVE",
+    "verified_utc": "2026-09-22T21:21:11.297480+00:00",
+    "method": "automation_update tool and persisted status check",
+    "scope": "E8 extension only; completed paper/core evidence unchanged"
+  },
+  "e8_status": "Qualification harness reviewed; exact two-boot handoff delivered to existing Claude worker; timing separately gated",
+  "no_publication_or_submission": true,
+  "limits": [
+    "Three paired boot blocks and fixed selected prefixes; no broad workload precision",
+    "T1 native/tree engine seed difference; no isolated causal speedup estimate",
+    "Full API continuations differ; no matched-output or quality-preservation claim",
+    "No full-model sequential-equivalence proof",
+    "E7a frozen criteria failed; no compact candidate promoted",
+    "Local mechanism reimplementations, not a benchmark of the Bole/TreeWY authors systems",
+    "Conditional composed-stack and broader task-quality studies remain deferred"
+  ],
+  "remote_copy": {
+    "status": "VERIFIED",
+    "host": "mark@100.103.10.122",
+    "worktree": "/home/mark/lumo-paper-v2-20260921",
+    "checked_utc": "2026-09-22T21:12:46.876327+00:00",
+    "exact_hash_matches": [
+      "main.tex",
+      "abstract.tex",
+      "main.bbl",
+      "main.pdf",
+      "README.md",
+      "FINAL-REVIEW.md",
+      "paper.config.yaml",
+      "figures/pipeline.tikz",
+      "figures/scan-replay.tikz",
+      "notes/claim-evidence-ledger.md",
+      "notes/design/baselines.csv",
+      "notes/design/method-components.csv",
+      "notes/design/experiment-matrix.csv",
+      "notes/design/optimization-evidence-map.md",
+      "notes/optimization-route-audit-2026-09-22.md",
+      "plan/2026-09-22-system-design-reframe.md",
+      "issues/2026-09-22-system-design-reframe.csv",
+      "scripts/build_review_bundle.py",
+      "experiments/STATUS.md",
+      "p0/monitor/NEXT.md",
+      "p0/monitor/state.json",
+      "p0/monitor/design-reframe-redteam.md",
+      "p0/monitor/2026-09-22-design-reframe-build.json",
+      "artifacts/README.md",
+      "artifacts/FINAL-DELIVERY-before-design-reframe.json",
+      "artifacts/paper-design-20260922T2112Z.tar.gz",
+      "artifacts/paper-design-20260922T2112Z.tar.gz.manifest.json"
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "utc": "2026-09-22T09:35:41.249892+00:00",
+  "source_sha256": "1857d76012642eb284ac8e1c4361a7af6bf4fa5d21697751d79d19edaabfe606",
+  "abstract_sha256": "9a29ea33ffb9a3fdb84ee3daf980861535f0ab9414165e0516c6b67170d7b0b0",
+  "pdf_sha256": "93610803f1f325491651d8e7d207aa832577b6767288a7411b3765f61d20230d",
+  "pages": 13,
+  "build": "latexmk in staging with current source bytes",
+  "undefined_references": false,
+  "overfull_boxes": false,
+  "visually_inspected_pages": [
+    1,
+    10,
+    11,
+    12,
+    13
+  ],
+  "scope": "Closed B1/B4 finite selected-route claims; native preflight and E1 timing pending"
+}

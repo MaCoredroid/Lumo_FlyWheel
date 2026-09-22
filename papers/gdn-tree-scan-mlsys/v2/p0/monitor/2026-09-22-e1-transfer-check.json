@@ -1,0 +1,7 @@
+{
+  "utc": "2026-09-22T12:25:39.511806+00:00",
+  "scope": "Local closed-campaign transfer agrees with all source/raw hashes enumerated by the independent all-cell review. Packaging will hash every member separately.",
+  "checks": 188,
+  "review_json_sha256": "347ef2f472908b70c5e7f7cb20fe2f7e0efdb553d064a66239bb6698b6f0a8f8",
+  "aggregate_sha256": "dbd4542ee9899da3eb592fdf8a0b935010f5c8035de9d5cb75e581343c7deb1d"
+}

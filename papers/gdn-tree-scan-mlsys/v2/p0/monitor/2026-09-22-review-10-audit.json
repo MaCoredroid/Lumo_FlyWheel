@@ -1,0 +1,103 @@
+{
+  "utc": "2026-09-22T00:40:33.983038+00:00",
+  "scope": "Read-only raw capture review via temporary metadata copy; CPU controls only",
+  "real_capture_revalidation": {
+    "rc": 0,
+    "all_pass": true,
+    "n_checks": 48,
+    "failed": [],
+    "unverified": [],
+    "inspector_sha256": "e888b7160f11b8951945061c76c30c38cb5371855ba7389fe33047d12e6b3d53",
+    "payload_sha256": "02b37fff1f856247b4b7f9a694061bca1b2500c76afc7bad12b401c1c36d8c54"
+  },
+  "control_suite": {
+    "rc": 0,
+    "all_controls_ok": true,
+    "n_cases": 20,
+    "output_exists": true,
+    "stderr": ""
+  },
+  "payload_identity": {
+    "hash_matches_verdict": true,
+    "state_index": 21,
+    "serving_state_is_none": true,
+    "layer": "language_model.model.layers.62.linear_attn",
+    "keys": [
+      "A_log",
+      "a",
+      "b",
+      "batch_index",
+      "beta_tree",
+      "dt_bias",
+      "g_tree",
+      "h0",
+      "key_spec",
+      "layer_prefix",
+      "n_actual",
+      "n_pad",
+      "output_scale",
+      "query_spec",
+      "schema",
+      "serving_out",
+      "serving_state",
+      "state_index",
+      "tree_parent",
+      "value_spec",
+      "value_tree"
+    ]
+  },
+  "sources": {
+    "experiments/e7a/inspect_capture.py": "e888b7160f11b8951945061c76c30c38cb5371855ba7389fe33047d12e6b3d53",
+    "experiments/e7a/test_inspector_controls.py": "0779ba29164862a4c265ccd65c44342d35d7bfaa82c763b0af593e7d0e2944e2",
+    "experiments/e7a/capture_loop.v5.sh": "8a6e70b7dc622acba140ba987667b89856164755f64e33eea4ac1a06db93ce8e",
+    "experiments/e7a/PILOT_FREEZE.md": "f11f10b09992d5c12274bc0298feba05f01824a3492a023b2489bd85f5fd8396"
+  },
+  "freeze_gate_negative_control": {
+    "rc": 0,
+    "accepted_unfilled_template_with_only_status_changed": true,
+    "stderr": "",
+    "note": "No pilot summary hashes or filled criteria supplied; isolated gate only, no model calls"
+  },
+  "final_check_utc": "2026-09-22T00:43:39.167635+00:00",
+  "resources": {
+    "observed_utc": "2026-09-22T00:43:39.167635+00:00",
+    "available_gib": 66.8426284790039,
+    "free_gib": 35.8248176574707,
+    "swap_used_gib": 0.0,
+    "compute_apps": {
+      "rc": 0,
+      "stdout": "2834058, VLLM::EngineCore"
+    },
+    "docker": {
+      "rc": 0,
+      "stdout": "e7a-capture-003948 Up 3 minutes"
+    }
+  },
+  "reviewed_files": {
+    "experiments/STATUS.md": "87807f35c661f0dd1d13b75e0d7cec4699ce58bf801b839d5e85aaf68006360e",
+    "experiments/e7a/inspect_capture.py": "e888b7160f11b8951945061c76c30c38cb5371855ba7389fe33047d12e6b3d53",
+    "experiments/e7a/test_inspector_controls.py": "0779ba29164862a4c265ccd65c44342d35d7bfaa82c763b0af593e7d0e2944e2",
+    "experiments/e7a/serve_drivers.v4.sh": "b02e677b07849058a0279b25c2d71b18108738e543afaacea1b0268e5c4f329a",
+    "experiments/e7a/capture_loop.v5.sh": "8a6e70b7dc622acba140ba987667b89856164755f64e33eea4ac1a06db93ce8e",
+    "experiments/e7a/PILOT_FREEZE.md": "f11f10b09992d5c12274bc0298feba05f01824a3492a023b2489bd85f5fd8396",
+    "experiments/e7a/e7a_selftest_core.py": "eb606572f6756473a44ab43f4b744511f7e6a26b4659c6f51c721a7685570029",
+    "experiments/e7a/run_fresh_e7a.sh": "bf5a87004a7cead53264da73495f7271f16a1ac9b0d06edf2447ce721a58571d",
+    "p0/HANDOFF-CLAUDE.md": "a06f3a3530963e599037013eb73beabf37d9abd2324e77f0adb02d43211fa7b2",
+    "p0/P0-REPORT.md": "9999aecafc19d1a3de981229d8f281e15d730b924713437a9abef4aaed7d2c44",
+    "main.tex": "a78861718e9556772d6c909f836614a245f1851031accd29814ac8d1edd3673b",
+    "abstract.tex": "ede112b273147fe736e8e7a736cb3d9157b1e2983cd8c04e1b4fe9d16668f001"
+  },
+  "progress_counts": {
+    "pilot_verified": 2,
+    "pilot_planned": 8,
+    "fresh_harness_completed": 0,
+    "fresh_harness_planned": 8,
+    "confirmation_verified": 0,
+    "confirmation_planned": 32,
+    "failed_capture_attempts": 3,
+    "initial_kernel_campaigns_verified": 2,
+    "e1_completed": 0,
+    "e1_planned": 18,
+    "e2_e7b_qualified": 0
+  }
+}

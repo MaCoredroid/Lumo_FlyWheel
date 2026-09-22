@@ -1,0 +1,1049 @@
+"""FR13_TREE_CONV_FUSED (FIX-3): fused tree causal-conv emulation ops.
+
+Census target (FR13_B1_SPEED_ATTRIBUTION_BIND.md, holds=True): the tree
+causal-conv Python torch-op emulation in
+``scripts/fr10_phase4_patch_vllm_tree_gdn.py`` costs ~95 (chain5) /
+~124-134 (cat9) captured device nodes PER GDN LAYER x48 vs native's single
+``causal_conv1d_update`` node. Ranked contributors and their fused forms:
+
+  (1) per-node state write-back loop (7 device nodes x tree_n x B, ~44-52%
+      of the extra nodes) -> ONE init-time static-index gather over the
+      shared ``(prior ++ x ++ zero_row)`` source + the existing
+      ``index_copy_`` (playbook class 3 gather-then-scatter). Pure data
+      movement, zero arithmetic: ``new_state[i][:, j] =
+      (prior ++ x[path_i] ++ zeros)[path_len_i + j]`` is the closed-form
+      composition of the loop's index math.
+  (2) per-col tap/bias/silu emulation (~20%) -> one bf16 elementwise mul +
+      one fp32 cast + bias broadcast-add + EXPLICIT ordered adds. Reduction
+      ops are BANNED in this module (unspecified order breaks bit-exactness);
+      the per-element operand pairs and the legacy add order
+      ``(((bias + p0) + p1) + p2) + p3`` are preserved verbatim.
+  (3) page-safe conv remap row math (~10.5%) and
+  (4) committed-path prior gather row math (~9.5%) -> prepared-rows split:
+      the shared row math runs once per kv-cache group per forward; each
+      layer keeps only 1-2 bank ops (``index_select``/``index_copy_``).
+      The frozen library fns (``fr13_replay_conv_remap`` /
+      ``fr10_gdn_tree_kernel``) stay the byte-verbatim OFF arm.
+
+THE BAR (class 10): BIT-EXACT to the current emulation — same bf16 tap
+order, same cast boundaries (bf16 taps were THE FR11-overturning fix), same
+accumulation order, same silu/bias op order. Math-correct != bit-exact;
+per-stage tolerances are BANNED. Proof = int-view byte A/B
+(tests/test_fr13_tree_conv_fused_byte_ab.py: synthetic + capture-payload),
+then the live gate (B=1 same-seed repeat first).
+
+SCOPE (tree-only, user 6c5aeaae): these helpers are consumed ONLY by the
+tree-conv emulation branch (``use_fr10_tree_conv``); the native
+``causal_conv1d_update`` path is untouched.
+
+The ``legacy_*_reference`` functions are TEST-ONLY verbatim replicas of the
+patcher's legacy emulation text / the frozen library row math (pinned by the
+wiring test's substring asserts and anchored to the LIVE legacy bytes by the
+capture-payload A/B arm). They must never be wired into serving.
+
+CUDA-graph safety (class 6): every function here is fixed-shape tensor ops
+with no host sync, no data-dependent shapes, no Python branching on tensor
+values; per-step temporaries are consumed-in-step. The static index tables
+and the zero source row are built ONCE (init-time / first non-capturing
+forward, FIX-2 layer-keyed cache pattern) and passed in as arguments.
+"""
+
+from __future__ import annotations
+
+import os
+
+import torch
+
+
+# ---------------------------------------------------------------------------
+# Static index tables (init-time; value-static per tree topology).
+# ---------------------------------------------------------------------------
+
+# CUDA-graph capture-time staging retention (class 6, live-gate fix
+# 2026-06-12): the cu130 nightly profiles cudagraph memory BEFORE any eager
+# tree forward (gpu_model_runner "Profiling CUDA graph memory"), so the
+# FIRST fused forward of a boot can run INSIDE stream capture and miss the
+# layer-keyed table cache. A pageable host->device copy
+# (torch.tensor(list, device="cuda")) is ILLEGAL during capture; a PINNED
+# host source is legal but gets baked into the graph as an H2D copy node
+# that re-reads the staging buffer on every replay — so every staging
+# tensor must stay alive for the life of the process. Retained here
+# (value-static, tree_n*state_len int64 each, a handful per boot). The
+# DEVICE-side result stays unretained per the capture-pool license (the
+# graph owns its pool address; the baked copy refills it on each replay).
+_CAPTURE_STAGING_RETAIN: list[torch.Tensor] = []
+
+
+def tree_paths_from_parent(parent: list[int]) -> list[list[int]]:
+    """Root-to-node path (node ids) for every node, mirroring the builder."""
+    paths: list[list[int]] = []
+    for node in range(len(parent)):
+        path: list[int] = []
+        cur = node
+        while cur >= 0:
+            path.append(cur)
+            cur = parent[cur]
+        path.reverse()
+        paths.append(path)
+    return paths
+
+
+def build_tree_conv_window_source_indices(
+    *, parent: list[int], width: int, device: torch.device | str
+) -> torch.Tensor:
+    """TEST-ONLY replica of the builder's ``source_by_width`` math.
+
+    Mirrors the metadata-builder init in
+    ``scripts/fr10_phase4_patch_vllm_tree_gdn.py`` (``source_rows`` loop):
+    per node, the last ``width`` rows of
+    ``[prior rows 0..width-2] ++ [width-1+path_node for path_node in path]``.
+    """
+    rows = []
+    for node, path in enumerate(tree_paths_from_parent(parent)):
+        source = list(range(width - 1)) + [
+            width - 1 + int(path_node) for path_node in path
+        ]
+        rows.append(source[-width:])
+    return torch.tensor(rows, dtype=torch.long, device=device)
+
+
+def build_tree_conv_state_src_indices(
+    *,
+    parent: list[int],
+    width: int,
+    state_len: int,
+    device: torch.device | str,
+) -> torch.Tensor:
+    """Static gather table replacing the per-node state write-back loop.
+
+    Legacy semantics (proven, FR12_CONV_STATE_DIAGNOSTIC.md): for node ``i``
+    and state column ``j``::
+
+        new_state[i][:, j] = (prior ++ x[path_i] ++ zeros)[path_len_i + j]
+
+    i.e. for ``j < width-1`` the last-(width-1) taps of
+    ``(prior ++ committed-path tokens of node i)``; for ``j in
+    [width-1, state_len)`` exact zeros (the live zero-pad branch:
+    state_len=12 > width-1=3).
+
+    Against the fused shared source
+    ``source_z = cat(prior.T [width-1 rows], x [tree_n rows],
+    zero_row [1 row])`` the closed form is, with ``p = path_len_i + j``::
+
+        state_src[i, j] = p                                  if p < width-1
+                          width-1 + path_i[p - (width-1)]    elif j < width-1
+                          width-1 + tree_n   (the zero row)  otherwise
+
+    Returns the FLAT [tree_n * state_len] int64 table (row-major (i, j)),
+    matching ``fused_tree_conv_state_rows``'s
+    ``index_select(0, ...).view(tree_n, state_len, dim)``.
+    """
+    if width < 2:
+        raise ValueError(f"conv width must be >= 2, got {width}")
+    if state_len < width - 1:
+        raise ValueError(
+            f"state_len {state_len} < width-1 {width - 1} is not the legacy "
+            "write-back geometry (store_idx would read past the zero pad)"
+        )
+    paths = tree_paths_from_parent(parent)
+    tree_n = len(parent)
+    zero_row = width - 1 + tree_n
+    flat: list[int] = []
+    for i in range(tree_n):
+        path_len = len(paths[i])
+        for j in range(state_len):
+            p = path_len + j
+            if p < width - 1:
+                flat.append(p)
+            elif j < width - 1:
+                flat.append(width - 1 + paths[i][p - (width - 1)])
+            else:
+                flat.append(zero_row)
+    flat_cpu = torch.tensor(flat, dtype=torch.long)
+    dev = torch.device(device)
+    if dev.type != "cuda":
+        return flat_cpu.to(dev)
+    if torch.cuda.is_current_stream_capturing():
+        # Capture-time miss (see _CAPTURE_STAGING_RETAIN): pinned staging is
+        # the only capture-legal H2D; retain the staging buffer so the baked
+        # copy node stays valid on every replay. Values are byte-identical
+        # to the eager build (exact int64, no numerics).
+        staging = flat_cpu.pin_memory()
+        _CAPTURE_STAGING_RETAIN.append(staging)
+        return staging.to(dev, non_blocking=True)
+    return flat_cpu.to(dev)
+
+
+# ---------------------------------------------------------------------------
+# Fused per-layer ops (the FR13_TREE_CONV_FUSED=1 arm).
+# ---------------------------------------------------------------------------
+
+
+def fused_tree_conv_source(
+    *, prior_window: torch.Tensor, x: torch.Tensor, zero_row: torch.Tensor
+) -> torch.Tensor:
+    """Shared source: ``cat(prior.T, x, zero_row)``.
+
+    Reuses the window's existing cat with ONE appended zero row. Window /
+    flat-source indices never reference the appended row (all are
+    ``< width-1 + tree_n``), so every downstream window ``index_select``
+    output is byte-identical to the legacy two-operand cat (CPU-executed
+    invariance check in the byte A/B); the write-back gather reads the zero
+    row for state columns ``>= width-1``.
+    """
+    if prior_window.dtype != x.dtype or zero_row.dtype != x.dtype:
+        raise RuntimeError(
+            "FR13_TREE_CONV_FUSED source dtype uniformity violated: "
+            f"{prior_window.dtype}/{x.dtype}/{zero_row.dtype}"
+        )
+    return torch.cat((prior_window.transpose(0, 1), x, zero_row), dim=0)
+
+
+def fused_tree_conv_sources_batched(
+    *,
+    prior_bank: torch.Tensor,
+    prior_cols: torch.Tensor,
+    x: torch.Tensor,
+    zero_row: torch.Tensor,
+    staging: torch.Tensor,
+    batch: int,
+    tree_n: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Build all fixed32 request sources directly in persistent staging.
+
+    This is the batched, byte-copy-only form of ``fused_tree_conv_source``.
+    It replaces B independent prior gathers, B cats, and B staging copies with
+    one prior gather and one cat whose ``out`` is the already-preseeded source
+    staging.  Request order and each source row's bytes stay unchanged.
+    """
+    b = int(batch)
+    n = int(tree_n)
+    if b not in (1, 2, 3, 4) or n != 32:
+        raise ValueError(
+            "FR13_FIXED32_CONV_SOURCE_BATCH requires B=1..4 and tree_n=32, "
+            f"got B={b} tree_n={n}"
+        )
+    if (
+        prior_bank.ndim != 3
+        or int(prior_bank.shape[0]) < b
+        or x.ndim != 2
+        or int(x.shape[0]) < b * n
+        or zero_row.ndim != 2
+        or int(zero_row.shape[0]) != 1
+        or staging.ndim != 2
+        or prior_cols.ndim != 1
+        or prior_cols.dtype != torch.long
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_SOURCE_BATCH tensor geometry drift: "
+            f"prior={tuple(prior_bank.shape)} cols={tuple(prior_cols.shape)} "
+            f"x={tuple(x.shape)} zero={tuple(zero_row.shape)} "
+            f"staging={tuple(staging.shape)}"
+        )
+    channels = int(x.shape[1])
+    prior_rows = int(prior_cols.numel())
+    source_rows = prior_rows + n + 1
+    if (
+        int(prior_bank.shape[1]) != channels
+        or int(zero_row.shape[1]) != channels
+        or int(staging.shape[0]) < b * source_rows
+        or int(staging.shape[1]) != channels
+        or prior_bank.dtype != x.dtype
+        or zero_row.dtype != x.dtype
+        or staging.dtype != x.dtype
+        or prior_bank.device != x.device
+        or zero_row.device != x.device
+        or staging.device != x.device
+        or prior_cols.device != x.device
+        or int(x.stride(1)) != 1
+        or int(x.stride(0)) < channels
+        or not zero_row.is_contiguous()
+        or not staging.is_contiguous()
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_SOURCE_BATCH source contract drift: "
+            f"B={b} rows={source_rows} channels={channels} "
+            f"x_shape={tuple(x.shape)} x_stride={tuple(x.stride())} "
+            f"dtype={prior_bank.dtype}/{x.dtype}/{zero_row.dtype}/"
+            f"{staging.dtype} device={prior_bank.device}/{x.device}/"
+            f"{zero_row.device}/{staging.device}"
+        )
+
+    prior_windows = prior_bank[:b].index_select(2, prior_cols)
+    sources = staging[: b * source_rows].view(b, source_rows, channels)
+    torch.cat(
+        (
+            prior_windows.transpose(1, 2),
+            x[: b * n].view(b, n, channels),
+            zero_row.view(1, 1, channels).expand(b, 1, channels),
+        ),
+        dim=1,
+        out=sources,
+    )
+    return sources, prior_windows
+
+
+def fused_tree_conv_taps_acc(
+    *,
+    window: torch.Tensor,
+    conv_weights: torch.Tensor,
+    bias: torch.Tensor | None,
+) -> torch.Tensor:
+    """Vectorized bf16 taps + fp32 accumulation, legacy op/operand order.
+
+    Legacy (native-bf16-taps arm of ``_fr11_conv_tap_product`` + the per-col
+    loop): per col ``c``, ``tap_c = (x_col.to(bf16) * w_c.to(bf16))
+    .to(bf16).to(f32)`` and ``acc = acc + tap_c`` with
+    ``acc0 = bias.to(f32)`` (broadcast) or ``zeros``.
+
+    Fused: ONE bf16 elementwise mul over [tree_n, width, dim] (per-element
+    operand pairs identical to the per-col muls; bf16 mul is fp32-compute +
+    RNE — exact: 8-bit x 8-bit mantissa products fit fp32), ONE fp32 cast
+    (the same ``.to(f32)`` boundary), then EXPLICIT ordered adds in the
+    legacy operand order — addition is never commuted and reduction ops are
+    BANNED (unspecified order). The wasted ``x.float()`` materialization and
+    the bias ``clone`` are dropped: the broadcast add has identical
+    per-element operand pairs.
+
+    Requires ``window.dtype == conv_weights.dtype`` (the legacy
+    ``w.to(dtype)`` is a no-op cast then; fused skips the no-op entirely) —
+    enforced fail-loud.
+    """
+    if window.dtype != conv_weights.dtype:
+        raise RuntimeError(
+            "FR13_TREE_CONV_FUSED tap dtype uniformity violated: "
+            f"window={window.dtype} conv_weights={conv_weights.dtype}"
+        )
+    width = int(window.size(1))
+    # conv_weights is [dim, width]; .t()/unsqueeze are VIEWS (no cast/copy
+    # kernel). Elementwise mul in the window dtype = the legacy per-col mul.
+    prod = window * conv_weights.t().unsqueeze(0)
+    prod_f32 = prod.to(torch.float32)
+    if bias is None:
+        acc = torch.zeros(
+            (int(window.size(0)), int(window.size(2))),
+            dtype=torch.float32,
+            device=window.device,
+        )
+        start = 0
+    else:
+        acc = bias.to(torch.float32).view(1, -1) + prod_f32[:, 0, :]
+        start = 1
+    # EXPLICIT ordered adds (legacy operand order: acc left, tap right).
+    for col in range(start, width):
+        acc = acc + prod_f32[:, col, :]
+    return acc
+
+
+def fused_tree_conv_state_rows(
+    *,
+    source_z: torch.Tensor,
+    state_src: torch.Tensor,
+    tree_n: int,
+    state_len: int,
+) -> torch.Tensor:
+    """Per-node write-back rows via ONE static-index gather (class 3).
+
+    Replaces the legacy 7-device-nodes-x-tree_n loop (per-node index_select
+    / cat / new_zeros / arange / index_select / transpose + the final
+    stack). Pure data movement: gathers are per-element moves with no
+    arithmetic and no dtype change. Returns [tree_n, dim, state_len]
+    contiguous, the legacy ``torch.stack`` layout.
+    """
+    return (
+        source_z.index_select(0, state_src)
+        .view(int(tree_n), int(state_len), int(source_z.size(1)))
+        .transpose(1, 2)
+        .contiguous()
+    )
+
+
+# ---------------------------------------------------------------------------
+# Prepared-rows split for the committed-prior gather + page-safe remap.
+# The row math is remap-independent (reads only accepted paths/lens + spec
+# indices, which no remap mutates), so once-per-kv-cache-group is exact; the
+# per-layer remainder is 1-2 bank ops.
+# ---------------------------------------------------------------------------
+
+
+def prepare_committed_path_conv_rows(
+    *,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor | None,
+    num_accepted_tokens: torch.Tensor | None,
+    num_spec_decodes: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Row math of ``gather_committed_path_conv_prior`` (frozen library fn)
+    WITHOUT the per-layer bank ``index_select``.
+
+    Identical op sequence to ``fr10_gdn_tree_kernel.
+    gather_committed_path_conv_prior`` (the OFF arm): clamp/gather/where/
+    clamp on the shared accepted paths/lens + spec indices. Returns
+    ``(read_node_cols [B,1], bank_rows [B,1])`` int64.
+    """
+    b = int(num_spec_decodes)
+    spec_cols = int(spec_state_indices.size(-1))
+    device = spec_state_indices.device
+    if accepted_paths is None or num_accepted_tokens is None:
+        read_node_cols = torch.zeros((b, 1), dtype=torch.long, device=device)
+    else:
+        lens = num_accepted_tokens[:b].to(torch.long).view(-1, 1)
+        path_cols = torch.clamp(
+            lens - 1, min=0, max=int(accepted_paths.size(-1)) - 1
+        )
+        read_node_cols = accepted_paths[:b].to(torch.long).gather(1, path_cols)
+        # len == 0 commits no draft node: read node column 0 (the committed
+        # root token's window), matching the library fn exactly.
+        read_node_cols = torch.where(
+            lens > 0, read_node_cols, torch.zeros_like(read_node_cols)
+        )
+        read_node_cols = torch.clamp(read_node_cols, min=0, max=spec_cols - 1)
+    if os.environ.get("FR13_TREE_RUNROW_INIT", "1") == "1":
+        # STATELESS-TREE: seed the next-step conv prior from col 0 (the running
+        # row, where the post-accept committer deposited this-step's committed
+        # leaf window), not the accepted-leaf node column. Mirrors the SSM
+        # RUNROW_INIT (h0_col=0). read_node_cols stays available for callers.
+        read_node_cols = torch.zeros((b, 1), dtype=torch.long, device=device)
+    bank_rows = spec_state_indices[:b].to(torch.long).gather(1, read_node_cols)
+    return read_node_cols, bank_rows
+
+
+def gather_committed_path_conv_prior_prepared(
+    *, conv_state: torch.Tensor, bank_rows: torch.Tensor
+) -> torch.Tensor:
+    """Per-layer remainder of the committed-prior gather: the bank snapshot.
+
+    MUST stay in-layer and PRE-remap (per-layer snapshot semantics): only
+    the row math is hoisted to once-per-group.
+    """
+    return torch.index_select(conv_state, 0, bank_rows.reshape(-1))
+
+
+def prepare_replay_conv_remap_rows(
+    *,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    num_accepted_tokens: torch.Tensor,
+    num_spec_decodes: int,
+    max_path_len: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Row math of ``replay_conv_state_linear_remap`` (frozen library fn)
+    WITHOUT the per-layer bank gather-then-scatter.
+
+    Identical valid-lane/clamp/identity-self-copy semantics; returns flat
+    ``(src_rows, dst_rows)`` int64 of length ``B * path_cols`` (empty on the
+    library fn's early-return conditions, making the prepared remap the same
+    no-op).
+    """
+    spec_cols = int(spec_state_indices.shape[1])
+    path_cols = min(int(accepted_paths.shape[1]), int(max_path_len), spec_cols)
+    b = int(num_spec_decodes)
+    device = spec_state_indices.device
+    if b <= 0 or path_cols <= 0 or spec_cols <= 0:
+        empty = torch.zeros((0,), dtype=torch.long, device=device)
+        return empty, empty
+    ks = torch.arange(path_cols, device=device, dtype=torch.long)
+    lens = num_accepted_tokens.reshape(-1)[:b].to(torch.long).view(b, 1)
+    valid = ks.view(1, -1) < lens
+    src_col = torch.clamp(
+        accepted_paths[:b, :path_cols].to(torch.long), 0, spec_cols - 1
+    )
+    dst_col = ks.view(1, -1).expand(b, path_cols)
+    # Invalid lanes become identity (src == dst): byte-neutral self-copies,
+    # matching the library fn / gather kernel's masked-off stores.
+    src_col = torch.where(valid, src_col, dst_col)
+    window = spec_state_indices[:b].to(torch.long)
+    src_rows = window.gather(1, src_col).reshape(-1)
+    dst_rows = window.gather(1, dst_col).reshape(-1)
+    return src_rows, dst_rows
+
+
+def replay_conv_state_linear_remap_prepared(
+    *,
+    conv_state: torch.Tensor,
+    src_rows: torch.Tensor,
+    dst_rows: torch.Tensor,
+) -> None:
+    """Per-layer remainder of the page-safe remap: 2 bank ops.
+
+    Gather-then-scatter (class 3): ``index_select`` MATERIALIZES every
+    source row before ``index_copy_`` writes any destination row — the same
+    race-free in-place overlapping-permutation order as the library fn, and
+    conv-view-logical-elements-only (page-safe) by the same torch-op
+    construction.
+    """
+    if int(src_rows.numel()) == 0:
+        return
+    vals = conv_state.index_select(0, src_rows)
+    conv_state.index_copy_(0, dst_rows, vals)
+
+
+
+
+
+
+# ---------------------------------------------------------------------------
+# TEST-ONLY legacy reference replicas (the byte A/B's Arm A).
+# Pinned to the patcher's conv_replacement text / the frozen library fns by
+# tests/test_fr13_tree_conv_fused_wiring.py substring asserts and anchored
+# to LIVE legacy bytes by the capture-payload A/B arm. NEVER wire these into
+# serving.
+# ---------------------------------------------------------------------------
+
+
+def legacy_tree_conv_taps_acc_reference(
+    *,
+    window: torch.Tensor,
+    conv_weights: torch.Tensor,
+    bias: torch.Tensor | None,
+    x: torch.Tensor,
+    tap_dtype: torch.dtype,
+) -> torch.Tensor:
+    """Verbatim replica: per-col ``_fr11_conv_tap_product`` accumulation
+    (native bf16 taps arm) with the legacy
+    ``bias.to(f32).unsqueeze(0).expand_as(x.float()).clone()`` seed."""
+    if bias is None:
+        acc = torch.zeros_like(x, dtype=torch.float32)
+    else:
+        acc = bias.to(torch.float32).unsqueeze(0).expand_as(x.float()).clone()
+    width = int(window.size(1))
+    for col in range(width):
+        w_cast = conv_weights[:, col].to(tap_dtype).unsqueeze(0)
+        acc = acc + (
+            (window[:, col, :].to(tap_dtype) * w_cast)
+            .to(tap_dtype)
+            .to(torch.float32)
+        )
+    return acc
+
+
+def legacy_tree_conv_state_rows_reference(
+    *,
+    x: torch.Tensor,
+    prior_window: torch.Tensor,
+    path_node_tensors: list[torch.Tensor],
+    state_len: int,
+) -> torch.Tensor:
+    """Verbatim replica of the patcher's per-node write-back loop."""
+    node_state_rows = []
+    for node_i in range(len(path_node_tensors)):
+        node_path = path_node_tensors[node_i]
+        node_x = x.index_select(0, node_path)
+        node_state_source = torch.cat(
+            (prior_window.transpose(0, 1), node_x),
+            dim=0,
+        )
+        node_state_source = torch.cat(
+            (
+                node_state_source,
+                x.new_zeros((int(state_len), int(x.size(1)))),
+            ),
+            dim=0,
+        )
+        node_store_idx = node_path.numel() + torch.arange(
+            state_len, dtype=torch.long, device=x.device
+        )
+        node_state_rows.append(
+            node_state_source.index_select(0, node_store_idx).transpose(0, 1)
+        )
+    return torch.stack(node_state_rows, dim=0)
+
+
+def legacy_gather_committed_path_conv_prior_reference(
+    *,
+    conv_state: torch.Tensor,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor | None,
+    num_accepted_tokens: torch.Tensor | None,
+    num_spec_decodes: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Verbatim replica of ``fr10_gdn_tree_kernel.
+    gather_committed_path_conv_prior`` (that module imports triton at top,
+    so CPU hosts compare against this replica; the GPU arm compares against
+    the real library fn too)."""
+    b = int(num_spec_decodes)
+    spec_cols = int(spec_state_indices.size(-1))
+    device = spec_state_indices.device
+    if accepted_paths is None or num_accepted_tokens is None:
+        read_node_cols = torch.zeros((b, 1), dtype=torch.long, device=device)
+    else:
+        lens = num_accepted_tokens[:b].to(torch.long).view(-1, 1)
+        path_cols = torch.clamp(
+            lens - 1, min=0, max=int(accepted_paths.size(-1)) - 1
+        )
+        read_node_cols = accepted_paths[:b].to(torch.long).gather(1, path_cols)
+        read_node_cols = torch.where(
+            lens > 0, read_node_cols, torch.zeros_like(read_node_cols)
+        )
+        read_node_cols = torch.clamp(read_node_cols, min=0, max=spec_cols - 1)
+    bank_rows = spec_state_indices[:b].to(torch.long).gather(1, read_node_cols)
+    prior_state_bank = torch.index_select(
+        conv_state, 0, bank_rows.reshape(-1)
+    )
+    return read_node_cols, bank_rows, prior_state_bank
+
+
+# ---------------------------------------------------------------------------
+# Full per-layer drivers (T5 synthetic pipeline A/B; also CPU data movement).
+# Op ORDER mirrors the live conv_replacement exactly: committed-prior
+# snapshot (pre-remap) -> page-safe remap -> per-request window/taps/
+# activation/out-slice/write-back/index_copy_.
+# ---------------------------------------------------------------------------
+
+
+def legacy_tree_conv_layer_reference(
+    *,
+    conv_state: torch.Tensor,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    accepted_lens: torch.Tensor,
+    x: torch.Tensor,
+    conv_weights: torch.Tensor,
+    bias: torch.Tensor | None,
+    source_flat: torch.Tensor,
+    path_node_tensors: list[torch.Tensor],
+    num_spec_decodes: int,
+    tree_n: int,
+    width: int,
+    state_len: int,
+    activation_fn,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    from lumo_flywheel_serving.fr13_replay_conv_remap import (
+        replay_conv_state_linear_remap,
+    )
+
+    (
+        read_cols,
+        bank_rows,
+        prior_bank,
+    ) = legacy_gather_committed_path_conv_prior_reference(
+        conv_state=conv_state,
+        spec_state_indices=spec_state_indices,
+        accepted_paths=accepted_paths,
+        num_accepted_tokens=accepted_lens,
+        num_spec_decodes=num_spec_decodes,
+    )
+    replay_conv_state_linear_remap(
+        conv_state=conv_state,
+        spec_state_indices=spec_state_indices,
+        accepted_paths=accepted_paths,
+        num_accepted_tokens=accepted_lens,
+        num_spec_decodes=num_spec_decodes,
+        max_path_len=int(spec_state_indices.size(-1)),
+    )
+    prior_cols = torch.arange(width - 1, dtype=torch.long, device=x.device)
+    out = torch.empty_like(x)
+    for b in range(int(num_spec_decodes)):
+        start = b * tree_n
+        end = start + tree_n
+        xb = x[start:end]
+        prior_window = prior_bank[b].index_select(1, prior_cols)
+        source = torch.cat((prior_window.transpose(0, 1), xb), dim=0)
+        window = source.index_select(0, source_flat).view(
+            tree_n, width, xb.size(1)
+        )
+        acc = legacy_tree_conv_taps_acc_reference(
+            window=window,
+            conv_weights=conv_weights,
+            bias=bias,
+            x=xb,
+            tap_dtype=x.dtype,
+        )
+        out[start:end] = activation_fn(acc)
+        new_state = legacy_tree_conv_state_rows_reference(
+            x=xb,
+            prior_window=prior_window,
+            path_node_tensors=path_node_tensors,
+            state_len=state_len,
+        ).to(dtype=conv_state.dtype)
+        conv_state.index_copy_(
+            0,
+            spec_state_indices[b, :tree_n].to(torch.long),
+            new_state,
+        )
+    return out, read_cols, bank_rows
+
+
+def fused_tree_conv_layer(
+    *,
+    conv_state: torch.Tensor,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    accepted_lens: torch.Tensor,
+    x: torch.Tensor,
+    conv_weights: torch.Tensor,
+    bias: torch.Tensor | None,
+    source_flat: torch.Tensor,
+    state_src: torch.Tensor,
+    zero_row: torch.Tensor,
+    num_spec_decodes: int,
+    tree_n: int,
+    width: int,
+    state_len: int,
+    activation_fn,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    read_cols, bank_rows = prepare_committed_path_conv_rows(
+        spec_state_indices=spec_state_indices,
+        accepted_paths=accepted_paths,
+        num_accepted_tokens=accepted_lens,
+        num_spec_decodes=num_spec_decodes,
+    )
+    src_rows, dst_rows = prepare_replay_conv_remap_rows(
+        spec_state_indices=spec_state_indices,
+        accepted_paths=accepted_paths,
+        num_accepted_tokens=accepted_lens,
+        num_spec_decodes=num_spec_decodes,
+        max_path_len=int(spec_state_indices.size(-1)),
+    )
+    prior_bank = gather_committed_path_conv_prior_prepared(
+        conv_state=conv_state, bank_rows=bank_rows
+    )
+    replay_conv_state_linear_remap_prepared(
+        conv_state=conv_state, src_rows=src_rows, dst_rows=dst_rows
+    )
+    prior_cols = torch.arange(width - 1, dtype=torch.long, device=x.device)
+    out = torch.empty_like(x)
+    for b in range(int(num_spec_decodes)):
+        start = b * tree_n
+        end = start + tree_n
+        xb = x[start:end]
+        prior_window = prior_bank[b].index_select(1, prior_cols)
+        source_z = fused_tree_conv_source(
+            prior_window=prior_window, x=xb, zero_row=zero_row
+        )
+        window = source_z.index_select(0, source_flat).view(
+            tree_n, width, xb.size(1)
+        )
+        acc = fused_tree_conv_taps_acc(
+            window=window, conv_weights=conv_weights, bias=bias
+        )
+        out[start:end] = activation_fn(acc)
+        new_state = fused_tree_conv_state_rows(
+            source_z=source_z,
+            state_src=state_src,
+            tree_n=tree_n,
+            state_len=state_len,
+        ).to(dtype=conv_state.dtype)
+        conv_state.index_copy_(
+            0,
+            spec_state_indices[b, :tree_n].to(torch.long),
+            new_state,
+        )
+    return out, read_cols, bank_rows
+
+
+# ---------------------------------------------------------------------------
+# FR13_CONV_WB_FUSED (B2a, 2026-07-22): single-kernel conv-state write-back.
+#
+# The nsys real-task differential (FR13_VERIFY_PROFILE_FINDINGS.md) measured
+# the class-3 gather-then-scatter pair as the two biggest tree-only aten
+# kernels in the captured decode graph: the state-rows gather
+# (_scatter_gather_elementwise @73.2us) + transpose-.contiguous() copy
+# feeding conv_state.index_copy_ (index_elementwise @84.6us, 22 page-strided
+# rows ~17MB). This kernel fuses all three into ONE launch that reads the
+# shared (prior ++ x ++ zero_row) source and writes each node's state row
+# directly into the page-strided conv_state destination:
+#   conv_state[dst_rows[n], c, s] = source_z[state_src[n*L + s], c]
+# Pure data movement, zero arithmetic, no dtype change (host wrapper asserts
+# dtype equality) => byte-identical to the aten pair by construction; gated
+# offline in output/fr13_verify_profile/gate_conv_wb_fused_byte.py and
+# default OFF (FR13_CONV_WB_FUSED=0) in the patcher.
+# ---------------------------------------------------------------------------
+
+try:  # triton is only present in the serving container; import lazily-safe
+    import triton
+    import triton.language as tl
+
+    @triton.jit
+    def _fr13_conv_wb_fused_kernel(
+        source_z,      # [S, C] contiguous, same dtype as conv_state
+        state_src,     # [N*L] integer source-row table (static per topology)
+        dst_rows,      # [N] integer conv_state page rows
+        conv_state,    # strided base (as_strided page view)
+        stride_cs0,
+        stride_cs1,
+        stride_cs2,
+        C: tl.constexpr,
+        L: tl.constexpr,
+        BLOCK_C: tl.constexpr,
+    ):
+        pid_n = tl.program_id(0)
+        pid_c = tl.program_id(1)
+        offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)
+        c_mask = offs_c < C
+        dst = tl.load(dst_rows + pid_n).to(tl.int64)
+        base = conv_state + dst * stride_cs0
+        for s in tl.static_range(0, L):
+            src = tl.load(state_src + pid_n * L + s).to(tl.int64)
+            vals = tl.load(source_z + src * C + offs_c, mask=c_mask, other=0)
+            tl.store(
+                base + offs_c * stride_cs1 + s * stride_cs2,
+                vals,
+                mask=c_mask,
+            )
+
+    @triton.jit
+    def _fr13_conv_wb_fused_batched_kernel(
+        source_z,      # [B*S, C] contiguous staging (request b's source at b*S)
+        state_src,     # [N*L] shared per-topology table (per-b LOCAL rows)
+        dst_rows,      # [B*N] flat destination rows
+        conv_state,    # strided base (page view or bank view)
+        stride_cs0,
+        stride_cs1,
+        stride_cs2,
+        S: tl.constexpr,
+        N: tl.constexpr,
+        C: tl.constexpr,
+        L: tl.constexpr,
+        BLOCK_C: tl.constexpr,
+    ):
+        # FR13_CONV_WB_BATCHED (B2c): ONE launch for ALL requests' node
+        # writebacks — replaces the per-b python loop's B launches (the
+        # measured committer host-gap slice is launch/glue-dominated).
+        # Identical inner body to _fr13_conv_wb_fused_kernel; the b axis only
+        # offsets the source base and selects dst_rows[b*N + n]. Destinations
+        # are disjoint across programs => order-free, byte-identical to the
+        # per-b launch sequence by construction (pure data movement).
+        pid0 = tl.program_id(0)
+        pid_c = tl.program_id(1)
+        pid_b = pid0 // N
+        pid_n = pid0 % N
+        offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)
+        c_mask = offs_c < C
+        dst = tl.load(dst_rows + pid0).to(tl.int64)
+        base = conv_state + dst * stride_cs0
+        src_base = pid_b.to(tl.int64) * S
+        for s in tl.static_range(0, L):
+            src = tl.load(state_src + pid_n * L + s).to(tl.int64) + src_base
+            vals = tl.load(source_z + src * C + offs_c, mask=c_mask, other=0)
+            tl.store(
+                base + offs_c * stride_cs1 + s * stride_cs2,
+                vals,
+                mask=c_mask,
+            )
+
+except Exception:  # pragma: no cover - CPU-only host env
+    triton = None
+    tl = None
+
+
+_FR13_CONV_WB_STAGING: dict = {}
+_FR13_CONV_WB_STAGING_LEASES: dict = {}
+
+
+def conv_wb_staging_get(layer_key, rows_needed: int, c: int, dtype, device):
+    """Persistent [ROWS_CAP, C] source staging for the batched writeback.
+
+    CAPACITY-keyed (layer, c, dtype): the actual per-request source rows S
+    are only known at forward time, so preseed allocates an upper bound
+    (max_num_seqs * (state_len + n_tree + 1) >= max_num_seqs * S) at builder
+    init — OUTSIDE capture (tree-decode first call is INSIDE capture, the 2d
+    class). A rows_needed beyond capacity fail-louds under capture rather
+    than reallocating a captured address.
+    """
+    import torch as _t
+    key = (layer_key, int(c), str(dtype))
+    st = _FR13_CONV_WB_STAGING.get(key)
+    if st is None or st.shape[0] < int(rows_needed):
+        if key in _FR13_CONV_WB_STAGING_LEASES:
+            raise RuntimeError(
+                "FR13_CONV_WB_BATCHED: leased source staging cannot be "
+                f"reallocated (layer={layer_key}, rows_needed={rows_needed}, "
+                f"have={0 if st is None else int(st.shape[0])})"
+            )
+        if _t.cuda.is_available() and _t.cuda.is_current_stream_capturing():
+            raise RuntimeError(
+                "FR13_CONV_WB_BATCHED: staging (re)allocation inside graph "
+                f"capture (layer={layer_key}, rows_needed={rows_needed}, "
+                f"have={0 if st is None else int(st.shape[0])}); preseed at "
+                "builder init with the capacity bound"
+            )
+        st = _t.zeros(int(rows_needed), int(c), dtype=dtype, device=device)
+        _FR13_CONV_WB_STAGING[key] = st
+    return st
+
+
+def freeze_conv_wb_staging_sources(
+    layer_keys,
+    rows_needed: int,
+    c: int,
+    dtype,
+    device,
+) -> tuple[torch.Tensor, ...]:
+    """Freeze and return the fixed32 source stages in canonical layer order."""
+    import torch as _t
+
+    if _t.cuda.is_available() and _t.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_DIRECT source freeze called inside capture"
+        )
+    if isinstance(dtype, str):
+        dtype = getattr(_t, dtype)
+    keys = tuple((str(k), int(c), str(dtype)) for k in layer_keys)
+    if len(keys) != 48 or len(set(keys)) != 48:
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_DIRECT requires 48 distinct ordered layer keys"
+        )
+    refs = []
+    for key in keys:
+        source = _FR13_CONV_WB_STAGING.get(key)
+        if (
+            not _t.is_tensor(source)
+            or source.device != _t.device(device)
+            or source.dtype != dtype
+            or source.ndim != 2
+            or int(source.shape[0]) < int(rows_needed)
+            or int(source.shape[1]) != int(c)
+            or not source.is_contiguous()
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_CONV_DIRECT source staging is missing or "
+                f"undersized for key={key!r}"
+            )
+        prior = _FR13_CONV_WB_STAGING_LEASES.get(key)
+        identity = (id(source), int(source.data_ptr()))
+        if prior is not None and prior != identity:
+            raise RuntimeError(
+                "FR13_FIXED32_CONV_DIRECT source staging identity drift"
+            )
+        _FR13_CONV_WB_STAGING_LEASES[key] = identity
+        refs.append(source)
+    if len({int(source.data_ptr()) for source in refs}) != 48:
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_DIRECT source stages must not alias"
+        )
+    return tuple(refs)
+
+
+def conv_wb_staging_preseed(layer_keys, rows_cap: int, c: int,
+                            dtype, device) -> None:
+    """Preseed batched-writeback staging at builder init (outside capture)."""
+    import torch as _t
+    if isinstance(dtype, str):
+        dtype = getattr(_t, dtype)
+    for k in layer_keys:
+        conv_wb_staging_get(str(k), int(rows_cap), int(c), dtype, device)
+    print(
+        f"[FR13_CONV_WB_BATCHED] preseeded {len(layer_keys)} stagings: "
+        f"rows_cap={rows_cap} c={c} dtype={dtype}",
+        flush=True,
+    )
+
+
+def launch_conv_state_writeback_batched(
+    *,
+    source_z: torch.Tensor,
+    state_src: torch.Tensor,
+    dst_rows: torch.Tensor,
+    conv_state: torch.Tensor,
+    tree_n: int,
+    state_len: int,
+    batch: int,
+    src_rows_per_b: int,
+) -> None:
+    """B2c batched form of :func:`launch_conv_state_writeback`.
+
+    Same byte-copy contract per (b, n): identical source elements to
+    identical destinations, no cast; destinations disjoint across (b, n).
+    """
+    if triton is None:
+        raise RuntimeError("triton unavailable; FR13_CONV_WB_BATCHED needs the serving container")
+    if source_z.dtype != conv_state.dtype:
+        raise ValueError(
+            f"FR13_CONV_WB_BATCHED requires matching dtypes, got source "
+            f"{source_z.dtype} vs conv_state {conv_state.dtype}"
+        )
+    if not source_z.is_contiguous():
+        raise ValueError("source_z staging must be contiguous")
+    b = int(batch)
+    n = int(tree_n)
+    L = int(state_len)
+    S = int(src_rows_per_b)
+    C = int(source_z.size(1))
+    if b <= 0 or n <= 0:
+        return
+    if int(source_z.size(0)) < b * S:
+        raise ValueError(
+            f"staging rows {int(source_z.size(0))} < batch*S={b * S}"
+        )
+    if int(state_src.numel()) < n * L:
+        raise ValueError(
+            f"state_src covers {int(state_src.numel())} < tree_n*state_len={n * L}"
+        )
+    if int(dst_rows.numel()) < b * n:
+        raise ValueError(f"dst_rows covers {int(dst_rows.numel())} < batch*tree_n={b * n}")
+    if int(conv_state.size(1)) != C or int(conv_state.size(2)) != L:
+        raise ValueError(
+            f"conv_state dims {tuple(conv_state.shape[1:])} != (C={C}, L={L})"
+        )
+    BLOCK_C = 1024
+    grid = (b * n, triton.cdiv(C, BLOCK_C))
+    _fr13_conv_wb_fused_batched_kernel[grid](
+        source_z,
+        state_src,
+        dst_rows,
+        conv_state,
+        conv_state.stride(0),
+        conv_state.stride(1),
+        conv_state.stride(2),
+        S=S,
+        N=n,
+        C=C,
+        L=L,
+        BLOCK_C=BLOCK_C,
+        num_warps=4,
+    )
+
+
+def launch_conv_state_writeback(
+    *,
+    source_z: torch.Tensor,
+    state_src: torch.Tensor,
+    dst_rows: torch.Tensor,
+    conv_state: torch.Tensor,
+    tree_n: int,
+    state_len: int,
+) -> None:
+    """One-launch fused replacement for
+    ``fused_tree_conv_state_rows(...).to(dtype) + conv_state.index_copy_``.
+
+    Byte-copy contract: identical source elements to identical destinations,
+    no cast (asserts dtype equality), page-stride-safe via explicit strides.
+    """
+    if triton is None:
+        raise RuntimeError("triton unavailable; FR13_CONV_WB_FUSED needs the serving container")
+    if source_z.dtype != conv_state.dtype:
+        raise ValueError(
+            f"FR13_CONV_WB_FUSED requires matching dtypes, got source "
+            f"{source_z.dtype} vs conv_state {conv_state.dtype}"
+        )
+    if not source_z.is_contiguous():
+        raise ValueError("source_z must be contiguous")
+    n = int(tree_n)
+    L = int(state_len)
+    C = int(source_z.size(1))
+    if int(state_src.numel()) < n * L:
+        raise ValueError(
+            f"state_src covers {int(state_src.numel())} < tree_n*state_len={n * L}"
+        )
+    if int(dst_rows.numel()) < n:
+        raise ValueError(f"dst_rows covers {int(dst_rows.numel())} < tree_n={n}")
+    if int(conv_state.size(1)) != C or int(conv_state.size(2)) != L:
+        raise ValueError(
+            f"conv_state dims {tuple(conv_state.shape[1:])} != (C={C}, L={L})"
+        )
+    BLOCK_C = 1024
+    grid = (n, triton.cdiv(C, BLOCK_C))
+    _fr13_conv_wb_fused_kernel[grid](
+        source_z,
+        state_src,
+        dst_rows,
+        conv_state,
+        conv_state.stride(0),
+        conv_state.stride(1),
+        conv_state.stride(2),
+        C=C,
+        L=L,
+        BLOCK_C=BLOCK_C,
+        num_warps=4,
+    )

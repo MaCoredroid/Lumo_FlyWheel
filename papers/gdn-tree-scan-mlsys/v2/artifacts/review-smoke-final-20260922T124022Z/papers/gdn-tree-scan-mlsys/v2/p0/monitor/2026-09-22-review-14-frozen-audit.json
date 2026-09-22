@@ -1,0 +1,733 @@
+{
+  "utc": "2026-09-22T06:33:32.683621+00:00",
+  "freeze_sha256": "21f3eb5c3f9ce52aa2492d62c5be4dbc0f3d0df236aec717f70420c2ab2b36ce",
+  "pilot": {
+    "n_sets": 8,
+    "padding_failed_prefixes": [
+      "p015",
+      "p017",
+      "p021",
+      "p058",
+      "p072",
+      "p083",
+      "p085",
+      "p095"
+    ],
+    "padding": [
+      {
+        "prefix": "p072",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.923681640625,
+        "factor_bitwise_frac": 0.9036783854166667,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p072",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9443196614583333,
+        "factor_bitwise_frac": 0.9409830729166666,
+        "out_max_abs": 5.587935447692871e-09
+      },
+      {
+        "prefix": "p017",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9071614583333333,
+        "factor_bitwise_frac": 0.8589192708333333,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p017",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9447102864583333,
+        "factor_bitwise_frac": 0.9333007812499999,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p015",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9124837239583333,
+        "factor_bitwise_frac": 0.8909830729166667,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p015",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9308430989583333,
+        "factor_bitwise_frac": 0.9250162760416667,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p021",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9276041666666667,
+        "factor_bitwise_frac": 0.8938313802083333,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p021",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9471516927083333,
+        "factor_bitwise_frac": 0.939990234375,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p085",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9279622395833333,
+        "factor_bitwise_frac": 0.91259765625,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p085",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9435221354166666,
+        "factor_bitwise_frac": 0.94443359375,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p095",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9165852864583334,
+        "factor_bitwise_frac": 0.8883138020833333,
+        "out_max_abs": 7.450580596923828e-09
+      },
+      {
+        "prefix": "p095",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9421223958333333,
+        "factor_bitwise_frac": 0.9319010416666667,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p058",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.8727539062499999,
+        "factor_bitwise_frac": 0.8720540364583333,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p058",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.8868977864583333,
+        "factor_bitwise_frac": 0.8921223958333333,
+        "out_max_abs": 4.6566128730773926e-09
+      },
+      {
+        "prefix": "p083",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9169596354166667,
+        "factor_bitwise_frac": 0.893115234375,
+        "out_max_abs": 5.587935447692871e-09
+      },
+      {
+        "prefix": "p083",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9310709635416666,
+        "factor_bitwise_frac": 0.9259602864583333,
+        "out_max_abs": 7.450580596923828e-09
+      }
+    ],
+    "half_width_failures": [
+      {
+        "prefix": "p072",
+        "kernel": "native_sg_chain_depth5_verify(context)",
+        "relative_half_width": 0.09051849736399832
+      },
+      {
+        "prefix": "p015",
+        "kernel": "native_sg_chain_depth5_verify(context)",
+        "relative_half_width": 0.05132009309081466
+      },
+      {
+        "prefix": "p085",
+        "kernel": "C_nm[ieee]_verify_out16",
+        "relative_half_width": 0.20225072054499404
+      },
+      {
+        "prefix": "p095",
+        "kernel": "native_sg_chain_depth5_verify(context)",
+        "relative_half_width": 0.0946544256148369
+      },
+      {
+        "prefix": "p058",
+        "kernel": "native_sg_chain_depth5_verify(context)",
+        "relative_half_width": 0.06573115289207994
+      },
+      {
+        "prefix": "p083",
+        "kernel": "A_prod_scan_verify_out16",
+        "relative_half_width": 0.06950353737443658
+      },
+      {
+        "prefix": "p083",
+        "kernel": "native_sg_chain_depth5_verify(context)",
+        "relative_half_width": 0.0500736416920883
+      }
+    ],
+    "half_width_failed_prefix_count": 6,
+    "state_order_failures": [],
+    "minimum_bf16_agreement": {
+      "prefix": "p021",
+      "kernel": "B_fs[ieee]",
+      "agreement": 0.9997884114583333
+    }
+  },
+  "confirmation": {
+    "n_sets": 31,
+    "padding_failed_prefixes": [
+      "p003",
+      "p005",
+      "p012",
+      "p013",
+      "p019",
+      "p025",
+      "p027",
+      "p030",
+      "p031",
+      "p033",
+      "p038",
+      "p040",
+      "p046",
+      "p049",
+      "p052",
+      "p059",
+      "p060",
+      "p063",
+      "p065",
+      "p067",
+      "p076",
+      "p077",
+      "p078",
+      "p079",
+      "p081",
+      "p082",
+      "p086",
+      "p088",
+      "p089",
+      "p091",
+      "p092"
+    ],
+    "padding": [
+      {
+        "prefix": "p063",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9146158854166666,
+        "factor_bitwise_frac": 0.887548828125,
+        "out_max_abs": 1.862645149230957e-09
+      },
+      {
+        "prefix": "p063",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9330729166666667,
+        "factor_bitwise_frac": 0.926025390625,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p059",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.908740234375,
+        "factor_bitwise_frac": 0.9012044270833334,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p059",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9220703124999999,
+        "factor_bitwise_frac": 0.92490234375,
+        "out_max_abs": 2.7939677238464355e-09
+      },
+      {
+        "prefix": "p049",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9057291666666667,
+        "factor_bitwise_frac": 0.8633951822916667,
+        "out_max_abs": 1.862645149230957e-09
+      },
+      {
+        "prefix": "p049",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9420735677083333,
+        "factor_bitwise_frac": 0.9376790364583333,
+        "out_max_abs": 1.862645149230957e-09
+      },
+      {
+        "prefix": "p052",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9311848958333333,
+        "factor_bitwise_frac": 0.911279296875,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p052",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.946923828125,
+        "factor_bitwise_frac": 0.947119140625,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p046",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9123046874999999,
+        "factor_bitwise_frac": 0.890185546875,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p046",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9224609375,
+        "factor_bitwise_frac": 0.9134114583333334,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p065",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.8997721354166667,
+        "factor_bitwise_frac": 0.8703450520833333,
+        "out_max_abs": 7.450580596923828e-09
+      },
+      {
+        "prefix": "p065",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9300455729166667,
+        "factor_bitwise_frac": 0.9313476562499999,
+        "out_max_abs": 7.450580596923828e-09
+      },
+      {
+        "prefix": "p025",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9077799479166666,
+        "factor_bitwise_frac": 0.8563313802083333,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p025",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9313313802083333,
+        "factor_bitwise_frac": 0.9222005208333334,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p031",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.909912109375,
+        "factor_bitwise_frac": 0.8829264322916667,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p031",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9469889322916667,
+        "factor_bitwise_frac": 0.9423502604166667,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p013",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9092936197916667,
+        "factor_bitwise_frac": 0.8712727864583333,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p013",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.93125,
+        "factor_bitwise_frac": 0.9203613281249999,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p040",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9231119791666667,
+        "factor_bitwise_frac": 0.9059244791666666,
+        "out_max_abs": 1.862645149230957e-09
+      },
+      {
+        "prefix": "p040",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9404947916666666,
+        "factor_bitwise_frac": 0.9398925781249999,
+        "out_max_abs": 4.6566128730773926e-09
+      },
+      {
+        "prefix": "p033",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.933837890625,
+        "factor_bitwise_frac": 0.9187174479166667,
+        "out_max_abs": 5.587935447692871e-09
+      },
+      {
+        "prefix": "p033",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9622721354166667,
+        "factor_bitwise_frac": 0.9653645833333333,
+        "out_max_abs": 5.587935447692871e-09
+      },
+      {
+        "prefix": "p038",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9051432291666667,
+        "factor_bitwise_frac": 0.8758951822916666,
+        "out_max_abs": 7.450580596923828e-09
+      },
+      {
+        "prefix": "p038",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9345703125,
+        "factor_bitwise_frac": 0.9220703124999999,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p060",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9424479166666666,
+        "factor_bitwise_frac": 0.9209147135416667,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p060",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9636555989583333,
+        "factor_bitwise_frac": 0.9607421875,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p067",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9138020833333333,
+        "factor_bitwise_frac": 0.8821451822916666,
+        "out_max_abs": 1.862645149230957e-09
+      },
+      {
+        "prefix": "p067",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9382975260416666,
+        "factor_bitwise_frac": 0.928564453125,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p019",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9327311197916667,
+        "factor_bitwise_frac": 0.9057128906249999,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p019",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.948486328125,
+        "factor_bitwise_frac": 0.9426595052083333,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p003",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9137369791666666,
+        "factor_bitwise_frac": 0.8930013020833333,
+        "out_max_abs": 7.450580596923828e-09
+      },
+      {
+        "prefix": "p003",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9392740885416666,
+        "factor_bitwise_frac": 0.9382649739583333,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p077",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9303548177083333,
+        "factor_bitwise_frac": 0.879052734375,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p077",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9497233072916667,
+        "factor_bitwise_frac": 0.9338541666666667,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p089",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9251953125,
+        "factor_bitwise_frac": 0.9001953125,
+        "out_max_abs": 7.450580596923828e-09
+      },
+      {
+        "prefix": "p089",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9447591145833333,
+        "factor_bitwise_frac": 0.9384928385416667,
+        "out_max_abs": 7.450580596923828e-09
+      },
+      {
+        "prefix": "p030",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9149251302083333,
+        "factor_bitwise_frac": 0.8963216145833334,
+        "out_max_abs": 1.862645149230957e-09
+      },
+      {
+        "prefix": "p030",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9342773437499999,
+        "factor_bitwise_frac": 0.9303385416666666,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p081",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.928271484375,
+        "factor_bitwise_frac": 0.9061848958333333,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p081",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.943408203125,
+        "factor_bitwise_frac": 0.939501953125,
+        "out_max_abs": 5.122274160385132e-09
+      },
+      {
+        "prefix": "p012",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9193847656249999,
+        "factor_bitwise_frac": 0.896728515625,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p012",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.935107421875,
+        "factor_bitwise_frac": 0.9277506510416667,
+        "out_max_abs": 7.450580596923828e-09
+      },
+      {
+        "prefix": "p092",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9341796875,
+        "factor_bitwise_frac": 0.9108072916666666,
+        "out_max_abs": 1.862645149230957e-09
+      },
+      {
+        "prefix": "p092",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9590657552083334,
+        "factor_bitwise_frac": 0.957080078125,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p086",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9405436197916667,
+        "factor_bitwise_frac": 0.8993489583333333,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p086",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9584798177083333,
+        "factor_bitwise_frac": 0.9427734375,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p079",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9160807291666666,
+        "factor_bitwise_frac": 0.8908854166666667,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p079",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9351725260416667,
+        "factor_bitwise_frac": 0.9271321614583333,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p027",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9132975260416667,
+        "factor_bitwise_frac": 0.8997395833333334,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p027",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.922265625,
+        "factor_bitwise_frac": 0.915283203125,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p091",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9362630208333333,
+        "factor_bitwise_frac": 0.9072916666666666,
+        "out_max_abs": 1.862645149230957e-09
+      },
+      {
+        "prefix": "p091",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9658528645833333,
+        "factor_bitwise_frac": 0.95947265625,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p082",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.92138671875,
+        "factor_bitwise_frac": 0.9000976562499999,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p082",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9466634114583333,
+        "factor_bitwise_frac": 0.9433268229166667,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p088",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9437825520833333,
+        "factor_bitwise_frac": 0.9223795572916667,
+        "out_max_abs": 1.862645149230957e-09
+      },
+      {
+        "prefix": "p088",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9666666666666667,
+        "factor_bitwise_frac": 0.9635091145833333,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p005",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.939306640625,
+        "factor_bitwise_frac": 0.9202311197916666,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p005",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.96328125,
+        "factor_bitwise_frac": 0.9601888020833333,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p076",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9331380208333333,
+        "factor_bitwise_frac": 0.9237141927083333,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p076",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9520182291666667,
+        "factor_bitwise_frac": 0.9591634114583333,
+        "out_max_abs": 1.862645149230957e-09
+      },
+      {
+        "prefix": "p078",
+        "kernel": "B_fs_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9343424479166667,
+        "factor_bitwise_frac": 0.9154459635416666,
+        "out_max_abs": 3.725290298461914e-09
+      },
+      {
+        "prefix": "p078",
+        "kernel": "C_nm_npad32_vs_npad16",
+        "out_bitwise_frac": 0.9536783854166666,
+        "factor_bitwise_frac": 0.9484212239583333,
+        "out_max_abs": 3.725290298461914e-09
+      }
+    ],
+    "half_width_failures": [
+      {
+        "prefix": "p059",
+        "kernel": "native_sg_chain_depth5_verify(context)",
+        "relative_half_width": 0.058616831527821295
+      },
+      {
+        "prefix": "p052",
+        "kernel": "native_sg_chain_depth5_verify(context)",
+        "relative_half_width": 0.07514122428405234
+      },
+      {
+        "prefix": "p046",
+        "kernel": "A_prod_scan_verify_out16",
+        "relative_half_width": 0.06963145929696368
+      },
+      {
+        "prefix": "p013",
+        "kernel": "native_sg_chain_depth5_verify(context)",
+        "relative_half_width": 0.07096315042936806
+      },
+      {
+        "prefix": "p040",
+        "kernel": "native_sg_chain_depth5_verify(context)",
+        "relative_half_width": 0.05378764835740966
+      },
+      {
+        "prefix": "p003",
+        "kernel": "native_sg_chain_depth5_verify(context)",
+        "relative_half_width": 0.07195465936646982
+      },
+      {
+        "prefix": "p077",
+        "kernel": "A_prod_scan_verify_out16",
+        "relative_half_width": 0.07444171611944864
+      },
+      {
+        "prefix": "p030",
+        "kernel": "C_nm[ieee]_verify_out16",
+        "relative_half_width": 0.29443893902596174
+      },
+      {
+        "prefix": "p079",
+        "kernel": "B_fs[ieee]_verify_out16",
+        "relative_half_width": 0.19463588064614307
+      },
+      {
+        "prefix": "p079",
+        "kernel": "C_nm[ieee]_verify_out16",
+        "relative_half_width": 0.053530019796393186
+      },
+      {
+        "prefix": "p027",
+        "kernel": "native_sg_chain_depth5_verify(context)",
+        "relative_half_width": 0.06214766975112583
+      },
+      {
+        "prefix": "p082",
+        "kernel": "native_sg_chain_depth5_verify(context)",
+        "relative_half_width": 0.05187482494214188
+      },
+      {
+        "prefix": "p076",
+        "kernel": "C_nm[ieee]_verify_out16",
+        "relative_half_width": 0.3208609476006917
+      },
+      {
+        "prefix": "p076",
+        "kernel": "native_sg_chain_depth5_verify(context)",
+        "relative_half_width": 0.06945622137713323
+      }
+    ],
+    "half_width_failed_prefix_count": 12,
+    "state_order_failures": [
+      {
+        "prefix": "p031",
+        "B": 2.809754127142128e-07,
+        "C": 3.4991357855673755e-07,
+        "abs_difference": 6.893816584252477e-08
+      }
+    ],
+    "minimum_bf16_agreement": {
+      "prefix": "p005",
+      "kernel": "C_nm[ieee]",
+      "agreement": 0.9997721354166667
+    }
+  }
+}

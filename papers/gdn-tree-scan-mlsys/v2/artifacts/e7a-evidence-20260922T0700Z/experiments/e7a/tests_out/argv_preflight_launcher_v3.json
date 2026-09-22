@@ -1,0 +1,19 @@
+{
+  "launcher": "e7a_capture_launch.v3.sh",
+  "launcher_sha256": "aaec8b3dc6c5d854c0d6c16b219599225e751d65ee56e31c962f1b7547752c8f",
+  "gate_neutralized_test_copy_only": true,
+  "docker_calls": [
+    "rm",
+    "run"
+  ],
+  "env_mismatches": {},
+  "positions": {
+    "fr10_phase4_patch_vllm_tree_gdn.py": 161,
+    "${E7A_SHIM_PATH}": 254,
+    "${E7B_SHIM_PATH}": 372,
+    "vllm serve": 1298
+  },
+  "order_ok": true,
+  "pass": true,
+  "note": "stub docker on PATH recorded argv; no real container; the memory gate line was neutralized ONLY in the scratch test copy"
+}

@@ -1,0 +1,1216 @@
+{
+  "utc": "2026-09-22T08:28:14.923546+00:00",
+  "scope": "Independent first tree-forward comparison; policyA vs earlier KVoff baseline; not standalone attention-oracle proof",
+  "reference": "experiments/out-20260922T071945Z-e7b-r16-p072-commit-batch/e7b_001_p072_arm1_none-B_fs_ieee-all",
+  "policyA": "experiments/out-20260922T081202Z-e2-j1prime-p072-kvpolicyA-b1/e7b_001_p072_arm1_none-B_fs_ieee-all",
+  "capture_indices": [
+    0,
+    0
+  ],
+  "positions_equal": true,
+  "input_hidden_equal_bits": true,
+  "first_hidden_difference": 3,
+  "layers": [
+    {
+      "layer": 0,
+      "type": "linear_attention",
+      "hidden_equal_bits": true,
+      "residual_equal_bits": true,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "layer": 1,
+      "type": "linear_attention",
+      "hidden_equal_bits": true,
+      "residual_equal_bits": true,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "layer": 2,
+      "type": "linear_attention",
+      "hidden_equal_bits": true,
+      "residual_equal_bits": true,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "layer": 3,
+      "type": "full_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.03125,
+        0.00390625,
+        0.05078125,
+        0.0263671875,
+        0.0068359375,
+        0.009765625,
+        0.0166015625
+      ]
+    },
+    {
+      "layer": 4,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.0068359375,
+        0.00384521484375,
+        0.0078125,
+        0.016326904296875,
+        0.015625,
+        0.001953125,
+        0.017120361328125
+      ]
+    },
+    {
+      "layer": 5,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.006481170654296875,
+        0.00518798828125,
+        0.01953125,
+        0.02392578125,
+        0.0068359375,
+        0.0029296875,
+        0.0283203125
+      ]
+    },
+    {
+      "layer": 6,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.0185546875,
+        0.012620925903320312,
+        0.0625,
+        0.029296875,
+        0.0234375,
+        0.005859375,
+        0.03125
+      ]
+    },
+    {
+      "layer": 7,
+      "type": "full_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.0498046875,
+        0.01318359375,
+        0.0400390625,
+        0.0517578125,
+        0.0302734375,
+        0.0078125,
+        0.03369140625
+      ]
+    },
+    {
+      "layer": 8,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.05078125,
+        0.01416015625,
+        0.09375,
+        0.06640625,
+        0.046875,
+        0.0087890625,
+        0.0625
+      ]
+    },
+    {
+      "layer": 9,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.109375,
+        0.0111083984375,
+        0.0390625,
+        0.0361328125,
+        0.0390625,
+        0.005859375,
+        0.078125
+      ]
+    },
+    {
+      "layer": 10,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.021240234375,
+        0.00927734375,
+        0.03594970703125,
+        0.03741455078125,
+        0.027099609375,
+        0.0062255859375,
+        0.0296478271484375
+      ]
+    },
+    {
+      "layer": 11,
+      "type": "full_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.1796875,
+        0.012451171875,
+        0.2734375,
+        0.032958984375,
+        0.09375,
+        0.013671875,
+        0.07421875
+      ]
+    },
+    {
+      "layer": 12,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.056640625,
+        0.012939453125,
+        0.08984375,
+        0.03143310546875,
+        0.05078125,
+        0.015625,
+        0.031219482421875
+      ]
+    },
+    {
+      "layer": 13,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.02996826171875,
+        0.0126953125,
+        0.056640625,
+        0.02685546875,
+        0.04315185546875,
+        0.01171875,
+        0.04052734375
+      ]
+    },
+    {
+      "layer": 14,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.02734375,
+        0.009765625,
+        0.07189559936523438,
+        0.02587890625,
+        0.05078125,
+        0.012237548828125,
+        0.03070068359375
+      ]
+    },
+    {
+      "layer": 15,
+      "type": "full_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.0556640625,
+        0.02490234375,
+        0.1416015625,
+        0.03192138671875,
+        0.1358642578125,
+        0.06103515625,
+        0.03076171875
+      ]
+    },
+    {
+      "layer": 16,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.0625,
+        0.080078125,
+        0.171875,
+        0.0400390625,
+        0.08984375,
+        0.0634765625,
+        0.0345458984375
+      ]
+    },
+    {
+      "layer": 17,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.1875,
+        0.0546875,
+        0.265625,
+        0.0703125,
+        0.109375,
+        0.05078125,
+        0.109375
+      ]
+    },
+    {
+      "layer": 18,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.15625,
+        0.03253173828125,
+        0.119384765625,
+        0.0625,
+        0.109375,
+        0.34375,
+        0.0859375
+      ]
+    },
+    {
+      "layer": 19,
+      "type": "full_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.15673828125,
+        0.34375,
+        0.90625,
+        0.03662109375,
+        0.1875,
+        0.3125,
+        0.25
+      ]
+    },
+    {
+      "layer": 20,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.125,
+        0.5625,
+        0.84375,
+        0.0361328125,
+        0.4375,
+        0.15625,
+        0.25
+      ]
+    },
+    {
+      "layer": 21,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.094970703125,
+        0.095703125,
+        0.421875,
+        0.03271484375,
+        0.1260986328125,
+        0.09765625,
+        0.09375
+      ]
+    },
+    {
+      "layer": 22,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.1044921875,
+        0.2890625,
+        0.765625,
+        0.0546875,
+        0.2744140625,
+        0.060546875,
+        0.14453125
+      ]
+    },
+    {
+      "layer": 23,
+      "type": "full_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.1650390625,
+        0.25,
+        0.271484375,
+        0.0322265625,
+        0.17578125,
+        0.3125,
+        0.0634765625
+      ]
+    },
+    {
+      "layer": 24,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.5234375,
+        0.2578125,
+        0.8515625,
+        0.03857421875,
+        0.8359375,
+        0.4140625,
+        0.0625
+      ]
+    },
+    {
+      "layer": 25,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.169921875,
+        0.2236328125,
+        0.34375,
+        0.078125,
+        1.09375,
+        0.0842742919921875,
+        0.09375
+      ]
+    },
+    {
+      "layer": 26,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.21484375,
+        0.4375,
+        1.0625,
+        0.078125,
+        0.5625,
+        0.119140625,
+        0.0576171875
+      ]
+    },
+    {
+      "layer": 27,
+      "type": "full_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.71875,
+        0.75,
+        0.3046875,
+        0.125,
+        0.390625,
+        0.1201171875,
+        0.0703125
+      ]
+    },
+    {
+      "layer": 28,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.4375,
+        0.3203125,
+        0.2421875,
+        0.07666015625,
+        1.017578125,
+        0.171875,
+        0.05859375
+      ]
+    },
+    {
+      "layer": 29,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.21142578125,
+        0.259765625,
+        0.23388671875,
+        0.0595703125,
+        0.21630859375,
+        0.1552734375,
+        0.06103515625
+      ]
+    },
+    {
+      "layer": 30,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.1484375,
+        0.40625,
+        0.1875,
+        0.109375,
+        0.37890625,
+        0.1484375,
+        0.12109375
+      ]
+    },
+    {
+      "layer": 31,
+      "type": "full_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        1.171875,
+        1.77734375,
+        1.033203125,
+        0.1953125,
+        0.357421875,
+        1.28125,
+        0.07275390625
+      ]
+    },
+    {
+      "layer": 32,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        1.578125,
+        4.125,
+        0.2294921875,
+        0.089111328125,
+        0.875,
+        1.328125,
+        0.45703125
+      ]
+    },
+    {
+      "layer": 33,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.765625,
+        1.21875,
+        0.390625,
+        0.08251953125,
+        0.5,
+        0.28125,
+        0.0859375
+      ]
+    },
+    {
+      "layer": 34,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.2265625,
+        2.0,
+        0.25,
+        0.07257080078125,
+        0.515625,
+        0.203125,
+        0.31103515625
+      ]
+    },
+    {
+      "layer": 35,
+      "type": "full_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.359375,
+        0.9375,
+        2.25,
+        0.1015625,
+        0.6171875,
+        0.1426544189453125,
+        0.484375
+      ]
+    },
+    {
+      "layer": 36,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.2421875,
+        0.53125,
+        0.75,
+        0.1328125,
+        0.318359375,
+        0.13623046875,
+        0.140625
+      ]
+    },
+    {
+      "layer": 37,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.09814453125,
+        0.303955078125,
+        0.2734375,
+        0.0478515625,
+        0.191650390625,
+        0.1640625,
+        0.052490234375
+      ]
+    },
+    {
+      "layer": 38,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.4140625,
+        1.0,
+        0.21875,
+        0.0703125,
+        0.193359375,
+        0.122039794921875,
+        0.078125
+      ]
+    },
+    {
+      "layer": 39,
+      "type": "full_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.1002197265625,
+        0.3544921875,
+        0.19219970703125,
+        0.0625,
+        0.17333984375,
+        0.1162109375,
+        0.078125
+      ]
+    },
+    {
+      "layer": 40,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.140625,
+        0.4013671875,
+        0.29541015625,
+        0.080078125,
+        0.203125,
+        0.1640625,
+        0.08203125
+      ]
+    },
+    {
+      "layer": 41,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.111328125,
+        0.4208984375,
+        0.419921875,
+        0.07080078125,
+        0.22216796875,
+        0.158203125,
+        0.125
+      ]
+    },
+    {
+      "layer": 42,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.58984375,
+        3.078125,
+        1.52850341796875,
+        0.171875,
+        1.22412109375,
+        0.5390625,
+        0.25
+      ]
+    },
+    {
+      "layer": 43,
+      "type": "full_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        1.298828125,
+        1.46875,
+        1.17578125,
+        0.072509765625,
+        0.2451171875,
+        0.5625,
+        0.09375
+      ]
+    },
+    {
+      "layer": 44,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.2423095703125,
+        0.8671875,
+        0.46875,
+        0.076171875,
+        0.34375,
+        0.255859375,
+        0.099609375
+      ]
+    },
+    {
+      "layer": 45,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.1513671875,
+        0.28515625,
+        0.21490478515625,
+        0.125,
+        0.18056488037109375,
+        0.2138671875,
+        0.06640625
+      ]
+    },
+    {
+      "layer": 46,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.4296875,
+        1.759765625,
+        0.20751953125,
+        0.09375,
+        1.185546875,
+        0.375,
+        0.0771484375
+      ]
+    },
+    {
+      "layer": 47,
+      "type": "full_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        1.25,
+        2.8125,
+        0.201171875,
+        0.24609375,
+        0.8125,
+        0.7109375,
+        0.25
+      ]
+    },
+    {
+      "layer": 48,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.46875,
+        2.3759765625,
+        1.01171875,
+        0.09765625,
+        0.234375,
+        0.779296875,
+        0.28125
+      ]
+    },
+    {
+      "layer": 49,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.19140625,
+        1.4296875,
+        0.2119140625,
+        0.28125,
+        0.25,
+        0.296875,
+        0.1484375
+      ]
+    },
+    {
+      "layer": 50,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        1.015625,
+        12.3125,
+        0.625,
+        0.126953125,
+        2.828125,
+        1.25,
+        0.1875
+      ]
+    },
+    {
+      "layer": 51,
+      "type": "full_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.53125,
+        5.5,
+        3.0625,
+        0.3740234375,
+        1.09375,
+        0.578125,
+        0.3125
+      ]
+    },
+    {
+      "layer": 52,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.23828125,
+        1.90625,
+        0.533203125,
+        0.12109375,
+        0.6484375,
+        0.2705078125,
+        0.21875
+      ]
+    },
+    {
+      "layer": 53,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.2216796875,
+        2.9521484375,
+        0.2470703125,
+        0.275390625,
+        0.5546875,
+        0.30859375,
+        0.095703125
+      ]
+    },
+    {
+      "layer": 54,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.453125,
+        2.42578125,
+        1.3125,
+        1.75,
+        6.625,
+        1.875,
+        0.5
+      ]
+    },
+    {
+      "layer": 55,
+      "type": "full_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.71875,
+        3.5703125,
+        1.10546875,
+        0.5625,
+        0.78125,
+        1.46875,
+        0.6875
+      ]
+    },
+    {
+      "layer": 56,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.3515625,
+        1.314453125,
+        0.5322265625,
+        0.1953125,
+        0.328125,
+        0.3046875,
+        0.09375
+      ]
+    },
+    {
+      "layer": 57,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.38671875,
+        1.66796875,
+        0.2890625,
+        0.15625,
+        0.2626953125,
+        0.4140625,
+        0.10986328125
+      ]
+    },
+    {
+      "layer": 58,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        8.5,
+        11.53125,
+        3.328125,
+        2.0,
+        3.75,
+        2.9140625,
+        1.5
+      ]
+    },
+    {
+      "layer": 59,
+      "type": "full_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        0.515625,
+        3.875,
+        0.625,
+        1.75,
+        0.84765625,
+        0.5,
+        0.21875
+      ]
+    },
+    {
+      "layer": 60,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        1.1875,
+        3.453125,
+        0.484375,
+        0.1826171875,
+        0.46875,
+        1.5,
+        0.1455078125
+      ]
+    },
+    {
+      "layer": 61,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        1.6875,
+        3.53125,
+        1.140625,
+        1.0,
+        1.4375,
+        2.0,
+        0.34375
+      ]
+    },
+    {
+      "layer": 62,
+      "type": "linear_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        1.25,
+        5.625,
+        1.25,
+        0.4375,
+        1.0625,
+        2.9453125,
+        0.3125
+      ]
+    },
+    {
+      "layer": 63,
+      "type": "full_attention",
+      "hidden_equal_bits": false,
+      "residual_equal_bits": false,
+      "hidden_max_abs_by_row": [
+        0.0,
+        0.0,
+        0.0,
+        4.0,
+        24.0,
+        15.0,
+        7.25,
+        10.75,
+        12.984375,
+        1.25
+      ]
+    }
+  ],
+  "logit_max_abs_by_row": [
+    0.0,
+    0.0,
+    0.0,
+    1.1015625,
+    6.125,
+    1.9296875,
+    1.515625,
+    1.90625,
+    1.28125,
+    0.578125
+  ],
+  "argmax_changed_rows": [
+    5
+  ],
+  "source_files": [
+    {
+      "path": "experiments/out-20260922T071945Z-e7b-r16-p072-commit-batch/e7b_001_p072_arm1_none-B_fs_ieee-all/logs/layer_hidden.pt",
+      "sha256": "93cc353a4b264974465a34e8faba8ce60d3195d9db6f5a89b65929d5fc92c7f8"
+    },
+    {
+      "path": "experiments/out-20260922T071945Z-e7b-r16-p072-commit-batch/e7b_001_p072_arm1_none-B_fs_ieee-all/logs/final_logits.pt",
+      "sha256": "ea8295d6a397df64a01f1559be521b1e00ec68c8cbcc03874f8ae94a334b5377"
+    },
+    {
+      "path": "experiments/out-20260922T071945Z-e7b-r16-p072-commit-batch/e7b_001_p072_arm1_none-B_fs_ieee-all/docker_inspect.json",
+      "sha256": "481aa90a2c5d232092bf4f0527f83fd396503b1cf04d9e6e02733c5db96b1086"
+    },
+    {
+      "path": "experiments/out-20260922T071945Z-e7b-r16-p072-commit-batch/e7b_001_p072_arm1_none-B_fs_ieee-all/e7b_spec.json",
+      "sha256": "8627e1b3a6602f1a9425667d8c00081c365da91b97870a30e23bec30642aece9"
+    },
+    {
+      "path": "experiments/out-20260922T081202Z-e2-j1prime-p072-kvpolicyA-b1/e7b_001_p072_arm1_none-B_fs_ieee-all/logs/layer_hidden.pt",
+      "sha256": "4e23716ddeef3ed4c7f92b5e9a2707dbfc4952261ab78729f6d52517d828652d"
+    },
+    {
+      "path": "experiments/out-20260922T081202Z-e2-j1prime-p072-kvpolicyA-b1/e7b_001_p072_arm1_none-B_fs_ieee-all/logs/final_logits.pt",
+      "sha256": "e021a13a6430afe2712ba0ecd82ca7817fded99b6b710bf5664064bd5a825aca"
+    },
+    {
+      "path": "experiments/out-20260922T081202Z-e2-j1prime-p072-kvpolicyA-b1/e7b_001_p072_arm1_none-B_fs_ieee-all/docker_inspect.json",
+      "sha256": "f29f43eb2389896847d2da61bdf6a77a175dc48d4bbea31154e58feb3e0a8d3e"
+    },
+    {
+      "path": "experiments/out-20260922T081202Z-e2-j1prime-p072-kvpolicyA-b1/e7b_001_p072_arm1_none-B_fs_ieee-all/e7b_spec.json",
+      "sha256": "8627e1b3a6602f1a9425667d8c00081c365da91b97870a30e23bec30642aece9"
+    }
+  ]
+}

@@ -1,0 +1,142 @@
+{
+ "cell": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_12_b2_native-11_B4_a1",
+ "arm": "native-11",
+ "checks": [
+  {
+   "check": "cmd_no_async_scheduling",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "check": "cmd_enforce_eager",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "check": "cmd_max_num_seqs",
+   "pass": true,
+   "detail": [
+    "4"
+   ]
+  },
+  {
+   "check": "cmd_prefix_cache_explicitly_off",
+   "pass": true,
+   "detail": "explicit --no-enable-prefix-caching required (empty flags are not proof)"
+  },
+  {
+   "check": "env_no_heavy_capture_metrics_or_traces",
+   "pass": true,
+   "detail": {
+    "FR10_METRICS": null,
+    "LUMO_MTP_DRAFT_TRACE_FILE": null,
+    "LUMO_TREE_PATH_LCP_LOG": null,
+    "LUMO_TREE_SAMPLER_DEBUG_LOG": null
+   }
+  },
+  {
+   "check": "cmd_gpu_memory_utilization_frozen",
+   "pass": true,
+   "detail": [
+    "0.6"
+   ]
+  },
+  {
+   "check": "cmd_max_model_len_frozen",
+   "pass": true,
+   "detail": [
+    "16384"
+   ]
+  },
+  {
+   "check": "env_spec_config_exactly_frozen",
+   "pass": true,
+   "detail": {
+    "container": "{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":11}",
+    "frozen": "{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":11}"
+   }
+  },
+  {
+   "check": "env_e1_recorder",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "check": "env_native_spec_config",
+   "pass": true,
+   "detail": {
+    "method": "qwen3_5_mtp",
+    "num_speculative_tokens": 11
+   }
+  },
+  {
+   "check": "env_native_no_fr13_feature_on",
+   "pass": true,
+   "detail": {
+    "fr_env_seen": {
+     "FR13_SFWD_GPU_TIMER": "1",
+     "FR10_DECODE_MODE_DEFAULT": "naive_mtp",
+     "FR10_ENABLE_TREE_GDN": "0"
+    },
+    "features_on": {}
+   }
+  },
+  {
+   "check": "env_native_decode_mode_naive_mtp_tree_gdn_off",
+   "pass": true,
+   "detail": {
+    "FR10_DECODE_MODE_DEFAULT": "naive_mtp",
+    "FR10_ENABLE_TREE_GDN": "0"
+   }
+  },
+  {
+   "check": "e1_shim_five_anchors",
+   "pass": true,
+   "detail": [
+    "F-forward-entry",
+    "B1-chain-break-nonpure",
+    "B2-chain-break-no-start",
+    "W-physical-step",
+    "R-output-boundary",
+    "file"
+   ]
+  },
+  {
+   "check": "recorder_sealed_no_errors",
+   "pass": true,
+   "detail": {
+    "n_events": 314,
+    "errors": 0,
+    "seal": {
+     "event": "run_close",
+     "reason": "atexit",
+     "n_events": 314,
+     "n_forwards": 104,
+     "n_physical_steps": 91,
+     "n_output_records": 104,
+     "sink_failed": false,
+     "t": 4264178.164511055,
+     "t_wall_utc": "2026-09-22T11:31:48Z",
+     "n": 314,
+     "errors": 0,
+     "sink_failures": 0
+    }
+   }
+  },
+  {
+   "check": "occupancy_never_exceeds_declared",
+   "pass": true,
+   "detail": {
+    "max_active": 4
+   }
+  },
+  {
+   "check": "log_native_mtp_no_fr13_engaged",
+   "pass": true,
+   "detail": {
+    "engaged_lines": 0
+   }
+  }
+ ],
+ "all_pass": true
+}

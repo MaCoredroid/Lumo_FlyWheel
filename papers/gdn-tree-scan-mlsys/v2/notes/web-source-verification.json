@@ -1,0 +1,100 @@
+[
+  {
+    "url": "https://pytorch.org/blog/hybrid-models-meet-sglang-more-than-full-attention/",
+    "final_url": "https://pytorch.org/blog/hybrid-models-meet-sglang-more-than-full-attention/",
+    "status": 200,
+    "title": "Hybrid Models Meet SGLang: More than Full Attention \u2013 PyTorch",
+    "verified_on": "2026-09-21"
+  },
+  {
+    "url": "https://lmsysorg.mintlify.app/cookbook/autoregressive/Qwen/Qwen3-Next",
+    "final_url": "https://lmsysorg.mintlify.app/cookbook/autoregressive/Qwen/Qwen3-Next",
+    "status": 200,
+    "title": "Qwen3-Next - SGLang Documentation",
+    "verified_on": "2026-09-21"
+  },
+  {
+    "url": "https://sgl-project.github.io/advanced_features/speculative_decoding.html",
+    "final_url": "https://sgl-project.github.io/advanced_features/speculative_decoding.html",
+    "status": 200,
+    "title": "Page moved \u2014 SGLang Documentation",
+    "verified_on": "2026-09-21"
+  },
+  {
+    "url": "https://github.com/sgl-project/sglang/releases",
+    "final_url": "https://github.com/sgl-project/sglang/releases",
+    "status": 200,
+    "title": "Releases \u00b7 sgl-project/sglang \u00b7 GitHub",
+    "verified_on": "2026-09-21"
+  },
+  {
+    "url": "https://github.com/sgl-project/sglang/issues/25587",
+    "final_url": "https://github.com/sgl-project/sglang/issues/25587",
+    "status": 200,
+    "title": "[Bug] [NPU] Hybrid-GDN MTP speculative decoding is not lossless on Ascend NPU \u00b7 Issue #25587 \u00b7 sgl-project/sglang \u00b7 GitHub",
+    "verified_on": "2026-09-21"
+  },
+  {
+    "url": "https://qwen.ai/blog?from=research.latest-advancements-list&id=4074cca80393150c248e508aa62983f9cb7d27cd",
+    "final_url": "https://qwen.ai/blog?from=research.latest-advancements-list&id=4074cca80393150c248e508aa62983f9cb7d27cd",
+    "status": 200,
+    "title": "Qwen",
+    "verified_on": "2026-09-21"
+  },
+  {
+    "url": "https://huggingface.co/Qwen/Qwen3.6-27B-FP8",
+    "final_url": "https://huggingface.co/Qwen/Qwen3.6-27B-FP8",
+    "status": 200,
+    "title": "Qwen/Qwen3.6-27B-FP8 \u00b7 Hugging Face",
+    "verified_on": "2026-09-21"
+  },
+  {
+    "url": "https://github.com/MaCoredroid/Lumo_FlyWheel/tree/55f55854328b37f262e97d57b5863d8fadd7ff76",
+    "final_url": "https://github.com/MaCoredroid/Lumo_FlyWheel/tree/55f55854328b37f262e97d57b5863d8fadd7ff76",
+    "status": 200,
+    "title": "GitHub - MaCoredroid/Lumo_FlyWheel at 55f55854328b37f262e97d57b5863d8fadd7ff76 \u00b7 GitHub",
+    "verified_on": "2026-09-21"
+  },
+  {
+    "url": "https://github.com/vllm-project/vllm/issues/47572",
+    "final_url": "https://github.com/vllm-project/vllm/issues/47572",
+    "status": 200,
+    "title": "[RFC]: ReplaySSM: cache SSM inputs instead of state for faster standard and speculative decode (Mamba2 + GDN) \u00b7 Issue #47572 \u00b7 vllm-project/vllm \u00b7 GitHub",
+    "verified_on": "2026-09-21"
+  },
+  {
+    "url": "https://macoredroid.github.io/Lumo_FlyWheel/stateless-tree.html",
+    "final_url": "https://macoredroid.github.io/Lumo_FlyWheel/stateless-tree.html",
+    "status": 200,
+    "title": "Stateless Tree Speculative Decoding: A Branched Verifier That Caches and Commits Like Native - Lumo FlyWheel Vol. V",
+    "verified_on": "2026-09-21"
+  },
+  {
+    "url": "https://macoredroid.github.io/Lumo_FlyWheel/spine-reorder.html",
+    "final_url": "https://macoredroid.github.io/Lumo_FlyWheel/spine-reorder.html",
+    "status": 200,
+    "title": "One Bit in the Last Place: Why a Wider Speculative Tree Accepted Fewer Tokens - Lumo FlyWheel Vol. VI",
+    "verified_on": "2026-09-21"
+  },
+  {
+    "url": "https://macoredroid.github.io/Lumo_FlyWheel/keep-or-replay.html",
+    "final_url": "https://macoredroid.github.io/Lumo_FlyWheel/keep-or-replay.html",
+    "status": 200,
+    "title": "Keep or Replay: Why a Speculative Tree That Accepts More Still Loses to the Linear Chain - Lumo FlyWheel Vol. VII",
+    "verified_on": "2026-09-21"
+  },
+  {
+    "url": "https://macoredroid.github.io/Lumo_FlyWheel/numbers-that-didnt-survive.html",
+    "final_url": "https://macoredroid.github.io/Lumo_FlyWheel/numbers-that-didnt-survive.html",
+    "status": 200,
+    "title": "Twenty-Seven Milliseconds, Shipped - Lumo FlyWheel Vol. X",
+    "verified_on": "2026-09-21"
+  },
+  {
+    "url": "https://macoredroid.github.io/Lumo_FlyWheel/every-lever.html",
+    "final_url": "https://macoredroid.github.io/Lumo_FlyWheel/every-lever.html",
+    "status": 200,
+    "title": "Every Lever We Pulled: A Speculative-Decoding Speed Campaign in Full - Lumo FlyWheel Vol. VIII",
+    "verified_on": "2026-09-21"
+  }
+]

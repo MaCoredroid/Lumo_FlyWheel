@@ -1,0 +1,83 @@
+{
+  "utc": "2026-09-22T00:12:21.670346+00:00",
+  "container_id": "f038a2c62caf5b99c7cc1c20dc480c9017760a02def609e801f2e9a92f63fc1a",
+  "image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+  "image_config": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+  "state": {
+    "Status": "running",
+    "Running": true,
+    "Pid": 2804650,
+    "OOMKilled": false,
+    "StartedAt": "2026-09-22T00:08:28.988516335Z"
+  },
+  "mounts": [
+    {
+      "Source": "/home/mark/lumo-paper-v2-20260921",
+      "Destination": "/workspace",
+      "RW": true
+    },
+    {
+      "Source": "/models",
+      "Destination": "/models",
+      "RW": false
+    },
+    {
+      "Source": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T000828Z-e7a-step2-captures-eager-fixed/capture_01_p072/logs",
+      "Destination": "/logs",
+      "RW": true
+    }
+  ],
+  "selected_env": {
+    "E7A_SHIM_PATH": "/workspace/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T000828Z-e7a-step2-captures-eager-fixed/capture_01_p072/script_snapshot/e7a_capture_shim.py",
+    "FR13_REPLAY_ROUTE": "1",
+    "FR10_TREE_GDN_CAPTURE_PAYLOAD": "/logs/tree_gdn_capture_payload.pt",
+    "FR10_TREE_GDN_CAPTURE_PAYLOAD_LAYER_PREFIX": "62",
+    "E7A_CAPTURE_SHIM": "1"
+  },
+  "records": {
+    "patcher_identity.txt": {
+      "sha256": "92c84e9d703d6383181d1fce4a1f00ee89f7a69e70dff1eedf4814d107f6662f",
+      "text": "worktree_sha256=a7f8f0943d1a13ac4742e824ea4e126c6ff341342aba677db5169e712c7e7281\nworktree_blob=98e5590324d9512c63fb50b6a7e718ff9cd95e6c\nHEAD_blob=48d20e1a6ef2a2dc7b598d04875cf6db445ccf6a\ndiffers_from_HEAD=yes\n"
+    },
+    "patcher_worktree_vs_HEAD.diff": {
+      "sha256": "02e31108a22df9b817424b5dbdc92c2c8c92878ffa294fb346d59a3b3cda373d",
+      "text": "diff --git a/scripts/fr10_phase4_patch_vllm_tree_gdn.py b/scripts/fr10_phase4_patch_vllm_tree_gdn.py\nindex 48d20e1a6..98e559032 100644\n--- a/scripts/fr10_phase4_patch_vllm_tree_gdn.py\n+++ b/scripts/fr10_phase4_patch_vllm_tree_gdn.py\n@@ -26276,12 +26276,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:\n         \"import os\\n\" + _FR13_FIXED32_TSR_NONPREFIX_SOURCE,\n         1,\n     )\n-    if _FR13_FIXED32_MODE:\n-        text = text.replace(\n-            \"import os\\n\",\n-            f\"import os\\n_FR13_FIXED32_MODE = {_FR13_FIXED32_MODE!r}\\n\",\n-            1,\n-        )\n+    # E7A-FIX (2026-09-21): emit the drafter constant UNCONDITIONALLY. The emitted propose body references\n+    # _FR13_FIXED32_MODE on every route; HEAD emitted its definition only when FR13_FIXED32_MODE was set, so the\n+    # plain tree_mtp route raised NameError on the first proposal. The value is the patcher's own (env-unset -> \"\").\n+    text = text.replace(\n+        \"import os\\n\",\n+        f\"import os\\n_FR13_FIXED32_MODE = {_FR13_FIXED32_MODE!r}\\n\",\n+        1,\n+    )\n \n     tree_parse_old = \"\"\"        # Parse the speculative token tree.\n         spec_token_tree = self.speculative_config.speculative_token_tree\n"
+    },
+    "image_identity.txt": {
+      "sha256": "6bce4d8f72ec7a4ad4a501c6ab7fe821e9b5eae1f02fa96347dc4f37d3a74bde",
+      "text": "image_digest=vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776\nsha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc arm64\n"
+    },
+    "logs/served_model.json": {
+      "sha256": "c30f6acd65dd231bb00403c61fc0b163842aa5e21c13d18e42306904ce52d61e",
+      "text": "{\"schema\":\"fr13.served_model.v1\",\"path\":\"/models/qwen3.6-27b-fp8\",\"name\":\"qwen3.6-27b\",\"checkpoint_identity\":\"d053823784d5db6f1dbc255bd9ef041e3825efbcfa10ff3e32011671e979c578\",\"overridden\":\"false\",\"launcher\":\"fr10_launch_speed_server.sh\"}\n"
+    },
+    "logs/repo_identity.json": {
+      "sha256": "6fff983ff3231d9de420787212253628a8663be0f3c8c15af5a4223ebc499c4f",
+      "text": "{\"schema\":\"fr13.repo_identity.v1\",\"repo\":\"/home/mark/lumo-paper-v2-20260921\",\"head\":\"984f613d7885d9bf7898866827552b68a3199d0c\",\"origin\":\"caller-override\",\"script_dir\":\"/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T000828Z-e7a-step2-captures-eager-fixed/capture_01_p072/script_snapshot\",\"launcher\":\"fr10_launch_speed_server.sh\"}\n"
+    },
+    "logs/e7a_capture_shim.json": {
+      "sha256": "441657ebf80d384cd337294c35610184585ebd740d80e66ffb344356fce12016",
+      "text": "{\n \"schema\": \"e7a.capture_shim.v1\",\n \"applied_utc\": \"2026-09-22T00:08:34Z\",\n \"target\": \"/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py\",\n \"sha256_before\": \"723974c703d1ad1545399b78526e5d50ae7f7f362e434bad384a0a3327595b28\",\n \"sha256_after\": \"9af4fd3305d71840dd937e081c4d5fff615e6687409b4e7995f75d07439420fc\",\n \"edits\": [\n  {\n   \"anchor\": \"guard\",\n   \"line\": 13727\n  },\n  {\n   \"anchor\": \"serving_state\",\n   \"line\": 15165\n  }\n ],\n \"shim_sha256\": \"1d1b511acbe8b5ab218c016d61a89328fdd2cd30907e54efa25b6bff738d788b\",\n \"scope\": \"capture-only guard + None-safe serving_state; serving arithmetic untouched\"\n}"
+    },
+    "driver_trace.txt": {
+      "sha256": "0bc111316b62ec5252506a0bab6afd40593d6dfb9b24faf49383b53ac14cefc4",
+      "text": "start_utc=2026-09-22T00:08:28Z cmd=capture prefix=p072 layer=62\nguard_pid=2804846 container_id=f038a2c62caf5b99c7cc1c20dc480c9017760a02def609e801f2e9a92f63fc1a container_name=e7a-capture-000828 alive=true utc=2026-09-22T00:08:34Z\n"
+    },
+    "health.txt": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "text": ""
+    }
+  },
+  "snapshot_hash_check": "capture_loop.v3.sh: OK\ne7a_capture_launch.v2.sh: OK\ne7a_capture_shim.py: OK\ne7a_native_launch.v2.sh: OK\ngpu_oom_guard.sh: OK\ninspect_capture.py: OK\nprefix_pool.py: OK\nserve_drivers.v3.sh: OK",
+  "loaded_source_hashes": {
+    "rc": 0,
+    "output": "{\"/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/eagle.py\": \"aa022e2a1fc7993d0f7d4223f8366471e02e3c0e2740934c7a9490f7b45b01d7\", \"/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py\": \"9af4fd3305d71840dd937e081c4d5fff615e6687409b4e7995f75d07439420fc\", \"/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py\": \"5be4ad43409da82b63bfd0177926467e9a2b59da553ee6dd04d3130a5d77b12f\"}",
+    "stderr": ""
+  },
+  "gpu_pid_chain": [
+    2805378,
+    2804650,
+    2804627
+  ],
+  "compute_belongs_to_container": true
+}

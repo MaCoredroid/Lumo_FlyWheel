@@ -1,0 +1,136 @@
+{
+ "cell": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_05_b1_tree_B1_a1",
+ "arm": "tree",
+ "checks": [
+  {
+   "check": "cmd_no_async_scheduling",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "check": "cmd_enforce_eager",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "check": "cmd_max_num_seqs",
+   "pass": true,
+   "detail": [
+    "1"
+   ]
+  },
+  {
+   "check": "cmd_prefix_cache_explicitly_off",
+   "pass": true,
+   "detail": "explicit --no-enable-prefix-caching required (empty flags are not proof)"
+  },
+  {
+   "check": "env_no_heavy_capture_metrics_or_traces",
+   "pass": true,
+   "detail": {
+    "FR10_METRICS": "0",
+    "LUMO_MTP_DRAFT_TRACE_FILE": "",
+    "LUMO_TREE_PATH_LCP_LOG": "",
+    "LUMO_TREE_SAMPLER_DEBUG_LOG": ""
+   }
+  },
+  {
+   "check": "cmd_gpu_memory_utilization_frozen",
+   "pass": true,
+   "detail": [
+    "0.6"
+   ]
+  },
+  {
+   "check": "cmd_max_model_len_frozen",
+   "pass": true,
+   "detail": [
+    "16384"
+   ]
+  },
+  {
+   "check": "env_spec_config_exactly_frozen",
+   "pass": true,
+   "detail": {
+    "container": "{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":9,\"speculative_token_tree\":\"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]\"}",
+    "frozen": "{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":9,\"speculative_token_tree\":\"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]\"}"
+   }
+  },
+  {
+   "check": "env_e1_recorder",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "check": "env_kv_policy_B_exact",
+   "pass": true,
+   "detail": {
+    "FR13_ATTN_KV_REMAP": "1",
+    "FR13_SLOT_REORDER": "0",
+    "FR13_KV_REMAP_SYNCFREE": "1"
+   }
+  },
+  {
+   "check": "env_tree_route_flags",
+   "pass": true,
+   "detail": {
+    "FR13_REPLAY_ROUTE": "1",
+    "FR13_EAGER_PACK": "1",
+    "FR13_TREE_CONV_FUSED": "1",
+    "FR13_TREE_RUNROW_INIT": null
+   }
+  },
+  {
+   "check": "env_no_capture_hooks",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "check": "e1_shim_five_anchors",
+   "pass": true,
+   "detail": [
+    "F-forward-entry",
+    "B1-chain-break-nonpure",
+    "B2-chain-break-no-start",
+    "W-physical-step",
+    "R-output-boundary",
+    "file"
+   ]
+  },
+  {
+   "check": "recorder_sealed_no_errors",
+   "pass": true,
+   "detail": {
+    "n_events": 1082,
+    "errors": 0,
+    "seal": {
+     "event": "run_close",
+     "reason": "atexit",
+     "n_events": 1082,
+     "n_forwards": 360,
+     "n_physical_steps": 346,
+     "n_output_records": 360,
+     "sink_failed": false,
+     "t": 4261118.913852424,
+     "t_wall_utc": "2026-09-22T10:40:49Z",
+     "n": 1082,
+     "errors": 0,
+     "sink_failures": 0
+    }
+   }
+  },
+  {
+   "check": "occupancy_never_exceeds_declared",
+   "pass": true,
+   "detail": {
+    "max_active": 1
+   }
+  },
+  {
+   "check": "log_kv_remap_engaged_no_reorder",
+   "pass": true,
+   "detail": null
+  }
+ ],
+ "all_pass": true
+}

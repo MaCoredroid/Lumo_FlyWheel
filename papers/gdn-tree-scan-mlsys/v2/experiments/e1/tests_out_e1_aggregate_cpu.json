@@ -1,0 +1,75 @@
+{
+  "checks": {
+    "full_campaign_means_and_paired_bootstrap": {
+      "pass": true,
+      "detail": {
+        "paired_block_differences": [
+          0.5880000000000001,
+          0.6000000000000001,
+          0.6120000000000001
+        ],
+        "mean_difference": 0.6000000000000001,
+        "bootstrap_95pct_interval": [
+          0.5880000000000001,
+          0.6120000000000001
+        ],
+        "baseline_native5_mean_rate": 3.0,
+        "precision_half_width_over_baseline": 0.0040000000000000036,
+        "target": 0.1,
+        "status": "within target"
+      }
+    },
+    "all_18_cells_listed": {
+      "pass": true,
+      "detail": null
+    },
+    "insufficient_block_makes_tree_B4_contrasts_not_estimable_B1_unaffected": {
+      "pass": true,
+      "detail": null
+    },
+    "valid_second_attempt_used_after_invalid_first": {
+      "pass": true,
+      "detail": null
+    },
+    "deterministic_same_seed": {
+      "pass": true,
+      "detail": null
+    },
+    "unsealed_valid_123_refused_not_counted": {
+      "pass": true,
+      "detail": {
+        "index": 1,
+        "block": 1,
+        "arm": "native-5",
+        "batch": "B1",
+        "attempts": [
+          "cell_01_b1_native-5_B1_a1"
+        ],
+        "status": "FAILED_ATTEMPT_UNSEALED (refused: no terminal seal)",
+        "rate": null,
+        "diag": null,
+        "support": null,
+        "attempt": "cell_01_b1_native-5_B1_a1"
+      }
+    },
+    "sealed_invalid_after_final_audit_not_counted_preliminary_preserved": {
+      "pass": true,
+      "detail": {
+        "index": 1,
+        "block": 1,
+        "arm": "native-5",
+        "batch": "B1",
+        "attempts": [
+          "cell_01_b1_native-5_B1_a1"
+        ],
+        "status": "INVALID",
+        "rate": null,
+        "diag": null,
+        "support": null,
+        "attempt": "cell_01_b1_native-5_B1_a1",
+        "terminal_seal_utc": "x"
+      }
+    }
+  },
+  "all_pass": true
+}

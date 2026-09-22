@@ -1,0 +1,5 @@
+recorded_utc=2026-09-21T23:08:24Z
+container_name=e7a-230026
+pid=2763037
+descendants=
+method=docker inspect .State.Pid + ps --ppid descendants; re-sampled every 5 s while running

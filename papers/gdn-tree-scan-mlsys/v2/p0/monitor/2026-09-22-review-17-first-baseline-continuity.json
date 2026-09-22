@@ -1,0 +1,118 @@
+{
+  "utc": "2026-09-22T07:26:16.015330+00:00",
+  "run": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T071945Z-e7b-r16-p072-commit-batch/e7b_001_p072_arm1_none-B_fs_ieee-all",
+  "runtime_sha256": "9c3a6d94b2e1c6ccb07e4aedbbc29d812b9cbf4d102789b5f8a262b04b99b5ca",
+  "n_operand_steps": 13,
+  "n_state_steps": 13,
+  "transitions": [
+    {
+      "step": 1,
+      "accepted_len_prev": 1,
+      "consumed_row": 21,
+      "published_row": 21,
+      "shape_equal": true,
+      "bitwise_equal": true,
+      "max_abs_delta": 0.0
+    },
+    {
+      "step": 2,
+      "accepted_len_prev": 3,
+      "consumed_row": 21,
+      "published_row": 21,
+      "shape_equal": true,
+      "bitwise_equal": true,
+      "max_abs_delta": 0.0
+    },
+    {
+      "step": 3,
+      "accepted_len_prev": 1,
+      "consumed_row": 21,
+      "published_row": 21,
+      "shape_equal": true,
+      "bitwise_equal": true,
+      "max_abs_delta": 0.0
+    },
+    {
+      "step": 4,
+      "accepted_len_prev": 0,
+      "consumed_row": 21,
+      "published_row": 21,
+      "shape_equal": true,
+      "bitwise_equal": true,
+      "max_abs_delta": 0.0
+    },
+    {
+      "step": 5,
+      "accepted_len_prev": 3,
+      "consumed_row": 21,
+      "published_row": 21,
+      "shape_equal": true,
+      "bitwise_equal": true,
+      "max_abs_delta": 0.0
+    },
+    {
+      "step": 6,
+      "accepted_len_prev": 3,
+      "consumed_row": 21,
+      "published_row": 21,
+      "shape_equal": true,
+      "bitwise_equal": true,
+      "max_abs_delta": 0.0
+    },
+    {
+      "step": 7,
+      "accepted_len_prev": 1,
+      "consumed_row": 21,
+      "published_row": 21,
+      "shape_equal": true,
+      "bitwise_equal": true,
+      "max_abs_delta": 0.0
+    },
+    {
+      "step": 8,
+      "accepted_len_prev": 2,
+      "consumed_row": 21,
+      "published_row": 21,
+      "shape_equal": true,
+      "bitwise_equal": true,
+      "max_abs_delta": 0.0
+    },
+    {
+      "step": 9,
+      "accepted_len_prev": 0,
+      "consumed_row": 21,
+      "published_row": 21,
+      "shape_equal": true,
+      "bitwise_equal": true,
+      "max_abs_delta": 0.0
+    },
+    {
+      "step": 10,
+      "accepted_len_prev": 0,
+      "consumed_row": 21,
+      "published_row": 21,
+      "shape_equal": true,
+      "bitwise_equal": true,
+      "max_abs_delta": 0.0
+    },
+    {
+      "step": 11,
+      "accepted_len_prev": 4,
+      "consumed_row": 21,
+      "published_row": 21,
+      "shape_equal": true,
+      "bitwise_equal": true,
+      "max_abs_delta": 0.0
+    },
+    {
+      "step": 12,
+      "accepted_len_prev": 5,
+      "consumed_row": 21,
+      "published_row": 21,
+      "shape_equal": true,
+      "bitwise_equal": true,
+      "max_abs_delta": 0.0
+    }
+  ],
+  "scope": "authoritative state continuity of instrumented baseline, not full token/conv/KV qualification"
+}

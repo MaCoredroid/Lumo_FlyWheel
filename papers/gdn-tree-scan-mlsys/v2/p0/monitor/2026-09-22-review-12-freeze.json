@@ -1,0 +1,225 @@
+{
+  "freeze_path": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/e7a/PILOT_FREEZE.json",
+  "freeze_sha256": "21f3eb5c3f9ce52aa2492d62c5be4dbc0f3d0df236aec717f70420c2ab2b36ce",
+  "checks": {
+    "freeze_record_parses": {
+      "pass": true,
+      "detail": null
+    },
+    "schema": {
+      "pass": true,
+      "detail": "e7a.pilot_freeze.v1"
+    },
+    "status_frozen": {
+      "pass": true,
+      "detail": "FROZEN"
+    },
+    "frozen_utc_iso": {
+      "pass": true,
+      "detail": "2026-09-22T01:36:16Z"
+    },
+    "eight_unique_pilot_ids_match_frozen_set": {
+      "pass": true,
+      "detail": {
+        "ids": [
+          "p072",
+          "p017",
+          "p015",
+          "p021",
+          "p085",
+          "p095",
+          "p058",
+          "p083"
+        ],
+        "frozen": [
+          "p072",
+          "p017",
+          "p015",
+          "p021",
+          "p085",
+          "p095",
+          "p058",
+          "p083"
+        ]
+      }
+    },
+    "evidence_p072": {
+      "pass": true,
+      "detail": {
+        "provenance_sha_match": true,
+        "all_pass": true,
+        "payload_sha_match": true,
+        "inspector_match": true,
+        "prefix_match": true
+      }
+    },
+    "evidence_p017": {
+      "pass": true,
+      "detail": {
+        "provenance_sha_match": true,
+        "all_pass": true,
+        "payload_sha_match": true,
+        "inspector_match": true,
+        "prefix_match": true
+      }
+    },
+    "evidence_p015": {
+      "pass": true,
+      "detail": {
+        "provenance_sha_match": true,
+        "all_pass": true,
+        "payload_sha_match": true,
+        "inspector_match": true,
+        "prefix_match": true
+      }
+    },
+    "evidence_p021": {
+      "pass": true,
+      "detail": {
+        "provenance_sha_match": true,
+        "all_pass": true,
+        "payload_sha_match": true,
+        "inspector_match": true,
+        "prefix_match": true
+      }
+    },
+    "evidence_p085": {
+      "pass": true,
+      "detail": {
+        "provenance_sha_match": true,
+        "all_pass": true,
+        "payload_sha_match": true,
+        "inspector_match": true,
+        "prefix_match": true
+      }
+    },
+    "evidence_p095": {
+      "pass": true,
+      "detail": {
+        "provenance_sha_match": true,
+        "all_pass": true,
+        "payload_sha_match": true,
+        "inspector_match": true,
+        "prefix_match": true
+      }
+    },
+    "evidence_p058": {
+      "pass": true,
+      "detail": {
+        "provenance_sha_match": true,
+        "all_pass": true,
+        "payload_sha_match": true,
+        "inspector_match": true,
+        "prefix_match": true
+      }
+    },
+    "evidence_p083": {
+      "pass": true,
+      "detail": {
+        "provenance_sha_match": true,
+        "all_pass": true,
+        "payload_sha_match": true,
+        "inspector_match": true,
+        "prefix_match": true
+      }
+    },
+    "single_inspector_version_across_pilot": {
+      "pass": true,
+      "detail": [
+        "59c5b2b92d0d1387"
+      ]
+    },
+    "harness_summary_hash_bound_and_covers_pilot": {
+      "pass": true,
+      "detail": {
+        "sha_match": true,
+        "fresh_in_summary": 8,
+        "pilot_covered": 8,
+        "n_verified_fresh": 8,
+        "n_invalid_cells": 0
+      }
+    },
+    "candidate_selection_filled": {
+      "pass": true,
+      "detail": {
+        "candidates": [
+          "A_prod: production sequential scan (fp32 store; deployed bf16 store reported)",
+          "B_fs[ieee]: ancestor-masked triangular solve (forward substitution) + compact reconstruction, fp32 ieee (bf16-store variant reported)",
+          "C_nm[ieee]: Bole finite-Neumann (d terms) + compact reconstruction, fp32 ieee (bf16-store variant reported)"
+        ],
+        "excluded": [
+          "B_fs[tf32], C_nm[tf32]: 3\u20134 orders worse on all 8 pilot sets (out32 vs oracle max 1.34e-4 vs 4.45e-8); reported as ablation only, never promoted",
+          "A_legacy (June-8 vendored scan export skips the root update; source-inspected), B_legacyWY bf16-bnd: excluded as before"
+        ],
+        "rationale": "Pilot (8 VERIFIED-FRESH sets, out-20260922T012554Z-e7a-fresh-pilot): A_prod fp32 out bit-identical to the pinned native spec-update kernel on 8/8 (integer view, fp32 and bf16 stores); B/C fp32-ieee out vs fp64 oracle \u2264 4.447e-08 (A \u2264 2.724e-08); compact-commit state vs oracle \u2264 7.867e-07; bf16-store B/C agreement with native \u2265 0.999788; sibling-reorder and padding controls bitwise-invariant on 8/8; replay repeat-launch bitwise-equal on 8/8. Served output (live server, tree step 1) byte-identical to the production scan and native spec-update bf16 outputs on 8/8 (fresh-pilot-v2)."
+      }
+    },
+    "tolerances_filled_finite_nonneg_rule_enforced": {
+      "pass": true,
+      "detail": {
+        "scan_fp32_out_vs_native_specupdate_bitwise": {
+          "pilot_max": 0,
+          "tolerance": 0,
+          "rule": "0 ULP, integer view (bit-identical), production scan fp32 store vs pinned native spec-update kernel; pilot 8/8 bitwise_frac = 1.0"
+        },
+        "scan_bf16_out_vs_native_specupdate_bitwise": {
+          "pilot_max": 0,
+          "tolerance": 0,
+          "rule": "0 ULP, integer view, deployed bf16 store vs native spec-update bf16 store; pilot 8/8 bitwise_frac = 1.0"
+        },
+        "fp32_ieee_realizations_out_vs_fp64_oracle_max_abs": {
+          "pilot_max": 4.44652720754668e-08,
+          "margin": 2.0,
+          "tolerance": 8.89305441509336e-08
+        },
+        "compact_commit_state_vs_fp64_oracle_max_abs": {
+          "pilot_max": 7.867071634137801e-07,
+          "margin": 2.0,
+          "tolerance": 1.5734143268275602e-06
+        },
+        "compact_commit_state_vs_native_specupdate_max_abs": {
+          "pilot_max": 1.9073486328125e-06,
+          "margin": 2.0,
+          "tolerance": 3.814697265625e-06
+        },
+        "replay_state_vs_fp64_oracle_max_abs": {
+          "pilot_max": 1.2969487670488888e-06,
+          "margin": 2.0,
+          "tolerance": 2.5938975340977777e-06
+        }
+      }
+    },
+    "decision_change_criteria_filled": {
+      "pass": true,
+      "detail": [
+        "any confirmation set where the production-scan fp32 or bf16 store is not bit-identical (integer view) to the pinned native spec-update kernel",
+        "any confirmation set where the payload's served bf16 output is not byte-identical to the production scan bf16 output (and to the native spec-update bf16 output) on the captured operands",
+        "any confirmation set where a candidate's fp32-ieee out vs fp64 oracle, compact-commit state vs oracle/native, or replay state exceeds its frozen tolerance",
+        "bf16-store B/C disagreement with native above the frozen class (agreement floor 0.999683) on any confirmation set",
+        "served bf16 output vs fp64 oracle > 1 ULP16 on significant elements or above the frozen max-abs class on any confirmation set"
+      ]
+    },
+    "timing_precision_filled": {
+      "pass": true,
+      "detail": {
+        "relative_half_width_max": 0.05,
+        "probe_drift_max": 0.05,
+        "basis": "half-width = (p90 - p10) / (2 * median) of CUDA-event sync timings, iters 200 / warmup 20, per set. Applies to the VERIFY-class kernels (A_prod scan out16, B_fs/C_nm verify out16, native spec-update chain): pilot max 0.0623 (met). COMMIT-class kernels (~18\u2013105 us: B/C compact commit, A replay commit, native one-token) are REPORTED, not gated: pilot half-width max 0.216 on 3/8 sets exceeded 0.05 because of sub-20-us jitter; confirmation rows above 0.05 are labeled imprecise. Probe drift pilot max 0.0370. Timing remains a shared-device diagnostic; attribution label required per run."
+      }
+    },
+    "cost_variance_filled_finite_nonneg": {
+      "pass": true,
+      "detail": {
+        "boot_health_s": 320.0,
+        "request_s": 14.794774651527405,
+        "driver_cycle_s": 357.0,
+        "payload_bytes": 3607409.0
+      }
+    },
+    "resampling_unit_is_prefix": {
+      "pass": true,
+      "detail": "frozen prefix (one boot, one request, one one-shot payload per prefix; never layer/file/row)"
+    }
+  },
+  "all_pass": true
+}

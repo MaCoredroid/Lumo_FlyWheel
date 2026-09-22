@@ -1,0 +1,7 @@
+{
+  "scope": "Parent verifies all six transferred runtime source copies against pre-data campaign identity hashes; final E1 archive pending closed campaign.",
+  "source_map_sha256": "b428cdb175e82887df79dd93887785be72b712f7bcce777cc5e716cf7e815ba3",
+  "verified_files": 6,
+  "remote_copy_utc": "2026-09-22T11:50:14Z",
+  "parent_recorded_utc": "2026-09-22T11:51:16.216417+00:00"
+}

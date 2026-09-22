@@ -1,0 +1,48 @@
+{
+  "utc": "2026-09-22T00:56:43.077344+00:00",
+  "id": "e6086017dd2d49915d1e5606406384b471bdc3b4f0a4f4a7c6f3d02923dee10d",
+  "image": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+  "status": "running",
+  "container_pid": 2845465,
+  "started": "2026-09-22T00:51:55.667777746Z",
+  "mounts": [
+    {
+      "Source": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T003357Z-e7a-step2-captures-v4-pilot2to8/capture_05_p085/logs",
+      "Destination": "/logs",
+      "RW": true
+    },
+    {
+      "Source": "/home/mark/lumo-paper-v2-20260921",
+      "Destination": "/workspace",
+      "RW": true
+    },
+    {
+      "Source": "/models",
+      "Destination": "/models",
+      "RW": false
+    }
+  ],
+  "env": {
+    "E7A_CAPTURE_SHIM": "1",
+    "FR10_TREE_GDN_CAPTURE_PAYLOAD_LAYER_PREFIX": "language_model.model.layers.62.linear_attn",
+    "FR13_REPLAY_ROUTE": "1",
+    "E7A_SHIM_PATH": "/workspace/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T003357Z-e7a-step2-captures-v4-pilot2to8/capture_05_p085/script_snapshot/e7a_capture_shim.py",
+    "FR10_TREE_GDN_CAPTURE_PAYLOAD_NUM_TOKENS": "10"
+  },
+  "patcher_identity.txt": "worktree_sha256=a7f8f0943d1a13ac4742e824ea4e126c6ff341342aba677db5169e712c7e7281\nworktree_blob=98e5590324d9512c63fb50b6a7e718ff9cd95e6c\nHEAD_blob=48d20e1a6ef2a2dc7b598d04875cf6db445ccf6a\ndiffers_from_HEAD=yes\n",
+  "logs/served_model.json": "{\"schema\":\"fr13.served_model.v1\",\"path\":\"/models/qwen3.6-27b-fp8\",\"name\":\"qwen3.6-27b\",\"checkpoint_identity\":\"d053823784d5db6f1dbc255bd9ef041e3825efbcfa10ff3e32011671e979c578\",\"overridden\":\"false\",\"launcher\":\"fr10_launch_speed_server.sh\"}\n",
+  "driver_trace.txt": "start_utc=2026-09-22T00:51:47Z cmd=capture prefix=p085 layer=language_model.model.layers.62.linear_attn\nguard_pid=2845643 container_id=e6086017dd2d49915d1e5606406384b471bdc3b4f0a4f4a7c6f3d02923dee10d container_name=e7a-capture-005147 alive=true utc=2026-09-22T00:52:01Z\n",
+  "health.txt": "",
+  "snapshot_hashcheck": "capture_loop.v4.sh: OK\ne7a_capture_launch.v2.sh: OK\ne7a_capture_shim.py: OK\ne7a_native_launch.v2.sh: OK\ngpu_oom_guard.sh: OK\ninspect_capture.py: OK\nprefix_pool.py: OK\nserve_drivers.v4.sh: OK\ntest_inspector_controls.py: OK\n",
+  "loaded_sources": {
+    "rc": 0,
+    "stdout": "{\"/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/eagle.py\": \"aa022e2a1fc7993d0f7d4223f8366471e02e3c0e2740934c7a9490f7b45b01d7\", \"/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py\": \"9af4fd3305d71840dd937e081c4d5fff615e6687409b4e7995f75d07439420fc\", \"/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py\": \"5be4ad43409da82b63bfd0177926467e9a2b59da553ee6dd04d3130a5d77b12f\"}\n",
+    "stderr": ""
+  },
+  "gpu_pid_chain": [
+    2846215,
+    2845465,
+    2845442
+  ],
+  "owned_gpu_confirmed": true
+}

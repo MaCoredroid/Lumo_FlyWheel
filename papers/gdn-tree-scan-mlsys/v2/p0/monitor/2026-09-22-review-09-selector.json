@@ -1,0 +1,98 @@
+{
+  "checks": {
+    "hook_selector_is_exact_equality_with_str_self_prefix": {
+      "pass": true,
+      "detail": null
+    },
+    "config_layer_62_is_linear_attention": {
+      "pass": true,
+      "detail": {
+        "n_layers": 64,
+        "n_linear": 48
+      }
+    },
+    "runtime_printed_naming_scheme_matches": {
+      "pass": true,
+      "detail": {
+        "printed_layers": [
+          "0",
+          "1",
+          "2",
+          "4",
+          "5",
+          "6",
+          "8",
+          "9",
+          "10",
+          "12",
+          "13",
+          "14",
+          "16",
+          "17",
+          "18",
+          "20",
+          "21",
+          "22",
+          "24",
+          "25",
+          "26",
+          "28",
+          "29",
+          "30",
+          "32",
+          "33",
+          "34",
+          "36",
+          "37",
+          "38",
+          "40",
+          "41",
+          "42",
+          "44",
+          "45",
+          "46",
+          "48",
+          "49",
+          "50",
+          "52",
+          "53",
+          "54",
+          "56",
+          "57",
+          "58",
+          "60",
+          "61",
+          "62"
+        ]
+      }
+    },
+    "bare_number_selector_fires_on_no_layer": {
+      "pass": true,
+      "detail": []
+    },
+    "full_prefix_selector_fires_on_exactly_layer_62": {
+      "pass": true,
+      "detail": null
+    },
+    "driver_v4_refuses_bare_number": {
+      "pass": true,
+      "detail": "selector '62' is not a full module prefix"
+    },
+    "driver_v4_accepts_full_prefix_linear_layer": {
+      "pass": true,
+      "detail": "selector_ok=language_model.model.layers.62.linear_attn layer_index=62 layer_type=linear_attention num_layers=64 n_linear=48"
+    },
+    "driver_v4_refuses_full_attention_layer_63": {
+      "pass": true,
+      "detail": "layer 63 is full_attention, not linear_attention"
+    },
+    "num_tokens_filter_10_contains_real_tree_n": {
+      "pass": true,
+      "detail": {
+        "records": 12
+      }
+    }
+  },
+  "patcher_sha256": "a7f8f0943d1a13ac4742e824ea4e126c6ff341342aba677db5169e712c7e7281",
+  "all_pass": true
+}

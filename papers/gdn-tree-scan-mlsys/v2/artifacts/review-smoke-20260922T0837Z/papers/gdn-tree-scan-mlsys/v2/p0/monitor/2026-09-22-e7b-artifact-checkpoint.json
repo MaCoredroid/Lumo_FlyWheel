@@ -1,0 +1,9 @@
+{
+  "checked_utc": "2026-09-22T08:07:50.055781+00:00",
+  "archive": "e7b-diagnostics-20260922T0801Z.tar.gz",
+  "archive_sha256": "c573b5064d944547df280e314520a97dd0c10678fb877c8d75b3a898d548ad05",
+  "archive_bytes": 2179735658,
+  "verified_files": 727,
+  "scope": "Private one-prefix verifier/commit diagnostics; KV remap disabled; not full-route qualification",
+  "verification": "Every regular member streamed and checked against its size/SHA256; no extraction or inference"
+}

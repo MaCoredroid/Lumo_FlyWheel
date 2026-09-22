@@ -1,0 +1,49 @@
+{
+  "definition": "Rate is (global accepted/global draft events + 1) / (retained pure-wall seconds/retained wall events). Different populations; not observed emitted-token throughput.",
+  "residual_definition": "Wall cost minus normalized component estimates with differing supports; not measured host time.",
+  "legacy_fields": "committed means accepted+1; tps is a proxy; event_ms is retained pure-wall cost; alignment is not evidence of aligned populations.",
+  "arms": [
+    {
+      "arm": "native5",
+      "global_draft_events": 115663.0,
+      "global_accepted_tokens": 395775.0,
+      "global_generation_tokens": 510460.0,
+      "pure_forward_events": 89030.0,
+      "pure_forward_steps": 31923.0,
+      "retained_wall_events": 85805.0,
+      "retained_wall_steps": 30703.0,
+      "drafter_spans": 42824.0,
+      "committer_spans": 42550.0,
+      "wall_fraction_of_global_events": 0.7418534881509212,
+      "structural_minus_generation_tokens": 978.0
+    },
+    {
+      "arm": "native11",
+      "global_draft_events": 113620.0,
+      "global_accepted_tokens": 559400.0,
+      "global_generation_tokens": 671097.0,
+      "pure_forward_events": 72168.0,
+      "pure_forward_steps": 26293.0,
+      "retained_wall_events": 69077.0,
+      "retained_wall_steps": 25097.0,
+      "drafter_spans": 44366.0,
+      "committer_spans": 43923.0,
+      "wall_fraction_of_global_events": 0.6079651469811653,
+      "structural_minus_generation_tokens": 1923.0
+    },
+    {
+      "arm": "tree",
+      "global_draft_events": 103456.0,
+      "global_accepted_tokens": 443372.0,
+      "global_generation_tokens": 544713.0,
+      "pure_forward_events": 67525.0,
+      "pure_forward_steps": 24129.0,
+      "retained_wall_events": 65488.0,
+      "retained_wall_steps": 23363.0,
+      "drafter_spans": 39771.0,
+      "committer_spans": 39339.0,
+      "wall_fraction_of_global_events": 0.6330034024126199,
+      "structural_minus_generation_tokens": 2115.0
+    }
+  ]
+}

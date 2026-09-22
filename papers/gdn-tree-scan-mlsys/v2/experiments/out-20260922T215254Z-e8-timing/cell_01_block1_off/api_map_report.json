@@ -1,0 +1,28 @@
+{
+ "domains": {
+  "cmpl-91d492b415607e7d": "token_ids",
+  "cmpl-818c8135e3363387": "token_ids",
+  "cmpl-a3c68cd9c9e5ecee": "token_ids",
+  "cmpl-bc3aee2cc8fbcb5c": "token_ids",
+  "cmpl-89b4b3d7258beb79": "token_ids",
+  "cmpl-aecc56bb2fa3c13b": "token_ids",
+  "cmpl-84dadd6f5e6b57a2": "token_ids",
+  "cmpl-8405f6a1281ce3bc": "token_ids",
+  "cmpl-a49f7b3c7a9517ac": "token_ids",
+  "cmpl-8ed2ea3189286469": "token_ids"
+ },
+ "tokenizer": null,
+ "refusals": [],
+ "mapped": {
+  "cmpl-91d492b415607e7d-0-931027c5": 128,
+  "cmpl-818c8135e3363387-0-ac2ff426": 128,
+  "cmpl-a3c68cd9c9e5ecee-0-aac42868": 128,
+  "cmpl-bc3aee2cc8fbcb5c-0-aa6f35a4": 128,
+  "cmpl-89b4b3d7258beb79-0-a49f5160": 128,
+  "cmpl-aecc56bb2fa3c13b-0-a16ee42a": 128,
+  "cmpl-84dadd6f5e6b57a2-0-b050eca1": 128,
+  "cmpl-8405f6a1281ce3bc-0-94d4e8e0": 128,
+  "cmpl-a49f7b3c7a9517ac-0-92ac99d2": 32,
+  "cmpl-8ed2ea3189286469-0-933d71ff": 32
+ }
+}

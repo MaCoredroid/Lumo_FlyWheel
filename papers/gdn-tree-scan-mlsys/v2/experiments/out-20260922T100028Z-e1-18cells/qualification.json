@@ -1,0 +1,40 @@
+{
+ "qualified": {
+  "native-5/B1": {
+   "evidence": [
+    "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_01_b1_native-5_B1_a1/native_preflight_live.json",
+    "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_01_b1_native-5_B1_a1/native_preflight_final.json",
+    "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_01_b1_native-5_B1_a1/cell_result.json"
+   ],
+   "utc": "2026-09-22T10:08:59Z",
+   "rule": "native untimed preflight segment inside the first planned boot: live PASS before warm-up/timed, final sealed-ledger audit PASS, cell sealed (not INVALID)"
+  },
+  "native-5/B4": {
+   "evidence": [
+    "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_02_b1_native-5_B4_a1/native_preflight_live.json",
+    "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_02_b1_native-5_B4_a1/native_preflight_final.json",
+    "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_02_b1_native-5_B4_a1/cell_result.json"
+   ],
+   "utc": "2026-09-22T10:16:31Z",
+   "rule": "native untimed preflight segment inside the first planned boot: live PASS before warm-up/timed, final sealed-ledger audit PASS, cell sealed (not INVALID)"
+  },
+  "native-11/B4": {
+   "evidence": [
+    "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_03_b1_native-11_B4_a1/native_preflight_live.json",
+    "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_03_b1_native-11_B4_a1/native_preflight_final.json",
+    "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_03_b1_native-11_B4_a1/cell_result.json"
+   ],
+   "utc": "2026-09-22T10:24:14Z",
+   "rule": "native untimed preflight segment inside the first planned boot: live PASS before warm-up/timed, final sealed-ledger audit PASS, cell sealed (not INVALID)"
+  },
+  "native-11/B1": {
+   "evidence": [
+    "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_04_b1_native-11_B1_a1/native_preflight_live.json",
+    "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_04_b1_native-11_B1_a1/native_preflight_final.json",
+    "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_04_b1_native-11_B1_a1/cell_result.json"
+   ],
+   "utc": "2026-09-22T10:33:21Z",
+   "rule": "native untimed preflight segment inside the first planned boot: live PASS before warm-up/timed, final sealed-ledger audit PASS, cell sealed (not INVALID)"
+  }
+ }
+}

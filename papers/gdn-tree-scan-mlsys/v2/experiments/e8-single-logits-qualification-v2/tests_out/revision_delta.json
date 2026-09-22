@@ -1,0 +1,35 @@
+{
+  "status": "PASS",
+  "original_manifest_sha256": "45da91477bf238e99f70c2201bc722059427ff9cced399754171a4371c41efcf",
+  "corrected_manifest_sha256": "bc2feab326cb67c916ea418b0399499f4986e18d6bba3e4efc7a20a50f0ce030",
+  "changed_existing_payloads": [
+    "e8_launch.v1.sh",
+    "e8_prepare.py"
+  ],
+  "unchanged_existing_payloads": {
+    "README.md": "c7fd080023b04ceba5d9c14ab928804390ced6d0e7c8aacdc42156a4ec219ef8",
+    "e8_head_gate.py": "ab66067f0148a138b9fddea3494e4b76c1525259504d2445b38093c18166cd67",
+    "e8_qualify.py": "f0cbbd6097eb77bd2233a42dcac2bf86caef9cff02971ae4cc71cf9c674bb5c0",
+    "e8_shim.py": "b6c69fd47170d072ee1649a2be5ade7ff03214fa44a9caf18a85715c4ef362af",
+    "e8_verify.py": "d8f4ee02021d568a3d88eaa025c1ad43c7b8dc66b1c976f1fcc890e8a38c4dbf",
+    "frozen/e1/e1_api_tokens_from_capture.v2.py": "6d36ee15d8b5b6289c24ebc437f621dfd32adc010aae9ff1495fb34af0121f9f",
+    "frozen/e1/e1_event_recorder_shim.py": "06344718f035949ea7f1cea49e4677e9acc2a71a460bbbc7b94e01a1bbbbc1df",
+    "frozen/e1/e1_join.py": "cbee2ae70947f1adb4073bd151a7148fcb05cbc02d1c5dff37b381ffadf1e766",
+    "frozen/e1/e1_recorder.py": "1cf3f53552e008c44f7b7e5e6187d8052bcfd4c75bd6f81e2e07d1f70fbf65a0",
+    "frozen/e1/e1_workload.py": "bcc5af170fd16599223ad7286f0367c82f978faf640ac4acebe0e9c36d001594",
+    "frozen/e1/frozen_prefixes.json": "8329672628828d35b4768732ed93b855335bc7576801890b0195957a2459973e",
+    "frozen/e1/prefix_pool.json": "05e731fd02b937970d05695ef2ee836a76efc463481a3a0ce4eeaa237f877d09",
+    "frozen/repository/scripts/fr10_phase4_patch_vllm_tree_gdn.py": "a7f8f0943d1a13ac4742e824ea4e126c6ff341342aba677db5169e712c7e7281",
+    "frozen/repository/scripts/fr13_device_multidraft_kernel.py": "648ff0e33e8a7cdd0fbe8ebb3d2befaa27002a3347f94f9bdc0668365ed2e8e9",
+    "frozen/repository/scripts/gpu_oom_guard.sh": "6148206a024c17746bce91c6c3e065275a8d47c24d660c665d7e3d8e29ad265b",
+    "frozen/repository/src/lumo_flywheel_serving/fr10_decode_modes.py": "9111854366d4856559d9b42c23d5ca6c84800638c08f98d9f15bbeb09d93499b",
+    "frozen/repository/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "98f7c8511c1fa991fd36526e69a8b753a5205716bf5b0a53c058177c965cdb20",
+    "frozen/repository/src/lumo_flywheel_serving/fr13_tree_conv_fused.py": "564c7dc7ba61ccd9579f2fb7a4af9a2cdaaa1753dfb98434f2011457d90d9a6e",
+    "test_e8_cpu.py": "7264e5d25762fc3c79d02626683c1f1f4716caffe02cc727e17648887a20862a"
+  },
+  "scientific_manifest_fields_identical": true,
+  "added_payloads": [
+    "INFRASTRUCTURE_FIX.md",
+    "test_launcher_execution.py"
+  ]
+}

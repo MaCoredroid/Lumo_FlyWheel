@@ -1,0 +1,14 @@
+{
+  "scope": "SYNTHETIC telemetry parser regression; pid 100 stipulated own, pid 200 stipulated foreign; no real process modified",
+  "reducer_sha256": "9d35c6feac8874df92b7ded32e536ac05d2eff9bc335afe89e4b8e9680450261",
+  "result": {
+    "available": true,
+    "util_samples": 1,
+    "util_zero_frac": 0.0,
+    "util_gt5_count": 1,
+    "util_max": 90,
+    "inventory_seconds": 1,
+    "foreign_compute_process_seconds": {},
+    "label": "UNCONTENDED-WINDOW (no foreign compute process in the 1 Hz inventory; only our container)"
+  }
+}

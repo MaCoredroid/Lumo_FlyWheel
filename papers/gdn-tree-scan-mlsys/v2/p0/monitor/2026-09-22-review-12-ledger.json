@@ -1,0 +1,460 @@
+{
+  "utc": "2026-09-22T06:00:17.288594+00:00",
+  "capture_ledger": [
+    {
+      "prefix": "p072",
+      "group": "pilot",
+      "run": "experiments/out-20260922T000828Z-e7a-step2-captures-eager-fixed/capture_01_p072",
+      "pass": false,
+      "failed": null,
+      "inspector_sha256": "8e72315c52bfa32192ae1b713692cd901d639e2c35776fed9ea4ba88a25be7c8",
+      "payload_hash_matches": false
+    },
+    {
+      "prefix": "p072",
+      "group": "pilot",
+      "run": "experiments/out-20260922T002242Z-e7a-step2-captures-v4/capture_01_p072",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p017",
+      "group": "pilot",
+      "run": "experiments/out-20260922T003357Z-e7a-step2-captures-v4-pilot2to8/capture_02_p017",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p015",
+      "group": "pilot",
+      "run": "experiments/out-20260922T003357Z-e7a-step2-captures-v4-pilot2to8/capture_03_p015",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p021",
+      "group": "pilot",
+      "run": "experiments/out-20260922T003357Z-e7a-step2-captures-v4-pilot2to8/capture_04_p021",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p085",
+      "group": "pilot",
+      "run": "experiments/out-20260922T003357Z-e7a-step2-captures-v4-pilot2to8/capture_05_p085",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p095",
+      "group": "pilot",
+      "run": "experiments/out-20260922T010711Z-e7a-step2-captures-v4-pilot6to8/capture_06_p095",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p058",
+      "group": "pilot",
+      "run": "experiments/out-20260922T010711Z-e7a-step2-captures-v4-pilot6to8/capture_07_p058",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p083",
+      "group": "pilot",
+      "run": "experiments/out-20260922T010711Z-e7a-step2-captures-v4-pilot6to8/capture_08_p083",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p063",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T013708Z-e7a-step2-captures-v5-confirmation/capture_01_p063",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p059",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T013708Z-e7a-step2-captures-v5-confirmation/capture_02_p059",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p049",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T013708Z-e7a-step2-captures-v5-confirmation/capture_03_p049",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p052",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T013708Z-e7a-step2-captures-v5-confirmation/capture_04_p052",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p046",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T013708Z-e7a-step2-captures-v5-confirmation/capture_05_p046",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p065",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T013708Z-e7a-step2-captures-v5-confirmation/capture_06_p065",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p025",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T013708Z-e7a-step2-captures-v5-confirmation/capture_07_p025",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p031",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_08_p031",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p013",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_09_p013",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p040",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_10_p040",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p033",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_11_p033",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p038",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_12_p038",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p060",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_13_p060",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p067",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_14_p067",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p019",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_15_p019",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p003",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_16_p003",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p077",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_17_p077",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p089",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_18_p089",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p030",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_19_p030",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p081",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_20_p081",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p012",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_21_p012",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p092",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_22_p092",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p086",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_23_p086",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p079",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_24_p079",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p027",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_25_p027",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p091",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_26_p091",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p082",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_27_p082",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p088",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_28_p088",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p005",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_29_p005",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p087",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_30_p087",
+      "pass": false,
+      "failed": [
+        "per_step_accepted_paths_match_api_sequence"
+      ],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p076",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T050330Z-e7a-step2-captures-v5-confirmation-part3/capture_31_p076",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+      "payload_hash_matches": true
+    },
+    {
+      "prefix": "p078",
+      "group": "confirmation",
+      "run": "experiments/out-20260922T050330Z-e7a-step2-captures-v5-confirmation-part3/capture_32_p078",
+      "pass": true,
+      "failed": [],
+      "inspector_sha256": "6e71a24c5b7ea82932b219b7502a5c19d3b367e37105451a306b7afb3c95ed04",
+      "payload_hash_matches": true
+    }
+  ],
+  "counts": {
+    "pilot": {
+      "passing_unique": 8,
+      "planned": 8,
+      "failed_unique": [
+        "p072"
+      ]
+    },
+    "confirmation": {
+      "passing_unique": 31,
+      "planned": 32,
+      "failed_unique": [
+        "p087"
+      ]
+    }
+  },
+  "out-20260922T013313Z-e7a-fresh-pilot-v2": {
+    "status": "completed",
+    "source_start_end_match": true,
+    "image": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "n_fresh": 8,
+    "n_invalid": 0,
+    "n_operand_sets": 8,
+    "cubins": 30
+  },
+  "out-20260922T051611Z-e7a-fresh-confirmation": {
+    "status": "completed",
+    "source_start_end_match": true,
+    "image": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "n_fresh": 31,
+    "n_invalid": 0,
+    "n_operand_sets": 31,
+    "cubins": 30
+  },
+  "e7b_runs": [
+    {
+      "run": "experiments/out-20260922T052753Z-e7b-arms-pass1-boot1-force-spine-refused/e7b_001_p072_arm1_none-B_fs_ieee-all",
+      "symlink": false,
+      "trace_tail": "start_utc=2026-09-22T05:27:53Z cmd=capture prefix=p072 layer=language_model.model.layers.62.linear_attn\ne7b_arm=none:B_fs_ieee:all\nguard_pid=3139865 container_id=07b5cbce180549716fcd63ce2f576e4dd6eee24d95fcdbe6789296d77ecc9a97 container_name=e7a-capture-052753 alive=true utc=2026-09-22T05:28:00Z\nrequest_start_utc=2026-09-22T05:33:26.608560783Z\ncleanup: removed owned container e7a-capture-052753 (rc=1)\nexit_utc=2026-09-22T05:33:36Z rc=1\n",
+      "provenance_pass": null
+    },
+    {
+      "run": "experiments/out-20260922T053504Z-e7b-arms-pass1/e7b_001_p072_arm1_none-B_fs_ieee-all",
+      "symlink": false,
+      "trace_tail": "start_utc=2026-09-22T05:35:04Z cmd=capture prefix=p072 layer=language_model.model.layers.62.linear_attn\ne7b_arm=none:B_fs_ieee:all\nguard_pid=3146077 container_id=fa8979e31ffed95deab1850280f0af5d9f87aa3c177751279ed2023b7444b5b1 container_name=e7a-capture-053504 alive=true utc=2026-09-22T05:35:17Z\nrequest_start_utc=2026-09-22T05:40:43.575806205Z\nrequest_end_utc=2026-09-22T05:41:01.163645105Z\npayload_mtime_utc=2026-09-22 05:40:51.042856851 +0000 size=3607409\ncleanup: removed owned container e7a-capture-053504 (rc=0)\nexit_utc=2026-09-22T05:41:02Z rc=0\n",
+      "provenance_pass": true
+    },
+    {
+      "run": "experiments/out-20260922T053504Z-e7b-arms-pass1/e7b_003_p072_arm3_verify_only-B_fs_ieee-all",
+      "symlink": false,
+      "trace_tail": "start_utc=2026-09-22T05:47:05Z cmd=capture prefix=p072 layer=language_model.model.layers.62.linear_attn\ne7b_arm=verify_only:B_fs_ieee:all\nguard_pid=3158124 container_id=937b1a2c4c3165e8ee1208032dec543000c76ae331fc979c2ad0b2c775ada519 container_name=e7a-capture-054705 alive=true utc=2026-09-22T05:47:20Z\nrequest_start_utc=2026-09-22T05:52:47.050127651Z\ncleanup: removed owned container e7a-capture-054705 (rc=1)\nexit_utc=2026-09-22T05:52:55Z rc=1\n",
+      "provenance_pass": null
+    },
+    {
+      "run": "experiments/out-20260922T053504Z-e7b-arms-pass1/e7b_002_p072_arm2_none-B_fs_ieee-all",
+      "symlink": false,
+      "trace_tail": "start_utc=2026-09-22T05:41:05Z cmd=capture prefix=p072 layer=language_model.model.layers.62.linear_attn\ne7b_arm=none:B_fs_ieee:all\nguard_pid=3152312 container_id=be93944e69383ce2a55a9e6f9915127f5192304808179bdb62283ea1905951c2 container_name=e7a-capture-054105 alive=true utc=2026-09-22T05:41:17Z\nrequest_start_utc=2026-09-22T05:46:43.962527532Z\nrequest_end_utc=2026-09-22T05:47:01.600184421Z\npayload_mtime_utc=2026-09-22 05:46:51.437120195 +0000 size=3607409\ncleanup: removed owned container e7a-capture-054105 (rc=0)\nexit_utc=2026-09-22T05:47:02Z rc=0\n",
+      "provenance_pass": true
+    },
+    {
+      "run": "experiments/out-20260922T055357Z-e7b-arms-pass1b/e7b_001_p072_arm1_none-B_fs_ieee-all",
+      "symlink": true,
+      "trace_tail": "start_utc=2026-09-22T05:35:04Z cmd=capture prefix=p072 layer=language_model.model.layers.62.linear_attn\ne7b_arm=none:B_fs_ieee:all\nguard_pid=3146077 container_id=fa8979e31ffed95deab1850280f0af5d9f87aa3c177751279ed2023b7444b5b1 container_name=e7a-capture-053504 alive=true utc=2026-09-22T05:35:17Z\nrequest_start_utc=2026-09-22T05:40:43.575806205Z\nrequest_end_utc=2026-09-22T05:41:01.163645105Z\npayload_mtime_utc=2026-09-22 05:40:51.042856851 +0000 size=3607409\ncleanup: removed owned container e7a-capture-053504 (rc=0)\nexit_utc=2026-09-22T05:41:02Z rc=0\n",
+      "provenance_pass": true
+    },
+    {
+      "run": "experiments/out-20260922T055357Z-e7b-arms-pass1b/e7b_003_p072_arm3_verify_only-B_fs_ieee-all",
+      "symlink": false,
+      "trace_tail": "start_utc=2026-09-22T05:53:57Z cmd=capture prefix=p072 layer=language_model.model.layers.62.linear_attn\ne7b_arm=verify_only:B_fs_ieee:all\nguard_pid=3164324 container_id=916e66740c2429c687d02a8aed3a4f0ff7eba692c780465dc3a9f2f2b9879b36 container_name=e7a-capture-055357 alive=true utc=2026-09-22T05:54:10Z\nrequest_start_utc=2026-09-22T05:59:51.455674735Z\nrequest_end_utc=2026-09-22T06:00:09.874622191Z\npayload_mtime_utc=2026-09-22 06:00:00.309122593 +0000 size=3607409\ncleanup: removed owned container e7a-capture-055357 (rc=0)\nexit_utc=2026-09-22T06:00:13Z rc=0\n",
+      "provenance_pass": true
+    },
+    {
+      "run": "experiments/out-20260922T055357Z-e7b-arms-pass1b/e7b_004_p072_arm4_commit_only-B_fs_ieee-all",
+      "symlink": false,
+      "trace_tail": "start_utc=2026-09-22T06:00:16Z cmd=capture prefix=p072 layer=language_model.model.layers.62.linear_attn\ne7b_arm=commit_only:B_fs_ieee:all\n",
+      "provenance_pass": null
+    },
+    {
+      "run": "experiments/out-20260922T055357Z-e7b-arms-pass1b/e7b_002_p072_arm2_none-B_fs_ieee-all",
+      "symlink": true,
+      "trace_tail": "start_utc=2026-09-22T05:41:05Z cmd=capture prefix=p072 layer=language_model.model.layers.62.linear_attn\ne7b_arm=none:B_fs_ieee:all\nguard_pid=3152312 container_id=be93944e69383ce2a55a9e6f9915127f5192304808179bdb62283ea1905951c2 container_name=e7a-capture-054105 alive=true utc=2026-09-22T05:41:17Z\nrequest_start_utc=2026-09-22T05:46:43.962527532Z\nrequest_end_utc=2026-09-22T05:47:01.600184421Z\npayload_mtime_utc=2026-09-22 05:46:51.437120195 +0000 size=3607409\ncleanup: removed owned container e7a-capture-054105 (rc=0)\nexit_utc=2026-09-22T05:47:02Z rc=0\n",
+      "provenance_pass": true
+    }
+  ]
+}

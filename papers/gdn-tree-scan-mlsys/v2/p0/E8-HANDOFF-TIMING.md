@@ -1,0 +1,15 @@
+# Parent-reviewed E8 timing handoff
+
+Issued 2026-09-22T21:52:54.207356+00:00. Authorizes exactly one campaign of six fixed fresh B1 timing cells in the existing Claude session. Both actual qualification arms independently PASS, report `p0/monitor/e8-qualification-results-redteam.md` SHA e8e02700cad9337bfa61f1446b3f1b090404f144c8acfe193fbad197291cfca3. Exact QUALIFICATION_PASS.json SHA815b348bdb95c455122e7f1232449d4e12dd339edbd6c3c8e2b9a980c6342513. Timing harness independent PASS report `p0/monitor/e8-timing-harness-redteam.md`, SHAfff590de052d939d9f7ff484de95f0d9f61f013a95b60fca99c4216d0a7446fc. Timing manifest SHA256 8bbb5b486fa9e11ff0bc0ef6d0373de65bbd8217392e973a02de015df39c2ab1.
+
+Preserve all earlier roots, sources and logs, including the original pre-container failure. Save current qualification status under a dated companion before updating e8-worker-status.json. Recheck exact manifest and real qualification admission with timing_verify.py, absent new output root/log, device idle, no containers and no duplicate drivers. Do not regenerate any manifest or edit frozen payloads. Execute exactly once from /home/mark/lumo-paper-v2-20260921:
+
+```sh
+python3 -u -B papers/gdn-tree-scan-mlsys/v2/experiments/e8-single-logits-timing-v1/timing_driver.py --repo /home/mark/lumo-paper-v2-20260921 --run /home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T215254Z-e8-timing --qualification /home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T213142Z-e8-single-logits-v2 --execute
+```
+
+Capture stdout/stderr in NEW `papers/gdn-tree-scan-mlsys/v2/p0/monitor/e8-timing-worker-20260922T215254Z.log`. Use a wrapper that writes actual start/end UTC, PID, and actual shell exit code to a companion receipt even on failure; do not infer the exit code this time. Keep e8-worker-status.json current. Record actual sealed-cell and request counts, current job/cell and ETA. Driver owns its snapshot and labeled containers; leave unrelated resources and shared checkout alone.
+
+Frozen order: block1 OFF/ON, block2 ON/OFF, block3 OFF/ON. Each fresh server: two32-token warmups plus eight128-token requests. Source/config checks, clean ON5/OFF10 head census, complete API joins, every-prefix timing support, and bracketing sampled GPU ownership are mandatory. No expensive qualification instrumentation in timing. No continuation-match retention filter. Never censor valid slow intervals. Mean of three paired relative differences is primary; ratio of arm means diagnostic; no estimate if any cell unavailable.
+
+On any failure preserve evidence, stop and diagnose; no retries, replacements, threshold changes, extensions or another worker. Do not edit attempted sources. On success preserve all six seals and aggregate, report actual counts and terminal receipt, then wait for independent data review. Do not edit the paper yourself. Initial ETA45–70minutes, refine from observed cell durations. No public submission, upload, contact or push.

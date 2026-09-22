@@ -1,0 +1,11 @@
+{
+  "utc": "2026-09-21T23:25:57.511585+00:00",
+  "finding": "Derived native launcher looks for a missing sibling gpu_oom_guard.sh and reports armed despite background failure",
+  "action": "Started existing repository guard scoped by immutable container ID and expected name",
+  "container": "e7a-native-231853",
+  "container_id": "b0c1e63a2d3480f0e1d40a9ba8328bf900d8e9ca0a23d561d8bce0598ea47d33",
+  "guard_pid": 2780203,
+  "guard_running": true,
+  "guard_script_sha256": "6148206a024c17746bce91c6c3e065275a8d47c24d660c665d7e3d8e29ad265b",
+  "guard_log": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260921T231853Z-e7a-step2-native-score/codex_gpu_oom_guard.log"
+}

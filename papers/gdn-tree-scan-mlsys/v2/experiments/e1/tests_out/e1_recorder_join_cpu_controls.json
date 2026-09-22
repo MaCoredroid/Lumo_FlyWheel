@@ -1,0 +1,123 @@
+{
+  "checks": {
+    "b1_chain_4_usable_api_bound_tokens_probe_first": {
+      "pass": true,
+      "detail": {
+        "n_usable": 4,
+        "sum_emitted_tokens_api_bound": 10
+      }
+    },
+    "no_api_evidence_no_throughput_rc3": {
+      "pass": true,
+      "detail": null
+    },
+    "second_commit_same_step_is_error_invalid": {
+      "pass": true,
+      "detail": null
+    },
+    "i3_rows_labeled_by_explicit_call_site_ids": {
+      "pass": true,
+      "detail": null
+    },
+    "i3_short_id_list_is_error_invalid": {
+      "pass": true,
+      "detail": null
+    },
+    "i2_mixed_forward_between_pure_steps_not_bridged": {
+      "pass": true,
+      "detail": null
+    },
+    "i2_chain_break_marker_not_bridged": {
+      "pass": true,
+      "detail": null
+    },
+    "b4_wall_once_20_tokens_per_0p24s": {
+      "pass": true,
+      "detail": null
+    },
+    "b4_without_token_evidence_no_rate": {
+      "pass": true,
+      "detail": null
+    },
+    "duplicated_request_row_invalid": {
+      "pass": true,
+      "detail": null
+    },
+    "num_reqs_mismatch_invalid": {
+      "pass": true,
+      "detail": null
+    },
+    "cohort_change_excluded_not_bridged": {
+      "pass": true,
+      "detail": null
+    },
+    "missing_row_on_slow_step_invalidates_run": {
+      "pass": true,
+      "detail": null
+    },
+    "orphan_commit_rows_invalid": {
+      "pass": true,
+      "detail": null
+    },
+    "physical_step_without_rows_invalid": {
+      "pass": true,
+      "detail": null
+    },
+    "step_idx_progression_invalid": {
+      "pass": true,
+      "detail": null
+    },
+    "equal_count_wrong_ids_invalid": {
+      "pass": true,
+      "detail": null
+    },
+    "eos_truncation_in_last_row_tail_not_counted": {
+      "pass": true,
+      "detail": [
+        {
+          "a": 1
+        },
+        2,
+        {
+          "71": {
+            "reason": "cohort change at the successor (ramp/drain)",
+            "wall_s": 0.1
+          },
+          "72": {
+            "reason": "terminal: no successor physical step id+1",
+            "wall_s": null
+          }
+        }
+      ]
+    },
+    "truncation_not_in_last_row_invalid": {
+      "pass": true,
+      "detail": null
+    },
+    "idle_interval_excluded_with_wall": {
+      "pass": true,
+      "detail": null
+    },
+    "occupancy_mismatch_excluded": {
+      "pass": true,
+      "detail": null
+    },
+    "i5_bad_sink_never_raises_flag_written": {
+      "pass": true,
+      "detail": null
+    },
+    "i5_missing_probe_invalid": {
+      "pass": true,
+      "detail": null
+    },
+    "i5_sink_failure_counter_invalid": {
+      "pass": true,
+      "detail": null
+    },
+    "recorder_inert_without_env": {
+      "pass": true,
+      "detail": null
+    }
+  },
+  "all_pass": true
+}

@@ -1,0 +1,249 @@
+{
+  "observed_utc": "2026-09-22T11:20:34.360878+00:00",
+  "hashes": {
+    "p0/HANDOFF-CLAUDE.md": "a06f3a3530963e599037013eb73beabf37d9abd2324e77f0adb02d43211fa7b2",
+    "p0/P0-REPORT.md": "9999aecafc19d1a3de981229d8f281e15d730b924713437a9abef4aaed7d2c44",
+    "main.tex": "f52a828f4cb13aca925be7d081da0c4c438072762b673de9a2933b7396032212",
+    "abstract.tex": "0eddd1990dfe88aa1b0251526448d24983c7d0f67821d2f2921bb63df18755ce",
+    "experiments/e1/e1_run_cells.v2.sh": "910e2dac38a8661361da7f011f8a6a48563b84f6799eb5b1257fc558fa765d72",
+    "experiments/e1/e1_aggregate.py": "98beec9efac26f560783d9d77af3e2154edbd6b24ebadfe141b0cafce6e48a68"
+  },
+  "cells": [
+    {
+      "path": "cell_01_b1_native-5_B1_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 13.682245138976391,
+        "sum_wall_s_unique_physical_steps": 72.72198311705142,
+        "sum_emitted_tokens_api_bound_pure_support": 995,
+        "n_usable": 312,
+        "n_excluded": 117
+      },
+      "seal": {
+        "sealed": true,
+        "utc": "2026-09-22T10:08:59Z",
+        "gates": {
+          "verify": "PASS",
+          "summary": "VALID",
+          "preflight_live": "PASS",
+          "preflight_final": "PASS"
+        },
+        "campaign_snapshot_sha256sums": "d1ab57c53464ef814c7eed3b87ebd21a670cf8278541b8adc4864e5cf6dc2ecd",
+        "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+      },
+      "sha256": "954a4a968cd2c12515e556438c4ea6de26117677ecb651f65a6689544e249854"
+    },
+    {
+      "path": "cell_02_b1_native-5_B4_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 57.33075818918667,
+        "sum_wall_s_unique_physical_steps": 13.395950520411134,
+        "sum_emitted_tokens_api_bound_pure_support": 768,
+        "n_usable": 56,
+        "n_excluded": 66
+      },
+      "seal": {
+        "sealed": true,
+        "utc": "2026-09-22T10:16:31Z",
+        "gates": {
+          "verify": "PASS",
+          "summary": "VALID",
+          "preflight_live": "PASS",
+          "preflight_final": "PASS"
+        },
+        "campaign_snapshot_sha256sums": "d1ab57c53464ef814c7eed3b87ebd21a670cf8278541b8adc4864e5cf6dc2ecd",
+        "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+      },
+      "sha256": "45952e2e06318589117ce24a8b3d7f2392d172072eaea942b87797c075955594"
+    },
+    {
+      "path": "cell_03_b1_native-11_B4_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 43.47118832311055,
+        "sum_wall_s_unique_physical_steps": 18.19595991075039,
+        "sum_emitted_tokens_api_bound_pure_support": 791,
+        "n_usable": 52,
+        "n_excluded": 61
+      },
+      "seal": {
+        "sealed": true,
+        "utc": "2026-09-22T10:24:14Z",
+        "gates": {
+          "verify": "PASS",
+          "summary": "VALID",
+          "preflight_live": "PASS",
+          "preflight_final": "PASS"
+        },
+        "campaign_snapshot_sha256sums": "d1ab57c53464ef814c7eed3b87ebd21a670cf8278541b8adc4864e5cf6dc2ecd",
+        "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+      },
+      "sha256": "bdc663bd53e7227c4d4c499c87145473119844e1c5033ac901a03b4d4c9399c9"
+    },
+    {
+      "path": "cell_04_b1_native-11_B1_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 11.439958475412476,
+        "sum_wall_s_unique_physical_steps": 86.189124035649,
+        "sum_emitted_tokens_api_bound_pure_support": 986,
+        "n_usable": 249,
+        "n_excluded": 114
+      },
+      "seal": {
+        "sealed": true,
+        "utc": "2026-09-22T10:33:21Z",
+        "gates": {
+          "verify": "PASS",
+          "summary": "VALID",
+          "preflight_live": "PASS",
+          "preflight_final": "PASS"
+        },
+        "campaign_snapshot_sha256sums": "d1ab57c53464ef814c7eed3b87ebd21a670cf8278541b8adc4864e5cf6dc2ecd",
+        "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+      },
+      "sha256": "79ada4f5fbc542ebb01f1c20aefff56303d7817826336d9ed0fe1e9398e1c1b3"
+    },
+    {
+      "path": "cell_05_b1_tree_B1_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 12.597382772294214,
+        "sum_wall_s_unique_physical_steps": 78.98466038424522,
+        "sum_emitted_tokens_api_bound_pure_support": 995,
+        "n_usable": 314,
+        "n_excluded": 32
+      },
+      "seal": {
+        "sealed": true,
+        "utc": "2026-09-22T10:40:52Z",
+        "gates": {
+          "verify": "PASS",
+          "summary": "VALID"
+        },
+        "campaign_snapshot_sha256sums": "d1ab57c53464ef814c7eed3b87ebd21a670cf8278541b8adc4864e5cf6dc2ecd",
+        "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+      },
+      "sha256": "4ee281136878a174de81289b815b807ebcdd4f69f1087fa897d6c94136e61004"
+    },
+    {
+      "path": "cell_06_b1_tree_B4_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 47.65063886822262,
+        "sum_wall_s_unique_physical_steps": 14.354477006942034,
+        "sum_emitted_tokens_api_bound_pure_support": 684,
+        "n_usable": 51,
+        "n_excluded": 54
+      },
+      "seal": {
+        "sealed": true,
+        "utc": "2026-09-22T10:47:25Z",
+        "gates": {
+          "verify": "PASS",
+          "summary": "VALID"
+        },
+        "campaign_snapshot_sha256sums": "d1ab57c53464ef814c7eed3b87ebd21a670cf8278541b8adc4864e5cf6dc2ecd",
+        "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+      },
+      "sha256": "f3849d486615b96d1b88d652e1ef0aa135e65ce9883aaad7472ba34d84411cb4"
+    },
+    {
+      "path": "cell_07_b2_tree_B1_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 12.607309482129649,
+        "sum_wall_s_unique_physical_steps": 78.92246965225786,
+        "sum_emitted_tokens_api_bound_pure_support": 995,
+        "n_usable": 314,
+        "n_excluded": 32
+      },
+      "seal": {
+        "sealed": true,
+        "utc": "2026-09-22T10:54:54Z",
+        "gates": {
+          "verify": "PASS",
+          "summary": "VALID"
+        },
+        "campaign_snapshot_sha256sums": "d1ab57c53464ef814c7eed3b87ebd21a670cf8278541b8adc4864e5cf6dc2ecd",
+        "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+      },
+      "sha256": "afacaea3ce3fd38a6b905c1493697e8d89d5da5c041f29ff2ff57b83abc40740"
+    },
+    {
+      "path": "cell_08_b2_tree_B4_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 46.68934818318858,
+        "sum_wall_s_unique_physical_steps": 17.22020185086876,
+        "sum_emitted_tokens_api_bound_pure_support": 804,
+        "n_usable": 61,
+        "n_excluded": 36
+      },
+      "seal": {
+        "sealed": true,
+        "utc": "2026-09-22T11:01:15Z",
+        "gates": {
+          "verify": "PASS",
+          "summary": "VALID"
+        },
+        "campaign_snapshot_sha256sums": "d1ab57c53464ef814c7eed3b87ebd21a670cf8278541b8adc4864e5cf6dc2ecd",
+        "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+      },
+      "sha256": "10ce7db48befe05f77574a6eaaadb32d6f10fab71f1f27d46288f47714f9e878"
+    },
+    {
+      "path": "cell_09_b2_native-5_B4_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 52.51945957635484,
+        "sum_wall_s_unique_physical_steps": 15.327652007341385,
+        "sum_emitted_tokens_api_bound_pure_support": 805,
+        "n_usable": 64,
+        "n_excluded": 42
+      },
+      "seal": {
+        "sealed": true,
+        "utc": "2026-09-22T11:08:20Z",
+        "gates": {
+          "verify": "PASS",
+          "summary": "VALID"
+        },
+        "campaign_snapshot_sha256sums": "d1ab57c53464ef814c7eed3b87ebd21a670cf8278541b8adc4864e5cf6dc2ecd",
+        "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+      },
+      "sha256": "3545c6639417489580ce16425e8dd6c88e6ed3fe0c8d78ef9ca845ad61462850"
+    },
+    {
+      "path": "cell_10_b2_native-5_B1_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 13.66210470123698,
+        "sum_wall_s_unique_physical_steps": 72.8291886029765,
+        "sum_emitted_tokens_api_bound_pure_support": 995,
+        "n_usable": 312,
+        "n_excluded": 28
+      },
+      "seal": {
+        "sealed": true,
+        "utc": "2026-09-22T11:16:19Z",
+        "gates": {
+          "verify": "PASS",
+          "summary": "VALID"
+        },
+        "campaign_snapshot_sha256sums": "d1ab57c53464ef814c7eed3b87ebd21a670cf8278541b8adc4864e5cf6dc2ecd",
+        "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+      },
+      "sha256": "e224ba112641393cf121471389205868696d8e852cb024019ea1be02831e76e4"
+    }
+  ],
+  "campaign_tail": "tive-5/B4 qualified (recorded in /home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/qualification.json)\ncell_result (PRELIMINARY): VALID [] 57.33075818918667\n=== cell 3 block 1 native-11 B4 state=PREFLIGHT attempts=0 measured=0 (2026-09-22T10:16:31Z)\nterminal seal: VALID 43.47118832311055\n  native preflight live PASS + final PASS -> native-11/B4 qualified (recorded in /home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/qualification.json)\ncell_result (PRELIMINARY): VALID [] 43.47118832311055\n=== cell 4 block 1 native-11 B1 state=PREFLIGHT attempts=0 measured=0 (2026-09-22T10:24:14Z)\nterminal seal: VALID 11.439958475412476\n  native preflight live PASS + final PASS -> native-11/B1 qualified (recorded in /home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/qualification.json)\ncell_result (PRELIMINARY): VALID [] 11.439958475412476\n=== cell 5 block 1 tree B1 state=QUALIFIED attempts=0 measured=0 (2026-09-22T10:33:21Z)\nterminal seal: VALID 12.597382772294214\ncell_result (PRELIMINARY): VALID [] 12.597382772294214\n=== cell 6 block 1 tree B4 state=QUALIFIED attempts=0 measured=0 (2026-09-22T10:40:52Z)\nterminal seal: VALID 47.65063886822262\ncell_result (PRELIMINARY): VALID [] 47.65063886822262\n=== cell 7 block 2 tree B1 state=QUALIFIED attempts=0 measured=0 (2026-09-22T10:47:25Z)\nterminal seal: VALID 12.607309482129649\ncell_result (PRELIMINARY): VALID [] 12.607309482129649\n=== cell 8 block 2 tree B4 state=QUALIFIED attempts=0 measured=0 (2026-09-22T10:54:54Z)\nterminal seal: VALID 46.68934818318858\ncell_result (PRELIMINARY): VALID [] 46.68934818318858\n=== cell 9 block 2 native-5 B4 state=QUALIFIED attempts=0 measured=0 (2026-09-22T11:01:15Z)\nterminal seal: VALID 52.51945957635484\ncell_result (PRELIMINARY): VALID [] 52.51945957635484\n=== cell 10 block 2 native-5 B1 state=QUALIFIED attempts=0 measured=0 (2026-09-22T11:08:20Z)\nterminal seal: VALID 13.66210470123698\ncell_result (PRELIMINARY): VALID [] 13.66210470123698\n=== cell 11 block 2 native-11 B1 state=QUALIFIED attempts=0 measured=0 (2026-09-22T11:16:19Z)\n",
+  "status_head": "# v2 bounded numerical experiments — execution status\n\nWorktree: `/home/mark/lumo-paper-v2-20260921`, branch `codex/paper-v2-pilot-20260921`, base `984f613d7885d9bf7898866827552b68a3199d0c`.\nSession: Claude Fable 5.1 interactive, tmux `lumo-v2-20260921` (created 2026-09-21T21:45:29Z per `p0/handoff-status.json`), handoff `p0/HANDOFF-CLAUDE.md` (sha256 `a06f3a35…1fa7b2`).\nHost clock is UTC (`date +%Z` = UTC). Times below are MEASURED (file mtimes, `date -u`, telemetry stamps) or marked *observed-by*.\n\n## Authorization scope (from handoff)\n\nBounded scope only: E7a -> E2/E7b -> E1, E3 conditional. No external messages, uploads, publication, push, new quantization campaign, or broad task-quality campaign. Do not touch `/home/mark/shared/lumoFlyWheel` checkout state, its captures, tmux sessions, unrelated processes, or shared model weights. Historical captures are read-only inputs and remain historical. Synthetic inputs are labeled synthetic. The old pre-fix WY state-write bug is NOT the principal baseline (the vendored WY kernel is the post-fix form at commit `8a975837`).\n\n## Stage log (measured chronology)\n\n| UTC (measured) | Stage | State | Evidence |\n| --- | --- | --- | --- |\n| 2026-09-22T11:16:19Z | E1 cell 10 (b2 native-5 B1) SEALED VALID: 13.66 tok/s over 312 intervals (72.83 s, 995 tokens), min 29 per prompt (floor PASS), 0 over-cap, verify PASS; cell 11 (native-11 B1) next | `…/cell_10_b2_native-5_B1_a1/` |\n| 2026-09-22T11:08:20Z | E1 cell 9 (b2 native-5 B4) SEALED VALID: 52.52 tok/s over 64 four-request intervals (15.33 s, 805 tokens), cohorts A 29 / B 35 (floor PASS), 0 over-cap, verify PASS; cell 10 (native-5 B1) next | `…/cell_09_b2_native-5_B4_a1/` |\n| 2026-09-22T11:01:15Z | E1 cell 8 (b2 tree B4) SEALED VALID: 46.69 tok/s over 61 four-request intervals (17.22 s, 804 tokens), cohorts A 30 / B 31 (floor PASS), 0 over-cap, verify PASS; cell 9 (native-5 B4) next | `…/cell_08_b2_tree_B4_a1/` |\n| 2026-09-22T10:54:54Z | E1 cell 7 (b2 tree B1) SEALED VALID: 12.61 tok/s over 314 intervals (78.92 s, 995 tokens), min 34 per prompt (floor PASS), 0 over-cap, verify PASS; cell 8 (tree B4) next | `…/cell_07_b2_tree_B1_a1/` |\n| 2026-09-22T10:47:25Z | E1 cell 6 (b1 tree B4) SEALED VALID — block 1 complete (6/6 VALID): verify PASS; primary 47.65 tok/s over 51 four-request intervals (14.35 s, 684 API-bound tokens), cohorts A 26 / B 25 (floor PASS), 0 over-cap. Block 2 starts with cell 7 (tree B1) | `…/cell_06_b1_tree_B4_a1/` |\n| 2026-09-22T10:45:17Z | DEVIATION T1 recorded (independent review `e1-first-tree-timing-redteam.md` 21148b1095b8f5e4…): the tree launcher v7 carries no `--seed` handling → tree-arm EngineCore seed = vLLM default 0; native arms `--seed 20260921`; API request seeds 20260921 in all arms. Greedy workload; the duplicate-source selector uses its own explicit generator (reviewer's source chain) → no corrupted sampling/rate evidence indicated; NO replacement boot; frozen campaign/snapshots unchanged; not claiming identical engine seeds or full frozen-setting compliance. Addendum `e1/E1_ASEXECUTED_DEVIATIONS.md` | `e1/E1_ASEXECUTED_DEVIATIONS.md` |\n| 2026-09-22T10:40:52Z | E1 cell 5 (b1 tree B1) SEALED VALID: verify PASS (policy B engaged, reorder absent, exact SPEC_CONFIG, no heavy capture, frozen allocation); primary 12.60 tok/s over 314 intervals (78.98 s, 995 API-bound tokens), min 34 intervals per prompt (floor PASS), 0 over-cap; cell 6 (tree B4) next | `…/cell_05_b1_tree_B1_a1/` |\n| 2026-09-22T10:33:21Z | E1 cell 4 (b1 native-11 B1) SEALED VALID: preflight live+final PASS → native-11/B1 QUALIFIED (all four native routes now qualified); primary 11.44 tok/s over 249 intervals (86.19 s, 986 API-bound tokens), min 24 interva",
+  "pane": "● Cell 8 (block 2, tree, B4) sealed VALID at 46.69 tok/s. Recording it; the monitor is near its 30-minute expiry, so I will re-arm it\n  in the same step.\n\n  Ran 1 shell command\n\n● Monitor(E1 18-cell campaign: per-cell seals/failures in campaign.log and runner exit (re-armed 3))\n  ⎿  Monitor started · task bcglgzihf · timeout 1800s\n\n● Cell 8 is recorded: 46.69 tok/s over 61 four-request intervals (17.22 s, 804 API-bound tokens), cohorts A 30 and B 31 intervals,\n  floor pass, no over-cap intervals, verification PASS. Cell 9 (block 2, native-5, B4, now a qualified route so no preflight segment)\n  started at 11:01:15Z; a fresh 30-minute monitor is armed for its seal. Nothing else is actionable until the next event.\n\n✻ Sautéed for 18s · done 11:01 AM · 1 monitor still running\n\n● Monitor event: \"E1 18-cell campaign: per-cell seals/failures in campaign.log and runner exit (re-armed)\"\n\n● Monitor event: \"E1 18-cell campaign: per-cell seals/failures in campaign.log and runner exit (re-armed)\"\n\n● That expiry is the earlier monitor (blgnfinwa); the replacement watch (bcglgzihf) is already armed and covers cell 9 onward.\n  Nothing else is actionable until its next event.\n\n✻ Churned for 2s · done 11:01 AM · 1 monitor still running\n\n● Monitor event: \"E1 18-cell campaign: per-cell seals/failures in campaign.log and runner exit (re-armed 3)\"\n\n● Cell 9 (block 2, native-5, B4) sealed VALID at 52.52 tok/s. Recording it.\n\n  Ran 1 shell command\n\n● Cell 9 is recorded: 52.52 tok/s over 64 four-request intervals (15.33 s, 805 API-bound tokens), cohorts A 29 and B 35 intervals,\n  floor pass, no over-cap intervals, verification PASS. Cell 10 (block 2, native-5, B1) started at 11:08:20Z; the armed monitor is\n  watching for its seal, and nothing else is actionable until then.\n\n✻ Churned for 15s · done 11:08 AM · 1 monitor still running\n\n● Monitor event: \"E1 18-cell campaign: per-cell seals/failures in campaign.log and runner exit (re-armed 3)\"\n\n● Cell 10 (block 2, native-5, B1) sealed VALID at 13.66 tok/s. Recording it.\n\n  Ran 1 shell command\n\n● Cell 10 is recorded: 13.66 tok/s over 312 retained intervals (72.83 s, 995 API-bound tokens), every prompt at least 29 intervals,\n  floor pass, no over-cap intervals, verification PASS. Cell 11 (block 2, native-11, B1) started at 11:16:19Z; the armed monitor is\n  watching for its seal, and nothing else is actionable until then.\n\n✻ Crunched for 13s · done 11:16 AM · 1 monitor still running\n                                                                                             ✔ Update installed · Restart to update\n───────────────────────────────────────────────────────────────────────────────────────────────────── Lumo v2 numerical experiments ─\n❯ \n─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n  ⏵⏵ bypass permissions on · 1 monitor · ← for agents · ↓ to manage\n",
+  "available_gib": 63.33171081542969,
+  "swap_used_gib": 0,
+  "containers": "e1-cell11-111619 Up 4 minutes\n",
+  "compute": "3410965, VLLM::EngineCore, 34769 MiB\n",
+  "runner": "3335600    01:20:05 bash\n"
+}

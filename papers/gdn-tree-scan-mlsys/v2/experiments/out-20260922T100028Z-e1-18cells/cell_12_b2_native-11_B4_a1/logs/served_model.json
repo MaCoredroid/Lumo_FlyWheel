@@ -1,0 +1,1 @@
+{"schema":"fr13.served_model.v1","path":"/models/qwen3.6-27b-fp8","name":"qwen3.6-27b","checkpoint_identity":"d053823784d5db6f1dbc255bd9ef041e3825efbcfa10ff3e32011671e979c578","overridden":"false","launcher":"fr13_launch_native_mtp_server.sh"}

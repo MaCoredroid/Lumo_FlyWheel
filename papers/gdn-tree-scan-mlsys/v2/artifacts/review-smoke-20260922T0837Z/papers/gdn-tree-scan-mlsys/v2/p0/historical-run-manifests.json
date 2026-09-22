@@ -1,0 +1,452 @@
+{
+  "audit": "P0 source/configuration reconciliation without model inference",
+  "base_image_versions": {
+    "vllm": "0.19.2rc1.dev134+gfe9c3d6c5.cu130",
+    "torch": "2.11.0+cu130",
+    "triton": "3.6.0"
+  },
+  "historical_runs": [
+    {
+      "evidence_id": "H3",
+      "arm": "native5_control_kvr1",
+      "source_revision": "103cedccd75b3149c87b465c9201416abff7533a",
+      "started_utc": "2026-07-22T11:16:44Z",
+      "ended_utc": "2026-07-22T13:34:37Z",
+      "requested_sampling": {
+        "LUMO_PROXY_FORCE_TEMPERATURE": "0.6",
+        "LUMO_PROXY_FORCE_TOP_P": "0.95",
+        "LUMO_PROXY_FORCE_TOP_K": "20"
+      },
+      "recorded_flags": {
+        "FR10_DECODE_MODE_DEFAULT": "naive_mtp",
+        "FR13_ATTN_KV_REMAP": "1",
+        "FR13_CFWD_GPU_TIMER": "1",
+        "FR13_DFWD_GPU_TIMER": "1",
+        "FR13_ENABLE_APC": "1",
+        "FR13_SLOT_REORDER": "1",
+        "VLLM_BATCH_INVARIANT": "0"
+      },
+      "boot_arguments": {
+        "model": "/models/qwen3.6-27b-fp8",
+        "attention_backend": "FLASH_ATTN",
+        "max_model_len": 131072,
+        "max_num_seqs": 4,
+        "max_num_batched_tokens": 4096,
+        "gpu_memory_utilization": 0.6,
+        "mamba_ssm_cache_dtype": "float32",
+        "block_size": 1024,
+        "enable_prefix_caching": true,
+        "speculative_config": {
+          "method": "qwen3_5_mtp",
+          "num_speculative_tokens": 5
+        },
+        "compilation_config": {
+          "mode": null,
+          "debug_dump_path": null,
+          "cache_dir": "",
+          "compile_cache_save_format": "binary",
+          "backend": "inductor",
+          "custom_ops": [],
+          "ir_enable_torch_wrap": null,
+          "splitting_ops": null,
+          "compile_mm_encoder": false,
+          "cudagraph_mm_encoder": false,
+          "encoder_cudagraph_token_budgets": [],
+          "encoder_cudagraph_max_vision_items_per_batch": 0,
+          "encoder_cudagraph_max_frames_per_batch": null,
+          "compile_sizes": null,
+          "compile_ranges_endpoints": null,
+          "inductor_compile_config": {
+            "enable_auto_functionalized_v2": false,
+            "size_asserts": false,
+            "alignment_asserts": false,
+            "scalar_asserts": false,
+            "combo_kernels": true,
+            "benchmark_combo_kernel": true
+          },
+          "inductor_passes": {},
+          "cudagraph_mode": "<CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>",
+          "cudagraph_num_of_warmups": 0,
+          "cudagraph_capture_sizes": null,
+          "cudagraph_copy_inputs": false,
+          "cudagraph_specialize_lora": true,
+          "use_inductor_graph_partition": null,
+          "pass_config": {},
+          "max_cudagraph_capture_size": null,
+          "dynamic_shapes_config": {
+            "type": "<DynamicShapesType.BACKED: 'backed'>",
+            "evaluate_guards": false,
+            "assume_32_bit_indexing": false
+          },
+          "local_cache_dir": null,
+          "fast_moe_cold_start": null,
+          "static_all_moe_layers": []
+        }
+      },
+      "vllm_version": "0.19.2rc1.dev134+gfe9c3d6c5 (boot record)",
+      "sampler_reconstruction": {
+        "changed": true,
+        "target_constraint_calls_in_forward": 2,
+        "calls": [
+          {
+            "line": 148,
+            "source": "apply_sampling_constraints(\n            target_logits,\n            metadata.cu_num_draft_tokens,\n            sampling_metadata,\n        )"
+          },
+          {
+            "line": 154,
+            "source": "apply_sampling_constraints(\n            target_logits,\n            metadata.cu_num_draft_tokens,\n            sampling_metadata,\n        )"
+          }
+        ],
+        "patcher_sha256": "31cbd3fbab034755c76eb457ee915606d6d8e86afb5b84bc4115565ac6e269e2",
+        "reconstructed_sampler_sha256": "5f0479ddfdab451079f668eccde5e999ac41e6e844b9b351c3480b452dc0450d",
+        "reconstructed_file": "p0/stock-image/reconstructed-native5_control_kvr1.py",
+        "patcher_messages": "",
+        "scope": "full historical sampler text-rewrite function; not a recovered runtime file"
+      },
+      "target_temperature_scale_inferred": 0.36,
+      "sampling_caveat": "Two full constraint passes include top-k/top-p; bonus/self-logit paths can differ. Not a globally equivalent clean temperature-0.36 run.",
+      "measurement": {
+        "schema": "fr13.measure.deploy_speed.v1",
+        "speed_basis": "d(request_decode_time_seconds_sum)/d(spec_decode_num_drafts_total)",
+        "s_per_fwd_gpu_basis": "d(fr13_decode_forward_gpu_seconds_total)/d(fr13_decode_forward_gpu_drafts_total) [MATCHED pure-decode drafts; NOT global spec_decode_num_drafts_total]",
+        "measured_tps_fullstep_wall_note": "committed_per_event / MEASURED wall per event (start-to-start deltas between consecutive pure-decode steps, idle-capped, chain broken on mixed/prefill steps). Includes ALL step cost: host glue, sampler, packer, scheduler gap.",
+        "component_gpu_note": "FR13_DFWD/CFWD_GPU_TIMER spans: drafter = propose_draft_token_ids (all D spine forwards); committer = the spec-decode rejection-sampler dispatch in _sample (accept/LCP/bonus decision + commit; includes the host committer loop's packed DtoH+sync when FR13_GPU_COMMITTER=0). Async cuda-event spans summed over the per-task brackets (d(vllm:fr13_drafter/committer_gpu_seconds_total)); ms_per_step = seconds/spans*1000, one span per spec decode step. Totals share the per-task-bracket overlap caveat at B>1; the ms-per-step ratio does not.",
+        "events_per_step": 2.788898286501895,
+        "accept_per_event": 3.421794350829565,
+        "committed_per_event": 4.421794350829565,
+        "wall_s_per_event": 0.10344846862893771,
+        "engagement": {
+          "tok_per_draft": 5.0,
+          "expected_tok_per_draft": 5.0,
+          "engaged": true
+        }
+      },
+      "artifact_hashes": [
+        {
+          "path": "output/fr13_kvremap_tail6/native5_control_kvr1/git_head.txt",
+          "sha256": "e8557f46ef2a9c0630fd36ecf6a317d3958e078359647f68f234c9fe5ec56582"
+        },
+        {
+          "path": "output/fr13_kvremap_tail6/native5_control_kvr1/container_env.txt",
+          "sha256": "89bba7b329ef62c5ebbfa1d558b4369f1d65787f89834ff2b50784ae9272e127"
+        },
+        {
+          "path": "output/fr13_kvremap_tail6/native5_control_kvr1/proxy_env.txt",
+          "sha256": "3e6862cc3a24cac6b648b8d76102f7fe0a743f887cdbea30dd69a66215f8e828"
+        },
+        {
+          "path": "output/fr13_kvremap_tail6/native5_control_kvr1/boot_log_snapshot.txt",
+          "sha256": "1760ecd68c1b203a432e626f1eec1d8d4593a33095b6fab700d50d007a25aa78"
+        },
+        {
+          "path": "output/fr13_kvremap_tail6/native5_control_kvr1/deploy_speed_kvr1.json",
+          "sha256": "88deadb9f1ffac9985f263b985dae0dae16a8b2be09da30b2b076efc22cdee87"
+        }
+      ],
+      "historical_binary_identity": "Unresolved: no run-time FA2/JIT binary digest in selected run artifacts; current disk hash cannot backfill it",
+      "historical_model_revision": "Unresolved: boot revision=None and mutable /models path; current model hashes do not prove July content",
+      "decision": "RELABEL: retain archived observation; requested T=0.6, duplicated target constraints source-reconstructed; do not claim nominal sampling equivalence or a current matched-build comparison"
+    },
+    {
+      "evidence_id": "H3",
+      "arm": "native11_control_kvr1",
+      "source_revision": "2fc0faf624eb44dc1bfd43cf48e915c936b72804",
+      "started_utc": "2026-07-22T13:34:37Z",
+      "ended_utc": "2026-07-22T16:50:16Z",
+      "requested_sampling": {
+        "LUMO_PROXY_FORCE_TEMPERATURE": "0.6",
+        "LUMO_PROXY_FORCE_TOP_P": "0.95",
+        "LUMO_PROXY_FORCE_TOP_K": "20"
+      },
+      "recorded_flags": {
+        "FR10_DECODE_MODE_DEFAULT": "naive_mtp",
+        "FR13_ATTN_KV_REMAP": "1",
+        "FR13_CFWD_GPU_TIMER": "1",
+        "FR13_DFWD_GPU_TIMER": "1",
+        "FR13_ENABLE_APC": "1",
+        "FR13_SLOT_REORDER": "1",
+        "VLLM_BATCH_INVARIANT": "0"
+      },
+      "boot_arguments": {
+        "model": "/models/qwen3.6-27b-fp8",
+        "attention_backend": "FLASH_ATTN",
+        "max_model_len": 131072,
+        "max_num_seqs": 4,
+        "max_num_batched_tokens": 4096,
+        "gpu_memory_utilization": 0.6,
+        "mamba_ssm_cache_dtype": "float32",
+        "block_size": 1024,
+        "enable_prefix_caching": true,
+        "speculative_config": {
+          "method": "qwen3_5_mtp",
+          "num_speculative_tokens": 11
+        },
+        "compilation_config": {
+          "mode": null,
+          "debug_dump_path": null,
+          "cache_dir": "",
+          "compile_cache_save_format": "binary",
+          "backend": "inductor",
+          "custom_ops": [],
+          "ir_enable_torch_wrap": null,
+          "splitting_ops": null,
+          "compile_mm_encoder": false,
+          "cudagraph_mm_encoder": false,
+          "encoder_cudagraph_token_budgets": [],
+          "encoder_cudagraph_max_vision_items_per_batch": 0,
+          "encoder_cudagraph_max_frames_per_batch": null,
+          "compile_sizes": null,
+          "compile_ranges_endpoints": null,
+          "inductor_compile_config": {
+            "enable_auto_functionalized_v2": false,
+            "size_asserts": false,
+            "alignment_asserts": false,
+            "scalar_asserts": false,
+            "combo_kernels": true,
+            "benchmark_combo_kernel": true
+          },
+          "inductor_passes": {},
+          "cudagraph_mode": "<CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>",
+          "cudagraph_num_of_warmups": 0,
+          "cudagraph_capture_sizes": null,
+          "cudagraph_copy_inputs": false,
+          "cudagraph_specialize_lora": true,
+          "use_inductor_graph_partition": null,
+          "pass_config": {},
+          "max_cudagraph_capture_size": null,
+          "dynamic_shapes_config": {
+            "type": "<DynamicShapesType.BACKED: 'backed'>",
+            "evaluate_guards": false,
+            "assume_32_bit_indexing": false
+          },
+          "local_cache_dir": null,
+          "fast_moe_cold_start": null,
+          "static_all_moe_layers": []
+        }
+      },
+      "vllm_version": "0.19.2rc1.dev134+gfe9c3d6c5 (boot record)",
+      "sampler_reconstruction": {
+        "changed": true,
+        "target_constraint_calls_in_forward": 2,
+        "calls": [
+          {
+            "line": 148,
+            "source": "apply_sampling_constraints(\n            target_logits,\n            metadata.cu_num_draft_tokens,\n            sampling_metadata,\n        )"
+          },
+          {
+            "line": 154,
+            "source": "apply_sampling_constraints(\n            target_logits,\n            metadata.cu_num_draft_tokens,\n            sampling_metadata,\n        )"
+          }
+        ],
+        "patcher_sha256": "31cbd3fbab034755c76eb457ee915606d6d8e86afb5b84bc4115565ac6e269e2",
+        "reconstructed_sampler_sha256": "5f0479ddfdab451079f668eccde5e999ac41e6e844b9b351c3480b452dc0450d",
+        "reconstructed_file": "p0/stock-image/reconstructed-native11_control_kvr1.py",
+        "patcher_messages": "",
+        "scope": "full historical sampler text-rewrite function; not a recovered runtime file"
+      },
+      "target_temperature_scale_inferred": 0.36,
+      "sampling_caveat": "Two full constraint passes include top-k/top-p; bonus/self-logit paths can differ. Not a globally equivalent clean temperature-0.36 run.",
+      "measurement": {
+        "schema": "fr13.measure.deploy_speed.v1",
+        "speed_basis": "d(request_decode_time_seconds_sum)/d(spec_decode_num_drafts_total)",
+        "s_per_fwd_gpu_basis": "d(fr13_decode_forward_gpu_seconds_total)/d(fr13_decode_forward_gpu_drafts_total) [MATCHED pure-decode drafts; NOT global spec_decode_num_drafts_total]",
+        "measured_tps_fullstep_wall_note": "committed_per_event / MEASURED wall per event (start-to-start deltas between consecutive pure-decode steps, idle-capped, chain broken on mixed/prefill steps). Includes ALL step cost: host glue, sampler, packer, scheduler gap.",
+        "component_gpu_note": "FR13_DFWD/CFWD_GPU_TIMER spans: drafter = propose_draft_token_ids (all D spine forwards); committer = the spec-decode rejection-sampler dispatch in _sample (accept/LCP/bonus decision + commit; includes the host committer loop's packed DtoH+sync when FR13_GPU_COMMITTER=0). Async cuda-event spans summed over the per-task brackets (d(vllm:fr13_drafter/committer_gpu_seconds_total)); ms_per_step = seconds/spans*1000, one span per spec decode step. Totals share the per-task-bracket overlap caveat at B>1; the ms-per-step ratio does not.",
+        "events_per_step": 2.744760962993953,
+        "accept_per_event": 4.923428973772223,
+        "committed_per_event": 5.923428973772223,
+        "wall_s_per_event": 0.14828358771979097,
+        "engagement": {
+          "tok_per_draft": 11.0,
+          "expected_tok_per_draft": 11.0,
+          "engaged": true
+        }
+      },
+      "artifact_hashes": [
+        {
+          "path": "output/fr13_kvremap_tail6/native11_control_kvr1/git_head.txt",
+          "sha256": "78d17f3f0915e37de7d5cc7d2f7e1839ae467aa50fd22f36febb27fb48c9af41"
+        },
+        {
+          "path": "output/fr13_kvremap_tail6/native11_control_kvr1/container_env.txt",
+          "sha256": "923b3083b0125a77103fdc770f2bbcca2e5f8a70ab9458845e45c49670e9b233"
+        },
+        {
+          "path": "output/fr13_kvremap_tail6/native11_control_kvr1/proxy_env.txt",
+          "sha256": "3e6862cc3a24cac6b648b8d76102f7fe0a743f887cdbea30dd69a66215f8e828"
+        },
+        {
+          "path": "output/fr13_kvremap_tail6/native11_control_kvr1/boot_log_snapshot.txt",
+          "sha256": "f339c953d0b9b54383b70e03dfdc9e89df0d8ba28d7d6a6b7c30f6e2469551c9"
+        },
+        {
+          "path": "output/fr13_kvremap_tail6/native11_control_kvr1/deploy_speed_kvr1.json",
+          "sha256": "acd116d76f6f58ccd6d8f72b668b90f2fabd75cb2da1292a04ed6fa6e2caeafc"
+        }
+      ],
+      "historical_binary_identity": "Unresolved: no run-time FA2/JIT binary digest in selected run artifacts; current disk hash cannot backfill it",
+      "historical_model_revision": "Unresolved: boot revision=None and mutable /models path; current model hashes do not prove July content",
+      "decision": "RELABEL: retain archived observation; requested T=0.6, duplicated target constraints source-reconstructed; do not claim nominal sampling equivalence or a current matched-build comparison"
+    },
+    {
+      "evidence_id": "H3",
+      "arm": "kvremap_tail6_kvr1",
+      "source_revision": "224c5db735dae01bd5a6b4d1dd1599db31640175",
+      "started_utc": "2026-07-22T07:21:25Z",
+      "ended_utc": "2026-07-22T10:40:58Z",
+      "requested_sampling": {
+        "LUMO_PROXY_FORCE_TEMPERATURE": "0.6",
+        "LUMO_PROXY_FORCE_TOP_P": "0.95",
+        "LUMO_PROXY_FORCE_TOP_K": "20"
+      },
+      "recorded_flags": {
+        "FR10_DECODE_MODE_DEFAULT": "tree_mtp",
+        "FR13_ATTN_KV_REMAP": "1",
+        "FR13_CFWD_GPU_TIMER": "1",
+        "FR13_DFWD_GPU_TIMER": "1",
+        "FR13_DRAFT_SOURCE": "merged",
+        "FR13_ENABLE_APC": "1",
+        "FR13_SLOT_REORDER": "1",
+        "VLLM_BATCH_INVARIANT": "0"
+      },
+      "boot_arguments": {
+        "model": "/models/qwen3.6-27b-fp8",
+        "attention_backend": "TREE_ATTN",
+        "max_model_len": 131072,
+        "max_num_seqs": 4,
+        "max_num_batched_tokens": 4096,
+        "gpu_memory_utilization": 0.6,
+        "mamba_ssm_cache_dtype": "float32",
+        "block_size": 1024,
+        "enable_prefix_caching": true,
+        "speculative_config": {
+          "method": "qwen3_5_mtp",
+          "num_speculative_tokens": 21,
+          "speculative_token_tree": "[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0)]"
+        },
+        "compilation_config": {
+          "mode": null,
+          "debug_dump_path": null,
+          "cache_dir": "",
+          "compile_cache_save_format": "binary",
+          "backend": "inductor",
+          "custom_ops": [],
+          "ir_enable_torch_wrap": null,
+          "splitting_ops": null,
+          "compile_mm_encoder": false,
+          "cudagraph_mm_encoder": false,
+          "encoder_cudagraph_token_budgets": [],
+          "encoder_cudagraph_max_vision_items_per_batch": 0,
+          "encoder_cudagraph_max_frames_per_batch": null,
+          "compile_sizes": null,
+          "compile_ranges_endpoints": null,
+          "inductor_compile_config": {
+            "enable_auto_functionalized_v2": false,
+            "size_asserts": false,
+            "alignment_asserts": false,
+            "scalar_asserts": false,
+            "combo_kernels": true,
+            "benchmark_combo_kernel": true
+          },
+          "inductor_passes": {},
+          "cudagraph_mode": "<CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>",
+          "cudagraph_num_of_warmups": 0,
+          "cudagraph_capture_sizes": null,
+          "cudagraph_copy_inputs": false,
+          "cudagraph_specialize_lora": true,
+          "use_inductor_graph_partition": null,
+          "pass_config": {},
+          "max_cudagraph_capture_size": null,
+          "dynamic_shapes_config": {
+            "type": "<DynamicShapesType.BACKED: 'backed'>",
+            "evaluate_guards": false,
+            "assume_32_bit_indexing": false
+          },
+          "local_cache_dir": null,
+          "fast_moe_cold_start": null,
+          "static_all_moe_layers": []
+        }
+      },
+      "vllm_version": "0.19.2rc1.dev134+gfe9c3d6c5 (boot record)",
+      "sampler_reconstruction": {
+        "changed": true,
+        "target_constraint_calls_in_forward": 2,
+        "calls": [
+          {
+            "line": 148,
+            "source": "apply_sampling_constraints(\n            target_logits,\n            metadata.cu_num_draft_tokens,\n            sampling_metadata,\n        )"
+          },
+          {
+            "line": 154,
+            "source": "apply_sampling_constraints(\n            target_logits,\n            metadata.cu_num_draft_tokens,\n            sampling_metadata,\n        )"
+          }
+        ],
+        "patcher_sha256": "31cbd3fbab034755c76eb457ee915606d6d8e86afb5b84bc4115565ac6e269e2",
+        "reconstructed_sampler_sha256": "5f0479ddfdab451079f668eccde5e999ac41e6e844b9b351c3480b452dc0450d",
+        "reconstructed_file": "p0/stock-image/reconstructed-kvremap_tail6_kvr1.py",
+        "patcher_messages": "",
+        "scope": "full historical sampler text-rewrite function; not a recovered runtime file"
+      },
+      "target_temperature_scale_inferred": 0.36,
+      "sampling_caveat": "Two full constraint passes include top-k/top-p; bonus/self-logit paths can differ. Not a globally equivalent clean temperature-0.36 run.",
+      "measurement": {
+        "schema": "fr13.measure.deploy_speed.v1",
+        "speed_basis": "d(request_decode_time_seconds_sum)/d(spec_decode_num_drafts_total)",
+        "s_per_fwd_gpu_basis": "d(fr13_decode_forward_gpu_seconds_total)/d(fr13_decode_forward_gpu_drafts_total) [MATCHED pure-decode drafts; NOT global spec_decode_num_drafts_total]",
+        "measured_tps_fullstep_wall_note": "committed_per_event / MEASURED wall per event (start-to-start deltas between consecutive pure-decode steps, idle-capped, chain broken on mixed/prefill steps). Includes ALL step cost: host glue, sampler, packer, scheduler gap.",
+        "component_gpu_note": "FR13_DFWD/CFWD_GPU_TIMER spans: drafter = propose_draft_token_ids (all D spine forwards); committer = the spec-decode rejection-sampler dispatch in _sample (accept/LCP/bonus decision + commit; includes the host committer loop's packed DtoH+sync when FR13_GPU_COMMITTER=0). Async cuda-event spans summed over the per-task brackets (d(vllm:fr13_drafter/committer_gpu_seconds_total)); ms_per_step = seconds/spans*1000, one span per spec decode step. Totals share the per-task-bracket overlap caveat at B>1; the ms-per-step ratio does not.",
+        "events_per_step": 2.7984997306146133,
+        "accept_per_event": 4.2856093411691925,
+        "committed_per_event": 5.2856093411691925,
+        "wall_s_per_event": 0.16087929312893964,
+        "engagement": {
+          "tok_per_draft": 21.0,
+          "expected_tok_per_draft": 21.0,
+          "engaged": true
+        }
+      },
+      "artifact_hashes": [
+        {
+          "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/git_head.txt",
+          "sha256": "4acb88d239e1ec970eeda717f34b4e6e81cce0aa2a6f5723d4cb99c17ab3474d"
+        },
+        {
+          "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/container_env.txt",
+          "sha256": "36e509d9dbe8639add09d78bde97a3f8b81a069f2e0e836c691d8a8c6bcece95"
+        },
+        {
+          "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/proxy_env.txt",
+          "sha256": "3e6862cc3a24cac6b648b8d76102f7fe0a743f887cdbea30dd69a66215f8e828"
+        },
+        {
+          "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/boot_log_snapshot.txt",
+          "sha256": "8c5a830240505e55b4080f0a9ef6f7a3f274d647b77fec61aaa15abdb08b3963"
+        },
+        {
+          "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/deploy_speed_kvr1.json",
+          "sha256": "bd8b1d65054c852053bf4492754af879769339c639f6d7a43f4e99e7bb41f2d8"
+        }
+      ],
+      "historical_binary_identity": "Unresolved: no run-time FA2/JIT binary digest in selected run artifacts; current disk hash cannot backfill it",
+      "historical_model_revision": "Unresolved: boot revision=None and mutable /models path; current model hashes do not prove July content",
+      "decision": "RELABEL: retain archived observation; requested T=0.6, duplicated target constraints source-reconstructed; do not claim nominal sampling equivalence or a current matched-build comparison"
+    }
+  ],
+  "selected_revision": "984f613d7885d9bf7898866827552b68a3199d0c",
+  "selected_revision_sampler": {
+    "changed": true,
+    "target_constraint_calls_in_forward": 1,
+    "calls": [
+      {
+        "line": 148,
+        "source": "apply_sampling_constraints(\n            target_logits,\n            metadata.cu_num_draft_tokens,\n            sampling_metadata,\n        )"
+      }
+    ],
+    "patcher_sha256": "c382ef22a5a8d4e84209e6723f8eea21c3819543c6e942c62951385b5c1c003e",
+    "reconstructed_sampler_sha256": "fb4e79e1361da1c59a3256f6eec555d982ea6bc48d3b84bba2ed055d9b104173",
+    "reconstructed_file": "p0/stock-image/reconstructed-current.py",
+    "patcher_messages": "[FR13_TEMP_FIX] rejection_sampler constraints: stock_apply=True legacy_double=False -> injected_extra_apply=False",
+    "scope": "exact current constraint-insertion block; not a full patcher boot"
+  },
+  "remaining_runtime_gate": "Fresh boot must archive actual patched files, native extension and JIT identities, model checksums, and sampler engagement before final measurements"
+}

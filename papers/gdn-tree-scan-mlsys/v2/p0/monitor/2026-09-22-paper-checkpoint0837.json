@@ -1,0 +1,11 @@
+{
+  "utc": "2026-09-22T08:38:03.442770+00:00",
+  "archive": "paper-review-20260922T0837Z.tar.gz",
+  "archive_sha256": "745ca13026dfff18f9cd1b50b7547d2e600477ce41af5098d2fa146e7c059111",
+  "files_verified": 98,
+  "companion_count": 2,
+  "accounting_audit": "PASS",
+  "extracted_latex_build": "PASS",
+  "warnings": [],
+  "scope": "Private intermediate review checkpoint: E7a and narrow E7b diagnostics reported; corrected serving-route qualification and E1 timing still in progress."
+}

@@ -1,0 +1,30 @@
+{
+  "utc": "2026-09-21T23:28:04.396906+00:00",
+  "run": "out-20260921T231030Z-e7a-tinygates-v3",
+  "status": "completed",
+  "source_start_end_equal": true,
+  "cubin_count": 76,
+  "cubin_mismatches": [],
+  "comparison_count": 201,
+  "invalid_comparisons": [],
+  "agreement": [
+    {
+      "result": "result_01_synthetic_chain11_tiny-gates.json",
+      "sha256": "59dc7575a93d0fd11e941df6a408677603dd93804498a849cc62dbf1ac322925",
+      "fp32_bitwise": 1.0,
+      "bf16_bitwise": 1.0
+    },
+    {
+      "result": "result_02_synthetic_chain5_tiny-gates.json",
+      "sha256": "5ec340e83930886721e99dcf37b6793198b89a35d100cea42fad2bcb5958fd7b",
+      "fp32_bitwise": 1.0,
+      "bf16_bitwise": 1.0
+    },
+    {
+      "result": "result_03_synthetic_caterpillar_tiny-gates.json",
+      "sha256": "a08de54a36ea0af347e3d050d0329940780b40969b1765ca3d3851c6074d3f95",
+      "fp32_bitwise": 1.0,
+      "bf16_bitwise": 1.0
+    }
+  ]
+}

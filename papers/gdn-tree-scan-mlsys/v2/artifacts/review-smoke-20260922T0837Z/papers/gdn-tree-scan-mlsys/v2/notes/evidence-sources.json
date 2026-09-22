@@ -1,0 +1,86 @@
+[
+  {
+    "evidence_id": "H3",
+    "path": "output/fr13_kvremap_tail6/native5_control_kvr1/deploy_speed_kvr1.json",
+    "sha256": "88deadb9f1ffac9985f263b985dae0dae16a8b2be09da30b2b076efc22cdee87",
+    "scope": "archived mixed-population accounting proxy; duplicated sampling constraints reconstructed; historical loaded binary unresolved"
+  },
+  {
+    "evidence_id": "H3",
+    "path": "output/fr13_kvremap_tail6/native11_control_kvr1/deploy_speed_kvr1.json",
+    "sha256": "acd116d76f6f58ccd6d8f72b668b90f2fabd75cb2da1292a04ed6fa6e2caeafc",
+    "scope": "archived mixed-population accounting proxy; duplicated sampling constraints reconstructed; historical loaded binary unresolved"
+  },
+  {
+    "evidence_id": "H3",
+    "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/deploy_speed_kvr1.json",
+    "sha256": "bd8b1d65054c852053bf4492754af879769339c639f6d7a43f4e99e7bb41f2d8",
+    "scope": "archived mixed-population accounting proxy; duplicated sampling constraints reconstructed; historical loaded binary unresolved"
+  },
+  {
+    "evidence_id": "H1",
+    "path": "FR13_REMAP_SHIP_RESULTS.md",
+    "sha256": "b1b5d28bdb0a0bebbd4c38780a873f237f06a35f716c0734a9726ef2d6f4e068",
+    "scope": "archived source; not a fresh experiment"
+  },
+  {
+    "evidence_id": "H2",
+    "path": "FR13_SLOT_REORDER_ARTIFACTS/VERDICT_TABLE.md",
+    "sha256": "fbea3e8dae6a3d3adf99d463ba7031cf8986709a124234164229b975d79a0b84",
+    "scope": "archived source; not a fresh experiment"
+  },
+  {
+    "evidence_id": "H3",
+    "path": "FR13_POSTSNAPFIX3_CLOSEOUT.md",
+    "sha256": "3ce92516ef36dacb525ed3694734c9de6bb0929a249b1cf43825b1d5a3c1a5a0",
+    "scope": "archived source; not a fresh experiment"
+  },
+  {
+    "evidence_id": "H4",
+    "path": "results/fr13_series_closeout_20260815/README.md",
+    "sha256": "2ddc816ae913f1dc914a2af0da6d391da0bab4717d07218a6a8ac3ddcb817998",
+    "scope": "archived source; not a fresh experiment"
+  },
+  {
+    "evidence_id": "H5",
+    "path": "results/fr13_b4_exact16_qc_20260814/fr13_b4_exact16_qc.json",
+    "sha256": "36e1643e82f87e66b9385f5246c78edb6ba7fab74293634c5dcbf7322df282fb",
+    "scope": "archived source; not a fresh experiment"
+  },
+  {
+    "evidence_id": "H6",
+    "path": "FR13_REPLAY_CHASEDOWN_BANK.md",
+    "sha256": "b3f466ea2ece55648a17555be0d645f04023025a2387e5af572b8a65d4d70286",
+    "scope": "documentary/code evidence; raw numerical captures not reproduced"
+  },
+  {
+    "evidence_id": "H6",
+    "path": "docs/archive/wy/FR13_WY_VS_SEQUENTIAL_VERDICT.md",
+    "sha256": "0dd72d180cc18f482593ab060d5cf699385f2cedafb858f7d1e681063954a861",
+    "scope": "documentary/code evidence; raw numerical captures not reproduced"
+  },
+  {
+    "evidence_id": "H6",
+    "path": "FR13_DIFFUSE_GDN_EXPLAINED.md",
+    "sha256": "b9d162e99ddbddbf45b60b34ec6c337bc9ee8b2035ec80fc0b19da6d71815ae2",
+    "scope": "documentary/code evidence; raw numerical captures not reproduced"
+  },
+  {
+    "evidence_id": "H6",
+    "path": "FR13_REALIZATION_AGREEMENT.md",
+    "sha256": "572d0387bc20e48232289c6e8cf60d9fb7363d9de7830ad0947e86ee9b98e561",
+    "scope": "documentary/code evidence; raw numerical captures not reproduced"
+  },
+  {
+    "evidence_id": "H6",
+    "path": "results/fr14_nvfp4_port_20260816/REDTEAM_20260816.md",
+    "sha256": "902814907c5642ce917fbda8f7ca955b3d859d4caae2d22570b448c4121d2736",
+    "scope": "documentary/code evidence; raw numerical captures not reproduced"
+  },
+  {
+    "evidence_id": "H6",
+    "path": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+    "sha256": "d9dd0c697b466180ab5d834a52555c1516edb534e0a3d1bd3094e0d1489c24c8",
+    "scope": "documentary/code evidence; raw numerical captures not reproduced"
+  }
+]

@@ -1,0 +1,32 @@
+{
+ "batch": 1,
+ "n_requests": 10,
+ "preflight": 0,
+ "warmup": 2,
+ "timed": 8,
+ "invalid": null,
+ "finish": {
+  "w0": "length",
+  "w1": "length",
+  "t0": "length",
+  "t1": "length",
+  "t2": "length",
+  "t3": "stop",
+  "t4": "length",
+  "t5": "length",
+  "t6": "length",
+  "t7": "length"
+ },
+ "api_tokens": {
+  "w0": 32,
+  "w1": 32,
+  "t0": 128,
+  "t1": 128,
+  "t2": 128,
+  "t3": 101,
+  "t4": 128,
+  "t5": 128,
+  "t6": 128,
+  "t7": 128
+ }
+}

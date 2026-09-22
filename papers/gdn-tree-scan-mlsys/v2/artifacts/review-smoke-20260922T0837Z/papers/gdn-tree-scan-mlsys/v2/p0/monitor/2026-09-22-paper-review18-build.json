@@ -1,0 +1,9 @@
+{
+  "utc": "2026-09-22T07:46:37.151581+00:00",
+  "main_tex_sha256": "be61c9192292d006eab7326cc091d1fe135c35fee037d1cf542a98899f1d99cd",
+  "pdf_sha256": "51e4f92870866e2f00c13de7231effa864a7d7f9ba3aabe79d041b039b94abc1",
+  "pages": 12,
+  "build": "latexmk clean final log, no overfull or undefined warnings",
+  "visual_qa": "Rendered pages9-12 inspected; tables, added stage-isolated diagnostics, continuation limits, references fit without clipping. Earlier pages unchanged from previous11pagecheckpoint.",
+  "scope": "Verified verifier and commit single-prefix diagnostics integrated; current route KV/sampler/composition and E1 remain open; independent section evidence review pending report18."
+}

@@ -1,0 +1,65 @@
+{
+  "checks": {
+    "b1_pilot_pipeline_runs_insufficient_support_not_invalid": {
+      "pass": true,
+      "detail": {
+        "status": "INSUFFICIENT_SUPPORT",
+        "floor": {
+          "rule": "every one of the 8 timed prompts >= 1 retained interval",
+          "prompts": [
+            "p072"
+          ],
+          "missing": [],
+          "pass": false
+        },
+        "per_prompt": {
+          "p072": {
+            "intervals": 11,
+            "wall_s": 13.273978726007044,
+            "tokens": 29
+          }
+        }
+      }
+    },
+    "phase_translated_to_engine_ids": {
+      "pass": true,
+      "detail": {
+        "phases": {
+          "warmup": [],
+          "timed": [
+            "cmpl-95488b508431b321-0-9d01285a"
+          ]
+        },
+        "cell_phases_api_ids": {
+          "warmup": [],
+          "timed": [
+            "cmpl-95488b508431b321"
+          ]
+        },
+        "api_to_engine_rule": "exact or unique '<api id>-' prefix (same as the token map)",
+        "note": "preflight and warm-up requests are the joiner's prespecified 'warmup' exclusion"
+      }
+    },
+    "unmapped_phase_id_is_invalid": {
+      "pass": true,
+      "detail": [
+        "phase requests without a unique engine id: [('timed', 'cmpl-DOESNOTEXIST')]"
+      ]
+    },
+    "summary_writes_preliminary_only_no_terminal_result": {
+      "pass": true,
+      "detail": null
+    },
+    "zero_usable_intervals_complete_reconciliation_is_insufficient_support_not_invalid": {
+      "pass": true,
+      "detail": [
+        0,
+        "INSUFFICIENT_SUPPORT",
+        [
+          "zero retained intervals with complete API reconciliation (joiner rc 3; EOS/budget outcome retained)"
+        ]
+      ]
+    }
+  },
+  "all_pass": true
+}

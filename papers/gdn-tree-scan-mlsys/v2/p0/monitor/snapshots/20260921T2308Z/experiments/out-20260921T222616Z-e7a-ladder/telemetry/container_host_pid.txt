@@ -1,0 +1,6 @@
+recorded_utc=2026-09-21T22:33:37Z
+container_name=e7a-222616
+pid=2748559
+descendants=
+method=docker inspect .State.Pid (container PID 1 = python3 entrypoint) + ps --ppid descendants; recorded while the container was running
+nvidia_smi_compute_apps_at_record=2748559, python3;

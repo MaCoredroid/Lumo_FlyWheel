@@ -1,0 +1,22 @@
+{
+  "utc": "2026-09-22T06:57:33.186542+00:00",
+  "pages": 11,
+  "build": "latexmk successful; no undefined citations/references or overfull boxes",
+  "visual_QA": "All pages contact render reviewed; final changed5,6,10,11 reviewed separately; no overflow; removed old forced reference page break.",
+  "files": {
+    "main.tex": "5e579cbf64ed4211efafbbdd9e15acc8ba99a53574162fdc12e6069178255b76",
+    "abstract.tex": "2952d72ce3c00fa1f425b4ef63abbb8324dd2f5180261402c24576ace10f7e19",
+    "main.pdf": "9b15aabb3697a9ee54ed0909c2530a4ddcb423ce2c94300c2ea014dc2e20efd1",
+    "main.bbl": "cada454cb0869be7006bbbd3a09fa50c02f93d6fdfc41118b9c76b99f343c2e1",
+    "figures/cost-breakdown.tikz": "a29baf437e9f19ee1c33111a07645daed2ace8857492b6daf29468452ee62fee",
+    "scripts/audit_evidence.py": "e801bce52db5ecf761514b1aae6a346c4b50ed5ee368c459a2a3156693050433",
+    "README.md": "a4c80e4afb7f545aaa6e7a323fc51bf62face07151ddf8c7080525f3335efd60",
+    "results/historical-metrics.csv": "ab8bd3bdc07bf5a8eba168dcbb9844bcacf53121136e68d6656cfdff81016e94",
+    "results/historical-supports.json": "2a85237b412479febae72886597e4f64aa0a6e18f8ac3dd3b66a1799837794e7",
+    "results/historical-macros.tex": "228e73de3c30abb84d728c7a86f814bb31f93f6f3b2970394956c7ab881b6c09",
+    "results/derived-accounting.json": "0ae3f4c186da6ff19c4bbf07caad40ff88f18f87fc02537b460f4f9c01d41d95",
+    "notes/evidence-sources.json": "c8dbf013f7ba1c8fb3344bfe4191e99b77213c53460881772a421daee52bb41b",
+    "p0/P0-MEASUREMENT-ERRATUM.md": "83ce2026e5bb7e544b210ddd96d3a039989a1f631f8e2b5c6ffd190b98c50d8a",
+    "p0/monitor/closure-ledger.md": "55b6f54237f7d600db9cafd9c679b44325cb5b8e351a65804ba9ffd5e0b94f8a"
+  }
+}

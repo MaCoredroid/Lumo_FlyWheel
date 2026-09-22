@@ -1,0 +1,9 @@
+{
+  "utc": "2026-09-22T08:23:30.867041+00:00",
+  "tex_sha256": "1b0720e6fa7f2621b5d8afa6b3f4a38d587450202c99dd45c079a712558efb3f",
+  "pdf_sha256": "242689ea18200d4dfdfbb76cc1a121e5f11669b67bcdb3cbf4587f7871df0ba4",
+  "pages": 12,
+  "scope": "Clarify E7a counts vs single-prefix E7b; no candidate promotion after frozen failures; distinguish cat10 depth5 from longer chain11",
+  "build": "staged exact current main.tex; clean final LaTeX log; changedpages10to12visuallyinspected",
+  "previous_build": "2026-09-22-paper-review18-kv-build.json"
+}

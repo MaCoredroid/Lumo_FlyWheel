@@ -1,0 +1,76 @@
+{
+ "schema": "e1.qualification_manifest.v1",
+ "written_utc": "2026-09-22T09:46:34Z",
+ "rule": "The runner treats a key '<arm>/<batch>' under 'qualified' as eligible for timing; a key '<arm>/<batch>:preflight' under 'qualified' enables the native untimed preflight segment inside that arm x batch's first planned boot (live PASS before warm-up/timed, final sealed-ledger audit PASS -> the runner records '<arm>/<batch>' in the campaign's qualification.json). Anything else is 'not qualified \u2014 not timed'.",
+ "qualified": {
+  "tree/B1": {
+   "evidence": [
+    "out-20260922T082815Z-e2-b1-policyB-sync-p072/e7b_001_p072_arm1_none-B_fs_ieee-all/ (policy B, sync; provenance 51/51; operands gate v2 PASS; capture gate v3e PASS 12/12 blocks; fixture fidelity T6 7.15e-7 / T9 (served bf16 ULP16) 1 / T10 (served output abs) 2.36e-4; E1 joiner 11 intervals; API token ids)"
+   ],
+   "gates": {
+    "operands_gate": "f5f5ec29fe04c023",
+    "capture_gate": "0f0aef4f7880427a",
+    "align": "3983b57e0bb0e52c"
+   },
+   "qualified_utc": "2026-09-22T09:28:02Z",
+   "authorization": "parent 2026-09-22 (~09:2xZ) after the independent B4 PASS (456 assertions; 53/53 layer-62 fidelity rows; 49/49 state->next-h0 links incl. compaction; 32/32 request blocks; 128 derived API ids == ledger prefixes)",
+   "gate_sources_sha256": {
+    "capture_gate_v3e": "0f0aef4f7880427a3afefc4a42dc2000526b79afa833cfff9ea77b887b78be13",
+    "ledger_align": "3983b57e0bb0e52c4abf6ba6a31155febd96632f583597cd5ff7df6bafdd997e",
+    "operands_gate_v2": "f5f5ec29fe04c0238deff807e09c302a80328318aeea51278f864c35b5ac754f",
+    "capture_gate_tests": "fc7e12f6f206512b19257623ef31f2f86d3eb703b0007fdee9b82ba024aa9bf1",
+    "continuation_v2": "e00e8684facfb819e12d16ff0e5d649315cdaf3ef14df73417f5a5b87001e809",
+    "derived_sidecar": "b1c3e3f08c8208c7d0fd58ff01bd596f872b7a1f9062bc434b347946707b7340"
+   },
+   "reports_sha256": {
+    "e2-b4-gate-redteam.md": "e21d757776deddcd524b581d26b4068e45c59d3f93658db737f4ab509ccd49f9",
+    "e2-b4-api-inversion-redteam.md": "f3b37263801f0faeaf4ecd4faeaeb6382b0e014fac54501109e4367e1e0a388a",
+    "e2-policyB-b1-redteam.md": "dd7de6d504fdd4daf8d091b36cc8e02b9ebe7c89aee7e61e81fa518b51e1be8f",
+    "e2-b4-final-redteam.md": "105d5eb78029e70a864cbefa3cb71a2886f94733d9a107055be59ef77d654788"
+   },
+   "fidelity_summary_of_record": "out-20260922T084319Z-e2-b4-policyB-sync-cohort4/fidelity_per_request_summary.v2.json (v1 labels reversed; preserved)"
+  },
+  "tree/B4": {
+   "evidence": [
+    "out-20260922T084319Z-e2-b4-policyB-sync-cohort4/e7b_001_p072_arm1_none-B_fs_ieee-all/ (policy B, sync, MAX_NUM_SEQS=4; REQUIRE/KV POLICY OK; operands gate v2 PASS x4 requests; capture gate v3e PASS 32/32 blocks, 8 captures bound; fidelity per request T6<=9.54e-7 / T9 (served bf16 ULP16) 1 / T10 (served output abs) <=4.79e-4; batch order p072,p095,p017,p085; E1 joiner 7 four-request intervals; API ids DERIVED (certified inversion sidecar))"
+   ],
+   "limitations": [
+    "API token ids for this pilot are DERIVED from decoded strings (certified exact inversion), not requested ids; every E1 cell requests ids directly"
+   ],
+   "qualified_utc": "2026-09-22T09:28:02Z",
+   "authorization": "parent 2026-09-22 (~09:2xZ) after the independent B4 PASS (456 assertions; 53/53 layer-62 fidelity rows; 49/49 state->next-h0 links incl. compaction; 32/32 request blocks; 128 derived API ids == ledger prefixes)",
+   "gate_sources_sha256": {
+    "capture_gate_v3e": "0f0aef4f7880427a3afefc4a42dc2000526b79afa833cfff9ea77b887b78be13",
+    "ledger_align": "3983b57e0bb0e52c4abf6ba6a31155febd96632f583597cd5ff7df6bafdd997e",
+    "operands_gate_v2": "f5f5ec29fe04c0238deff807e09c302a80328318aeea51278f864c35b5ac754f",
+    "capture_gate_tests": "fc7e12f6f206512b19257623ef31f2f86d3eb703b0007fdee9b82ba024aa9bf1",
+    "continuation_v2": "e00e8684facfb819e12d16ff0e5d649315cdaf3ef14df73417f5a5b87001e809",
+    "derived_sidecar": "b1c3e3f08c8208c7d0fd58ff01bd596f872b7a1f9062bc434b347946707b7340"
+   },
+   "reports_sha256": {
+    "e2-b4-gate-redteam.md": "e21d757776deddcd524b581d26b4068e45c59d3f93658db737f4ab509ccd49f9",
+    "e2-b4-api-inversion-redteam.md": "f3b37263801f0faeaf4ecd4faeaeb6382b0e014fac54501109e4367e1e0a388a",
+    "e2-policyB-b1-redteam.md": "dd7de6d504fdd4daf8d091b36cc8e02b9ebe7c89aee7e61e81fa518b51e1be8f",
+    "e2-b4-final-redteam.md": "105d5eb78029e70a864cbefa3cb71a2886f94733d9a107055be59ef77d654788"
+   },
+   "fidelity_summary_of_record": "out-20260922T084319Z-e2-b4-policyB-sync-cohort4/fidelity_per_request_summary.v2.json (v1 labels reversed; preserved)"
+  },
+  "native-5/B1:preflight": {
+   "rule": "untimed preflight inside cell 1 (first planned native-5 B1 boot)"
+  },
+  "native-5/B4:preflight": {
+   "rule": "untimed preflight inside cell 2"
+  },
+  "native-11/B4:preflight": {
+   "rule": "untimed preflight inside cell 3"
+  },
+  "native-11/B1:preflight": {
+   "rule": "untimed preflight inside cell 4"
+  }
+ },
+ "proposed": {},
+ "route_labels": {
+  "tree": "cat10 tree, TREE_ATTN, policy B (remap 1 / reorder 0 / syncfree 1), REPLAY_ROUTE=1, EAGER_PACK=1, TREE_CONV_FUSED=1 (baked), RUNROW_INIT=1, eager, cache off, sync scheduling",
+  "native": "PATCHED-RUNNER NATIVE BASELINE: stock MTP method, naive_mtp decode mode, FR10_ENABLE_TREE_GDN=0, no tree descriptor, FLASH_ATTN, eager, cache off, sync scheduling; tree-branch guards exclude the baked replay/conv paths (independent source review: patched rejection_sample minus the two tree-parent branches is AST-identical to pinned stock; native conv/update call ASTs equal stock)"
+ }
+}

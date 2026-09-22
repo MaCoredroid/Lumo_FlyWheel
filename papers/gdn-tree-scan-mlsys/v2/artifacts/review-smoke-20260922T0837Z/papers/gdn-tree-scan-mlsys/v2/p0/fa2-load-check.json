@@ -1,0 +1,7 @@
+{
+  "observed_utc": "2026-09-21T21:38:10.916877+00:00",
+  "returncode": 0,
+  "stdout": "{\"torch\": \"2.11.0+cu130\", \"library_loaded\": true, \"gpu_exposed\": false}\n",
+  "stderr": "",
+  "scope": "CPU-only shared-library load, no GPU exposed and no model inference"
+}

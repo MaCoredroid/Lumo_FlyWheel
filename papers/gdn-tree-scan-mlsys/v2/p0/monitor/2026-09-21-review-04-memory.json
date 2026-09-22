@@ -1,0 +1,7 @@
+{
+  "observed_utc": "2026-09-21T22:47:46.576748+00:00",
+  "available_gib": 58.956722259521484,
+  "free_gib": 15.482975006103516,
+  "swap_used_gib": 6.9481201171875,
+  "gate": "Both current launchers require MemAvailable >=80 GiB and swap_used==0; not executed by reviewer"
+}

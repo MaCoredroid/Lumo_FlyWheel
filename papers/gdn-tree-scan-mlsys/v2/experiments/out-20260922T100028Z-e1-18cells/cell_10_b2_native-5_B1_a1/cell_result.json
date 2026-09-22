@@ -1,0 +1,186 @@
+{
+ "cell": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_10_b2_native-5_B1_a1",
+ "batch": 1,
+ "status": "VALID",
+ "reasons": [],
+ "join": {
+  "n_events": 1064,
+  "invalid": null,
+  "refused": null,
+  "phases": {
+   "warmup": [
+    "cmpl-9b936460e373ca8c-0-aac7b8df",
+    "cmpl-bd4ae32542611923-0-a53235de"
+   ],
+   "timed": [
+    "cmpl-852c9fb50e07afa6-0-bb1d057b",
+    "cmpl-891179e31c764bf0-0-9cb393aa",
+    "cmpl-8d0f65bbe7ff4de8-0-bf08b944",
+    "cmpl-9afb7dfd71cb4961-0-a45f9818",
+    "cmpl-a6a27b6545142a31-0-afdaeefa",
+    "cmpl-a7f476f0df275819-0-9c61abe2",
+    "cmpl-b0749e09f79e5c27-0-aac2dfa6",
+    "cmpl-b74a5126dbb48fc6-0-ad6ff819"
+   ]
+  },
+  "n_forwards": 354,
+  "n_output_records": 354,
+  "n_nonpure_output_records": 14,
+  "n_physical_steps": 340,
+  "n_chain_breaks": 14,
+  "n_usable": 312,
+  "n_excluded": 28,
+  "excluded_wall_s_total": 21.07964734826237,
+  "truncated_tail_tokens": {
+   "cmpl-bd4ae32542611923-0-a53235de": 2,
+   "cmpl-9b936460e373ca8c-0-aac7b8df": 2,
+   "cmpl-a7f476f0df275819-0-9c61abe2": 1,
+   "cmpl-a6a27b6545142a31-0-afdaeefa": 2,
+   "cmpl-8d0f65bbe7ff4de8-0-bf08b944": 3,
+   "cmpl-b74a5126dbb48fc6-0-ad6ff819": 2,
+   "cmpl-852c9fb50e07afa6-0-bb1d057b": 5,
+   "cmpl-b0749e09f79e5c27-0-aac2dfa6": 1
+  },
+  "over_cap_diagnostic": {
+   "cap_s": 1.5,
+   "n_intervals_over_cap": 0,
+   "wall_s_over_cap": 0,
+   "physical_step_ids": [],
+   "tokens_per_wall_second_trimmed_DIAGNOSTIC_ONLY": 13.66210470123698
+  },
+  "phase_summary": {
+   "warmup": {
+    "requests": 2,
+    "ledger_tokens": 68,
+    "api_tokens": 64
+   },
+   "timed": {
+    "requests": 8,
+    "ledger_tokens": 1038,
+    "api_tokens": 1024
+   }
+  },
+  "token_evidence": {
+   "cmpl-a7f476f0df275819-0-9c61abe2": 128,
+   "cmpl-a6a27b6545142a31-0-afdaeefa": 128,
+   "cmpl-891179e31c764bf0-0-9cb393aa": 128,
+   "cmpl-8d0f65bbe7ff4de8-0-bf08b944": 128,
+   "cmpl-9afb7dfd71cb4961-0-a45f9818": 128,
+   "cmpl-b74a5126dbb48fc6-0-ad6ff819": 128,
+   "cmpl-852c9fb50e07afa6-0-bb1d057b": 128,
+   "cmpl-b0749e09f79e5c27-0-aac2dfa6": 128,
+   "cmpl-bd4ae32542611923-0-a53235de": 32,
+   "cmpl-9b936460e373ca8c-0-aac7b8df": 32
+  },
+  "ledger_tokens_all_forwards": 1106,
+  "sum_wall_s_unique_physical_steps": 72.8291886029765,
+  "sum_emitted_tokens_api_bound_pure_support": 995,
+  "n_request_rows": 312,
+  "tokens_per_wall_second": 13.66210470123698
+ },
+ "per_prompt": {
+  "p072": {
+   "intervals": 29,
+   "wall_s": 6.717668409459293,
+   "tokens": 125
+  },
+  "p017": {
+   "intervals": 36,
+   "wall_s": 8.35722023062408,
+   "tokens": 123
+  },
+  "p015": {
+   "intervals": 39,
+   "wall_s": 9.031439428217709,
+   "tokens": 121
+  },
+  "p021": {
+   "intervals": 39,
+   "wall_s": 9.037083177827299,
+   "tokens": 126
+  },
+  "p085": {
+   "intervals": 46,
+   "wall_s": 10.806427562609315,
+   "tokens": 126
+  },
+  "p095": {
+   "intervals": 46,
+   "wall_s": 10.77868003025651,
+   "tokens": 123
+  },
+  "p058": {
+   "intervals": 43,
+   "wall_s": 10.111984508112073,
+   "tokens": 126
+  },
+  "p083": {
+   "intervals": 34,
+   "wall_s": 7.988685255870223,
+   "tokens": 125
+  }
+ },
+ "floor": {
+  "rule": "every one of the 8 timed prompts >= 1 retained interval",
+  "prompts": [
+   "p072",
+   "p017",
+   "p015",
+   "p021",
+   "p085",
+   "p095",
+   "p058",
+   "p083"
+  ],
+  "missing": [],
+  "pass": true
+ },
+ "api_totals": {
+  "p072/w0": 32,
+  "p072/w1": 32,
+  "p072/t0": 128,
+  "p017/t1": 128,
+  "p015/t2": 128,
+  "p021/t3": 128,
+  "p085/t4": 128,
+  "p095/t5": 128,
+  "p058/t6": 128,
+  "p083/t7": 128
+ },
+ "finish": {
+  "w0": "length",
+  "w1": "length",
+  "t0": "length",
+  "t1": "length",
+  "t2": "length",
+  "t3": "length",
+  "t4": "length",
+  "t5": "length",
+  "t6": "length",
+  "t7": "length"
+ },
+ "primary": {
+  "tokens_per_wall_second": 13.66210470123698,
+  "sum_wall_s_unique_physical_steps": 72.8291886029765,
+  "sum_emitted_tokens_api_bound_pure_support": 995,
+  "n_usable": 312,
+  "n_excluded": 28
+ },
+ "diagnostic_over_cap": {
+  "cap_s": 1.5,
+  "n_intervals_over_cap": 0,
+  "wall_s_over_cap": 0,
+  "physical_step_ids": [],
+  "tokens_per_wall_second_trimmed_DIAGNOSTIC_ONLY": 13.66210470123698
+ },
+ "terminal_seal": {
+  "sealed": true,
+  "utc": "2026-09-22T11:16:19Z",
+  "gates": {
+   "verify": "PASS",
+   "summary": "VALID"
+  },
+  "campaign_snapshot_sha256sums": "d1ab57c53464ef814c7eed3b87ebd21a670cf8278541b8adc4864e5cf6dc2ecd",
+  "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+ }
+}

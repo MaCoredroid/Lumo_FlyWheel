@@ -1,0 +1,152 @@
+{
+ "cell": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_09_b2_native-5_B4_a1",
+ "batch": 4,
+ "status": "VALID",
+ "reasons": [],
+ "join": {
+  "n_events": 359,
+  "invalid": null,
+  "refused": null,
+  "phases": {
+   "warmup": [
+    "cmpl-80799232e79c65c4-0-91bcef47",
+    "cmpl-8921c9c11408c151-0-a5211bec",
+    "cmpl-9f9d8acd16ad7d26-0-8e8aab8b",
+    "cmpl-b0aeb0d04a65cf89-0-8eb350c9"
+   ],
+   "timed": [
+    "cmpl-9199b9fb422b88d3-0-8f5d1230",
+    "cmpl-9a6cf6a7802e6be7-0-98264f5c",
+    "cmpl-9b5c2f9301986781-0-8cfac45d",
+    "cmpl-a004b0b47e86072f-0-95f11ddd",
+    "cmpl-a020fbb2fbb62311-0-b6920f3a",
+    "cmpl-b06b23823dd30595-0-bafff7f6",
+    "cmpl-b4195510d88caf2c-0-bc9637c3",
+    "cmpl-b778853b7d46bb3b-0-8414cc0c"
+   ]
+  },
+  "n_forwards": 119,
+  "n_output_records": 119,
+  "n_nonpure_output_records": 13,
+  "n_physical_steps": 106,
+  "n_chain_breaks": 13,
+  "n_usable": 64,
+  "n_excluded": 42,
+  "excluded_wall_s_total": 24.372016315348446,
+  "truncated_tail_tokens": {
+   "cmpl-80799232e79c65c4-0-91bcef47": 5,
+   "cmpl-8921c9c11408c151-0-a5211bec": 2,
+   "cmpl-b06b23823dd30595-0-bafff7f6": 1,
+   "cmpl-9b5c2f9301986781-0-8cfac45d": 3,
+   "cmpl-b778853b7d46bb3b-0-8414cc0c": 1,
+   "cmpl-9a6cf6a7802e6be7-0-98264f5c": 4,
+   "cmpl-a004b0b47e86072f-0-95f11ddd": 1,
+   "cmpl-9199b9fb422b88d3-0-8f5d1230": 1,
+   "cmpl-a020fbb2fbb62311-0-b6920f3a": 2,
+   "cmpl-b4195510d88caf2c-0-bc9637c3": 1
+  },
+  "over_cap_diagnostic": {
+   "cap_s": 1.5,
+   "n_intervals_over_cap": 0,
+   "wall_s_over_cap": 0,
+   "physical_step_ids": [],
+   "tokens_per_wall_second_trimmed_DIAGNOSTIC_ONLY": 52.51945957635484
+  },
+  "phase_summary": {
+   "warmup": {
+    "requests": 4,
+    "ledger_tokens": 135,
+    "api_tokens": 128
+   },
+   "timed": {
+    "requests": 8,
+    "ledger_tokens": 1038,
+    "api_tokens": 1024
+   }
+  },
+  "token_evidence": {
+   "cmpl-b06b23823dd30595-0-bafff7f6": 128,
+   "cmpl-9b5c2f9301986781-0-8cfac45d": 128,
+   "cmpl-b778853b7d46bb3b-0-8414cc0c": 128,
+   "cmpl-9a6cf6a7802e6be7-0-98264f5c": 128,
+   "cmpl-a004b0b47e86072f-0-95f11ddd": 128,
+   "cmpl-9199b9fb422b88d3-0-8f5d1230": 128,
+   "cmpl-a020fbb2fbb62311-0-b6920f3a": 128,
+   "cmpl-b4195510d88caf2c-0-bc9637c3": 128,
+   "cmpl-8921c9c11408c151-0-a5211bec": 32,
+   "cmpl-b0aeb0d04a65cf89-0-8eb350c9": 32,
+   "cmpl-80799232e79c65c4-0-91bcef47": 32,
+   "cmpl-9f9d8acd16ad7d26-0-8e8aab8b": 32
+  },
+  "ledger_tokens_all_forwards": 1173,
+  "sum_wall_s_unique_physical_steps": 15.327652007341385,
+  "sum_emitted_tokens_api_bound_pure_support": 805,
+  "n_request_rows": 256,
+  "tokens_per_wall_second": 52.51945957635484
+ },
+ "per_cohort": {
+  "A(1-4)": {
+   "intervals": 29,
+   "wall_s": 6.824562408961356,
+   "tokens": 375
+  },
+  "B(5-8)": {
+   "intervals": 35,
+   "wall_s": 8.50308959838003,
+   "tokens": 430
+  }
+ },
+ "floor": {
+  "rule": "each of the 2 timed cohorts >= 1 complete four-request same-cohort interval",
+  "cohorts": [
+   "A(1-4)",
+   "B(5-8)"
+  ],
+  "missing": [],
+  "pass": true
+ },
+ "api_totals": {
+  "p072/w0": 32,
+  "p017/w1": 32,
+  "p015/w2": 32,
+  "p021/w3": 32,
+  "p072/ta0": 128,
+  "p017/ta1": 128,
+  "p015/ta2": 128,
+  "p021/ta3": 128,
+  "p085/tb0": 128,
+  "p095/tb1": 128,
+  "p058/tb2": 128,
+  "p083/tb3": 128
+ },
+ "finish": {
+  "w0": "length",
+  "w1": "length",
+  "w2": "length",
+  "w3": "length",
+  "ta0": "length",
+  "ta1": "length",
+  "ta2": "length",
+  "ta3": "length",
+  "tb0": "length",
+  "tb1": "length",
+  "tb2": "length",
+  "tb3": "length"
+ },
+ "primary": {
+  "tokens_per_wall_second": 52.51945957635484,
+  "sum_wall_s_unique_physical_steps": 15.327652007341385,
+  "sum_emitted_tokens_api_bound_pure_support": 805,
+  "n_usable": 64,
+  "n_excluded": 42
+ },
+ "diagnostic_over_cap": {
+  "cap_s": 1.5,
+  "n_intervals_over_cap": 0,
+  "wall_s_over_cap": 0,
+  "physical_step_ids": [],
+  "tokens_per_wall_second_trimmed_DIAGNOSTIC_ONLY": 52.51945957635484
+ },
+ "preliminary": true,
+ "note": "PRELIMINARY \u2014 not eligible until the runner writes cell_result.json with terminal_seal"
+}

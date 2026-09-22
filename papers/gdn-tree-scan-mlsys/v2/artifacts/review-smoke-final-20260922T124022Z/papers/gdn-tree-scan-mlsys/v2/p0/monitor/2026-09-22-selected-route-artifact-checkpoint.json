@@ -1,0 +1,24 @@
+{
+  "utc": "2026-09-22T09:34:44.397994+00:00",
+  "archive": "artifacts/selected-route-20260922T0930Z.tar.gz",
+  "archive_sha256": "7f127f0c2e8198f067eb0f59737e1a58afc34991aa562dacbc11d7d147d25a30",
+  "files_verified": 840,
+  "bytes": 1735458237,
+  "embedded_manifest_matches": true,
+  "preserved_evidence": {
+    "operands_gate.json": [
+      "experiments/out-20260922T084319Z-e2-b4-policyB-sync-cohort4/e7b_001_p072_arm1_none-B_fs_ieee-all/operands_gate.json"
+    ],
+    "capture_gate.v3.json": [
+      "experiments/out-20260922T084319Z-e2-b4-policyB-sync-cohort4/e7b_001_p072_arm1_none-B_fs_ieee-all/capture_gate.v3.json"
+    ],
+    "capture_gate.v3e.json": [
+      "experiments/out-20260922T084319Z-e2-b4-policyB-sync-cohort4/e7b_001_p072_arm1_none-B_fs_ieee-all/capture_gate.v3e.json"
+    ],
+    "e1_api_tokens.derived.json": [
+      "experiments/out-20260922T084319Z-e2-b4-policyB-sync-cohort4/e7b_001_p072_arm1_none-B_fs_ieee-all/e1_api_tokens.derived.json"
+    ]
+  },
+  "corrected_fidelity_label_summary_included": true,
+  "scope": "Private finite serving-contract evidence; no live conv/KV byte snapshots, full-model sequential-equivalence proof, warmed timing, or stochastic-law guarantee"
+}

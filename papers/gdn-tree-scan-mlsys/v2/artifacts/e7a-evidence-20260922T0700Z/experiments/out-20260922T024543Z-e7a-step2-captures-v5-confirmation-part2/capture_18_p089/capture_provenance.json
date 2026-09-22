@@ -1,0 +1,931 @@
+{
+ "run": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_18_p089",
+ "inspector_path": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_18_p089/script_snapshot/inspect_capture.py",
+ "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db",
+ "checks": {
+  "expected_record_exists": {
+   "pass": true,
+   "detail": null
+  },
+  "payload_exists": {
+   "pass": true,
+   "detail": 3607409
+  },
+  "no_warmup_invalid_marker": {
+   "pass": true,
+   "detail": null
+  },
+  "request_record_exists": {
+   "pass": true,
+   "detail": "cmpl-8866e3df066cfe8d"
+  },
+  "schema": {
+   "pass": true,
+   "detail": "fr10.tree_gdn_scan_capture.v1"
+  },
+  "layer_binding": {
+   "pass": true,
+   "detail": {
+    "payload": "language_model.model.layers.62.linear_attn",
+    "expected": "language_model.model.layers.62.linear_attn"
+   }
+  },
+  "batch_index_zero": {
+   "pass": true,
+   "detail": 0
+  },
+  "topology_binding": {
+   "pass": true,
+   "detail": {
+    "payload": [
+     -1,
+     0,
+     1,
+     1,
+     2,
+     2,
+     4,
+     4,
+     6,
+     6
+    ],
+    "expected": [
+     -1,
+     0,
+     1,
+     1,
+     2,
+     2,
+     4,
+     4,
+     6,
+     6
+    ],
+    "n_actual": 10
+   }
+  },
+  "n_pad": {
+   "pass": true,
+   "detail": 16
+  },
+  "state_index_nonnegative_int": {
+   "pass": true,
+   "detail": 21
+  },
+  "h0_pre_state_nontrivial": {
+   "pass": true,
+   "detail": {
+    "h0_abs_max": 4.00728178024292,
+    "note": "a NULL/zero bank row would indicate an unselected pre-state"
+   }
+  },
+  "shape_dtype_query_spec": {
+   "pass": true,
+   "detail": {
+    "got": [
+     [
+      10,
+      16,
+      128
+     ],
+     "torch.bfloat16"
+    ],
+    "expected": [
+     [
+      10,
+      16,
+      128
+     ],
+     "torch.bfloat16"
+    ]
+   }
+  },
+  "shape_dtype_key_spec": {
+   "pass": true,
+   "detail": {
+    "got": [
+     [
+      10,
+      16,
+      128
+     ],
+     "torch.bfloat16"
+    ],
+    "expected": [
+     [
+      10,
+      16,
+      128
+     ],
+     "torch.bfloat16"
+    ]
+   }
+  },
+  "shape_dtype_value_tree": {
+   "pass": true,
+   "detail": {
+    "got": [
+     [
+      10,
+      48,
+      128
+     ],
+     "torch.bfloat16"
+    ],
+    "expected": [
+     [
+      10,
+      48,
+      128
+     ],
+     "torch.bfloat16"
+    ]
+   }
+  },
+  "shape_dtype_a": {
+   "pass": true,
+   "detail": {
+    "got": [
+     [
+      10,
+      48
+     ],
+     "torch.bfloat16"
+    ],
+    "expected": [
+     [
+      10,
+      48
+     ],
+     "torch.bfloat16"
+    ]
+   }
+  },
+  "shape_dtype_b": {
+   "pass": true,
+   "detail": {
+    "got": [
+     [
+      10,
+      48
+     ],
+     "torch.bfloat16"
+    ],
+    "expected": [
+     [
+      10,
+      48
+     ],
+     "torch.bfloat16"
+    ]
+   }
+  },
+  "shape_dtype_A_log": {
+   "pass": true,
+   "detail": {
+    "got": [
+     [
+      48
+     ],
+     "torch.float32"
+    ],
+    "expected": [
+     [
+      48
+     ],
+     "torch.float32"
+    ]
+   }
+  },
+  "shape_dtype_dt_bias": {
+   "pass": true,
+   "detail": {
+    "got": [
+     [
+      48
+     ],
+     "torch.bfloat16"
+    ],
+    "expected": [
+     [
+      48
+     ],
+     "torch.bfloat16"
+    ]
+   }
+  },
+  "shape_dtype_h0": {
+   "pass": true,
+   "detail": {
+    "got": [
+     [
+      48,
+      128,
+      128
+     ],
+     "torch.float32"
+    ],
+    "expected": [
+     [
+      48,
+      128,
+      128
+     ],
+     "torch.float32"
+    ]
+   }
+  },
+  "shape_dtype_serving_out": {
+   "pass": true,
+   "detail": {
+    "got": [
+     [
+      10,
+      48,
+      128
+     ],
+     "torch.bfloat16"
+    ],
+    "expected": [
+     [
+      10,
+      48,
+      128
+     ],
+     "torch.bfloat16"
+    ]
+   }
+  },
+  "all_operands_finite": {
+   "pass": true,
+   "detail": null
+  },
+  "serving_state_is_None_on_stateless_route": {
+   "pass": true,
+   "detail": "NoneType"
+  },
+  "output_scale": {
+   "pass": true,
+   "detail": 0.08838834764831845
+  },
+  "pool_hash_chain": {
+   "pass": true,
+   "detail": {
+    "pool": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260921T230815Z-e7a-step2-prefixes/prefix_pool.json",
+    "expected_sha": "05e731fd02b937970d05695ef2ee836a76efc463481a3a0ce4eeaa237f877d09"
+   }
+  },
+  "prefix_in_pool": {
+   "pass": true,
+   "detail": "p089"
+  },
+  "prefix_hash_binding": {
+   "pass": true,
+   "detail": {
+    "request_prefix_sha": "42ddc634fe7e42939860d161235aa67fcbcc55f4a7f6070030a2c52d16efbf8a",
+    "request_prompt_sha": "42ddc634fe7e42939860d161235aa67fcbcc55f4a7f6070030a2c52d16efbf8a",
+    "pool_text_sha": "42ddc634fe7e42939860d161235aa67fcbcc55f4a7f6070030a2c52d16efbf8a"
+   }
+  },
+  "prompt_token_count_binding": {
+   "pass": true,
+   "detail": {
+    "usage.prompt_tokens": 4096,
+    "pool_tokens": 4096
+   }
+  },
+  "prefix_id_expected": {
+   "pass": true,
+   "detail": {
+    "request": "p089",
+    "expected": "p089"
+   }
+  },
+  "payload_written_during_request_window": {
+   "pass": true,
+   "detail": {
+    "request_start": "2026-09-22T03:50:35.892128594Z",
+    "request_end": "2026-09-22T03:50:51.785655414Z",
+    "payload_mtime": "2026-09-22 03:50:46.125712057 +0000"
+   }
+  },
+  "per_req_spec_trace.jsonl_grew_after_request": {
+   "pass": true,
+   "detail": {
+    "method": "lines_before_request",
+    "before_lines": 0,
+    "after_lines": 9
+   }
+  },
+  "fr10_mtp_draft_trace.jsonl_grew_after_request": {
+   "pass": true,
+   "detail": {
+    "method": "lines_before_request",
+    "before_lines": 0,
+    "after_lines": 12
+   }
+  },
+  "fr10_tree_depth_positions.jsonl_grew_after_request": {
+   "pass": true,
+   "detail": {
+    "method": "lines_before_request",
+    "before_lines": 0,
+    "after_lines": 10
+   }
+  },
+  "depth_position_first_step_is_full_tree": {
+   "pass": true,
+   "detail": {
+    "tree_n": 10,
+    "num_scheduled_tokens": [
+     10
+    ],
+    "n_actual": 10,
+    "base_contract": "state=num_computed_tokens_cpu-1,mrope=num_computed_tokens_cpu"
+   }
+  },
+  "depth_position_offsets_match_topology": {
+   "pass": true,
+   "detail": {
+    "depth_first_tree": [
+     0,
+     1,
+     2,
+     2,
+     3,
+     3,
+     4,
+     4,
+     5,
+     5
+    ]
+   }
+  },
+  "spec_trace_rows_for_this_request": {
+   "pass": true,
+   "detail": {
+    "n_rows": 9,
+    "foreign_rids": [],
+    "rid_example": "cmpl-8866e3df066cfe8d-0-81eee4b5"
+   }
+  },
+  "spec_trace_every_step_drafts_n_minus_1": {
+   "pass": true,
+   "detail": {
+    "drafts": [
+     9
+    ]
+   }
+  },
+  "spec_trace_first_step_within_request_window": {
+   "pass": true,
+   "detail": {
+    "ts": 1790049049.1715,
+    "window": [
+     1790049035.892128,
+     1790049051.785655
+    ]
+   }
+  },
+  "served_token_budget_logged": {
+   "pass": true,
+   "detail": {
+    "max_num_scheduled_tokens": 2048,
+    "source": "docker_logs.txt (server WARNING vllm.py)"
+   }
+  },
+  "prefill_forward_count_matches_prompt_over_token_budget": {
+   "pass": true,
+   "detail": {
+    "prompt_tokens": 4096,
+    "token_budget": 2048,
+    "expected_prefill_forwards": 2,
+    "draft_records_before_first_tree_step": 2,
+    "first_tree_step_ts": 1790049042.2851
+   }
+  },
+  "payload_written_inside_first_tree_step": {
+   "pass": true,
+   "detail": {
+    "first_tree_step_ts": 1790049042.2851,
+    "first_sampler_after_tree_ts": 1790049046.1298,
+    "payload_mtime_ts": 1790049046.125712
+   }
+  },
+  "draft_trace_rows_for_this_request": {
+   "pass": true,
+   "detail": {
+    "n_draft_records": 12,
+    "n_steps": 9,
+    "leading_prefill_records": 1,
+    "trailing_unused_records": 2,
+    "modes": [
+     "tree_mtp"
+    ]
+   }
+  },
+  "draft_trace_first_record_within_request_window": {
+   "pass": true,
+   "detail": {
+    "ts": 1790049040.4067
+   }
+  },
+  "completion_tokens_consistent_with_accepted_counts": {
+   "pass": true,
+   "detail": {
+    "usage.completion_tokens": 32,
+    "implied_min": 30,
+    "implied_max": 32,
+    "acc": [
+     0,
+     5,
+     5,
+     0,
+     3,
+     4,
+     1,
+     2,
+     2
+    ]
+   }
+  },
+  "tokenizer_loaded": {
+   "pass": true,
+   "detail": {
+    "path": "/models/qwen3.6-27b-fp8",
+    "class": "Qwen2TokenizerFast",
+    "transformers_version": "4.57.1",
+    "tokenizer_json_sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+   }
+  },
+  "api_emitted_token_ids_recorded": {
+   "pass": true,
+   "detail": {
+    "n_ids": 32,
+    "usage.completion_tokens": 32,
+    "note": "driver v4 records logprobs.tokens as token_id:<id>"
+   }
+  },
+  "emitted_tokens_decode_exactly_to_response_text": {
+   "pass": true,
+   "detail": {
+    "finish_inferred": "length",
+    "n_ids": 32,
+    "n_body": 32,
+    "no_inner_eos": true,
+    "decoded_len": 82,
+    "response_len": 82,
+    "decoded_head": "ports/q36a_E3_b4/` (16 astropy instances).\n\n---\n\n## 8. Next steps\n\n1. **Instrume",
+    "response_head": "ports/q36a_E3_b4/` (16 astropy instances).\n\n---\n\n## 8. Next steps\n\n1. **Instrume",
+    "first_mismatch_index": null
+   }
+  },
+  "finish_consistent_with_request_max_tokens": {
+   "pass": true,
+   "detail": {
+    "finish_inferred": "length",
+    "n_ids": 32,
+    "request.max_tokens": 32,
+    "note": "length finish requires n_ids == recorded max_tokens; missing max_tokens -> FAIL"
+   }
+  },
+  "recorded_finish_reason_matches_inferred": {
+   "pass": true,
+   "detail": {
+    "recorded": "length",
+    "inferred": "length"
+   }
+  },
+  "per_step_accepted_paths_match_api_sequence": {
+   "pass": true,
+   "detail": {
+    "n_steps": 9,
+    "draft_offset_fixed_from_prefill_count": 1,
+    "exhausted_exactly": true,
+    "steps": [
+     {
+      "step": 1,
+      "acc": 0,
+      "matched_path_len": 0,
+      "consumed": 1,
+      "ok": true
+     },
+     {
+      "step": 2,
+      "acc": 5,
+      "matched_path_len": 5,
+      "consumed": 6,
+      "ok": true
+     },
+     {
+      "step": 3,
+      "acc": 5,
+      "matched_path_len": 5,
+      "consumed": 6,
+      "ok": true
+     },
+     {
+      "step": 4,
+      "acc": 0,
+      "matched_path_len": 0,
+      "consumed": 1,
+      "ok": true
+     },
+     {
+      "step": 5,
+      "acc": 3,
+      "matched_path_len": 3,
+      "consumed": 4,
+      "ok": true
+     },
+     {
+      "step": 6,
+      "acc": 4,
+      "matched_path_len": 4,
+      "consumed": 5,
+      "ok": true
+     },
+     {
+      "step": 7,
+      "acc": 1,
+      "matched_path_len": 1,
+      "consumed": 2,
+      "ok": true
+     },
+     {
+      "step": 8,
+      "acc": 2,
+      "matched_path_len": 2,
+      "consumed": 3,
+      "ok": true
+     },
+     {
+      "step": 9,
+      "acc": 2,
+      "matched_path_len": 2,
+      "consumed": 3,
+      "ok": true
+     }
+    ]
+   }
+  },
+  "first_step_draft_accept_consistent_with_api_sequence": {
+   "pass": true,
+   "detail": {
+    "first_draft_root_child": 14,
+    "api_token_1": 32773,
+    "acc_0": 0
+   }
+  },
+  "shim_applied": {
+   "pass": true,
+   "detail": [
+    "guard",
+    "serving_state"
+   ]
+  }
+ },
+ "position_contract": "HEAD emitter base_contract 'state=num_computed_tokens_cpu-1,mrope=num_computed_tokens_cpu': the captured h0 is the recurrent state after the prompt's last token (position prompt_tokens-1); node 0 (root) is the first generated token at position prompt_tokens; drafts follow. No absolute position is emitted; binding uses tree size, scheduled-token count, per-request spec-trace rows (rid embeds the response id), draft records, accepted-count-implied token counts, API-side emitted ids decoded exactly to the response text, window and hashes.",
+ "payload_sha256": "3c6253d69b895b1f4363bcea39d09e65fafdd7fb2d485530c1a987e05ca03e1e",
+ "shapes": {
+  "query_spec": {
+   "got": [
+    [
+     10,
+     16,
+     128
+    ],
+    "torch.bfloat16"
+   ],
+   "expected": [
+    [
+     10,
+     16,
+     128
+    ],
+    "torch.bfloat16"
+   ]
+  },
+  "key_spec": {
+   "got": [
+    [
+     10,
+     16,
+     128
+    ],
+    "torch.bfloat16"
+   ],
+   "expected": [
+    [
+     10,
+     16,
+     128
+    ],
+    "torch.bfloat16"
+   ]
+  },
+  "value_tree": {
+   "got": [
+    [
+     10,
+     48,
+     128
+    ],
+    "torch.bfloat16"
+   ],
+   "expected": [
+    [
+     10,
+     48,
+     128
+    ],
+    "torch.bfloat16"
+   ]
+  },
+  "a": {
+   "got": [
+    [
+     10,
+     48
+    ],
+    "torch.bfloat16"
+   ],
+   "expected": [
+    [
+     10,
+     48
+    ],
+    "torch.bfloat16"
+   ]
+  },
+  "b": {
+   "got": [
+    [
+     10,
+     48
+    ],
+    "torch.bfloat16"
+   ],
+   "expected": [
+    [
+     10,
+     48
+    ],
+    "torch.bfloat16"
+   ]
+  },
+  "A_log": {
+   "got": [
+    [
+     48
+    ],
+    "torch.float32"
+   ],
+   "expected": [
+    [
+     48
+    ],
+    "torch.float32"
+   ]
+  },
+  "dt_bias": {
+   "got": [
+    [
+     48
+    ],
+    "torch.bfloat16"
+   ],
+   "expected": [
+    [
+     48
+    ],
+    "torch.bfloat16"
+   ]
+  },
+  "h0": {
+   "got": [
+    [
+     48,
+     128,
+     128
+    ],
+    "torch.float32"
+   ],
+   "expected": [
+    [
+     48,
+     128,
+     128
+    ],
+    "torch.float32"
+   ]
+  },
+  "serving_out": {
+   "got": [
+    [
+     10,
+     48,
+     128
+    ],
+    "torch.bfloat16"
+   ],
+   "expected": [
+    [
+     10,
+     48,
+     128
+    ],
+    "torch.bfloat16"
+   ]
+  }
+ },
+ "trace": {
+  "request_start": "2026-09-22T03:50:35.892128594Z",
+  "request_end": "2026-09-22T03:50:51.785655414Z",
+  "payload_mtime": "2026-09-22 03:50:46.125712057 +0000"
+ },
+ "first_depth_position_record_after_request": {
+  "base_contract": "state=num_computed_tokens_cpu-1,mrope=num_computed_tokens_cpu",
+  "depth_first_tree": [
+   0,
+   1,
+   2,
+   2,
+   3,
+   3,
+   4,
+   4,
+   5,
+   5
+  ],
+  "depth_offsets_row_order": [
+   0,
+   1,
+   2,
+   2,
+   3,
+   3,
+   4,
+   4,
+   5,
+   5
+  ],
+  "depth_offsets_spine_first": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   2,
+   3,
+   4,
+   5
+  ],
+  "event": "tree_depth_positions",
+  "flat_first_tree": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9
+  ],
+  "mrope_depth_first_tree": [
+   0,
+   1,
+   2,
+   2,
+   3,
+   3,
+   4,
+   4,
+   5,
+   5
+  ],
+  "num_scheduled_tokens": [
+   10
+  ],
+  "tree_n": 10
+ },
+ "spec_steps": {
+  "n_steps": 9,
+  "acc": [
+   0,
+   5,
+   5,
+   0,
+   3,
+   4,
+   1,
+   2,
+   2
+  ]
+ },
+ "prefill_binding": {
+  "token_budget": 2048,
+  "prefill_forwards": 2,
+  "leading_unused_draft_records": 1
+ },
+ "first_draft_record_after_request": {
+  "event": "mtp_draft",
+  "idx": 0,
+  "ts": 1790049040.4067,
+  "mode": "tree_mtp",
+  "speculative_token_tree": "{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":9,\"speculative_token_tree\":\"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]\"}",
+  "shape": [
+   1,
+   9
+  ],
+  "draft": [
+   [
+    27384,
+    1510,
+    11,
+    4327,
+    13654,
+    63,
+    7561,
+    198,
+    271
+   ]
+  ]
+ },
+ "first_verified_draft_record": {
+  "event": "mtp_draft",
+  "idx": 1,
+  "ts": 1790049041.9608,
+  "mode": "tree_mtp",
+  "speculative_token_tree": "{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":9,\"speculative_token_tree\":\"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]\"}",
+  "shape": [
+   1,
+   9
+  ],
+  "draft": [
+   [
+    14,
+    63,
+    33340,
+    318,
+    1892,
+    16,
+    2911,
+    21,
+    15
+   ]
+  ]
+ },
+ "tokenizer_identity": {
+  "path": "/models/qwen3.6-27b-fp8",
+  "class": "Qwen2TokenizerFast",
+  "transformers_version": "4.57.1",
+  "tokenizer_json_sha256": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+ },
+ "eos_token_ids_used": [
+  248044,
+  248046
+ ],
+ "shim_report": {
+  "schema": "e7a.capture_shim.v1",
+  "applied_utc": "2026-09-22T03:45:09Z",
+  "target": "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py",
+  "sha256_before": "723974c703d1ad1545399b78526e5d50ae7f7f362e434bad384a0a3327595b28",
+  "sha256_after": "9af4fd3305d71840dd937e081c4d5fff615e6687409b4e7995f75d07439420fc",
+  "edits": [
+   {
+    "anchor": "guard",
+    "line": 13727
+   },
+   {
+    "anchor": "serving_state",
+    "line": 15165
+   }
+  ],
+  "shim_sha256": "1d1b511acbe8b5ab218c016d61a89328fdd2cd30907e54efa25b6bff738d788b",
+  "scope": "capture-only guard + None-safe serving_state; serving arithmetic untouched"
+ },
+ "shim_edit_anchors": [
+  "guard",
+  "serving_state"
+ ],
+ "request": {
+  "prefix_id": "p089",
+  "prefix_sha256": "42ddc634fe7e42939860d161235aa67fcbcc55f4a7f6070030a2c52d16efbf8a",
+  "prompt_sha256": "42ddc634fe7e42939860d161235aa67fcbcc55f4a7f6070030a2c52d16efbf8a",
+  "prefix_tokens_pool": 4096,
+  "response_id": "cmpl-8866e3df066cfe8d",
+  "usage": {
+   "prompt_tokens": 4096,
+   "total_tokens": 4128,
+   "completion_tokens": 32,
+   "prompt_tokens_details": null
+  }
+ },
+ "unverified": [],
+ "failed": [],
+ "all_pass": true
+}

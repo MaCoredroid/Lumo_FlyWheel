@@ -1,0 +1,121 @@
+{
+  "checked_utc": "2026-09-21T23:11:41.322627+00:00",
+  "run": "out-20260921T230026Z-e7a-ladder-v3",
+  "status": "completed",
+  "source_start_end_equal": true,
+  "cubin_count": 122,
+  "cubin_mismatches": [],
+  "nonfinite_comparisons": [],
+  "agreement": [
+    {
+      "result": "result_01_layers_62_linear_attn.json",
+      "sha256": "6bd9fd192ee132723ef7d388b7d4d33ebde3b89dda7c5a72b0192c89978d09d2",
+      "A_vs_native_fp32_integer_bitwise": 1.0,
+      "A_vs_native_bf16_integer_bitwise": 1.0
+    },
+    {
+      "result": "result_02_layers_1_linear_attn.json",
+      "sha256": "a9c9842bbab2a5ab29a833f3936b68f5508f2117991048c743208f8e93289a5e",
+      "A_vs_native_fp32_integer_bitwise": 1.0,
+      "A_vs_native_bf16_integer_bitwise": 1.0
+    },
+    {
+      "result": "result_03_layers_12_linear_attn.json",
+      "sha256": "1be5c2dbb71d7032f7f907a9dad53125298e384c5678220429577ee5497b63c4",
+      "A_vs_native_fp32_integer_bitwise": 1.0,
+      "A_vs_native_bf16_integer_bitwise": 1.0
+    },
+    {
+      "result": "result_04_layers_0_linear_attn.json",
+      "sha256": "0fb2c31902dd7286c9b7229a14bd9c1d3af203c63e2baf23ada810ba6233ac48",
+      "A_vs_native_fp32_integer_bitwise": 1.0,
+      "A_vs_native_bf16_integer_bitwise": 0.9999837239583333
+    },
+    {
+      "result": "result_05_synthetic_chain1_historical-like.json",
+      "sha256": "2f6cd9da8f5f1aa181a51a106c89dd527926a9cc1f0063724c47abc25a7f84b6",
+      "A_vs_native_fp32_integer_bitwise": 1.0,
+      "A_vs_native_bf16_integer_bitwise": 1.0
+    },
+    {
+      "result": "result_06_synthetic_chain5_historical-like.json",
+      "sha256": "4245c7aaca4f5975cd34cd3cbd73edfe94ccce6b770f43f828e143dbffa9d45a",
+      "A_vs_native_fp32_integer_bitwise": 1.0,
+      "A_vs_native_bf16_integer_bitwise": 1.0
+    },
+    {
+      "result": "result_07_synthetic_chain11_historical-like.json",
+      "sha256": "74182edc70574db98925de56823d8821c044261ec184d4367ed611d6381ed883",
+      "A_vs_native_fp32_integer_bitwise": 1.0,
+      "A_vs_native_bf16_integer_bitwise": 1.0
+    },
+    {
+      "result": "result_08_synthetic_binary3_historical-like.json",
+      "sha256": "d092e9bfbc9e2b4f01097eded70b862d8fc80b57f086a45b1f457ca72bea86cd",
+      "A_vs_native_fp32_integer_bitwise": 1.0,
+      "A_vs_native_bf16_integer_bitwise": 0.9999891493055556
+    },
+    {
+      "result": "result_09_synthetic_caterpillar_historical-like.json",
+      "sha256": "a428165226a1c232502537a4f4141105cece3d013e9383d275aeb833b2ccecc8",
+      "A_vs_native_fp32_integer_bitwise": 1.0,
+      "A_vs_native_bf16_integer_bitwise": 1.0
+    }
+  ],
+  "B4_controls": {
+    "B_fs": [
+      {
+        "request": 0,
+        "out": true,
+        "U": true,
+        "commit": true
+      },
+      {
+        "request": 1,
+        "out": true,
+        "U": true,
+        "commit": true
+      },
+      {
+        "request": 2,
+        "out": true,
+        "U": true,
+        "commit": true
+      },
+      {
+        "request": 3,
+        "out": true,
+        "U": true,
+        "commit": true
+      }
+    ],
+    "C_nm": [
+      {
+        "request": 0,
+        "out": true,
+        "U": true,
+        "commit": true
+      },
+      {
+        "request": 1,
+        "out": true,
+        "U": true,
+        "commit": true
+      },
+      {
+        "request": 2,
+        "out": true,
+        "U": true,
+        "commit": true
+      },
+      {
+        "request": 3,
+        "out": true,
+        "U": true,
+        "commit": true
+      }
+    ]
+  },
+  "limitation": "Inspected saved artifacts and source, not an independent GPU rerun; no full-model qualification",
+  "comparison_dicts_checked": 603
+}

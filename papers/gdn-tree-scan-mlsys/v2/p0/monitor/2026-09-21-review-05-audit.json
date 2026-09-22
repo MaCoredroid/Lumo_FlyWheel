@@ -1,0 +1,27 @@
+{
+  "checked_utc": "2026-09-21T23:11:06.548014+00:00",
+  "reviewed_source_hashes": {
+    "e7a/e7a_capture_launch.diff": "4641be1d55d6c98465412f35bf68e22d8bc3a977be6eb10c4135dba5f1984bf6",
+    "e7a/e7a_capture_launch.sh": "892a74b91d9855e9e40ba70163235d50e17eb130bd1f75f4e3103917ce45d1f2",
+    "e7a/e7a_core.py": "868d55db26eb5b83a43dc22010d639de2fe129c055a84bcd6f32a9f0e48409b7",
+    "e7a/e7a_device.py": "70e475e3998c1d8b37761afa616ffe5c97a5ca02492366531fd13eee7012d693",
+    "e7a/e7a_kernels.py": "15c3536252183281c6ff1dd5fc9fcc068e5d056bf6fa5ec8b199cc302ac21a70",
+    "e7a/e7a_reduce.py": "c64211d32289adc17d3e39ea40e14835362db062af55b620c1f8d49277054bbf",
+    "e7a/e7a_selftest_core.py": "8ae7e11a32a67b3994a7c47687d487156b0b7582937e1aba350fa0a2c9a21714",
+    "e7a/e7a_test_core.py": "0447a04ebfb2ae1f88652b0ae07121b651d59543c42e10d7accfa3f4d7b0a090",
+    "e7a/legacy_wy_8a975837.py": "e7c2a2a8b658f0c944b35bbb93e571de5ecff0cb99a15860c924e635b28f58c1",
+    "e7a/prefix_pool.py": "8a55abe78793634fa01ae745e4c9e9e643386773efbf829df2b7130cf1862109",
+    "e7a/run_in_image.sh": "2ef28156c26aa72ea82a486541221e6aea432f7ad0e097f13140b14db6d22a0a",
+    "e7a/serve_drivers.sh": "97c0c215de14ff31549a2317ba2ea9279dbb1f6ffac063ed3f3e974c729ce2de"
+  },
+  "signed_zero_check": "Source inspected integer views; local torch CPU retest unavailable (ModuleNotFoundError), not claimed executed",
+  "selection_fixture": {
+    "requested_pilot": 8,
+    "requested_confirmation": 32,
+    "produced_pilot": 8,
+    "produced_confirmation": 4,
+    "wrote_frozen_manifest": true,
+    "behavior": "select silently accepts an undersized confirmation set"
+  },
+  "scope": "CPU and source inspection; v3 raw artifact audit separate"
+}

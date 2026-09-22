@@ -1,0 +1,25 @@
+{
+  "status": "PASS",
+  "count": 14,
+  "cases": [
+    "missing_terminal",
+    "absolute_member",
+    "escaping_member",
+    "symlink_member",
+    "wrong_version",
+    "positive_frozen_manifest",
+    "missing_pinned_payload",
+    "six_terminal_cells_including_insufficient_preserved",
+    "missing_cell_seal",
+    "preliminary_cell",
+    "changed_raw",
+    "failed_campaign",
+    "extra_replacement_cell",
+    "changed_aggregate"
+  ],
+  "no_archive_or_experiment_created": true,
+  "script_sha256": "144cc2e4a0c0841d8dbe64e92a78bcad7e96f0cc97773f3e8628fb960f7cf8a7",
+  "plan_sha256": "0fcb1b3af336b82c5a8fe194628691cdf486fe38eae6568011f1617e8aaace2b",
+  "actual_incomplete_local_campaign": "REFUSED_BEFORE_PAYLOAD_OR_ARCHIVE",
+  "existing_required_review_and_weight_pins": "PASS"
+}

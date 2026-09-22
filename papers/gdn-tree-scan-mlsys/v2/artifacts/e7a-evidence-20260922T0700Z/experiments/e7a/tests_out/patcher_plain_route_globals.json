@@ -1,0 +1,184 @@
+{
+  "run_dir": "papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T000315Z-e7a-patcher-dryrun",
+  "checks": {
+    "head_eagle_exactly_one_unbound_global": {
+      "pass": true,
+      "detail": [
+        "_FR13_FIXED32_MODE"
+      ]
+    },
+    "head_eagle_unbound_in_propose": {
+      "pass": true,
+      "detail": [
+        "SpecDecodeBaseProposer.propose"
+      ]
+    },
+    "head_eagle_unbound_at_failed_boot_traceback_line_1174": {
+      "pass": true,
+      "detail": [
+        1174,
+        1176,
+        1179,
+        1192,
+        1197,
+        1217,
+        1899
+      ]
+    },
+    "fixed_eagle_no_unbound_globals": {
+      "pass": true,
+      "detail": []
+    },
+    "eagle_A_to_B_diff_is_single_added_definition": {
+      "pass": true,
+      "detail": [
+        "+_FR13_FIXED32_MODE = ''"
+      ]
+    },
+    "same_modified_file_set": {
+      "pass": true,
+      "detail": {
+        "n": 19,
+        "only_a": [],
+        "only_b": []
+      }
+    },
+    "fixed_introduces_no_new_unbound_name_in_any_file": {
+      "pass": true,
+      "detail": {}
+    },
+    "latent_fixed32_sfwd_names_identical_A_B": {
+      "pass": true,
+      "detail": {
+        "A": [
+          "fixed32_sfwd_conv_postprep_byte_gate",
+          "fixed32_sfwd_conv_postprep_gate_control",
+          "fixed32_sfwd_prior_reuse_byte_gate",
+          "fixed32_sfwd_prior_reuse_gate_control",
+          "launch_fixed32_sfwd_conv_postprep_fusion",
+          "launch_fixed32_sfwd_prior_reuse"
+        ],
+        "B": [
+          "fixed32_sfwd_conv_postprep_byte_gate",
+          "fixed32_sfwd_conv_postprep_gate_control",
+          "fixed32_sfwd_prior_reuse_byte_gate",
+          "fixed32_sfwd_prior_reuse_gate_control",
+          "launch_fixed32_sfwd_conv_postprep_fusion",
+          "launch_fixed32_sfwd_prior_reuse"
+        ]
+      }
+    },
+    "declared_edit_reproduces_fixed_patcher_sha": {
+      "pass": true,
+      "detail": {
+        "orig_sha256": "c382ef22a5a8d4e84209e6723f8eea21c3819543c6e942c62951385b5c1c003e",
+        "fixed_sha256": "a7f8f0943d1a13ac4742e824ea4e126c6ff341342aba677db5169e712c7e7281",
+        "diff_lines": 23
+      }
+    }
+  },
+  "per_file_unbound": {
+    "vllm/compilation/cuda_graph.py": {
+      "A": [],
+      "B": []
+    },
+    "vllm/model_executor/layers/mamba/gdn_linear_attn.py": {
+      "A": [
+        "fixed32_sfwd_conv_postprep_byte_gate",
+        "fixed32_sfwd_conv_postprep_gate_control",
+        "fixed32_sfwd_prior_reuse_byte_gate",
+        "fixed32_sfwd_prior_reuse_gate_control",
+        "launch_fixed32_sfwd_conv_postprep_fusion",
+        "launch_fixed32_sfwd_prior_reuse"
+      ],
+      "B": [
+        "fixed32_sfwd_conv_postprep_byte_gate",
+        "fixed32_sfwd_conv_postprep_gate_control",
+        "fixed32_sfwd_prior_reuse_byte_gate",
+        "fixed32_sfwd_prior_reuse_gate_control",
+        "launch_fixed32_sfwd_conv_postprep_fusion",
+        "launch_fixed32_sfwd_prior_reuse"
+      ]
+    },
+    "vllm/model_executor/layers/mamba/mamba_utils.py": {
+      "A": [],
+      "B": []
+    },
+    "vllm/model_executor/layers/quantization/utils/fp8_utils.py": {
+      "A": [],
+      "B": []
+    },
+    "vllm/model_executor/models/qwen3_5.py": {
+      "A": [],
+      "B": []
+    },
+    "vllm/model_executor/models/qwen3_next.py": {
+      "A": [],
+      "B": []
+    },
+    "vllm/v1/attention/backends/flash_attn.py": {
+      "A": [],
+      "B": []
+    },
+    "vllm/v1/attention/backends/gdn_attn.py": {
+      "A": [],
+      "B": []
+    },
+    "vllm/v1/attention/backends/tree_attn.py": {
+      "A": [],
+      "B": []
+    },
+    "vllm/v1/attention/ops/triton_unified_attention.py": {
+      "A": [],
+      "B": []
+    },
+    "vllm/v1/core/sched/output.py": {
+      "A": [],
+      "B": []
+    },
+    "vllm/v1/core/sched/scheduler.py": {
+      "A": [],
+      "B": []
+    },
+    "vllm/v1/request.py": {
+      "A": [],
+      "B": []
+    },
+    "vllm/v1/sample/ops/topk_topp_sampler.py": {
+      "A": [],
+      "B": []
+    },
+    "vllm/v1/sample/rejection_sampler.py": {
+      "A": [],
+      "B": []
+    },
+    "vllm/v1/spec_decode/eagle.py": {
+      "A": [
+        "_FR13_FIXED32_MODE"
+      ],
+      "B": []
+    },
+    "vllm/v1/worker/gpu_input_batch.py": {
+      "A": [],
+      "B": []
+    },
+    "vllm/v1/worker/gpu_model_runner.py": {
+      "A": [],
+      "B": []
+    },
+    "vllm/v1/worker/mamba_utils.py": {
+      "A": [],
+      "B": []
+    }
+  },
+  "emitted_sha256": {
+    "A_eagle": "0ed568926e61c53d1bd714c8f71362b3020b6afedadf1674c3182ed2300d450c",
+    "B_eagle": "aa022e2a1fc7993d0f7d4223f8366471e02e3c0e2740934c7a9490f7b45b01d7"
+  },
+  "patcher_sha256": {
+    "head": "c382ef22a5a8d4e84209e6723f8eea21c3819543c6e942c62951385b5c1c003e",
+    "fixed": "a7f8f0943d1a13ac4742e824ea4e126c6ff341342aba677db5169e712c7e7281"
+  },
+  "audit_tool_sha256": "4d912bed82e9312ef0396c40715ae015f10bed9021277102e8ae320b39a80eb1",
+  "all_pass": true
+}

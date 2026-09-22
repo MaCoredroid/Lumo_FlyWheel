@@ -1,0 +1,47 @@
+{
+  "utc": "2026-09-22T00:15:29.440232+00:00",
+  "scope": "Synthetic CPU provenance negative controls only; zero model inference",
+  "inspector_sha256": "507e2b8f7472a911ccf285f345d7440fb66649262ace24f20564234d4d42048a",
+  "cases": {
+    "positive_exact": {
+      "rc": 1,
+      "all_pass": false,
+      "unverified": [],
+      "failed": [
+        "finish_consistent_with_request_max_tokens"
+      ],
+      "token_binding": null
+    },
+    "tokenizer_unavailable": {
+      "rc": 1,
+      "all_pass": false,
+      "unverified": [],
+      "failed": [
+        "tokenizer_loaded",
+        "emitted_tokens_decode_exactly_to_response_text",
+        "finish_consistent_with_request_max_tokens"
+      ],
+      "token_binding": null
+    },
+    "negative_empty_response": {
+      "rc": 1,
+      "all_pass": false,
+      "unverified": [],
+      "failed": [
+        "emitted_tokens_decode_exactly_to_response_text",
+        "finish_consistent_with_request_max_tokens"
+      ],
+      "token_binding": null
+    },
+    "negative_truncated_response": {
+      "rc": 1,
+      "all_pass": false,
+      "unverified": [],
+      "failed": [
+        "emitted_tokens_decode_exactly_to_response_text",
+        "finish_consistent_with_request_max_tokens"
+      ],
+      "token_binding": null
+    }
+  }
+}

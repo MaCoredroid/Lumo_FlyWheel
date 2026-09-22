@@ -1,0 +1,508 @@
+{
+ "run_dir": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T051611Z-e7a-fresh-confirmation",
+ "manifest_status": "completed",
+ "source_hashes_start_end_match": true,
+ "attribution": {
+  "available": true,
+  "container_host_pids": [
+   "3103483"
+  ],
+  "util_samples": 213,
+  "util_zero_frac": 0.5586854460093896,
+  "util_gt5_count": 91,
+  "util_max": 96,
+  "window_utc": [
+   "2026-09-22T05:16:12.104000",
+   "2026-09-22T05:19:44.236000"
+  ],
+  "coverage_gaps": [],
+  "inventory_seconds": 199,
+  "compute_pids_seen": {
+   "3103483": {
+    "samples": 199,
+    "names": [
+     "python3"
+    ]
+   }
+  },
+  "foreign_pids": {},
+  "label": "NO FOREIGN COMPUTE PROCESS SAMPLED (1 Hz inventory; only container PID(s) ['3103483'] seen; sampled observation, not a guarantee)"
+ },
+ "probe_checks": {
+  "1": {
+   "drift": 0.005148318058437708,
+   "pass": true,
+   "before_us": 1810.6096267700195,
+   "after_us": 1819.9312210083008,
+   "criterion": "<= 5%"
+  },
+  "2": {
+   "drift": 0.05296377088459357,
+   "pass": false,
+   "before_us": 1887.5104904174805,
+   "after_us": 1787.5408172607422,
+   "criterion": "<= 5%"
+  },
+  "3": {
+   "drift": 0.0024158844835277422,
+   "pass": true,
+   "before_us": 1772.2768783569336,
+   "after_us": 1767.995262145996,
+   "criterion": "<= 5%"
+  },
+  "4": {
+   "drift": 0.01353553476817059,
+   "pass": true,
+   "before_us": 1810.817527770996,
+   "after_us": 1786.307144165039,
+   "criterion": "<= 5%"
+  },
+  "5": {
+   "drift": 0.01130665691601754,
+   "pass": true,
+   "before_us": 1781.8992614746094,
+   "after_us": 1761.751937866211,
+   "criterion": "<= 5%"
+  },
+  "6": {
+   "drift": 0.026251678228698082,
+   "pass": true,
+   "before_us": 1765.3072357177734,
+   "after_us": 1811.649513244629,
+   "criterion": "<= 5%"
+  },
+  "7": {
+   "drift": 0.004173433307029591,
+   "pass": true,
+   "before_us": 1762.7775192260742,
+   "after_us": 1770.1343536376953,
+   "criterion": "<= 5%"
+  },
+  "8": {
+   "drift": 0.022686570184158265,
+   "pass": true,
+   "before_us": 1772.1855163574219,
+   "after_us": 1812.3903274536133,
+   "criterion": "<= 5%"
+  },
+  "9": {
+   "drift": 0.006929970646080007,
+   "pass": true,
+   "before_us": 1759.529685974121,
+   "after_us": 1771.7231750488281,
+   "criterion": "<= 5%"
+  },
+  "10": {
+   "drift": 0.03509209893606394,
+   "pass": true,
+   "before_us": 1760.3519439697266,
+   "after_us": 1822.1263885498047,
+   "criterion": "<= 5%"
+  },
+  "11": {
+   "drift": 0.007656360744649161,
+   "pass": true,
+   "before_us": 1782.574462890625,
+   "after_us": 1768.9264297485352,
+   "criterion": "<= 5%"
+  },
+  "12": {
+   "drift": 0.013112640769246134,
+   "pass": true,
+   "before_us": 1766.596794128418,
+   "after_us": 1789.7615432739258,
+   "criterion": "<= 5%"
+  },
+  "13": {
+   "drift": 0.02020803570567474,
+   "pass": true,
+   "before_us": 1819.4816589355469,
+   "after_us": 1782.713508605957,
+   "criterion": "<= 5%"
+  },
+  "14": {
+   "drift": 0.06554827805781901,
+   "pass": false,
+   "before_us": 1760.972785949707,
+   "after_us": 1876.4015197753906,
+   "criterion": "<= 5%"
+  },
+  "15": {
+   "drift": 0.028801412615203716,
+   "pass": true,
+   "before_us": 1822.9120254516602,
+   "after_us": 1770.4095840454102,
+   "criterion": "<= 5%"
+  },
+  "16": {
+   "drift": 0.004821275527467139,
+   "pass": true,
+   "before_us": 1769.4879531860352,
+   "after_us": 1778.019142150879,
+   "criterion": "<= 5%"
+  },
+  "17": {
+   "drift": 0.006212753227420713,
+   "pass": true,
+   "before_us": 1808.1695556640625,
+   "after_us": 1819.4032669067383,
+   "criterion": "<= 5%"
+  },
+  "18": {
+   "drift": 0.012114408345248885,
+   "pass": true,
+   "before_us": 1841.8975830078125,
+   "after_us": 1819.584083557129,
+   "criterion": "<= 5%"
+  },
+  "19": {
+   "drift": 0.04886122485981234,
+   "pass": true,
+   "before_us": 1769.4528579711914,
+   "after_us": 1855.9104919433594,
+   "criterion": "<= 5%"
+  },
+  "20": {
+   "drift": 0.008929205524802735,
+   "pass": true,
+   "before_us": 1831.6448211669922,
+   "after_us": 1815.2896881103516,
+   "criterion": "<= 5%"
+  },
+  "21": {
+   "drift": 0.011151789053525853,
+   "pass": true,
+   "before_us": 1771.2064743041992,
+   "after_us": 1751.4543533325195,
+   "criterion": "<= 5%"
+  },
+  "22": {
+   "drift": 0.012835975234615929,
+   "pass": true,
+   "before_us": 1821.9999313354492,
+   "after_us": 1798.6127853393555,
+   "criterion": "<= 5%"
+  },
+  "23": {
+   "drift": 0.009485234575526236,
+   "pass": true,
+   "before_us": 1773.860740661621,
+   "after_us": 1757.035255432129,
+   "criterion": "<= 5%"
+  },
+  "24": {
+   "drift": 0.0028222905675195885,
+   "pass": true,
+   "before_us": 1763.1359100341797,
+   "after_us": 1768.1119918823242,
+   "criterion": "<= 5%"
+  },
+  "25": {
+   "drift": 0.014175669737157753,
+   "pass": true,
+   "before_us": 1796.8864440917969,
+   "after_us": 1771.4143753051758,
+   "criterion": "<= 5%"
+  },
+  "26": {
+   "drift": 0.02290772456116454,
+   "pass": true,
+   "before_us": 1775.5424499511719,
+   "after_us": 1816.2160873413086,
+   "criterion": "<= 5%"
+  },
+  "27": {
+   "drift": 0.02084601413107522,
+   "pass": true,
+   "before_us": 1762.6447677612305,
+   "after_us": 1799.3888854980469,
+   "criterion": "<= 5%"
+  },
+  "28": {
+   "drift": 0.06644816481835286,
+   "pass": false,
+   "before_us": 1892.0272827148438,
+   "after_us": 1766.3055419921875,
+   "criterion": "<= 5%"
+  },
+  "29": {
+   "drift": 0.0019165216682919077,
+   "pass": true,
+   "before_us": 1807.5071334838867,
+   "after_us": 1810.9712600708008,
+   "criterion": "<= 5%"
+  },
+  "30": {
+   "drift": 0.00299302194381091,
+   "pass": true,
+   "before_us": 1774.273681640625,
+   "after_us": 1768.9632415771484,
+   "criterion": "<= 5%"
+  },
+  "31": {
+   "drift": 0.0016656426601892036,
+   "pass": true,
+   "before_us": 1762.6720428466797,
+   "after_us": 1765.608024597168,
+   "criterion": "<= 5%"
+  }
+ },
+ "n_invalid_cells": 0,
+ "n_operand_sets": 31,
+ "n_historical": 0,
+ "n_verified_fresh": 31,
+ "n_unverified_capture": 0,
+ "n_synthetic": 0,
+ "b4_exercised": false,
+ "operand_sets": [
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p063)",
+   "payload_sha256": "1925f057acf459880f63b0b637add107c3984f36c7abb10c0d6f994488893a65",
+   "prefix_id": "p063",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p059)",
+   "payload_sha256": "6a8ec9dd815f41b465253bc9f0977b62396a71bafaf45bfb4dd5fa9ec6d974c7",
+   "prefix_id": "p059",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p049)",
+   "payload_sha256": "168224396e074c0ddaaf043f91ab6ebb8cdce8063c7f57acdfff137885004f2d",
+   "prefix_id": "p049",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p052)",
+   "payload_sha256": "966f41c418a7fda164d1f3f2451a4b27dc2c7d394c07e4059457106aa020a374",
+   "prefix_id": "p052",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p046)",
+   "payload_sha256": "a3b6363f2e67c1ccfbc090354a03c739d0df6eb44d27a623ab4bbf4ee2e5ff3b",
+   "prefix_id": "p046",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p065)",
+   "payload_sha256": "cf101bd0b81edc0476b66bb905b2f8af2e11dc489f618b6b7ae946404aaae3ee",
+   "prefix_id": "p065",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p025)",
+   "payload_sha256": "7bd73c8e9b7aaca17dc7764299cd34a1d9bf8054bb2cbc37c5de1d86c693aea0",
+   "prefix_id": "p025",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p031)",
+   "payload_sha256": "4ed52fa2e916dc673c55cd36be7adfaa9c9747ee8bc666790b4cf916603cdd61",
+   "prefix_id": "p031",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p013)",
+   "payload_sha256": "319d8c8b349ee560f68b9d3ec050847b62fb24dced8546cae3d53c2655cf2cb7",
+   "prefix_id": "p013",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p040)",
+   "payload_sha256": "e795fe1d9cfdc80723f8d39400d6f374c24d2a007dd85e4cd7083da34ca8e4b7",
+   "prefix_id": "p040",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p033)",
+   "payload_sha256": "e84cafe571a09f642a56c2901bb7df512f5c0abb766b076c4408f009555ecf32",
+   "prefix_id": "p033",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p038)",
+   "payload_sha256": "92ff89c588cfe81682294d69b9dde5f81e931c4a196d0009b43df6070c83fa16",
+   "prefix_id": "p038",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p060)",
+   "payload_sha256": "2d9eafd2c2fad0d8a08e7ae54b216fc3b6b9431cd8eb978b9ae5d4d93f047d6a",
+   "prefix_id": "p060",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p067)",
+   "payload_sha256": "841304e296476a8898a2833b54abec940e03eacd399b1de094157e5e67a0cb33",
+   "prefix_id": "p067",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p019)",
+   "payload_sha256": "816500f268dfdfdcf20b7b1990a545769d01fe89daeac1918a8d634f9c6e2486",
+   "prefix_id": "p019",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p003)",
+   "payload_sha256": "0c467a0a6fc7d0d81244c690057a09567ed88c603caf3b4fb5a56779354cbaa3",
+   "prefix_id": "p003",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p077)",
+   "payload_sha256": "25eb7fe18e5265ff441a88543e03d6eee8dac31346a6da468b5ed61eefaa9253",
+   "prefix_id": "p077",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p089)",
+   "payload_sha256": "3c6253d69b895b1f4363bcea39d09e65fafdd7fb2d485530c1a987e05ca03e1e",
+   "prefix_id": "p089",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p030)",
+   "payload_sha256": "c7d59f7ed8b2d9e1ac81914597b546b513bab1fd538ca61488a78cd615054755",
+   "prefix_id": "p030",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p081)",
+   "payload_sha256": "30c73d9a4b1577658ca059be394db89dbb39965ec52104d7bdcb200193bdff5f",
+   "prefix_id": "p081",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p012)",
+   "payload_sha256": "a3d9501ab14e38054828d2171921b64d64c70315303ea085d1b2730a1b0ab640",
+   "prefix_id": "p012",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p092)",
+   "payload_sha256": "fc77d030cbc41f8efcb58f1d2f7eea56072427b2d9cc5cf0d14bb375b9bfa3ce",
+   "prefix_id": "p092",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p086)",
+   "payload_sha256": "14b2cb821056627326867fb4b1c42489894927f96fa0f6619a13b44ecf4f81c9",
+   "prefix_id": "p086",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p079)",
+   "payload_sha256": "ff93c2df9240f9344160ff9d62abdb177c152fbff931151204d9848bdc3d3b24",
+   "prefix_id": "p079",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p027)",
+   "payload_sha256": "2bcc0deb3dcdce79b76e31afc8de1c46ca695ba9b7bc4df4aba45bc8bec0c49b",
+   "prefix_id": "p027",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p091)",
+   "payload_sha256": "99024065cbaf50a20ef3779671320540fa5d358d7286ce53bf26e612ec0371e8",
+   "prefix_id": "p091",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p082)",
+   "payload_sha256": "e27ab1ca4acbbbb399d6eaaeaf72c3e36a00d78af9abe45c5e9c53d60a0eb0d3",
+   "prefix_id": "p082",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p088)",
+   "payload_sha256": "fceef3e99595720461578f56e3080d82390feff06c2266f250776e8a1b2e956f",
+   "prefix_id": "p088",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p005)",
+   "payload_sha256": "d5bf7a6152fc98c8b033654132121ac8cacd3661db9bbd1586654a07605368d4",
+   "prefix_id": "p005",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p076)",
+   "payload_sha256": "89fe01500590025fe36ab41f423f2d5b46006ea1022b2822eb38ec8947ab12cb",
+   "prefix_id": "p076",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p078)",
+   "payload_sha256": "199f79257df9f7d3c0097d9f5c4d93c101ec225f09b1657fd2b025489f3b215a",
+   "prefix_id": "p078",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  }
+ ],
+ "independent_prefixes_established": 31
+}

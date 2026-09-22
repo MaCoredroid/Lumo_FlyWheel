@@ -1,0 +1,21 @@
+{
+  "observed_utc": "2026-09-21T21:46:23.846394+00:00",
+  "p0": "complete_with_historical_gaps",
+  "experiment_status": "implementation_and_input_inspection_started_no_completed_measurements_verified",
+  "handoff_status": "acknowledged_and_work_started",
+  "host": "100.103.10.122",
+  "worktree": "/home/mark/lumo-paper-v2-20260921",
+  "branch": "codex/paper-v2-pilot-20260921",
+  "base_commit": "984f613d7885d9bf7898866827552b68a3199d0c",
+  "tmux_session": "lumo-v2-20260921",
+  "claude_session_id": "c8955ff9-f3ae-4551-869b-1a98b38ca2c3",
+  "model_requested": "fable",
+  "effort_requested": "xhigh",
+  "permission_mode_requested": "dangerously-skip-permissions",
+  "healthcheck": "provider_safeguard_rejection_cyber",
+  "handoff_sha256": "a06f3a3530963e599037013eb73beabf37d9abd2324e77f0adb02d43211fa7b2",
+  "model_observed": "Fable 5.1",
+  "effort_observed": "xhigh",
+  "permission_mode_observed": "bypass permissions on",
+  "initial_reply": "I'll start by reading the handoff document, then the P0 state it references, before touching any code."
+}

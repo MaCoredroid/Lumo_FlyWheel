@@ -1,0 +1,125 @@
+{
+ "label": "B4 synthetic caterpillar (shared layer params)",
+ "synthetic": true,
+ "n": 10,
+ "depth": 5,
+ "results": {
+  "B_fs": {
+   "per_request": [
+    {
+     "request": 0,
+     "out32_vs_oracle": 1.3111828058021135e-07,
+     "U_vs_oracle": 1.0181830880640064e-06,
+     "commit_target": 9,
+     "commit_vs_oracle": 6.046106735269063e-07
+    },
+    {
+     "request": 1,
+     "out32_vs_oracle": 1.2979859786987902e-07,
+     "U_vs_oracle": 1.1076336225990246e-06,
+     "commit_target": 7,
+     "commit_vs_oracle": 5.783416581195411e-07
+    },
+    {
+     "request": 2,
+     "out32_vs_oracle": 1.4213322699352382e-07,
+     "U_vs_oracle": 9.228422341855946e-07,
+     "commit_target": 5,
+     "commit_vs_oracle": 4.941672351321813e-07
+    },
+    {
+     "request": 3,
+     "out32_vs_oracle": 1.1963063806241792e-07,
+     "U_vs_oracle": 1.1545369738019673e-06,
+     "commit_target": 0,
+     "commit_vs_oracle": 4.0874655393707826e-07
+    }
+   ],
+   "B4_vs_B1_bitwise_request2": {
+    "out": true,
+    "U": true
+   },
+   "timing_us_B4_verify": {
+    "iters": 200,
+    "warmup": 20,
+    "sync_median_us": 372.8640079498291,
+    "sync_p10_us": 368.8639998435974,
+    "sync_p90_us": 379.32801246643066,
+    "sync_min_us": 366.7519986629486,
+    "pipelined_mean_us": 357.6300811767578
+   },
+   "timing_us_B4_commit": {
+    "iters": 200,
+    "warmup": 20,
+    "sync_median_us": 84.54400300979614,
+    "sync_p10_us": 83.29600095748901,
+    "sync_p90_us": 98.78399968147278,
+    "sync_min_us": 76.4160007238388,
+    "pipelined_mean_us": 77.12431907653809
+   }
+  },
+  "C_nm": {
+   "per_request": [
+    {
+     "request": 0,
+     "out32_vs_oracle": 1.3856886117713518e-07,
+     "U_vs_oracle": 1.0181830880640064e-06,
+     "commit_target": 9,
+     "commit_vs_oracle": 6.046106735269063e-07
+    },
+    {
+     "request": 1,
+     "out32_vs_oracle": 1.2979859786987902e-07,
+     "U_vs_oracle": 1.1076336225990246e-06,
+     "commit_target": 7,
+     "commit_vs_oracle": 5.783416581195411e-07
+    },
+    {
+     "request": 2,
+     "out32_vs_oracle": 1.4213322699352382e-07,
+     "U_vs_oracle": 1.0420515237363759e-06,
+     "commit_target": 5,
+     "commit_vs_oracle": 4.941672351321813e-07
+    },
+    {
+     "request": 3,
+     "out32_vs_oracle": 1.1963063806241792e-07,
+     "U_vs_oracle": 1.1545369738019673e-06,
+     "commit_target": 0,
+     "commit_vs_oracle": 4.0874655393707826e-07
+    }
+   ],
+   "B4_vs_B1_bitwise_request2": {
+    "out": true,
+    "U": true
+   },
+   "timing_us_B4_verify": {
+    "iters": 200,
+    "warmup": 20,
+    "sync_median_us": 338.17601203918457,
+    "sync_p10_us": 333.98398756980896,
+    "sync_p90_us": 378.1760036945343,
+    "sync_min_us": 330.01598715782166,
+    "pipelined_mean_us": 334.2424011230469
+   },
+   "timing_us_B4_commit": {
+    "iters": 200,
+    "warmup": 20,
+    "sync_median_us": 98.4639972448349,
+    "sync_p10_us": 96.54399752616882,
+    "sync_p90_us": 112.64000087976456,
+    "sync_min_us": 88.22400122880936,
+    "pipelined_mean_us": 98.10336112976074
+   }
+  },
+  "A_prod_scan_4x_launches_timing_us": {
+   "iters": 200,
+   "warmup": 20,
+   "sync_median_us": 280.41601181030273,
+   "sync_p10_us": 279.4559895992279,
+   "sync_p90_us": 281.9199860095978,
+   "sync_min_us": 278.1760096549988,
+   "pipelined_mean_us": 258.99391174316406
+  }
+ }
+}

@@ -1,0 +1,18 @@
+{
+  "utc": "2026-09-22T09:16:55.062549+00:00",
+  "source_sha256": "34191c78f462d6d009b2bf5121a26a326f462eb4e0f6fd52f8c3931da115f637",
+  "pdf_sha256": "8cd3d8f4591d84fc6c4f66c43d1c0dd917d707f3e49f01b9ba37ac44e1430970",
+  "pages": 13,
+  "build": "latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex in staging with copied current sources",
+  "undefined_references": false,
+  "overfull_boxes": false,
+  "visually_inspected_pages": [
+    4,
+    5,
+    10,
+    11,
+    12,
+    13
+  ],
+  "scope": "New selected-route evidence section; B4 final gates and E1 timing still pending"
+}

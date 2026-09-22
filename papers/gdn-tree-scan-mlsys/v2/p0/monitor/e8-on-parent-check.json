@@ -1,0 +1,26 @@
+{
+  "checked_utc": "2026-09-22T21:43:35.256471+00:00",
+  "status": "PASS_ON_ARM_ONLY",
+  "scope": "Independent reconstruction of complete API streams and ledger/head counts; full-logit comparison is executed by the pinned gate, not re-derived from exported logits",
+  "receipt_files_verified": 41,
+  "requests": 8,
+  "direct_api_tokens": 256,
+  "proposals": 103,
+  "paired_head_checks": 515,
+  "untimed_physical_intervals": 91,
+  "timed_support_intervals": 0,
+  "discarded_empty_nonpure_rows": 4,
+  "terminal_api_clipping_by_prefix": {
+    "p072": 2,
+    "p017": 5,
+    "p015": 1,
+    "p021": 0,
+    "p085": 1,
+    "p095": 3,
+    "p058": 3,
+    "p083": 0
+  },
+  "ledger_events": 311,
+  "source_qualification_receipt_sha256": "1fa9e1a21a9d319a1c2015fccd3d9b88264b4ce0cf015edc34c503845c09caf5",
+  "timing_authorized": false
+}

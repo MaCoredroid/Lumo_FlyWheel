@@ -1,0 +1,36 @@
+{
+ "batch": 4,
+ "n_requests": 12,
+ "preflight": 0,
+ "warmup": 4,
+ "timed": 8,
+ "invalid": null,
+ "finish": {
+  "w0": "length",
+  "w1": "length",
+  "w2": "length",
+  "w3": "length",
+  "ta0": "length",
+  "ta1": "length",
+  "ta2": "length",
+  "ta3": "length",
+  "tb0": "length",
+  "tb1": "length",
+  "tb2": "length",
+  "tb3": "length"
+ },
+ "api_tokens": {
+  "w0": 32,
+  "w1": 32,
+  "w2": 32,
+  "w3": 32,
+  "ta0": 128,
+  "ta1": 128,
+  "ta2": 128,
+  "ta3": 128,
+  "tb0": 128,
+  "tb1": 128,
+  "tb2": 128,
+  "tb3": 128
+ }
+}

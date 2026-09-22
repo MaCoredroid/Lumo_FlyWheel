@@ -1,0 +1,19 @@
+{
+ "schema": "e7a.capture_shim.v1",
+ "applied_utc": "2026-09-22T02:13:43Z",
+ "target": "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py",
+ "sha256_before": "723974c703d1ad1545399b78526e5d50ae7f7f362e434bad384a0a3327595b28",
+ "sha256_after": "9af4fd3305d71840dd937e081c4d5fff615e6687409b4e7995f75d07439420fc",
+ "edits": [
+  {
+   "anchor": "guard",
+   "line": 13727
+  },
+  {
+   "anchor": "serving_state",
+   "line": 15165
+  }
+ ],
+ "shim_sha256": "1d1b511acbe8b5ab218c016d61a89328fdd2cd30907e54efa25b6bff738d788b",
+ "scope": "capture-only guard + None-safe serving_state; serving arithmetic untouched"
+}

@@ -1,0 +1,15 @@
+# Verified p072 verifier-only diagnostic (review13 protocol)
+
+Evidence root on DGX: `experiments/out-20260922T063019Z-e7b-r13-p072-batch`. Completed 2026-09-22T06:48:26Z. One frozen pilot prefix, B1 eager, pinned FP8 model/image; layer62 substitution with local B forward-substitution fp32 realization. This is a diagnostic propagation observation, not E2/E7b deployment qualification or a powered harmlessness claim.
+
+Three boots: instrumented none; matched B verifier-only sham (same compact verifier arithmetic, no replacement); B verifier-only replacement. All three provenance PASS. Runtime snapshot d6468150e17e6a5a55476821565f3c29e279ee6ef089fc3d8c21a13051319a8c. Reducer-v3 result SHA256582c96f7799e237273894f0f43ff71465b93c573f8ccbb71703510c75776ac7d.
+
+Independent reader examined raw logits/hidden captures and all39state files; parent separately checked the result reduction. Twelve contiguous aligned steps,10matched candidate rows per step,32emitted tokens per arm. The13th captured step is partial at the response boundary and is not added to the matched comparison. None versus sham has zero observed logit/hidden/residual deltas and identical emitted tokens in this pair.
+
+B verifier-only versus matched sham first changes the substituted layer62 and downstream layer63; upstream layers0–61 are identical. Maximum absolute final-logit difference0.15625 at step3 and0.125 at step7; no argmax changes on120matched candidate rows and no emitted-token divergence over32tokens. Substitution record spans13verify invocations, minimum local bfloat16 output equality fraction0.9997884631156921 and maximum absolute output difference6.103515625e-05. The observed sham equality does not establish a universal cross-boot noise floor.
+
+The state-capture hook in these boots saved an accepted-column copy, not necessarily the authoritative running col0. No commit substitution ran, so this does not invalidate the verifier-stage contrast, but the captured copies do NOT establish correct state publication or continuation. Independent CPU reproduction found a real commit/both bug: replacing only that copy leaves col0 unchanged when accepted_len>1. Review15 fixes capture/publication of col0 and tests actual next-forward consumption. New commit diagnostics use separate immutable runs.
+
+Review record: `p0/monitor/validation-redteam-round15.md`. Full model-state/conv/KV continuation and matched E1 timing remain open.
+
+Parent route audit (2026-09-22T07:50Z, observed): all3review13andall3review16 docker-inspect environments omit FR13_ATTN_KV_REMAP and FR13_SLOT_REORDER; emitted runner plain gate atline7027 defaults0. Fixed32 branch is staticallyFalse on this plainroute. Kernel helper documents why noncontiguous accepted-path attentionKV requires relinearization before nextforward. These diagnostic observations do not qualify branch-path attention continuation. See p0/monitor/e2-minimal-qualification-review.md. Full-current-route qualification is held until intendedpolicyiswired and exercised.

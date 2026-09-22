@@ -1,0 +1,365 @@
+{
+  "utc": "2026-09-22T00:59:44.635773+00:00",
+  "scope": "Diagnostic offset exploration only, not a provenance verdict",
+  "draft_head": [
+    {
+      "idx": 0,
+      "ts": 1790038647.2521,
+      "mode": "tree_mtp",
+      "shape": [
+        1,
+        9
+      ],
+      "draft": [
+        [
+          220,
+          18,
+          20,
+          20,
+          16683,
+          16683,
+          2902,
+          3019,
+          27502
+        ]
+      ]
+    },
+    {
+      "idx": 1,
+      "ts": 1790038648.8392,
+      "mode": "tree_mtp",
+      "shape": [
+        1,
+        9
+      ],
+      "draft": [
+        [
+          966,
+          5303,
+          2099,
+          506,
+          13,
+          15135,
+          1228,
+          13,
+          318
+        ]
+      ]
+    },
+    {
+      "idx": 2,
+      "ts": 1790038655.6221,
+      "mode": "tree_mtp",
+      "shape": [
+        1,
+        9
+      ],
+      "draft": [
+        [
+          854,
+          13,
+          318,
+          561,
+          1368,
+          8057,
+          62987,
+          4021,
+          3669
+        ]
+      ]
+    }
+  ],
+  "spec_head": [
+    {
+      "ts": 1790038655.9529,
+      "rid": "cmpl-868f02cd5895aaf0-0-934fda0d",
+      "draft": 9,
+      "proposal_width": 9,
+      "verify_width": 9,
+      "acc": 3,
+      "inv": 0
+    },
+    {
+      "ts": 1790038656.2772,
+      "rid": "cmpl-868f02cd5895aaf0-0-934fda0d",
+      "draft": 9,
+      "proposal_width": 9,
+      "verify_width": 9,
+      "acc": 4,
+      "inv": 0
+    }
+  ],
+  "offset_alignments": [
+    {
+      "offset": 0,
+      "all_steps_match": false,
+      "n_matches": 5,
+      "n_steps": 11,
+      "trailing": 3
+    },
+    {
+      "offset": 1,
+      "all_steps_match": true,
+      "n_matches": 11,
+      "n_steps": 11,
+      "trailing": 2
+    },
+    {
+      "offset": 2,
+      "all_steps_match": false,
+      "n_matches": 5,
+      "n_steps": 11,
+      "trailing": 1
+    }
+  ],
+  "fr10_tree_depth_positions.jsonl": {
+    "n": 12,
+    "first": [
+      {
+        "base_contract": "state=num_computed_tokens_cpu-1,mrope=num_computed_tokens_cpu",
+        "depth_first_tree": [
+          0,
+          1,
+          2,
+          2,
+          3,
+          3,
+          4,
+          4,
+          5,
+          5
+        ],
+        "depth_offsets_row_order": [
+          0,
+          1,
+          2,
+          2,
+          3,
+          3,
+          4,
+          4,
+          5,
+          5
+        ],
+        "depth_offsets_spine_first": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          2,
+          3,
+          4,
+          5
+        ],
+        "event": "tree_depth_positions",
+        "flat_first_tree": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "mrope_depth_first_tree": [
+          0,
+          1,
+          2,
+          2,
+          3,
+          3,
+          4,
+          4,
+          5,
+          5
+        ],
+        "num_scheduled_tokens": [
+          10
+        ],
+        "tree_n": 10
+      },
+      {
+        "base_contract": "state=num_computed_tokens_cpu-1,mrope=num_computed_tokens_cpu",
+        "depth_first_tree": [
+          0,
+          1,
+          2,
+          2,
+          3,
+          3,
+          4,
+          4,
+          5,
+          5
+        ],
+        "depth_offsets_row_order": [
+          0,
+          1,
+          2,
+          2,
+          3,
+          3,
+          4,
+          4,
+          5,
+          5
+        ],
+        "depth_offsets_spine_first": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          2,
+          3,
+          4,
+          5
+        ],
+        "event": "tree_depth_positions",
+        "flat_first_tree": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "mrope_depth_first_tree": [
+          0,
+          1,
+          2,
+          2,
+          3,
+          3,
+          4,
+          4,
+          5,
+          5
+        ],
+        "num_scheduled_tokens": [
+          10
+        ],
+        "tree_n": 10
+      }
+    ]
+  },
+  "fr10_caterpillar_drafter.jsonl": {
+    "n": 14,
+    "first": [
+      {
+        "event": "fr10_caterpillar_native_spine_top2",
+        "ts": 1790038647.1877,
+        "single_logits": true,
+        "spine_only": false,
+        "shape": "cat9",
+        "spine_slots": [
+          0,
+          1,
+          3,
+          5,
+          7
+        ],
+        "leaf_slots": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "draft": [
+          [
+            220,
+            18,
+            20,
+            20,
+            16683,
+            16683,
+            2902,
+            3019,
+            27502
+          ]
+        ],
+        "spine": [
+          [
+            220,
+            18,
+            20,
+            16683,
+            3019
+          ]
+        ],
+        "leaves": [
+          [
+            20,
+            16683,
+            2902,
+            27502
+          ]
+        ],
+        "leaves2": [],
+        "root_leaf2": null
+      },
+      {
+        "event": "fr10_caterpillar_native_spine_top2",
+        "ts": 1790038648.5435,
+        "single_logits": true,
+        "spine_only": false,
+        "shape": "cat9",
+        "spine_slots": [
+          0,
+          1,
+          3,
+          5,
+          7
+        ],
+        "leaf_slots": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "draft": [
+          [
+            966,
+            5303,
+            2099,
+            506,
+            13,
+            15135,
+            1228,
+            13,
+            318
+          ]
+        ],
+        "spine": [
+          [
+            966,
+            5303,
+            506,
+            15135,
+            13
+          ]
+        ],
+        "leaves": [
+          [
+            2099,
+            13,
+            1228,
+            318
+          ]
+        ],
+        "leaves2": [],
+        "root_leaf2": null
+      }
+    ]
+  }
+}

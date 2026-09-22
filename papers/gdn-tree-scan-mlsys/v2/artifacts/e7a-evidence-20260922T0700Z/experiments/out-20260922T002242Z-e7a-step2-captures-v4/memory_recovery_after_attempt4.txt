@@ -1,0 +1,8 @@
+utc_before=2026-09-22T00:29:36Z
+containers=0 compute_procs=0
+Mem:          120330       74298       25515         134       21706       46031
+Swap:          16383        5626       10757
+precondition OK -> routine
+utc_after=2026-09-22T00:29:53Z
+Mem:          120330       15619      105168         661        1196      104710
+Swap:          16383           0       16383

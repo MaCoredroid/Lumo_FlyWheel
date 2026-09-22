@@ -1,0 +1,7 @@
+start_utc=2026-09-22T04:56:41Z cmd=capture prefix=p087 layer=language_model.model.layers.62.linear_attn
+guard_pid=3082598 container_id=6395a47eb657b3c70664f138d96b834b1c6f86fbc274e75ae3fdf468b556830e container_name=e7a-capture-045641 alive=true utc=2026-09-22T04:56:52Z
+request_start_utc=2026-09-22T05:02:18.429446631Z
+request_end_utc=2026-09-22T05:02:35.603133945Z
+payload_mtime_utc=2026-09-22 05:02:28.910369699 +0000 size=3607409
+cleanup: removed owned container e7a-capture-045641 (rc=0)
+exit_utc=2026-09-22T05:02:36Z rc=0

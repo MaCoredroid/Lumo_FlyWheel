@@ -1,0 +1,20 @@
+{
+  "utc": "2026-09-22T10:13:35.771567+00:00",
+  "source_sha256": "f52a828f4cb13aca925be7d081da0c4c438072762b673de9a2933b7396032212",
+  "abstract_sha256": "0eddd1990dfe88aa1b0251526448d24983c7d0f67821d2f2921bb63df18755ce",
+  "pdf_sha256": "ae619da40e6aa3b3cd0e3b64011373ce0720eed6c553da2dbfe653ceb988dd89",
+  "pages": 13,
+  "build": "latexmk in staging with current source bytes",
+  "undefined_references": false,
+  "overfull_boxes": false,
+  "visually_inspected_pages": [
+    1,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "scope": "Whole-paper pre-E1 review wording fixes; E1 results not integrated yet"
+}

@@ -1,0 +1,6 @@
+[launch] serving /models/qwen3.6-27b-fp8 as 'qwen3.6-27b' (checkpoint identity d053823784d5db6f)
+[launch] REPO OVERRIDDEN BY CALLER: /home/mark/lumo-paper-v2-20260921 (head 984f613d7885d9bf7898866827552b68a3199d0c)
+               total        used        free      shared  buff/cache   available
+Mem:           117Gi        15Gi       102Gi       667Mi       1.1Gi       102Gi
+Swap:           15Gi          0B        15Gi
+6f6e83dfff19750514d30a20341c86f4ec604b9271fff22e9975a284f02aceb5

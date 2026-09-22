@@ -1,0 +1,151 @@
+{
+  "utc": "2026-09-21T23:27:20.474801+00:00",
+  "source_sha256": "9e6dd6835bfb03bb6c404f1132a4b25ecb4bcb16f1a6f66ce61664a30337dc37",
+  "fixture": "synthetic CPU negative control with wrong layer, batch99/state-999, 10x1 QKV/gates, mismatched prefix/prompt hashes and token counts, unrelated request logs and arbitrary position",
+  "inspector_returncode": 0,
+  "all_pass": true,
+  "checks": {
+    "payload_exists": {
+      "pass": true,
+      "detail": 3149529
+    },
+    "no_warmup_invalid_marker": {
+      "pass": true,
+      "detail": null
+    },
+    "request_record_exists": {
+      "pass": true,
+      "detail": null
+    },
+    "schema": {
+      "pass": true,
+      "detail": "fr10.tree_gdn_scan_capture.v1"
+    },
+    "required_keys_present": {
+      "pass": true,
+      "detail": []
+    },
+    "topology_consistent": {
+      "pass": true,
+      "detail": {
+        "n": 10,
+        "parents": [
+          -1,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      }
+    },
+    "shapes": {
+      "pass": true,
+      "detail": {
+        "query_spec": [
+          [
+            10,
+            1
+          ],
+          "torch.float32"
+        ],
+        "key_spec": [
+          [
+            10,
+            1
+          ],
+          "torch.float32"
+        ],
+        "value_tree": [
+          [
+            10,
+            1
+          ],
+          "torch.float32"
+        ],
+        "a": [
+          [
+            10,
+            1
+          ],
+          "torch.float32"
+        ],
+        "b": [
+          [
+            10,
+            1
+          ],
+          "torch.float32"
+        ],
+        "A_log": [
+          [
+            10,
+            1
+          ],
+          "torch.float32"
+        ],
+        "dt_bias": [
+          [
+            10,
+            1
+          ],
+          "torch.float32"
+        ],
+        "h0": [
+          [
+            48,
+            128,
+            128
+          ],
+          "torch.float32"
+        ],
+        "serving_out": [
+          [
+            10,
+            1
+          ],
+          "torch.float32"
+        ]
+      }
+    },
+    "all_operands_finite": {
+      "pass": true,
+      "detail": null
+    },
+    "serving_state_is_None_on_stateless_route": {
+      "pass": true,
+      "detail": "NoneType"
+    },
+    "payload_written_during_request_window": {
+      "pass": true,
+      "detail": {
+        "request_start": "2026-09-21T23:27:19.453729+00:00",
+        "request_end": "2026-09-21T23:27:21.453729+00:00",
+        "payload_mtime": "2026-09-21T23:27:20.453729+00:00"
+      }
+    },
+    "tree_path_lcp.jsonl_grew_after_request": {
+      "pass": true,
+      "detail": {
+        "before": 0,
+        "after": 1
+      }
+    },
+    "fr10_tree_depth_positions.jsonl_grew_after_request": {
+      "pass": true,
+      "detail": {
+        "before": 0,
+        "after": 1
+      }
+    },
+    "shim_applied": {
+      "pass": true,
+      "detail": null
+    }
+  },
+  "conclusion": "Inspector validates presence/finiteness/timing but does not establish claimed request/token/layer/shape binding"
+}

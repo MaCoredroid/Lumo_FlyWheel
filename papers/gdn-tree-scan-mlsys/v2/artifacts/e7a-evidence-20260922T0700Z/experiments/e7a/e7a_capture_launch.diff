@@ -1,0 +1,48 @@
+--- scripts/fr10_launch_speed_server.sh	2026-09-21 21:41:59.124083899 +0000
++++ papers/gdn-tree-scan-mlsys/v2/experiments/e7a/e7a_capture_launch.sh	2026-09-21 23:15:50.305866955 +0000
+@@ -1,4 +1,15 @@
+ #!/usr/bin/env bash
++# DERIVED LAUNCHER (E7a fresh-operand capture). Byte-for-byte copy of scripts/fr10_launch_speed_server.sh at
++# HEAD 984f613d with the additions listed here (inline comments are NOT allowed inside the backslash-continued
++# docker argv, so the additions are only marked in this header and in e7a_capture_launch.diff):
++#   (1) docker -e pass-through of FR13_REPLAY_ROUTE, FR10_TREE_GDN_CAPTURE_PAYLOAD_LAYER_PREFIX,
++#       FR10_TREE_GDN_CAPTURE_PAYLOAD_NUM_TOKENS and E7A_CAPTURE_SHIM (documented capture selectors);
++#   (2) in-container: after the ORIGINAL patcher, run the capture-only shim
++#       /workspace/papers/gdn-tree-scan-mlsys/v2/experiments/e7a/e7a_capture_shim.py when E7A_CAPTURE_SHIM=1
++#       (fail-closed exact-text edits inside the capture try-block only; see that file).
++#   (3) the shared checkpoint mount is READ-ONLY (`-v /models:/models:ro`).
++# No gate, hash, model pin, memory check, or numerical serving flag is changed. The diff against the original is
++# recorded next to every capture run (launcher.diff) together with both files' sha256.
+ set -euo pipefail
+ 
+ # REPO IS DERIVED, NOT HARDCODED. This read
+@@ -277,7 +288,7 @@
+ 
+ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
+   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
+-  -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
++  -v "$REPO:/workspace" -v /models:/models:ro -v "$LOG_DIR:/logs" \
+   "${NSYS_DOCKER_ARGS[@]}" \
+   -e VLLM_BATCH_INVARIANT="$BATCH_INVARIANT" \
+   -e LUMO_BATCH_INVARIANT_VLLM="${LUMO_BATCH_INVARIANT_VLLM:-$BATCH_INVARIANT}" \
+@@ -315,6 +326,10 @@
+   -e FR12_TREE_CONV_STATE_FULL_CAPTURE="$FR12_TREE_CONV_STATE_FULL_CAPTURE" \
+   -e FR10_TREE_GDN_COUNTER_DUMP=/logs/fr10_tree_gdn_counters.json \
+   -e FR10_TREE_GDN_CAPTURE_PAYLOAD="$FR10_TREE_GDN_CAPTURE_PAYLOAD" \
++  -e FR13_REPLAY_ROUTE="${FR13_REPLAY_ROUTE:-1}" \
++  -e FR10_TREE_GDN_CAPTURE_PAYLOAD_LAYER_PREFIX="${FR10_TREE_GDN_CAPTURE_PAYLOAD_LAYER_PREFIX:-}" \
++  -e FR10_TREE_GDN_CAPTURE_PAYLOAD_NUM_TOKENS="${FR10_TREE_GDN_CAPTURE_PAYLOAD_NUM_TOKENS:-}" \
++  -e E7A_CAPTURE_SHIM="${E7A_CAPTURE_SHIM:-0}" \
+   -e FR10_TREE_GDN_COMMIT_HANDOFF_LOG="$FR10_TREE_GDN_COMMIT_HANDOFF_LOG" \
+   -e FR10_TREE_GDN_COMMIT_HANDOFF_LAYER_PREFIX="$FR10_TREE_GDN_COMMIT_HANDOFF_LAYER_PREFIX" \
+   -e FR10_TREE_GDN_COMMIT_HANDOFF_LIMIT="$FR10_TREE_GDN_COMMIT_HANDOFF_LIMIT" \
+@@ -384,6 +399,9 @@
+   python3 /workspace/scripts/fr12_apply_swe_prelaunch.py
+ fi
+ python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
++if [[ \"\${E7A_CAPTURE_SHIM:-0}\" == \"1\" ]]; then
++  python3 /workspace/papers/gdn-tree-scan-mlsys/v2/experiments/e7a/e7a_capture_shim.py
++fi
+ SPEC_ARGS=()
+ if [[ \"\${FR12_NO_SPECULATIVE_CONFIG:-0}\" != \"1\" ]]; then
+   SPEC_ARGS=(--speculative-config \"\$SPEC_CONFIG\")

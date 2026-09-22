@@ -1,0 +1,23 @@
+{
+  "_note": "Operator-authored AFTER reading the pilot harness SUMMARY (out-<utc>-e7a-fresh-pilot/SUMMARY.md). Every pilot_max is copied from the SUMMARY's worst case over the 8 VERIFIED-FRESH sets; tolerance = pilot_max * margin exactly, or a per-class rule. No value may be guessed. Fed to fill_pilot_freeze.py, validated by check_pilot_freeze.py.",
+  "candidate_selection": {"candidates": ["TBD: realizations carried to confirmation, e.g. scan-fp32-ieee, treewy-fs-fp32-ieee, bole-neumann-fp32-ieee (+ bf16-store variants if kept)"], "rationale": "TBD: cite SUMMARY rows; any candidate whose pilot worst case exceeds its tolerance is dropped BEFORE confirmation"},
+  "tolerances": {
+    "fp32_ieee_out_vs_fp64_oracle_max_abs": {"pilot_max": null, "margin": 2.0, "tolerance": null},
+    "fp32_ieee_state_vs_fp64_oracle_max_abs": {"pilot_max": null, "margin": 2.0, "tolerance": null},
+    "scan_fp32_store_vs_native_specupdate": {"pilot_max": 0, "tolerance": 0, "rule": "0 ULP, integer view (bit-identical) vs the pinned native spec-update kernel; any nonzero = decision change"},
+    "served_bf16_out_vs_fp64_oracle_max_abs": {"pilot_max": null, "margin": 1.5, "tolerance": null},
+    "bf16_store_realizations_agreement_floor": {"pilot_max": null, "margin": 1.5, "tolerance": null, "_note": "expressed as 1 - agreement fraction (worst over sets); floor = 1 - tolerance"},
+    "compact_commit_state_vs_native_max_abs": {"pilot_max": null, "margin": 2.0, "tolerance": null}
+  },
+  "unacceptable_decision_changes": [
+    "any production-scan fp32-store row not bit-identical (integer view) to the pinned native spec-update kernel",
+    "any bf16-store agreement below the frozen floor on any confirmation prefix",
+    "any non-finite comparison cell",
+    "any change in the ordering of realizations by worst-case error class between pilot and confirmation",
+    "provenance FAIL on any confirmation prefix (counted as a failure, never dropped or re-run silently)",
+    "tf32 realizations promoted to the deployed comparison"
+  ],
+  "timing_precision_target": {"relative_half_width_max": 0.05, "probe_drift_max": 0.05, "basis": "TBD: pilot CUDA-event medians over iters=200; probe-drift criterion as in v3 (<= 5 %)"},
+  "metric_variance": {"_note": "TBD: per class, min/median/max over the 8 pilot sets from SUMMARY (finite numbers only)"},
+  "notes": "Analysis/resampling unit = frozen prefix. Confirmation = 32 disjoint frozen prefixes (16 x 256 tokens, 16 x 4096 tokens), layer 62, same served configuration; run only via capture_loop.v5.sh SET=confirmation after this record validates."
+}

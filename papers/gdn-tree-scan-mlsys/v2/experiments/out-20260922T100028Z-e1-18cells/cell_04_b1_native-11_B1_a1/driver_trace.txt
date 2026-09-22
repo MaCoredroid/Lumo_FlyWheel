@@ -1,0 +1,9 @@
+start_utc=2026-09-22T10:24:14Z cell=4 block=1 arm=native-11 batch=B1 max_num_seqs=1 gpu_util_frozen=0.6 max_model_len_frozen=16384 spec_config_frozen={"method":"qwen3_5_mtp","num_speculative_tokens":11}
+driver_exec=e1_cell_driver.v1.sh sha256=25aa6c2195957630 from_snapshot=1 snapshot_dir=/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_04_b1_native-11_B1_a1/script_snapshot
+guard_pid=3359991 container_id=729ca58cfecd324a1f6cb67a7f8ecb2430dd7602bd4df5197ecaf8573c0f3905 container_name=e1-cell04-102414 alive=true utc=2026-09-22T10:24:29Z
+preflight_start_utc=2026-09-22T10:29:51.125223263Z
+preflight_verdict=PASS utc=2026-09-22T10:31:24Z
+workload_start_utc=2026-09-22T10:31:24.773694952Z
+workload_end_utc=2026-09-22T10:33:15.772864739Z
+container_stopped_utc=2026-09-22T10:33:19Z
+exit_utc=2026-09-22T10:33:19Z rc=0

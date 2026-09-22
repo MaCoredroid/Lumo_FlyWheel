@@ -1,0 +1,9 @@
+{
+  "utc": "2026-09-22T07:53:26.207132+00:00",
+  "tex_sha256": "d4e100458d5042e3e6868f6047849192879e41d034b233f65779695630feb357",
+  "pdf_sha256": "69cc2d4013bccb4760cb1132d44c60657eb053343c36b2f576dafe39ff628cc4",
+  "pages": 12,
+  "scope": "review18 independent newsection closed; added accepted-length qualifier and explicit6bootKV-off limitation supportedbyresults/e7b-route-environments.json",
+  "build": "cleanfinalLaTexlog;12pages;changedpages10/11visuallyinspected",
+  "previous_build": "2026-09-22-paper-review18-build.json"
+}

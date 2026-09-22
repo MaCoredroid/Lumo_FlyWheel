@@ -1,0 +1,9 @@
+{
+  "utc": "2026-09-22T12:27:54.680607+00:00",
+  "archive": "e1-timing-20260922T1225Z.tar.gz",
+  "sha256": "bf50b33386eb9614cf7874039f60cb62a484ee62bc0882e32ab32731857318d6",
+  "bytes": 12955447,
+  "all_members_hash_size_checked": 1482,
+  "embedded_manifest_matches_sidecar": true,
+  "scope": "Private raw E1 evidence, all18originalcells and T1 retained; no public release"
+}

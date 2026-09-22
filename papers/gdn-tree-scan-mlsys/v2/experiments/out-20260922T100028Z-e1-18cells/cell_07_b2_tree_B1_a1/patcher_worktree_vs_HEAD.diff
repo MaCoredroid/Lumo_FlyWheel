@@ -1,0 +1,25 @@
+diff --git a/scripts/fr10_phase4_patch_vllm_tree_gdn.py b/scripts/fr10_phase4_patch_vllm_tree_gdn.py
+index 48d20e1a6..98e559032 100644
+--- a/scripts/fr10_phase4_patch_vllm_tree_gdn.py
++++ b/scripts/fr10_phase4_patch_vllm_tree_gdn.py
+@@ -26276,12 +26276,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
+         "import os\n" + _FR13_FIXED32_TSR_NONPREFIX_SOURCE,
+         1,
+     )
+-    if _FR13_FIXED32_MODE:
+-        text = text.replace(
+-            "import os\n",
+-            f"import os\n_FR13_FIXED32_MODE = {_FR13_FIXED32_MODE!r}\n",
+-            1,
+-        )
++    # E7A-FIX (2026-09-21): emit the drafter constant UNCONDITIONALLY. The emitted propose body references
++    # _FR13_FIXED32_MODE on every route; HEAD emitted its definition only when FR13_FIXED32_MODE was set, so the
++    # plain tree_mtp route raised NameError on the first proposal. The value is the patcher's own (env-unset -> "").
++    text = text.replace(
++        "import os\n",
++        f"import os\n_FR13_FIXED32_MODE = {_FR13_FIXED32_MODE!r}\n",
++        1,
++    )
+ 
+     tree_parse_old = """        # Parse the speculative token tree.
+         spec_token_tree = self.speculative_config.speculative_token_tree

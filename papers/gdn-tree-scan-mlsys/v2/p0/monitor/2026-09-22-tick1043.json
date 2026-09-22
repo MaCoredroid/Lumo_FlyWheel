@@ -1,0 +1,47 @@
+{
+  "check_start_utc": "2026-09-22T10:43:18Z",
+  "check_final_utc": "2026-09-22T10:47:38Z",
+  "pacific": "2026-09-22 03:47:38 PDT",
+  "completed": 6,
+  "independently_raw_verified": 6,
+  "planned": 18,
+  "native_routes_independently_qualified": 4,
+  "active_cell": 7,
+  "active_arm": "tree/B1",
+  "container": "e1-cell07-104726",
+  "running_experiment_jobs": 1,
+  "prior_cell6_seal_utc": "2026-09-22T10:47:25Z",
+  "cell6_reported_rate_pending_independent_check": 47.65063886822262,
+  "new_findings": [
+    {
+      "id": "T1",
+      "finding": "API request seed20260921 for allarms; actual native engine seed20260921, tree engine seed0. Frozen seed label did not distinguish scopes and verifier omitted this check.",
+      "disposition": "Preserve immutable18-cell campaign and all measurements. Disclose as-executed protocol deviation; source confirms no engine-global seed input at activegreedy selector, without proving whole-engine seed invariance. Finalpaper disclosure still required; secondread-only claim-scope review active. No extra boot currently indicated."
+    }
+  ],
+  "reports": {
+    "e1-native-qualification-redteam.md": "7c3c4ebe5c16caa26c81419a0a61a631d4bae13b21ea3aff7522016c22d5439f",
+    "e1-first-tree-timing-redteam.md": "9995f60a61a45a9db69a2fa1fec013d10efc5b4f98bc26c811fed5908d81774e"
+  },
+  "asexecuted_note_sha256": "e151f745aa46ee27fa7a22e7b39c45bb9bd9948bdcddf23de1077d51c01c58df",
+  "parent_scope_note_sha256": "f04e6d62844ffe6962cac57b624934f7bbe5f9ae7f701b0f7e817a231ce2322b",
+  "resource_at10_43": {
+    "available_gib": 70.2333984375,
+    "swap_used_gib": 0,
+    "owned_compute_pid": 3376142,
+    "foreign_compute": 0
+  },
+  "scope": "Raw measurement validity is distinguished from full frozen-setting compliance. The tree engine-seed deviation is not silently relabeled.",
+  "followup_review_utc": "2026-09-22T10:49Z",
+  "cell6_independent": {
+    "tokens": 684,
+    "wall_s": 14.354477006942034,
+    "intervals": 51,
+    "rate": 47.65063886822262,
+    "cohort_intervals": [
+      26,
+      25
+    ]
+  },
+  "seed_claim_adjudication": "Independent second reviewer agrees bounded as-executed comparison needs disclosure, not newboot; no identical-engine or seed-controlled causalclaim"
+}

@@ -1,0 +1,15 @@
+{
+  "utc": "2026-09-22T09:50:00.565056+00:00",
+  "archive": "artifacts/paper-review-20260922T0948Z.tar.gz",
+  "sha256": "7899411a6ded18ffd6f94f6da72a1de66a126720a5774d03505f1152fd174279",
+  "files_verified": 110,
+  "companions": [
+    "e7a-evidence-20260922T0709Z.tar.gz",
+    "e7b-diagnostics-20260922T0801Z.tar.gz",
+    "selected-route-20260922T0930Z.tar.gz"
+  ],
+  "scope": "Private intermediate checkpoint: E7a frozen failures retained; bounded E7b diagnostics and selected synchronous B1/B4 route checks closed; native live preflight and E1 timing pending",
+  "paper_pdf_sha256": "93610803f1f325491651d8e7d207aa832577b6767288a7411b3765f61d20230d",
+  "build_and_visual_proof": "2026-09-22-paper-review23-build.json",
+  "checks": "All archive member sizes/hashes verified against manifest; canonical source/PDF build separately verified before packaging. No new extracted-build claim."
+}

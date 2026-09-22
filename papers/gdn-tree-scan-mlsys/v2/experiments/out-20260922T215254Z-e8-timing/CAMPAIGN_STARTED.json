@@ -1,0 +1,47 @@
+{
+  "schema": "e8.timing.start.v1",
+  "timing_manifest_sha256": "8bbb5b486fa9e11ff0bc0ef6d0373de65bbd8217392e973a02de015df39c2ab1",
+  "qualification": {
+    "root": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T215254Z-e8-timing/qualification_evidence",
+    "pass_sha256": "815b348bdb95c455122e7f1232449d4e12dd339edbd6c3c8e2b9a980c6342513",
+    "source_manifest_sha256": "bc2feab326cb67c916ea418b0399499f4986e18d6bba3e4efc7a20a50f0ce030"
+  },
+  "cells": [
+    {
+      "index": 1,
+      "block": 1,
+      "arm": "off",
+      "name": "cell_01_block1_off"
+    },
+    {
+      "index": 2,
+      "block": 1,
+      "arm": "on",
+      "name": "cell_02_block1_on"
+    },
+    {
+      "index": 3,
+      "block": 2,
+      "arm": "on",
+      "name": "cell_03_block2_on"
+    },
+    {
+      "index": 4,
+      "block": 2,
+      "arm": "off",
+      "name": "cell_04_block2_off"
+    },
+    {
+      "index": 5,
+      "block": 3,
+      "arm": "off",
+      "name": "cell_05_block3_off"
+    },
+    {
+      "index": 6,
+      "block": 3,
+      "arm": "on",
+      "name": "cell_06_block3_on"
+    }
+  ]
+}

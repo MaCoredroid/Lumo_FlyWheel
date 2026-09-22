@@ -1,0 +1,23 @@
+total 3616
+drwxrwxr-x 2 mark mark    4096 Sep 22 02:07 .
+drwxrwxr-x 4 mark mark    4096 Sep 22 02:07 ..
+-rw-r--r-- 1 root root     644 Sep 22 02:01 e7a_capture_shim.json
+-rw-r--r-- 1 root root    3647 Sep 22 02:07 fr10_caterpillar_drafter.jsonl
+-rw-rw-r-- 1 mark mark       2 Sep 22 02:06 fr10_caterpillar_drafter.jsonl.lines_before_request
+-rw-r--r-- 1 root root    3799 Sep 22 02:07 fr10_mtp_draft_trace.jsonl
+-rw-rw-r-- 1 mark mark       2 Sep 22 02:06 fr10_mtp_draft_trace.jsonl.lines_before_request
+-rw-r--r-- 1 root root    3969 Sep 22 02:07 fr10_tree_depth_positions.jsonl
+-rw-rw-r-- 1 mark mark       2 Sep 22 02:06 fr10_tree_depth_positions.jsonl.lines_before_request
+-rw-r--r-- 1 root root      68 Sep 22 02:01 fr13_apc_bridge_error.flag
+-rw-r--r-- 1 root root     102 Sep 22 02:01 fr13_apc_bridge_loaded.flag
+-rw-r--r-- 1 root root       1 Sep 22 02:01 fr13_dfwd_split.flag
+-rw-r--r-- 1 root root    1112 Sep 22 02:07 per_req_spec_trace.jsonl
+-rw-rw-r-- 1 mark mark       2 Sep 22 02:06 per_req_spec_trace.jsonl.lines_before_request
+-rw-rw-r-- 1 mark mark     375 Sep 22 02:00 repo_identity.json
+-rw-rw-r-- 1 mark mark     239 Sep 22 02:00 served_model.json
+-rw-r--r-- 1 root root 3607409 Sep 22 02:06 tree_gdn_capture_payload.pt
+-rw-r--r-- 1 root root       0 Sep 22 02:06 tree_path_lcp.jsonl
+-rw-rw-r-- 1 mark mark       2 Sep 22 02:06 tree_path_lcp.jsonl.lines_before_request
+-rw-r--r-- 1 root root    7778 Sep 22 02:07 tree_sampler_debug.jsonl
+-rw-r--r-- 1 root root    8698 Sep 22 02:07 tree_sampler_debug.jsonl.commit
+-rw-rw-r-- 1 mark mark       2 Sep 22 02:06 tree_sampler_debug.jsonl.lines_before_request

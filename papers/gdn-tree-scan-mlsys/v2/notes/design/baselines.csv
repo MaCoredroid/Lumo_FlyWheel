@@ -1,0 +1,12 @@
+id,category,selected,citation,reason,execution_status
+native5,strong_chain,yes,qwen2026qwen36fp8,Depth-comparable native chain for fresh Cat10,fresh_E1_verified_as_executed
+native11,longer_chain_control,yes,lumo2026cost,Longer native chain; not depth-matched to fresh Cat10,fresh_E1_verified_as_executed
+tree,method,yes,lumo2026archive,Cat10 stock TREE_ATTN flat-map synchronous eager cache-off route,fresh_E1_verified_as_executed
+autoregressive,foundational,conditional,leviathan2023fast,Context baseline; not replacement for chain,planned_if_requested
+tree_no_kv_remap,ablation,yes,lumo2026stateless,Accepted-path KV witness,historical_design_witness; fresh_E2_backend_specific_checks
+tree_interleaved,ablation,yes,lumo2026spine,Controlled spine numerical witness,historical_FA2_layout_witness_only; not_a_fresh_TreeATtn_timing_ablation
+sglang_tree,direct,conditional,zheng2024sglang,Existing calibration has unequal model/KV configurations,matched_comparison_planned
+bole,direct,conditional,wang2026bole,Same problem and overlapping platform; implementation feasibility first,literature_only
+treewy,direct,conditional,ghantasala2026treewy,Alternative verifier and state reconstruction,literature_only
+replayssm,chain_state,conditional,replayssm2026,Alternative state materialization policy,literature_only
+stree,foundational,no,wu2025stree,Different recurrence; related work not direct GDN control,literature_only

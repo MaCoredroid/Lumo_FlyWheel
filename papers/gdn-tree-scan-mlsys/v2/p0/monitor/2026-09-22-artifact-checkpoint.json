@@ -1,0 +1,23 @@
+{
+  "utc": "2026-09-22T07:04:10.470546+00:00",
+  "scope": "private partial review checkpoint; final refresh after E2/E1 required",
+  "e7a_archive": {
+    "file": "artifacts/e7a-evidence-20260922T0709Z.tar.gz",
+    "sha256": "776ddcaf5d938cc665bafca20f46e29d1e9a550a34914d798e78f70636cd180b",
+    "files_verified": 2859,
+    "pilot_payload_and_provenance_count": 8,
+    "historical_tensors_used": 4
+  },
+  "paper_archive": {
+    "file": "artifacts/paper-review-20260922T0710Z.tar.gz",
+    "sha256": "3676083f2e7b3c7b31ce1648ddebbf9dfcb804bf80363bb43261e8c79ed6c8ea",
+    "files": 80
+  },
+  "historical_audit": "all4derived files reproduced byte-for-byte after extraction",
+  "latex_build": "11pages; no overfull or undefined refs",
+  "excluded": "model weights and JIT cache bytes; hashes retained",
+  "runtime_replay": "original absolute paths retained; full GPU portability not certified",
+  "updated_utc": "2026-09-22T07:14:04.364573+00:00",
+  "earlier_pair": "0700/0702 superseded for omitted dependencies; preserved",
+  "independent_review": "All3specific packaging gaps closed; artifact-redteam-round1.md"
+}

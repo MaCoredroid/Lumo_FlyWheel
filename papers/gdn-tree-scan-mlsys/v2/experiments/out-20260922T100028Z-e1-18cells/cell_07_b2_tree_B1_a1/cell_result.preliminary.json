@@ -1,0 +1,178 @@
+{
+ "cell": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_07_b2_tree_B1_a1",
+ "batch": 1,
+ "status": "VALID",
+ "reasons": [],
+ "join": {
+  "n_events": 1082,
+  "invalid": null,
+  "refused": null,
+  "phases": {
+   "warmup": [
+    "cmpl-a5b1d67a2ae827f8-0-b4dffc54",
+    "cmpl-b1fcb65c00d4f6a8-0-b07d8a6d"
+   ],
+   "timed": [
+    "cmpl-8cafac14ec879472-0-bf632c7e",
+    "cmpl-8ce58c108abdd141-0-89e75965",
+    "cmpl-91fe6f2e96775580-0-acc059ed",
+    "cmpl-940d37d3f8b3efd2-0-acf8cd48",
+    "cmpl-9e92284dfc251633-0-a7b18bb3",
+    "cmpl-aa5d708cc031377c-0-8c4031e4",
+    "cmpl-bbe51d2d742aeac4-0-a299658f",
+    "cmpl-be0402b1b83c3d95-0-a12ce97c"
+   ]
+  },
+  "n_forwards": 360,
+  "n_output_records": 360,
+  "n_nonpure_output_records": 14,
+  "n_physical_steps": 346,
+  "n_chain_breaks": 14,
+  "n_usable": 314,
+  "n_excluded": 32,
+  "excluded_wall_s_total": 28.0313187725842,
+  "truncated_tail_tokens": {
+   "cmpl-b1fcb65c00d4f6a8-0-b07d8a6d": 2,
+   "cmpl-a5b1d67a2ae827f8-0-b4dffc54": 2,
+   "cmpl-91fe6f2e96775580-0-acc059ed": 1,
+   "cmpl-aa5d708cc031377c-0-8c4031e4": 2,
+   "cmpl-bbe51d2d742aeac4-0-a299658f": 3,
+   "cmpl-8cafac14ec879472-0-bf632c7e": 1,
+   "cmpl-8ce58c108abdd141-0-89e75965": 2,
+   "cmpl-be0402b1b83c3d95-0-a12ce97c": 1
+  },
+  "over_cap_diagnostic": {
+   "cap_s": 1.5,
+   "n_intervals_over_cap": 0,
+   "wall_s_over_cap": 0,
+   "physical_step_ids": [],
+   "tokens_per_wall_second_trimmed_DIAGNOSTIC_ONLY": 12.607309482129649
+  },
+  "phase_summary": {
+   "warmup": {
+    "requests": 2,
+    "ledger_tokens": 68,
+    "api_tokens": 64
+   },
+   "timed": {
+    "requests": 8,
+    "ledger_tokens": 1034,
+    "api_tokens": 1024
+   }
+  },
+  "token_evidence": {
+   "cmpl-91fe6f2e96775580-0-acc059ed": 128,
+   "cmpl-aa5d708cc031377c-0-8c4031e4": 128,
+   "cmpl-940d37d3f8b3efd2-0-acf8cd48": 128,
+   "cmpl-bbe51d2d742aeac4-0-a299658f": 128,
+   "cmpl-9e92284dfc251633-0-a7b18bb3": 128,
+   "cmpl-8cafac14ec879472-0-bf632c7e": 128,
+   "cmpl-8ce58c108abdd141-0-89e75965": 128,
+   "cmpl-be0402b1b83c3d95-0-a12ce97c": 128,
+   "cmpl-b1fcb65c00d4f6a8-0-b07d8a6d": 32,
+   "cmpl-a5b1d67a2ae827f8-0-b4dffc54": 32
+  },
+  "ledger_tokens_all_forwards": 1102,
+  "sum_wall_s_unique_physical_steps": 78.92246965225786,
+  "sum_emitted_tokens_api_bound_pure_support": 995,
+  "n_request_rows": 314,
+  "tokens_per_wall_second": 12.607309482129649
+ },
+ "per_prompt": {
+  "p072": {
+   "intervals": 39,
+   "wall_s": 9.697898291051388,
+   "tokens": 125
+  },
+  "p017": {
+   "intervals": 40,
+   "wall_s": 9.976352604106069,
+   "tokens": 123
+  },
+  "p015": {
+   "intervals": 40,
+   "wall_s": 9.977840754203498,
+   "tokens": 123
+  },
+  "p021": {
+   "intervals": 38,
+   "wall_s": 9.467790333554149,
+   "tokens": 124
+  },
+  "p085": {
+   "intervals": 46,
+   "wall_s": 11.636924442835152,
+   "tokens": 126
+  },
+  "p095": {
+   "intervals": 42,
+   "wall_s": 10.66056040674448,
+   "tokens": 123
+  },
+  "p058": {
+   "intervals": 35,
+   "wall_s": 8.89524121209979,
+   "tokens": 126
+  },
+  "p083": {
+   "intervals": 34,
+   "wall_s": 8.609861607663333,
+   "tokens": 125
+  }
+ },
+ "floor": {
+  "rule": "every one of the 8 timed prompts >= 1 retained interval",
+  "prompts": [
+   "p072",
+   "p017",
+   "p015",
+   "p021",
+   "p085",
+   "p095",
+   "p058",
+   "p083"
+  ],
+  "missing": [],
+  "pass": true
+ },
+ "api_totals": {
+  "p072/w0": 32,
+  "p072/w1": 32,
+  "p072/t0": 128,
+  "p017/t1": 128,
+  "p015/t2": 128,
+  "p021/t3": 128,
+  "p085/t4": 128,
+  "p095/t5": 128,
+  "p058/t6": 128,
+  "p083/t7": 128
+ },
+ "finish": {
+  "w0": "length",
+  "w1": "length",
+  "t0": "length",
+  "t1": "length",
+  "t2": "length",
+  "t3": "length",
+  "t4": "length",
+  "t5": "length",
+  "t6": "length",
+  "t7": "length"
+ },
+ "primary": {
+  "tokens_per_wall_second": 12.607309482129649,
+  "sum_wall_s_unique_physical_steps": 78.92246965225786,
+  "sum_emitted_tokens_api_bound_pure_support": 995,
+  "n_usable": 314,
+  "n_excluded": 32
+ },
+ "diagnostic_over_cap": {
+  "cap_s": 1.5,
+  "n_intervals_over_cap": 0,
+  "wall_s_over_cap": 0,
+  "physical_step_ids": [],
+  "tokens_per_wall_second_trimmed_DIAGNOSTIC_ONLY": 12.607309482129649
+ },
+ "preliminary": true,
+ "note": "PRELIMINARY \u2014 not eligible until the runner writes cell_result.json with terminal_seal"
+}

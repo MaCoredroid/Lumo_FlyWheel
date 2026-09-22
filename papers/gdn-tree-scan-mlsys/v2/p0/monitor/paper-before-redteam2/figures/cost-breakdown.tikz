@@ -1,0 +1,18 @@
+\begin{tikzpicture}
+\begin{axis}[
+ width=\columnwidth,height=5.2cm,
+ xbar stacked,bar width=12pt,
+ xmin=0,xmax=180,
+ ytick={0,1,2},yticklabels={MTP-5,MTP-11,Tree},
+ y dir=reverse,enlarge y limits=0.27,
+ xlabel={Milliseconds per request verification event},
+ tick label style={font=\scriptsize},label style={font=\scriptsize},
+ legend style={font=\scriptsize,at={(0.5,-0.28)},anchor=north,legend columns=2,draw=none},
+ axis lines*=left,xmajorgrids,grid style={gray!15}]
+\addplot[fill=inkblue!80,draw=none] table[x=verify_ms,y expr=\coordindex,col sep=comma] {results/historical-metrics.csv};
+\addplot[fill=mutedgreen!80,draw=none] table[x=draft_ms,y expr=\coordindex,col sep=comma] {results/historical-metrics.csv};
+\addplot[fill=mutedamber!80,draw=none] table[x=commit_ms,y expr=\coordindex,col sep=comma] {results/historical-metrics.csv};
+\addplot[fill=mutedred!80,draw=none] table[x=host_ms,y expr=\coordindex,col sep=comma] {results/historical-metrics.csv};
+\legend{Verify,Draft,Commit,Host/other}
+\end{axis}
+\end{tikzpicture}

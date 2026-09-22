@@ -1,0 +1,72 @@
+{
+  "observed_utc": "2026-09-22T06:19:12.056817+00:00",
+  "hashes": {
+    "e7b_runtime.py": "a857a0aea0f83316dd454e6b77038120023c4b59ea83f5ab6b77d54562e38dfa",
+    "e7b_reduce.py": "469b66dc6dea04456c6c154466e57ded5a652cbec3e63c269e4c7e27e21fbe19"
+  },
+  "controls": {
+    "h0_fp32_contiguous": {
+      "independent": true
+    },
+    "h0_bf16": {
+      "independent": true
+    },
+    "h0_noncontiguous": {
+      "independent": true
+    },
+    "row_ids": {
+      "matched_rows": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "logits_numeric": true,
+      "state_numeric": true,
+      "state_tokens_actually_match": true
+    },
+    "missing_positions": {
+      "matched_rows": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "logits_numeric": true,
+      "state_numeric": true,
+      "state_tokens_actually_match": true
+    },
+    "state_tokens": {
+      "matched_rows": [
+        0
+      ],
+      "logits_numeric": true,
+      "state_numeric": true,
+      "state_tokens_actually_match": false
+    },
+    "commit_commit_only": {
+      "compact_calls": 1,
+      "saved_state_matches_returned_bank": false,
+      "saved_value": 1.0,
+      "returned_value": 1.0000100135803223
+    },
+    "commit_sham": {
+      "compact_calls": 0,
+      "saved_state_matches_returned_bank": true,
+      "saved_value": 1.0,
+      "returned_value": 1.0
+    }
+  }
+}

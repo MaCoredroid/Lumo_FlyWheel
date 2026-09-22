@@ -1,0 +1,71 @@
+{
+  "created_utc": "2026-09-22T07:52:09.456023+00:00",
+  "rows": [
+    {
+      "run": "experiments/out-20260922T063019Z-e7b-r13-p072-batch/e7b_001_p072_arm1_none-B_fs_ieee-all",
+      "inspect_sha256": "aaa9de7eaf7e8879f6aa91f297febe445d50dbd938daeca81be5055c0559d542",
+      "flags": {
+        "FR13_ATTN_KV_REMAP": null,
+        "FR13_SLOT_REORDER": null,
+        "FR13_REPLAY_ROUTE": "1",
+        "FR13_TREE_RUNROW_INIT": null
+      }
+    },
+    {
+      "run": "experiments/out-20260922T063019Z-e7b-r13-p072-batch/e7b_002_p072_arm2_sham-B_fs_ieee-all-verify_only",
+      "inspect_sha256": "0677cebd286afe7fffdeb486ce442e081ac611375bdf539b01288ae7819deb65",
+      "flags": {
+        "FR13_ATTN_KV_REMAP": null,
+        "FR13_SLOT_REORDER": null,
+        "FR13_REPLAY_ROUTE": "1",
+        "FR13_TREE_RUNROW_INIT": null
+      }
+    },
+    {
+      "run": "experiments/out-20260922T063019Z-e7b-r13-p072-batch/e7b_003_p072_arm3_verify_only-B_fs_ieee-all",
+      "inspect_sha256": "441419d26c8ac353a090600d47285d26651f28b602746f903b1599463d664f65",
+      "flags": {
+        "FR13_ATTN_KV_REMAP": null,
+        "FR13_SLOT_REORDER": null,
+        "FR13_REPLAY_ROUTE": "1",
+        "FR13_TREE_RUNROW_INIT": null
+      }
+    },
+    {
+      "run": "experiments/out-20260922T071945Z-e7b-r16-p072-commit-batch/e7b_001_p072_arm1_none-B_fs_ieee-all",
+      "inspect_sha256": "481aa90a2c5d232092bf4f0527f83fd396503b1cf04d9e6e02733c5db96b1086",
+      "flags": {
+        "FR13_ATTN_KV_REMAP": null,
+        "FR13_SLOT_REORDER": null,
+        "FR13_REPLAY_ROUTE": "1",
+        "FR13_TREE_RUNROW_INIT": null
+      }
+    },
+    {
+      "run": "experiments/out-20260922T071945Z-e7b-r16-p072-commit-batch/e7b_002_p072_arm2_sham-B_fs_ieee-all-commit_only",
+      "inspect_sha256": "28fe5999d1c9698b9675f0824602da4765c5bee7a5e523359bb924f9d4ed817f",
+      "flags": {
+        "FR13_ATTN_KV_REMAP": null,
+        "FR13_SLOT_REORDER": null,
+        "FR13_REPLAY_ROUTE": "1",
+        "FR13_TREE_RUNROW_INIT": null
+      }
+    },
+    {
+      "run": "experiments/out-20260922T071945Z-e7b-r16-p072-commit-batch/e7b_003_p072_arm3_commit_only-B_fs_ieee-all",
+      "inspect_sha256": "72152a18b5c655559f10ce1f4a0615fc0db79bf2008fe74cab99d6ea27597538",
+      "flags": {
+        "FR13_ATTN_KV_REMAP": null,
+        "FR13_SLOT_REORDER": null,
+        "FR13_REPLAY_ROUTE": "1",
+        "FR13_TREE_RUNROW_INIT": null
+      }
+    }
+  ],
+  "null_means": "absent in recorded container environment",
+  "emitted_runner_sha256": "9487b658ab8eef802737370e6923aaeae865156625d07fdcd49d3fb2772e9cf4",
+  "plain_kv_gate_line": 7027,
+  "plain_kv_gate_default": "0",
+  "fixed32_branch_for_this_emitted_plain_route": "if False",
+  "interpretation": "All six diagnostics omit plain-route KV remap; local arithmetic and matched-arm observations are bounded to this unqualified serving configuration. Repair and verify branch-path KV continuation before current-route qualification."
+}

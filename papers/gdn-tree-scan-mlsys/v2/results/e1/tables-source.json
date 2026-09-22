@@ -1,0 +1,9 @@
+{
+  "source": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/papers/gdn-tree-scan-mlsys/v2/results/e1/aggregate.json",
+  "source_sha256": "dbd4542ee9899da3eb592fdf8a0b935010f5c8035de9d5cb75e581343c7deb1d",
+  "scope": "All 18 planned cells; missing numerical support stays empty, not zero. Contrasts and intervals are copied from the frozen aggregate without recomputation.",
+  "files": {
+    "cells.csv": "35cd67f1682ea62c8700e7dcfe8f77a9879cf7753a6c689c845b81c70a617094",
+    "contrasts.csv": "c464e06fb7528a35aaf967a4f9f94447cbcd81ab9ab5282f1fc0941ee561d359"
+  }
+}

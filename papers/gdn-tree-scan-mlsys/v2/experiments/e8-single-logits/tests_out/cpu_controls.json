@@ -1,0 +1,33 @@
+{
+  "status": "PASS",
+  "count": 27,
+  "results": {
+    "render_on_True": "PASS",
+    "render_on_False": "PASS",
+    "render_off_True": "PASS",
+    "render_off_False": "PASS",
+    "four_distinct_emitted_sources": "PASS",
+    "wrong_hash": "REFUSED_AS_REQUIRED",
+    "wrong_arm": "REFUSED_AS_REQUIRED",
+    "non_boolean": "REFUSED_AS_REQUIRED",
+    "positive_head_census": "PASS",
+    "head_negative_closed": "REFUSED_AS_REQUIRED",
+    "head_negative_failures": "REFUSED_AS_REQUIRED",
+    "head_negative_qualified_proposals": "REFUSED_AS_REQUIRED",
+    "head_negative_primary_head_calls": "REFUSED_AS_REQUIRED",
+    "head_negative_legacy_head_calls": "REFUSED_AS_REQUIRED",
+    "head_negative_checked_heads": "REFUSED_AS_REQUIRED",
+    "head_negative_root_heads": "REFUSED_AS_REQUIRED",
+    "head_negative_loop_heads": "REFUSED_AS_REQUIRED",
+    "head_negative_dispatch_ops_checked": "REFUSED_AS_REQUIRED",
+    "head_negative_arm": "REFUSED_AS_REQUIRED",
+    "head_negative_qualify": "REFUSED_AS_REQUIRED",
+    "head_negative_proposals": "REFUSED_AS_REQUIRED",
+    "head_negative_owner_pid": "REFUSED_AS_REQUIRED",
+    "stage_hashes": "PASS",
+    "launcher_syntax_forwarding_isolation": "PASS",
+    "all_python_compile": "PASS",
+    "import_without_head_preserves_receipt": "PASS",
+    "missing_manifest_dependency": "REFUSED_AS_REQUIRED"
+  }
+}

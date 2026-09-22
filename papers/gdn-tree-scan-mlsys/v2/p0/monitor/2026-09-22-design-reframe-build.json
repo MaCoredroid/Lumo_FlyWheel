@@ -1,0 +1,64 @@
+{
+  "checked_utc": "2026-09-22T21:08:52.364779+00:00",
+  "status": "PASS",
+  "scope": "Author-approved system-design reframe; no empirical result added or removed",
+  "source_hashes": {
+    "main.tex": "0d7bab3835839559797213a42c892c11e10002d93c23eb3d9897babf9e2cc642",
+    "abstract.tex": "887f36b63b62f07784a3b9a2f767e9960ca31ea6b4dbb076d031b92ee202180a",
+    "ref.bib": "64ca0fc74b5185f2f61358945a2f1250de76a7ec7c2ad793504dff0fc22693c0",
+    "main.pdf": "0295c3f6f287e1bfadd3bf68a2349910f0a043081cbad86e7a67ffd4a5cdbf05"
+  },
+  "pages": 14,
+  "citation_lint": {
+    "bib_entries": 27,
+    "cited_keys": 27,
+    "unresolved_keys": [],
+    "uncited_entries": []
+  },
+  "visual_qa": {
+    "final_pages_inspected": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14
+    ],
+    "clipping_or_overlap": false,
+    "last_page": "Final bibliography continues on page 14"
+  },
+  "undefined_references_or_overflow": false,
+  "historical_value_absence_check": {
+    "status": "PASS",
+    "excluded_examples": [
+      "32.85",
+      "42.74",
+      "39.95",
+      "15/15",
+      "0/15"
+    ],
+    "full_source_include_review": "p0/monitor/design-reframe-redteam.md"
+  },
+  "fresh_results": {
+    "numeric_sequence_unchanged": true,
+    "only_wording_change": "Clarify no per-node tree state is exported for the reference comparison; tile-local verification states exist"
+  },
+  "prose_review": {
+    "skill": "latex-rhythm-refiner",
+    "result": "PASS; reviewed current prose, no further edit required; citations and technical meaning unchanged"
+  },
+  "independent_review": {
+    "file": "p0/monitor/design-reframe-redteam.md",
+    "sha256": "dfed0d850c913b0a3e1eb842c452d475f96ef9b5ef2dfffbeb0ffd545576f4b0"
+  },
+  "new_e8_status": "Isolated harness staging; no GPU results yet; separate qualification required before timing",
+  "no_publication_or_submission": true
+}

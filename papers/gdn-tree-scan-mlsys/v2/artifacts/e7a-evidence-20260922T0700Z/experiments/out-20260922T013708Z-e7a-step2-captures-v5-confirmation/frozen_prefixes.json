@@ -1,0 +1,557 @@
+{
+ "schema": "e7a.frozen_prefixes.v2",
+ "frozen_utc": "2026-09-21T23:27:49Z",
+ "seed": 20260921,
+ "margin_median_nats": 1.3749999403953552,
+ "strata": {
+  "context": [
+   "short",
+   "long"
+  ],
+  "margin": [
+   "small(<median)",
+   "large(>=median)"
+  ]
+ },
+ "pilot_per_cell": 2,
+ "confirm_per_cell": 8,
+ "max_per_source": {
+  "pilot": 1,
+  "confirmation": 3
+ },
+ "counts": {
+  "pilot": 8,
+  "confirmation": 32
+ },
+ "pilot": [
+  {
+   "id": "p072",
+   "prefix_sha256": "4022f519838d33bcad42a55b3c34dbfeddd575bd56488a4f3509a1382f417f03",
+   "target_cell": [
+    "short",
+    "small"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 0.3750000596046448,
+   "source": "/work/docs/reports/auto_research/l0-ffn-gemm-phase-a-result-20260503.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p017",
+   "prefix_sha256": "d75829a949cf8cdac82b379b2c138a00126296fd08dc31c6665eef866695458c",
+   "target_cell": [
+    "short",
+    "small"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 0.0,
+   "source": "/work/docs/reports/auto_research/track-b-round4b-dpoint-remeasure-results-20260517.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p015",
+   "prefix_sha256": "90e85b57382a783b11c251d6957446be7c4bc572ab6d8f2365e73385623e41aa",
+   "target_cell": [
+    "short",
+    "large"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 6.750000038184226,
+   "source": "/work/docs/reports/auto_research/track-b-v4a-v2-preserve-thinking-smoke-20260513.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p021",
+   "prefix_sha256": "2328278565840fde5fa9b34d4b09897bd7974d8985aae4c4110b949455a097af",
+   "target_cell": [
+    "short",
+    "large"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 3.6249999701976776,
+   "source": "/work/research/fr13_workflows/apc_flag_cleanup_plan.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p085",
+   "prefix_sha256": "3b2eb67c915e1bf1455cab6c3ccfe9ea025ac027995ecccba2494d45715d3173",
+   "target_cell": [
+    "long",
+    "small"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 0.125,
+   "source": "/work/docs/LLD-13-Codex-Long-Scenario-Framework-v0_6.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p095",
+   "prefix_sha256": "0ec0f7292581e55182011e4642735ae009cfd3a31894ce7b27093e8953f02609",
+   "target_cell": [
+    "long",
+    "small"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 0.125,
+   "source": "/work/research/fr13_workflows/FR13_LEAK_ARCHAEOLOGY.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p058",
+   "prefix_sha256": "a1be6d26630b9ed90f7114eb363af083ea02be92be7f251895c0e6a1022148ce",
+   "target_cell": [
+    "long",
+    "large"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 2.8749998956918716,
+   "source": "/work/docs/reports/auto_research/track-b-e2e-swe-style-prompt-shape-spec-20260510.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p083",
+   "prefix_sha256": "6dcdc6e0dd72cf77d04a3425f869a0b4c84ffd6eac86d96fcff85868a677ff4a",
+   "target_cell": [
+    "long",
+    "large"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 3.124999925494194,
+   "source": "/work/docs/HLD-Serving-Backend-AutoResearch-v0_1.md",
+   "filled_from_medium": false
+  }
+ ],
+ "confirmation": [
+  {
+   "id": "p063",
+   "prefix_sha256": "35ae47bf531ba867953df481a76b997c077a0ea27827cbcbf74b79930b9f4963",
+   "target_cell": [
+    "short",
+    "small"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 0.125,
+   "source": "/work/docs/reports/auto_research/round5-b4-sweep-runbook-20260525.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p059",
+   "prefix_sha256": "7480d8c3955c1995fec3cc93286eb7240026d81b7c78aaefc24f0357a651aa07",
+   "target_cell": [
+    "short",
+    "small"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 0.25,
+   "source": "/work/docs/archive/wy/FR13_WY_LAYER0_LOCALIZE.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p049",
+   "prefix_sha256": "e39a3653f5a4501a8c6a599be4b88a753fc684b3cb5405a0d2ba5ea31afd93de",
+   "target_cell": [
+    "short",
+    "small"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 0.125,
+   "source": "/work/docs/reports/auto_research/l0-ffn-gemm-pivot-20260502.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p052",
+   "prefix_sha256": "ba06010c867672357e61ced84b88196af8fb8f9d79ad29f235d450be605d0909",
+   "target_cell": [
+    "short",
+    "small"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 0.25,
+   "source": "/work/docs/reports/auto_research/fr10-phase4-real-tensor-derisk-20260603.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p046",
+   "prefix_sha256": "20b63352aea901d0c8aab795d6aae2a1204c7f97f427a25a22c9a3911236f98d",
+   "target_cell": [
+    "short",
+    "small"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 0.8749999403953552,
+   "source": "/work/docs/LLD-05-Evaluator-Dual-Track-v0_1.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p065",
+   "prefix_sha256": "b77d631a346ddf65c7bd35311a6fb7f86509026127f39c02d8864133882e9484",
+   "target_cell": [
+    "short",
+    "small"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 0.6249999701976776,
+   "source": "/work/docs/reports/auto_research/swe-bench-concurrency-bandwidth-analysis-20260522.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p025",
+   "prefix_sha256": "fa17dcae865e551f0616f2597e8f5c61771706725a2c798bedf689e3b6a049ed",
+   "target_cell": [
+    "short",
+    "small"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 0.25,
+   "source": "/work/docs/reports/auto_research/l0-warm-decode-quality-bounded-track-20260505.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p031",
+   "prefix_sha256": "6e70bf724b241c1eb4f56ad182d79e10c600ad675c3998b7ad4456e19e87234e",
+   "target_cell": [
+    "short",
+    "small"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 1.1249999403953552,
+   "source": "/work/docs/archive/wy/FR13_WY_LAYER0_SUBOP_VERDICT.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p013",
+   "prefix_sha256": "79e545b81540bc2998db7f04ce34743962e7247bf75078d0d04960ebcf9cb7db",
+   "target_cell": [
+    "short",
+    "large"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 1.5,
+   "source": "/work/docs/reports/auto_research/fr10-lossless-mtp-tree-definitions-20260603.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p040",
+   "prefix_sha256": "44a2bb7a5cd0870b0c8192e51247c8f3a2c45e69ccd9b1d7d5d956c311e5b058",
+   "target_cell": [
+    "short",
+    "large"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 9.562499847321305,
+   "source": "/work/docs/archive/wy/FR13_WY_STATE_FIX.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p033",
+   "prefix_sha256": "7ad0bf676e222e4187707ebad2a946ef0f5ff572b1a3ffc60f1fee98783605a0",
+   "target_cell": [
+    "short",
+    "large"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 6.625000183004886,
+   "source": "/work/docs/reports/auto_research/fr10-gdn-tree-kernel-microbench-20260603.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p038",
+   "prefix_sha256": "cab8f09b3e0ecc2d789ae31cc08f2ad521f2cede189dd6cb520a979cb9e029ca",
+   "target_cell": [
+    "short",
+    "large"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 4.999999945051968,
+   "source": "/work/docs/reports/auto_research/track-b-round3-e2e-v3-closeout-20260510.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p060",
+   "prefix_sha256": "ef21c3cd7774f3784dd8c8148bc244bd40e1407c94aaa86618944190c5b775b3",
+   "target_cell": [
+    "short",
+    "large"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 3.562499925494194,
+   "source": "/work/docs/reports/auto_research/track-b-real-workload-5x-audit-20260506.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p067",
+   "prefix_sha256": "f6fafd41491b1cae54a5b83511c944b6f9a09e8a9abc2fff959c0c98fd23ac22",
+   "target_cell": [
+    "short",
+    "large"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 9.062500315369107,
+   "source": "/work/docs/reports/auto_research/swe-bench-q36-a-campaign-pre-registration-20260520.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p019",
+   "prefix_sha256": "b37e0fce7c017d18fccf611ff679d4ac1f5cf061b7dfdd4f174c549fd98f9c51",
+   "target_cell": [
+    "short",
+    "large"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 2.9999999552965164,
+   "source": "/work/docs/reports/auto_research/l0c-fp8-cutlass-run4-20260503.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p003",
+   "prefix_sha256": "6aa020a4c10ac0a520df34f2d40e30eb19fc0bfaa9c0c74b6c2a61c322a422ea",
+   "target_cell": [
+    "short",
+    "large"
+   ],
+   "context_stratum_actual": "short",
+   "tokens": 256,
+   "native_margin_nats": 1.3749999403953552,
+   "source": "/work/docs/archive/wy/FR13_WY_RESIDUAL_CLOSURE.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p077",
+   "prefix_sha256": "5235933d34f7bd720a3de61b6d4f9b213fb2d0e44b7078d9b915f8a67212bff1",
+   "target_cell": [
+    "long",
+    "small"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 0.0,
+   "source": "/work/docs/reports/auto_research/swe-bench-tier1-pro-instances-20260520.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p089",
+   "prefix_sha256": "42ddc634fe7e42939860d161235aa67fcbcc55f4a7f6070030a2c52d16efbf8a",
+   "target_cell": [
+    "long",
+    "small"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 0.25,
+   "source": "/work/docs/reports/auto_research/round-F-mtp-tree-fa-fb-design-status-20260525.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p030",
+   "prefix_sha256": "f70235c652d55aa7f24b9187258d95ee9ff13f0d85609dc62af5871fae561736",
+   "target_cell": [
+    "long",
+    "small"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 0.375,
+   "source": "/work/docs/reports/auto_research/round-F-unified-cheap-propose-tree-verify-spec-20260529.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p081",
+   "prefix_sha256": "c9151fcfcb9f82ef2f78875cfc82d3ae84da9f8ab3214643e8f8d4e9e89e95da",
+   "target_cell": [
+    "long",
+    "small"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 0.75,
+   "source": "/work/docs/codex-bench-spec-v2_3.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p012",
+   "prefix_sha256": "f9b0d9cfcf12ad2e97adf8150e9627b01585fd761662e4745d1d60a3c66009b9",
+   "target_cell": [
+    "long",
+    "small"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 1.0,
+   "source": "/work/docs/reports/auto_research/swe-bench-campaign-progress-20260520.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p092",
+   "prefix_sha256": "163447d4a2d35e4b6fe5151cbeb5136b6ea8352b93e75222e92dd7d19d64f3e9",
+   "target_cell": [
+    "long",
+    "small"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 0.875,
+   "source": "/work/docs/reports/auto_research/round-F-tree-rejection-sampler-KT-20260526.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p086",
+   "prefix_sha256": "711673a143e6648436d274914dfe9ce8da91eb8dbba649b71f77d3800a3943ea",
+   "target_cell": [
+    "long",
+    "small"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 0.0,
+   "source": "/work/docs/reports/auto_research/swe-bench-tier2-pro-instances-20260520.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p079",
+   "prefix_sha256": "38e383e20639c9ab553d18a5dcc6606f210c9ecc2fb81a45462e8afc9a444b88",
+   "target_cell": [
+    "long",
+    "small"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 1.2500001192092896,
+   "source": "/work/docs/reports/auto_research/l0c-evaluation-ladder-and-memory-prior-art-20260430.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p027",
+   "prefix_sha256": "a1407933600865a41d85c6826d6200beab6f7fd0c773d88b8e8021b95cb2da4c",
+   "target_cell": [
+    "long",
+    "large"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 1.8750000596046448,
+   "source": "/work/docs/reports/auto_research/l0-warm-decode-quality-bounded-track-20260505.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p091",
+   "prefix_sha256": "f7657fc6c0b2740de8534e63514debe645202475a78b20fd33b16663ffb8dfb9",
+   "target_cell": [
+    "long",
+    "large"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 2.2499999552965164,
+   "source": "/work/docs/HLD-Serving-Backend-AutoResearch-v0_1-SubSpec-AutoResearchAgent.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p082",
+   "prefix_sha256": "ee20f7189dcde79fa554163ad5e53797bac36890c30baad95e26b91f418fa445",
+   "target_cell": [
+    "long",
+    "large"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 12.000000000523869,
+   "source": "/work/research/fr13_workflows/FR13_KV_GDN_DECOUPLE_DESIGN.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p088",
+   "prefix_sha256": "431454e7dbd05eb1dd700eed10eb99be87c4d69b4045c22433cb69a81feadbe7",
+   "target_cell": [
+    "long",
+    "large"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 3.499999925494194,
+   "source": "/work/docs/vllm-upstream/DESIGN_ANNEX.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p005",
+   "prefix_sha256": "6593b0da0895356fb2d744f0ffab251ecd6cf091e5688c9a263cf23e5b45c79f",
+   "target_cell": [
+    "long",
+    "large"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 2.750000037252903,
+   "source": "/work/docs/archive/wy/FR13_WY_RESIDUAL_CLOSURE.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p087",
+   "prefix_sha256": "df5d0e30bc9609e30eca5fba35606bb405d36a343dab1263675bc900f6871363",
+   "target_cell": [
+    "long",
+    "large"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 3.6250000447034836,
+   "source": "/work/docs/reports/auto_research/track-b-e2e-proxy-side-instrumentation-20260508.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p076",
+   "prefix_sha256": "6d7751fbd43799742e08065d9cab4db611311776f8428de79fc78554802f319d",
+   "target_cell": [
+    "long",
+    "large"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 7.374999789404683,
+   "source": "/work/docs/reports/auto_research/qwen36-off-a-d-closeout-20260520.md",
+   "filled_from_medium": false
+  },
+  {
+   "id": "p078",
+   "prefix_sha256": "ce18f6e5d28a0082da57f5f559492249d83882d3bec91fc8a04ea0bb4e663217",
+   "target_cell": [
+    "long",
+    "large"
+   ],
+   "context_stratum_actual": "long",
+   "tokens": 4096,
+   "native_margin_nats": 12.249999880994437,
+   "source": "/work/docs/reports/auto_research/round-f-agentic-b4-clean-sweep-20260530.md",
+   "filled_from_medium": false
+  }
+ ],
+ "medium_fills": [],
+ "n_source_documents_pilot": 8,
+ "n_source_documents_confirmation": 30,
+ "scores_sha256": "2940202fa60523823340e3ea89809800bd9b9b1f75226b3306d3f5ce6b35e870",
+ "pool_sha256": "05e731fd02b937970d05695ef2ee836a76efc463481a3a0ce4eeaa237f877d09",
+ "analysis_unit_note": "unit = prefix; prefixes from the same source document are recorded (source) and must be treated as related spans in any later resampling",
+ "rule": "frozen before any tree/candidate output is viewed; pilot and confirmation are disjoint; counts are a bounded diagnostic design, not power"
+}

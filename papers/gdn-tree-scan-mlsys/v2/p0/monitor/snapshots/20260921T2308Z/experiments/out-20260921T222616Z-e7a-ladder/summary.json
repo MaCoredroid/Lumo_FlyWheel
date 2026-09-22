@@ -1,0 +1,102 @@
+{
+ "run_dir": "papers/gdn-tree-scan-mlsys/v2/experiments/out-20260921T222616Z-e7a-ladder",
+ "manifest_status": "completed",
+ "source_hashes_start_end_match": true,
+ "attribution": {
+  "available": true,
+  "container_host_pids": [
+   "2748559"
+  ],
+  "util_samples": 591,
+  "util_zero_frac": 0.9441624365482234,
+  "util_gt5_count": 29,
+  "util_max": 96,
+  "window_utc": [
+   "2026-09-21T22:26:16.768000",
+   "2026-09-21T22:36:06.985000"
+  ],
+  "coverage_gaps": [],
+  "inventory_seconds": 575,
+  "compute_pids_seen": {
+   "2748559": {
+    "samples": 575,
+    "names": [
+     "python3"
+    ]
+   }
+  },
+  "foreign_pids": {},
+  "label": "NO FOREIGN COMPUTE PROCESS SAMPLED (1 Hz inventory; only container PID(s) ['2748559'] seen; sampled observation, not a guarantee)"
+ },
+ "probe_checks": {
+  "1": {
+   "drift": 0.018263776971233298,
+   "pass": true,
+   "before_us": 1825.0783920288086,
+   "after_us": 1791.7455673217773,
+   "criterion": "<= 5%"
+  },
+  "2": {
+   "drift": 0.0008122373251469081,
+   "pass": true,
+   "before_us": 1788.6735916137695,
+   "after_us": 1790.1264190673828,
+   "criterion": "<= 5%"
+  },
+  "3": {
+   "drift": 0.02379477080498068,
+   "pass": true,
+   "before_us": 1830.9280395507812,
+   "after_us": 1787.3615264892578,
+   "criterion": "<= 5%"
+  },
+  "4": {
+   "drift": 0.021465524511803297,
+   "pass": true,
+   "before_us": 1822.8351593017578,
+   "after_us": 1861.9632720947266,
+   "criterion": "<= 5%"
+  },
+  "5": {
+   "drift": 0.041898055929403294,
+   "pass": true,
+   "before_us": 1903.5903930664062,
+   "after_us": 1823.8336563110352,
+   "criterion": "<= 5%"
+  },
+  "6": {
+   "drift": 0.0010815166824480606,
+   "pass": true,
+   "before_us": 1970.631980895996,
+   "after_us": 1972.7632522583008,
+   "criterion": "<= 5%"
+  },
+  "7": {
+   "drift": 0.008937145047873204,
+   "pass": true,
+   "before_us": 1906.4640045166016,
+   "after_us": 1923.5023498535156,
+   "criterion": "<= 5%"
+  },
+  "8": {
+   "drift": 0.016733097632572323,
+   "pass": true,
+   "before_us": 1834.7280502319336,
+   "after_us": 1865.4287338256836,
+   "criterion": "<= 5%"
+  },
+  "9": {
+   "drift": 0.013211547854322192,
+   "pass": true,
+   "before_us": 1813.920021057129,
+   "after_us": 1837.8847122192383,
+   "criterion": "<= 5%"
+  }
+ },
+ "n_invalid_cells": 0,
+ "n_operand_sets": 9,
+ "n_historical": 4,
+ "n_synthetic": 5,
+ "b4_exercised": true,
+ "independent_prefixes_established": 0
+}

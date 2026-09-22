@@ -1,0 +1,7 @@
+component,input,output,is_novel,replaceable_by,ablation_priority
+tree_descriptor,prefix and draft outputs,tokens parents masks row maps,no,linear chain,high
+branch_local_gdn,parent state and node operands,node output and scratch state,no,incorrect packed scan as regression control,high
+accepted_path_publication,selected row path,GDN convolution and KV continuation state,no,omit KV remap in isolated fixture,high
+physical_spine_layout,tree slot map,contiguous shared spine columns,no,interleaved layout in isolated fixture,high
+multidraft_sampler,target probabilities and proposals,accepted path and correction token,no,biased reference sampler as negative control,high
+query_head_pairing,attention tile work,same outputs with altered launch utilization,no,unpaired kernel,medium

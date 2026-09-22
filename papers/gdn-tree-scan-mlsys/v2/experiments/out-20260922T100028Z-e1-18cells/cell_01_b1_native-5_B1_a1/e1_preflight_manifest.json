@@ -1,0 +1,367 @@
+{
+ "phases": {
+  "preflight": [
+   "cmpl-a5f6270d49cc787d",
+   "cmpl-865eabb6d8ffb44c",
+   "cmpl-aace5e21300e8d2a",
+   "cmpl-b866f3b2cf37acc5",
+   "cmpl-90e10af1770ab329",
+   "cmpl-af99806c377dfc1d",
+   "cmpl-b63c8161c12f4c7f",
+   "cmpl-930d151a5d1fddfc"
+  ],
+  "warmup": [],
+  "timed": []
+ },
+ "requests": [
+  {
+   "phase": "preflight",
+   "slot": "f0",
+   "prefix_id": "p072",
+   "prefix_sha256": "4022f519838d33bcad42a55b3c34dbfeddd575bd56488a4f3509a1382f417f03",
+   "prompt_sha256": "4022f519838d33bcad42a55b3c34dbfeddd575bd56488a4f3509a1382f417f03",
+   "request_body_sha256": "8fd6ed96da49d2f23c7f8b305bb42d1a1fdeab53c295f2b0dc38e5f62ab3a0d0",
+   "request": {
+    "model": "qwen3.6-27b",
+    "max_tokens": 32,
+    "temperature": 0,
+    "seed": 20260921,
+    "logprobs": 1,
+    "echo": false,
+    "return_tokens_as_token_ids": true
+   },
+   "max_tokens": 32,
+   "seed": 20260921,
+   "temperature": 0,
+   "request_start_utc": "2026-09-22T10:05:57Z",
+   "request_end_utc": "2026-09-22T10:06:46Z",
+   "t_start_perf": 4259027.287418255,
+   "t_end_perf": 4259076.660585194,
+   "elapsed_s": 49.373166939243674,
+   "error": null,
+   "response_id": "cmpl-a5f6270d49cc787d",
+   "usage": {
+    "prompt_tokens": 256,
+    "total_tokens": 288,
+    "completion_tokens": 32,
+    "prompt_tokens_details": null
+   },
+   "finish_reason": "length",
+   "response_raw_sha256": "801d77c4c78a9e2db1824304610133949cd6c55714970c50505aefaf2bae5618",
+   "n_api_tokens": 32
+  },
+  {
+   "phase": "preflight",
+   "slot": "f1",
+   "prefix_id": "p017",
+   "prefix_sha256": "d75829a949cf8cdac82b379b2c138a00126296fd08dc31c6665eef866695458c",
+   "prompt_sha256": "d75829a949cf8cdac82b379b2c138a00126296fd08dc31c6665eef866695458c",
+   "request_body_sha256": "b1fcf72a289f1934c4215ae866befc92a06d882a6c08b577b622a8f68430694a",
+   "request": {
+    "model": "qwen3.6-27b",
+    "max_tokens": 32,
+    "temperature": 0,
+    "seed": 20260921,
+    "logprobs": 1,
+    "echo": false,
+    "return_tokens_as_token_ids": true
+   },
+   "max_tokens": 32,
+   "seed": 20260921,
+   "temperature": 0,
+   "request_start_utc": "2026-09-22T10:06:46Z",
+   "request_end_utc": "2026-09-22T10:06:50Z",
+   "t_start_perf": 4259076.660917962,
+   "t_end_perf": 4259079.987198359,
+   "elapsed_s": 3.326280397363007,
+   "error": null,
+   "response_id": "cmpl-865eabb6d8ffb44c",
+   "usage": {
+    "prompt_tokens": 256,
+    "total_tokens": 288,
+    "completion_tokens": 32,
+    "prompt_tokens_details": null
+   },
+   "finish_reason": "length",
+   "response_raw_sha256": "75556ad70a102d1e161e7f35cfa02e2f7687fe43a99e6ec4111e77f3302a87a1",
+   "n_api_tokens": 32
+  },
+  {
+   "phase": "preflight",
+   "slot": "f2",
+   "prefix_id": "p015",
+   "prefix_sha256": "90e85b57382a783b11c251d6957446be7c4bc572ab6d8f2365e73385623e41aa",
+   "prompt_sha256": "90e85b57382a783b11c251d6957446be7c4bc572ab6d8f2365e73385623e41aa",
+   "request_body_sha256": "c530ccefaac363db4dcbb97d93d9099ba6efae95eb9006bfeaf0c5f10b435d04",
+   "request": {
+    "model": "qwen3.6-27b",
+    "max_tokens": 32,
+    "temperature": 0,
+    "seed": 20260921,
+    "logprobs": 1,
+    "echo": false,
+    "return_tokens_as_token_ids": true
+   },
+   "max_tokens": 32,
+   "seed": 20260921,
+   "temperature": 0,
+   "request_start_utc": "2026-09-22T10:06:50Z",
+   "request_end_utc": "2026-09-22T10:06:53Z",
+   "t_start_perf": 4259079.987596119,
+   "t_end_perf": 4259083.104734408,
+   "elapsed_s": 3.1171382889151573,
+   "error": null,
+   "response_id": "cmpl-aace5e21300e8d2a",
+   "usage": {
+    "prompt_tokens": 256,
+    "total_tokens": 288,
+    "completion_tokens": 32,
+    "prompt_tokens_details": null
+   },
+   "finish_reason": "length",
+   "response_raw_sha256": "d276158c7c9af35ebc22c9285cb4b18dd0ab0eb5473a7a526bc1954ea4a53997",
+   "n_api_tokens": 32
+  },
+  {
+   "phase": "preflight",
+   "slot": "f3",
+   "prefix_id": "p021",
+   "prefix_sha256": "2328278565840fde5fa9b34d4b09897bd7974d8985aae4c4110b949455a097af",
+   "prompt_sha256": "2328278565840fde5fa9b34d4b09897bd7974d8985aae4c4110b949455a097af",
+   "request_body_sha256": "86a4eda5a71d87e6a98380c3f740499ae9c66d682c20e4f8fa02ca952a5cfcab",
+   "request": {
+    "model": "qwen3.6-27b",
+    "max_tokens": 32,
+    "temperature": 0,
+    "seed": 20260921,
+    "logprobs": 1,
+    "echo": false,
+    "return_tokens_as_token_ids": true
+   },
+   "max_tokens": 32,
+   "seed": 20260921,
+   "temperature": 0,
+   "request_start_utc": "2026-09-22T10:06:53Z",
+   "request_end_utc": "2026-09-22T10:06:55Z",
+   "t_start_perf": 4259083.105062984,
+   "t_end_perf": 4259085.511931203,
+   "elapsed_s": 2.4068682193756104,
+   "error": null,
+   "response_id": "cmpl-b866f3b2cf37acc5",
+   "usage": {
+    "prompt_tokens": 256,
+    "total_tokens": 288,
+    "completion_tokens": 32,
+    "prompt_tokens_details": null
+   },
+   "finish_reason": "length",
+   "response_raw_sha256": "80a1770f174f469993e0cf5a8a3891df793fe4c08c0aaad82ee24d45c0efc4be",
+   "n_api_tokens": 32
+  },
+  {
+   "phase": "preflight",
+   "slot": "f4",
+   "prefix_id": "p085",
+   "prefix_sha256": "3b2eb67c915e1bf1455cab6c3ccfe9ea025ac027995ecccba2494d45715d3173",
+   "prompt_sha256": "3b2eb67c915e1bf1455cab6c3ccfe9ea025ac027995ecccba2494d45715d3173",
+   "request_body_sha256": "a4cf59fb8b4d81f22a08b000b7f22e061457eaab3712971e964d80455d9adc5d",
+   "request": {
+    "model": "qwen3.6-27b",
+    "max_tokens": 32,
+    "temperature": 0,
+    "seed": 20260921,
+    "logprobs": 1,
+    "echo": false,
+    "return_tokens_as_token_ids": true
+   },
+   "max_tokens": 32,
+   "seed": 20260921,
+   "temperature": 0,
+   "request_start_utc": "2026-09-22T10:06:55Z",
+   "request_end_utc": "2026-09-22T10:07:02Z",
+   "t_start_perf": 4259085.512287715,
+   "t_end_perf": 4259091.900195628,
+   "elapsed_s": 6.387907912954688,
+   "error": null,
+   "response_id": "cmpl-90e10af1770ab329",
+   "usage": {
+    "prompt_tokens": 4096,
+    "total_tokens": 4128,
+    "completion_tokens": 32,
+    "prompt_tokens_details": null
+   },
+   "finish_reason": "length",
+   "response_raw_sha256": "0879ca19f04b2d3c70ce55b8bf00d0a89e7805734eb01515611c488b5c4c1166",
+   "n_api_tokens": 32
+  },
+  {
+   "phase": "preflight",
+   "slot": "f5",
+   "prefix_id": "p095",
+   "prefix_sha256": "0ec0f7292581e55182011e4642735ae009cfd3a31894ce7b27093e8953f02609",
+   "prompt_sha256": "0ec0f7292581e55182011e4642735ae009cfd3a31894ce7b27093e8953f02609",
+   "request_body_sha256": "59b5a7b1a349d4f961f0ae5eb0afd149e96c38a63d146502483b1b1247ed1f63",
+   "request": {
+    "model": "qwen3.6-27b",
+    "max_tokens": 32,
+    "temperature": 0,
+    "seed": 20260921,
+    "logprobs": 1,
+    "echo": false,
+    "return_tokens_as_token_ids": true
+   },
+   "max_tokens": 32,
+   "seed": 20260921,
+   "temperature": 0,
+   "request_start_utc": "2026-09-22T10:07:02Z",
+   "request_end_utc": "2026-09-22T10:07:07Z",
+   "t_start_perf": 4259091.900541676,
+   "t_end_perf": 4259097.66050533,
+   "elapsed_s": 5.759963653981686,
+   "error": null,
+   "response_id": "cmpl-af99806c377dfc1d",
+   "usage": {
+    "prompt_tokens": 4096,
+    "total_tokens": 4128,
+    "completion_tokens": 32,
+    "prompt_tokens_details": null
+   },
+   "finish_reason": "length",
+   "response_raw_sha256": "afdcde1282f84972aff13256aa97f4b9d32dec8b0bd51702a9d2c7aa7e3f198a",
+   "n_api_tokens": 32
+  },
+  {
+   "phase": "preflight",
+   "slot": "f6",
+   "prefix_id": "p058",
+   "prefix_sha256": "a1be6d26630b9ed90f7114eb363af083ea02be92be7f251895c0e6a1022148ce",
+   "prompt_sha256": "a1be6d26630b9ed90f7114eb363af083ea02be92be7f251895c0e6a1022148ce",
+   "request_body_sha256": "6226ae33e074e7740cb754d71dba6e03ceb9fa471d0a98d9231362dee79b33a4",
+   "request": {
+    "model": "qwen3.6-27b",
+    "max_tokens": 32,
+    "temperature": 0,
+    "seed": 20260921,
+    "logprobs": 1,
+    "echo": false,
+    "return_tokens_as_token_ids": true
+   },
+   "max_tokens": 32,
+   "seed": 20260921,
+   "temperature": 0,
+   "request_start_utc": "2026-09-22T10:07:07Z",
+   "request_end_utc": "2026-09-22T10:07:13Z",
+   "t_start_perf": 4259097.660850962,
+   "t_end_perf": 4259102.945829925,
+   "elapsed_s": 5.284978963434696,
+   "error": null,
+   "response_id": "cmpl-b63c8161c12f4c7f",
+   "usage": {
+    "prompt_tokens": 4096,
+    "total_tokens": 4128,
+    "completion_tokens": 32,
+    "prompt_tokens_details": null
+   },
+   "finish_reason": "length",
+   "response_raw_sha256": "a896fe2c1be23aeb4f5cc68a7ec8132a71f676ca06c76b5630121b15057882bf",
+   "n_api_tokens": 32
+  },
+  {
+   "phase": "preflight",
+   "slot": "f7",
+   "prefix_id": "p083",
+   "prefix_sha256": "6dcdc6e0dd72cf77d04a3425f869a0b4c84ffd6eac86d96fcff85868a677ff4a",
+   "prompt_sha256": "6dcdc6e0dd72cf77d04a3425f869a0b4c84ffd6eac86d96fcff85868a677ff4a",
+   "request_body_sha256": "11a0bb21a2c7135f35c00e5ab08fb84491d9c907dbdacff6b9137a261aacef9b",
+   "request": {
+    "model": "qwen3.6-27b",
+    "max_tokens": 32,
+    "temperature": 0,
+    "seed": 20260921,
+    "logprobs": 1,
+    "echo": false,
+    "return_tokens_as_token_ids": true
+   },
+   "max_tokens": 32,
+   "seed": 20260921,
+   "temperature": 0,
+   "request_start_utc": "2026-09-22T10:07:13Z",
+   "request_end_utc": "2026-09-22T10:07:18Z",
+   "t_start_perf": 4259102.946204549,
+   "t_end_perf": 4259107.972099909,
+   "elapsed_s": 5.025895359925926,
+   "error": null,
+   "response_id": "cmpl-930d151a5d1fddfc",
+   "usage": {
+    "prompt_tokens": 4096,
+    "total_tokens": 4128,
+    "completion_tokens": 32,
+    "prompt_tokens_details": null
+   },
+   "finish_reason": "length",
+   "response_raw_sha256": "f8bb06e8716632d551af2a7ec023d8879c0e4eef57c6ce92436bca57ef815c30",
+   "n_api_tokens": 32
+  }
+ ],
+ "batch": 1,
+ "submission": [
+  {
+   "phase": "preflight",
+   "slots": [
+    "f0"
+   ],
+   "utc": "2026-09-22T10:05:57Z"
+  },
+  {
+   "phase": "preflight",
+   "slots": [
+    "f1"
+   ],
+   "utc": "2026-09-22T10:06:46Z"
+  },
+  {
+   "phase": "preflight",
+   "slots": [
+    "f2"
+   ],
+   "utc": "2026-09-22T10:06:50Z"
+  },
+  {
+   "phase": "preflight",
+   "slots": [
+    "f3"
+   ],
+   "utc": "2026-09-22T10:06:53Z"
+  },
+  {
+   "phase": "preflight",
+   "slots": [
+    "f4"
+   ],
+   "utc": "2026-09-22T10:06:55Z"
+  },
+  {
+   "phase": "preflight",
+   "slots": [
+    "f5"
+   ],
+   "utc": "2026-09-22T10:07:02Z"
+  },
+  {
+   "phase": "preflight",
+   "slots": [
+    "f6"
+   ],
+   "utc": "2026-09-22T10:07:07Z"
+  },
+  {
+   "phase": "preflight",
+   "slots": [
+    "f7"
+   ],
+   "utc": "2026-09-22T10:07:13Z"
+  }
+ ],
+ "elapsed_s_total": 80.68508403841406,
+ "invalid": null
+}

@@ -1,0 +1,25 @@
+{
+ "prefix_id": "p060",
+ "layer_prefix": "language_model.model.layers.62.linear_attn",
+ "pool_path": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260921T230815Z-e7a-step2-prefixes/prefix_pool.json",
+ "pool_sha256": "05e731fd02b937970d05695ef2ee836a76efc463481a3a0ce4eeaa237f877d09",
+ "tree_parents_expected": [
+  -1,
+  0,
+  1,
+  1,
+  2,
+  2,
+  4,
+  4,
+  6,
+  6
+ ],
+ "served_model": "qwen3.6-27b",
+ "max_num_seqs": 1,
+ "attention_backend": "TREE_ATTN",
+ "replay_route": "1",
+ "shim": "1",
+ "enforce_eager": 1,
+ "why_eager": "the one-shot capture hook reads accepted-length/state-index tensors to the host (.cpu()), which is illegal during CUDA-graph capture (first attempt failed at engine init); June-2026 captures were eager boots too; the graph route is a separate E2 item"
+}

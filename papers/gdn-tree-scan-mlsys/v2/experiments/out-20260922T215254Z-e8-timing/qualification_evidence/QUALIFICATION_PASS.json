@@ -1,0 +1,13 @@
+{
+  "status": "QUALIFICATION_PASS",
+  "timing_authorized_by_this_driver": false,
+  "stage_manifest_sha256": "bc2feab326cb67c916ea418b0399499f4986e18d6bba3e4efc7a20a50f0ce030",
+  "arms": [
+    "on",
+    "off"
+  ],
+  "receipts": {
+    "on": "1fa9e1a21a9d319a1c2015fccd3d9b88264b4ce0cf015edc34c503845c09caf5",
+    "off": "20d718c832bee5514cf9ce9bede8bc431a0374481222a662e6ee1ccb6e058a60"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "checked_utc": "2026-09-22T10:30:48Z",
+  "checked_pacific": "2026-09-22 03:30:48 PDT",
+  "campaign": "experiments/out-20260922T100028Z-e1-18cells",
+  "completed_cells": 3,
+  "independently_verified_cells": 3,
+  "planned_cells": 18,
+  "active_cell": 4,
+  "active_arm": "native-11/B1",
+  "active_phase_observed": "preflight started10:29:51.125Z",
+  "running_gpu_jobs": 1,
+  "container": "e1-cell04-102414",
+  "compute_pid": 3360529,
+  "foreign_compute_processes_observed": 0,
+  "available_gib_during_model_residency": 37.5380859375,
+  "swap_used_gib_during_model_residency": 3.4150390625,
+  "preconditioning": "Cell3 and4 launcher logs each show102GiB available,zero swap before boot; no cleanup during inference",
+  "new_cell3_primary": {
+    "tokens": 791,
+    "wall_s": 18.19595991075039,
+    "intervals": 52,
+    "rate": 43.47118832311055,
+    "cohort_A_intervals": 26,
+    "cohort_B_intervals": 26
+  },
+  "review_report": "e1-native-qualification-redteam.md",
+  "review_report_sha256": "919133591f806a0b0ac0f3ed3111d339b8d5244f1d4f6ca58962cb1501c7869b",
+  "fixed_identities_verified_unchanged": {
+    "main.tex": "f52a828f4cb13aca925be7d081da0c4c438072762b673de9a2933b7396032212",
+    "abstract.tex": "0eddd1990dfe88aa1b0251526448d24983c7d0f67821d2f2921bb63df18755ce",
+    "e1_aggregate.py": "98beec9efac26f560783d9d77af3e2154edbd6b24ebadfe141b0cafce6e48a68",
+    "HANDOFF-CLAUDE.md": "a06f3a3530963e599037013eb73beabf37d9abd2324e77f0adb02d43211fa7b2",
+    "P0-REPORT.md": "9999aecafc19d1a3de981229d8f281e15d730b924713437a9abef4aaed7d2c44"
+  },
+  "findings": [],
+  "eta": "Cell4expectedwithin severalminutes; remainingtimingapproximately2hours under passinggates, thenpaperintegration/finalreview"
+}

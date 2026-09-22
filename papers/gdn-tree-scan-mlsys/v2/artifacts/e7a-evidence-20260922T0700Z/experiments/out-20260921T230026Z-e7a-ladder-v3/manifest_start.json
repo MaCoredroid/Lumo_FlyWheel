@@ -1,0 +1,70 @@
+{
+ "schema": "e7a.device_manifest.v3",
+ "harness_notes": "v3: integer-view bitwise equality fractions alongside numeric equality; isolated seam ablation oracles (beta bf16 round-trip only / div-sqrt only / both); B4-vs-B1 bitwise controls for all four requests; matched bf16-output B/C timing; preallocated native timing closures",
+ "status": "started",
+ "error": null,
+ "written_utc": "2026-09-21T23:00:34Z",
+ "start_utc": "2026-09-21T23:00:26Z",
+ "image_digest": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+ "torch": "2.11.0+cu130",
+ "triton": "3.6.0",
+ "python": "3.12.13",
+ "gpu": "NVIDIA GB10",
+ "capability": [
+  12,
+  1
+ ],
+ "driver": "NVRM version: NVIDIA UNIX Open Kernel Module for aarch64  590.48.01  Release Build  (dvs-builder@U22-I3-AF05-28-2)  Mon Dec  8 11:24:27 UTC 2025",
+ "source_sha256": {
+  "prod_kernel": "d9dd0c697b466180ab5d834a52555c1516edb534e0a3d1bd3094e0d1489c24c8",
+  "legacy_wy": "e7c2a2a8b658f0c944b35bbb93e571de5ecff0cb99a15860c924e635b28f58c1",
+  "e7a_core": "868d55db26eb5b83a43dc22010d639de2fe129c055a84bcd6f32a9f0e48409b7",
+  "e7a_kernels": "15c3536252183281c6ff1dd5fc9fcc068e5d056bf6fa5ec8b199cc302ac21a70",
+  "e7a_device": "70e475e3998c1d8b37761afa616ffe5c97a5ca02492366531fd13eee7012d693",
+  "native_fused_sigmoid_gating": "000ab8996af9788fdb8843a6a3b91833e7a14c8acc0e1ea073a536330f64cb6f",
+  "native_fused_recurrent": "3a2a3c5245acba127af326f0b3f287b352776a8eb1e1f6e40c24a767fae3c2ef"
+ },
+ "flags": {
+  "FIXED32_MODE": null,
+  "scan_align_on": false,
+  "npad_invariant_on": false,
+  "parent_gather_on": false,
+  "hc_internal_on": false,
+  "BV_prod": 16,
+  "num_warps_prod": 8,
+  "tf32_matmul_allowed": false,
+  "replay_h0_source_column": 15,
+  "scan_h0_source_column": 0,
+  "env_FR13_FR10_FR12": {}
+ },
+ "args": {
+  "payloads": [
+   "/hist/fr13_replay_gpu_gates/boot1a_eager_capture_logs/tree_gdn_capture_payload.pt",
+   "/hist/fr13_wy_l1_payload_20260608T170530Z/tree/logs/fr10_tree_gdn_scan_l1.pt",
+   "/hist/fr13_l12_offline_replay_20260608T075019Z/tree/logs/fr10_tree_gdn_scan_l12.pt",
+   "/hist/fr13_wy_l0_localize_20260608T220307Z/tree/logs/fr10_tree_gdn_scan_l0.pt"
+  ],
+  "synthetic": [
+   "chain:1",
+   "chain:5",
+   "chain:11",
+   "binary:3",
+   "caterpillar"
+  ],
+  "regime": "historical-like",
+  "seed": 20260921,
+  "dot_precs": [
+   "ieee",
+   "tf32"
+  ],
+  "block_v": 16,
+  "block_v_prod": 16,
+  "timing": true,
+  "iters": 200,
+  "warmup": 20,
+  "b4": true,
+  "out_dir": "/work/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260921T230026Z-e7a-ladder-v3"
+ },
+ "triton_cache_cubins_sha256": {},
+ "timing_label": "SHARED-DEVICE DIAGNOSTIC unless telemetry/ shows an uncontended window (unrelated vLLM server may be resident on this GB10)"
+}

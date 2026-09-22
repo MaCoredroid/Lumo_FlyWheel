@@ -1,0 +1,9 @@
+{
+  "orig": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+  "orig_sha256": "c382ef22a5a8d4e84209e6723f8eea21c3819543c6e942c62951385b5c1c003e",
+  "fixed": "/tmp/claude-1000/-home-mark-lumo-paper-v2-20260921/c8955ff9-f3ae-4551-869b-1a98b38ca2c3/scratchpad/patcher_fixed.py",
+  "fixed_sha256": "a7f8f0943d1a13ac4742e824ea4e126c6ff341342aba677db5169e712c7e7281",
+  "diff_lines": 23,
+  "diff": "--- a/scripts/fr10_phase4_patch_vllm_tree_gdn.py\n+++ b/scripts/fr10_phase4_patch_vllm_tree_gdn.py\n@@ -26276,12 +26276,14 @@\n         \"import os\\n\" + _FR13_FIXED32_TSR_NONPREFIX_SOURCE,\n         1,\n     )\n-    if _FR13_FIXED32_MODE:\n-        text = text.replace(\n-            \"import os\\n\",\n-            f\"import os\\n_FR13_FIXED32_MODE = {_FR13_FIXED32_MODE!r}\\n\",\n-            1,\n-        )\n+    # E7A-FIX (2026-09-21): emit the drafter constant UNCONDITIONALLY. The emitted propose body references\n+    # _FR13_FIXED32_MODE on every route; HEAD emitted its definition only when FR13_FIXED32_MODE was set, so the\n+    # plain tree_mtp route raised NameError on the first proposal. The value is the patcher's own (env-unset -> \"\").\n+    text = text.replace(\n+        \"import os\\n\",\n+        f\"import os\\n_FR13_FIXED32_MODE = {_FR13_FIXED32_MODE!r}\\n\",\n+        1,\n+    )\n \n     tree_parse_old = \"\"\"        # Parse the speculative token tree.\n         spec_token_tree = self.speculative_config.speculative_token_tree\n",
+  "declared_change": "unconditional emission of _FR13_FIXED32_MODE constant into eagle.py (value unchanged: patcher's own, '' when env unset)"
+}

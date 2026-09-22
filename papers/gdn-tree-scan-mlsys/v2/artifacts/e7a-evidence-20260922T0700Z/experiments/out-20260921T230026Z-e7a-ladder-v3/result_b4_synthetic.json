@@ -1,0 +1,171 @@
+{
+ "label": "B4 synthetic caterpillar (shared layer params)",
+ "synthetic": true,
+ "n": 10,
+ "depth": 5,
+ "results": {
+  "B_fs": {
+   "per_request": [
+    {
+     "request": 0,
+     "out32_vs_oracle": 1.3111828058021135e-07,
+     "U_vs_oracle": 1.0181830880640064e-06,
+     "commit_target": 9,
+     "commit_vs_oracle": 6.046106735269063e-07
+    },
+    {
+     "request": 1,
+     "out32_vs_oracle": 1.2979859786987902e-07,
+     "U_vs_oracle": 1.1076336225990246e-06,
+     "commit_target": 7,
+     "commit_vs_oracle": 5.783416581195411e-07
+    },
+    {
+     "request": 2,
+     "out32_vs_oracle": 1.4213322699352382e-07,
+     "U_vs_oracle": 9.228422341855946e-07,
+     "commit_target": 5,
+     "commit_vs_oracle": 4.941672351321813e-07
+    },
+    {
+     "request": 3,
+     "out32_vs_oracle": 1.1963063806241792e-07,
+     "U_vs_oracle": 1.1545369738019673e-06,
+     "commit_target": 0,
+     "commit_vs_oracle": 4.0874655393707826e-07
+    }
+   ],
+   "B4_vs_B1_bitwise_all_requests": [
+    {
+     "request": 0,
+     "out": true,
+     "U": true,
+     "commit": true
+    },
+    {
+     "request": 1,
+     "out": true,
+     "U": true,
+     "commit": true
+    },
+    {
+     "request": 2,
+     "out": true,
+     "U": true,
+     "commit": true
+    },
+    {
+     "request": 3,
+     "out": true,
+     "U": true,
+     "commit": true
+    }
+   ],
+   "B4_vs_B1_bitwise_all_true": true,
+   "timing_us_B4_verify": {
+    "iters": 200,
+    "warmup": 20,
+    "sync_median_us": 385.21599769592285,
+    "sync_p10_us": 381.3759982585907,
+    "sync_p90_us": 391.1040127277374,
+    "sync_min_us": 379.10398840904236,
+    "pipelined_mean_us": 369.79808807373047
+   },
+   "timing_us_B4_commit": {
+    "iters": 200,
+    "warmup": 20,
+    "sync_median_us": 84.44800227880478,
+    "sync_p10_us": 83.36000144481659,
+    "sync_p90_us": 93.28000247478485,
+    "sync_min_us": 81.44000172615051,
+    "pipelined_mean_us": 80.44719696044922
+   }
+  },
+  "C_nm": {
+   "per_request": [
+    {
+     "request": 0,
+     "out32_vs_oracle": 1.3856886117713518e-07,
+     "U_vs_oracle": 1.0181830880640064e-06,
+     "commit_target": 9,
+     "commit_vs_oracle": 6.046106735269063e-07
+    },
+    {
+     "request": 1,
+     "out32_vs_oracle": 1.2979859786987902e-07,
+     "U_vs_oracle": 1.1076336225990246e-06,
+     "commit_target": 7,
+     "commit_vs_oracle": 5.783416581195411e-07
+    },
+    {
+     "request": 2,
+     "out32_vs_oracle": 1.4213322699352382e-07,
+     "U_vs_oracle": 1.0420515237363759e-06,
+     "commit_target": 5,
+     "commit_vs_oracle": 4.941672351321813e-07
+    },
+    {
+     "request": 3,
+     "out32_vs_oracle": 1.1963063806241792e-07,
+     "U_vs_oracle": 1.1545369738019673e-06,
+     "commit_target": 0,
+     "commit_vs_oracle": 4.0874655393707826e-07
+    }
+   ],
+   "B4_vs_B1_bitwise_all_requests": [
+    {
+     "request": 0,
+     "out": true,
+     "U": true,
+     "commit": true
+    },
+    {
+     "request": 1,
+     "out": true,
+     "U": true,
+     "commit": true
+    },
+    {
+     "request": 2,
+     "out": true,
+     "U": true,
+     "commit": true
+    },
+    {
+     "request": 3,
+     "out": true,
+     "U": true,
+     "commit": true
+    }
+   ],
+   "B4_vs_B1_bitwise_all_true": true,
+   "timing_us_B4_verify": {
+    "iters": 200,
+    "warmup": 20,
+    "sync_median_us": 349.5039939880371,
+    "sync_p10_us": 342.848002910614,
+    "sync_p90_us": 464.89599347114563,
+    "sync_min_us": 340.06398916244507,
+    "pipelined_mean_us": 353.985595703125
+   },
+   "timing_us_B4_commit": {
+    "iters": 200,
+    "warmup": 20,
+    "sync_median_us": 93.47199648618698,
+    "sync_p10_us": 92.16000139713287,
+    "sync_p90_us": 106.78400099277496,
+    "sync_min_us": 90.52799642086029,
+    "pipelined_mean_us": 88.16767692565918
+   }
+  },
+  "A_prod_scan_4x_launches_timing_us": {
+   "iters": 200,
+   "warmup": 20,
+   "sync_median_us": 279.9679934978485,
+   "sync_p10_us": 279.5200049877167,
+   "sync_p90_us": 282.78398513793945,
+   "sync_min_us": 278.6880135536194,
+   "pipelined_mean_us": 258.93760681152344
+  }
+ }
+}

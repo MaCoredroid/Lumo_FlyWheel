@@ -1,0 +1,155 @@
+{
+  "source": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/papers/gdn-tree-scan-mlsys/v2/results/e1/aggregate.json",
+  "source_sha256": "dbd4542ee9899da3eb592fdf8a0b935010f5c8035de9d5cb75e581343c7deb1d",
+  "scope": "Top: three paired-boot rates and complete-arm means. Bottom: supplied paired-block 95% bootstrap percentile intervals; three-block uncertainty is coarse. Missing support is not zero.",
+  "plotted": {
+    "B1": {
+      "per_arm_block_rates": {
+        "native-5": [
+          13.682245138976391,
+          13.66210470123698,
+          13.666892393661975
+        ],
+        "native-11": [
+          11.439958475412476,
+          11.44047542493633,
+          11.435281791722367
+        ],
+        "tree": [
+          12.597382772294214,
+          12.607309482129649,
+          12.88001757402356
+        ]
+      },
+      "per_arm_mean_over_blocks": {
+        "native-5": 13.67041407795845,
+        "native-11": 11.438571897357058,
+        "tree": 12.694903276149141
+      },
+      "contrasts": {
+        "tree_minus_native5": {
+          "paired_block_differences": [
+            -1.0848623666821773,
+            -1.0547952191073318,
+            -0.786874819638415
+          ],
+          "mean_difference": -0.975510801809308,
+          "bootstrap_95pct_interval": [
+            -1.0848623666821773,
+            -0.786874819638415
+          ],
+          "baseline_native5_mean_rate": 13.67041407795845,
+          "precision_half_width_over_baseline": 0.010898994915019574,
+          "target": 0.1,
+          "status": "within target"
+        },
+        "tree_minus_native11": {
+          "paired_block_differences": [
+            1.1574242968817376,
+            1.1668340571933182,
+            1.4447357823011924
+          ],
+          "mean_difference": 1.2563313787920827,
+          "bootstrap_95pct_interval": [
+            1.1574242968817376,
+            1.4447357823011924
+          ],
+          "baseline_native5_mean_rate": 13.67041407795845,
+          "precision_half_width_over_baseline": 0.0105085143647076,
+          "target": 0.1,
+          "status": "within target"
+        },
+        "native11_minus_native5": {
+          "paired_block_differences": [
+            -2.242286663563915,
+            -2.22162927630065,
+            -2.2316106019396074
+          ],
+          "mean_difference": -2.2318421806013906,
+          "bootstrap_95pct_interval": [
+            -2.242286663563915,
+            -2.22162927630065
+          ],
+          "baseline_native5_mean_rate": 13.67041407795845,
+          "precision_half_width_over_baseline": 0.0007555508979267849,
+          "target": 0.1,
+          "status": "within target"
+        }
+      }
+    },
+    "B4": {
+      "per_arm_block_rates": {
+        "native-5": [
+          57.33075818918667,
+          52.51945957635484,
+          56.27493434684242
+        ],
+        "native-11": [
+          43.47118832311055,
+          42.27978432783668,
+          40.70058664519177
+        ],
+        "tree": [
+          47.65063886822262,
+          46.68934818318858,
+          47.51183139620072
+        ]
+      },
+      "per_arm_mean_over_blocks": {
+        "native-5": 55.37505070412798,
+        "native-11": 42.15051976537967,
+        "tree": 47.283939482537306
+      },
+      "contrasts": {
+        "tree_minus_native5": {
+          "paired_block_differences": [
+            -9.680119320964046,
+            -5.830111393166263,
+            -8.763102950641702
+          ],
+          "mean_difference": -8.09111122159067,
+          "bootstrap_95pct_interval": [
+            -9.680119320964046,
+            -5.830111393166263
+          ],
+          "baseline_native5_mean_rate": 55.37505070412798,
+          "precision_half_width_over_baseline": 0.0347630194360326,
+          "target": 0.1,
+          "status": "within target"
+        },
+        "tree_minus_native11": {
+          "paired_block_differences": [
+            4.1794505451120685,
+            4.409563855351898,
+            6.8112447510089495
+          ],
+          "mean_difference": 5.133419717157639,
+          "bootstrap_95pct_interval": [
+            4.1794505451120685,
+            6.8112447510089495
+          ],
+          "baseline_native5_mean_rate": 55.37505070412798,
+          "precision_half_width_over_baseline": 0.023763357075361483,
+          "target": 0.1,
+          "status": "within target"
+        },
+        "native11_minus_native5": {
+          "paired_block_differences": [
+            -13.859569866076114,
+            -10.23967524851816,
+            -15.574347701650652
+          ],
+          "mean_difference": -13.224530938748309,
+          "bootstrap_95pct_interval": [
+            -15.574347701650652,
+            -10.23967524851816
+          ],
+          "baseline_native5_mean_rate": 55.37505070412798,
+          "precision_half_width_over_baseline": 0.04816855592273808,
+          "target": 0.1,
+          "status": "within target"
+        }
+      }
+    }
+  }
+}

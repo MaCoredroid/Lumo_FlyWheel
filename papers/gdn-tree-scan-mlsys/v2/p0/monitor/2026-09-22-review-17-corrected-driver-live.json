@@ -1,0 +1,19 @@
+{
+  "utc": "2026-09-22T07:21:30.370020+00:00",
+  "scope": "firstactualcorrectedbootpre-requestsnapshotandwritten-spec audit",
+  "files": {
+    "serve_drivers.v7.sh": "5d1dafa4c2ccf51eb65a2c6e840490927c5f546e0d7382d79cf5971df655cb26",
+    "e7b_runtime.py": "9c3a6d94b2e1c6ccb07e4aedbbc29d812b9cbf4d102789b5f8a262b04b99b5ca",
+    "e7b_substitute_shim.py": "40063932a729d22eb12370c185b2f01b4979db013a5872e539c26e739eff3c5e",
+    "e7b_loop.v1.sh": "a5b47e094e293b38b2c887de0de8a1a6d93fd0304801945931b00761082705b0",
+    "e7b_operands_gate.py": "8c2a086253ee707d181e924ca04e03e22c043e5c92994ba7148bf400688cb0c4",
+    "e7a_kernels.py": "15c3536252183281c6ff1dd5fc9fcc068e5d056bf6fa5ec8b199cc302ac21a70"
+  },
+  "checks": {
+    "capture_operands_true": true,
+    "capture_state_true": true,
+    "self_exec_v7": true,
+    "no_v6_snapshot_driver": true
+  },
+  "all_pass": true
+}

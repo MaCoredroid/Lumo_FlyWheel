@@ -1,0 +1,31 @@
+{
+ "shim_sha256": "06344718f035949ea7f1cea49e4677e9acc2a71a460bbbc7b94e01a1bbbbc1df",
+ "edits": [
+  {
+   "anchor": "F-forward-entry",
+   "file": "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py"
+  },
+  {
+   "anchor": "B1-chain-break-nonpure",
+   "file": "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py"
+  },
+  {
+   "anchor": "B2-chain-break-no-start",
+   "file": "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py"
+  },
+  {
+   "anchor": "W-physical-step",
+   "file": "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py"
+  },
+  {
+   "anchor": "R-output-boundary",
+   "file": "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py"
+  },
+  {
+   "anchor": "file",
+   "file": "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py",
+   "sha256_before": "9487b658ab8eef802737370e6923aaeae865156625d07fdcd49d3fb2772e9cf4",
+   "sha256_after": "b2975681fe888b72854a25ba377ceb5c1287aa53e16327feab80e3155f25ef40"
+  }
+ ]
+}

@@ -1,0 +1,34 @@
+{
+  "utc": "2026-09-22T10:17:13.221040+00:00",
+  "file": "paper-review-20260922T1016Z.tar.gz",
+  "sha256": "6c5560a1c518f6cdad65d81fbff81721815d3ee38033d9f93f22a602e7c883f7",
+  "bytes": 1243960,
+  "files": 118,
+  "all_member_sizes_and_hashes_verified": true,
+  "scope": "Private working checkpoint: whole-paper pre-E1 findings closed, current13page PDF built and visually checked. Firstnative5/B1cell independently verified;18celltiming campaign running. No campaign comparison or completedv2 release.",
+  "pdf_build_proof": "2026-09-22-paper-review28-build.json",
+  "note": "Canonical paper build and page inspection were done before packaging; no separate extracted-build claim",
+  "companions": [
+    {
+      "file": "e7a-evidence-20260922T0709Z.tar.gz",
+      "sha256": "776ddcaf5d938cc665bafca20f46e29d1e9a550a34914d798e78f70636cd180b",
+      "bytes": 268871594,
+      "manifest": "e7a-evidence-20260922T0709Z.tar.gz.manifest.json",
+      "manifest_sha256": "50dd06ea612e00caec86e84db0b49321d3fd9878e8e4f79d68bb95dfa88c0e7d"
+    },
+    {
+      "file": "e7b-diagnostics-20260922T0801Z.tar.gz",
+      "sha256": "c573b5064d944547df280e314520a97dd0c10678fb877c8d75b3a898d548ad05",
+      "bytes": 2179735658,
+      "manifest": "e7b-diagnostics-20260922T0801Z.tar.gz.manifest.json",
+      "manifest_sha256": "f36db7f4f0b16f9f43a0d70b535ca664a66f1ef447789985b82f3a78db8b4682"
+    },
+    {
+      "file": "selected-route-20260922T0930Z.tar.gz",
+      "sha256": "7f127f0c2e8198f067eb0f59737e1a58afc34991aa562dacbc11d7d147d25a30",
+      "bytes": 1735458237,
+      "manifest": "selected-route-20260922T0930Z.tar.gz.manifest.json",
+      "manifest_sha256": "d1fe338b3bae56a755725a622fa679692377156b56be0d85952fd654d9e386b8"
+    }
+  ]
+}

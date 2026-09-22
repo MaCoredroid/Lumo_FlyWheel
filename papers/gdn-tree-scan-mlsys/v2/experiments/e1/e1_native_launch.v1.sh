@@ -1,0 +1,263 @@
+#!/usr/bin/env bash
+# E1 NATIVE-ARM LAUNCHER v1 (2026-09-22; DERIVED from e7a/e7a_native_launch.v2.sh = scripts/fr13_launch_native_mtp_server.sh @984f613d
+# with the read-only /models mount and the repository OOM-guard path). E1 additions, each opt-in by env and recorded in the
+# container Cmd/env: (1) VLLM_SYNC_SCHED=1 appends `--no-async-scheduling` (the recorder's output boundary is sync-only);
+# (2) E1_SHIM_PATH set -> the FR13 patcher (scripts/fr10_phase4_patch_vllm_tree_gdn.py; every feature default-OFF by env) is
+# applied in-container so the forward-timer anchors exist, then the E1 event-recorder shim is applied; FR13_SFWD_GPU_TIMER,
+# E1_RECORD, E1_RUNTIME_DIR are passed through. The served route stays the STOCK MTP method (qwen3_5_mtp) with NO FR13 tree/
+# GDN/APC/replay feature enabled — label: "native MTP, patched runner, FR13 features off, same instrumentation as the tree arm".
+# Without E1_SHIM_PATH the container command is byte-identical to the v2 native launcher (no patcher).
+# DERIVED LAUNCHER (E7a native reference boots). Byte-for-byte copy of scripts/fr13_launch_native_mtp_server.sh at
+# HEAD 984f613d with TWO changes: (1) the shared checkpoint mount is READ-ONLY (`-v /models:/models:ro`); (2) the OOM
+# guard path is `$REPO/scripts/gpu_oom_guard.sh` instead of `$(dirname "$0")/gpu_oom_guard.sh`, which resolves to a
+# non-existent file when this copy lives in experiments/e7a/ (review 06: the v1 copy logged "armed" but started nothing).
+# Nothing else (gates, memory check, flags) is changed. Diff recorded in e7a_native_launch.v2.diff.
+set -euo pipefail
+
+# ============================================================================
+# FR13 NATIVE-MTP-5 vLLM launcher (the fr9 decode path).
+#
+# STOCK vLLM Multi-Token-Prediction, num_speculative_tokens=5. NONE of the FR13
+# machinery: NO forked-fa2 kernel, NO speculative tree, NO tree_attn backend,
+# NO APC / prefix-cache patches, NO in-container GDN/tree patcher. This is the
+# apples half of the chain5(forked)-vs-native-MTP A/B that localizes the char-8
+# tool-call regression.
+#
+# WHY NO PATCHER (verified 2026-07-01 against the exact stock image
+# vllm/vllm-openai@sha256:3dbe092... == local tag vllm/vllm-openai:cu130-nightly):
+#   * `qwen3_5_mtp` is a STOCK SpeculativeMethod (config/speculative.py Literal
+#     registry contains "qwen3_next_mtp","qwen3_5_mtp","mtp"). The served model
+#     /models/qwen3.6-27b-fp8 is model_type=qwen3_5 with mtp_num_hidden_layers=1
+#     + an mtp.fc head, which speculative.py coerces qwen3_5 -> qwen3_5_mtp ->
+#     arch Qwen3_5MTP, then normalizes method=qwen3_5_mtp -> "mtp" internally
+#     (a deprecation warning, NOT an error). So the model's native MTP head loads
+#     and runs on the STOCK code path with NO edits.
+#   * scripts/fr10_phase4_patch_vllm_tree_gdn.py registers/renames NO spec method;
+#     every one of its patch steps is an additive tree/GDN/APC/capture/replay
+#     instrument, all default-OFF by env. Native MTP needs none of them, so this
+#     launcher does NOT run it (that is the whole point: fr9's unpatched path).
+#   * Stock attention backend for the qwen3-next full-attn layers on this GB10/CUDA
+#     platform is FLASH_ATTN (platforms/cuda.py default; --attention-backend
+#     FLASH_ATTN is a valid stock value). GDN prefill uses --gdn-prefill-backend
+#     triton (a stock CLI arg: engine/arg_utils.py Literal["flashinfer","triton"]).
+#
+# Same IMAGE / CONTAINER default / PORT / host-mem-recovery / OOM-guard / docker
+# run skeleton as fr13_launch_forked_fa2_tree_server.sh so this arm plugs into the
+# identical harness (fr13_bigdenom_swe_serve_variant.sh).
+# ============================================================================
+
+# REPO IS DERIVED, NOT HARDCODED. This read
+# `REPO=${REPO:-/home/mark/shared/lumoFlyWheel}` -- a path to a DIFFERENT
+# CHECKOUT. Launched from any other tree without an explicit override it
+# mounted that foreign repo at /workspace and silently ran its code whenever
+# it happened to carry the file being asked for; it burned two pre-boot
+# refusals on the MTP-5 probe (a missing model_server, a missing chat
+# template) before anyone looked at the mount. The fixed32-family launchers
+# have always derived from SCRIPT_DIR; this now matches them exactly,
+# caller-override included.
+_FR13_SERVED_MODEL_EXPLICIT=${SERVED_MODEL_PATH:+1}${SERVED_MODEL_NAME:+1}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+_FR13_REPO_EXPLICIT=${REPO:+1}
+REPO=${REPO:-$(cd "$SCRIPT_DIR/.." && pwd)}
+REPO=$(cd "$REPO" && pwd)
+# THE SERVED CHECKPOINT, parameterized -- the shape the forked launcher has
+# always had (SERVED_MODEL_PATH / SERVED_MODEL_NAME at :602-603). These were
+# EXEC-LINE LITERALS here, so a native arm could not be pointed at other
+# weights without editing the launcher, and nothing it produced said which
+# weights it had served. Defaults preserve the legacy 3.6 pair exactly.
+#
+# Override with SERVED_MODEL_PATH / SERVED_MODEL_NAME. They are NOT FR13_*/
+# LUMO_*/VLLM_* on purpose: those prefixes are auto-forwarded into the
+# container by the env sweeper, and this pair is host-side plumbing that
+# decides the serve line, not engine config.
+SERVED_MODEL_PATH=${SERVED_MODEL_PATH:-/models/qwen3.6-27b-fp8}
+SERVED_MODEL_NAME=${SERVED_MODEL_NAME:-qwen3.6-27b}
+readonly SERVED_MODEL_PATH SERVED_MODEL_NAME
+[[ -d "$SERVED_MODEL_PATH" && ! -L "$SERVED_MODEL_PATH" ]] \
+  || { echo "served checkpoint directory is missing or symlinked: $SERVED_MODEL_PATH" >&2; exit 2; }
+IMAGE=${IMAGE:-"vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776"}
+CONTAINER=${CONTAINER:-fr13-native-mtp}
+PORT=${PORT:-9950}
+GPU_UTIL=${GPU_UTIL:-0.6}
+# DURABLE OOM GUARD (see forked launcher): ALWAYS cap the container cgroup so the
+# host keeps headroom -> Claude/watchdog/tmux can NEVER be the kernel OOM victim.
+DOCKER_MEM_CAP=${DOCKER_MEM_CAP:-105g}
+PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
+GPU_OOM_GUARD=${GPU_OOM_GUARD:-1}
+MAX_MODEL_LEN=${MAX_MODEL_LEN:-131072}
+MAX_NUM_SEQS=${MAX_NUM_SEQS:-1}
+BATCH_INVARIANT=${BATCH_INVARIANT:-0}
+ENFORCE_EAGER=${ENFORCE_EAGER:-0}
+# Stock backend for the qwen3-next full-attention layers on GB10/CUDA. Let vLLM
+# use the platform default (FLASH_ATTN) unless the caller overrides. This is NOT
+# the forked TREE_ATTN backend.
+if [[ -z "${ATTENTION_BACKEND+x}" ]]; then
+  ATTENTION_BACKEND=FLASH_ATTN
+fi
+# Native MTP-5: stock spec method + 5 speculative tokens, NO speculative_token_tree.
+NUM_SPECULATIVE_TOKENS=${NUM_SPECULATIVE_TOKENS:-5}
+SPEC_METHOD=${SPEC_METHOD:-qwen3_5_mtp}
+SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"$SPEC_METHOD\",\"num_speculative_tokens\":$NUM_SPECULATIVE_TOKENS}"}
+
+# Optional STOCK vLLM prefix caching (NATIVE_ENABLE_APC=1) — vanilla APC on the native MTP kernel,
+# to isolate the CACHE axis vs the cache-OFF native baseline. This is stock --enable-prefix-caching
+# (the potentially-lossy vanilla path), NOT the forked EXACT_SEED (forked-launcher-only). Default
+# OFF = cache-off (the byte path native ran at 5/5).
+APC_FLAGS=""
+if [[ "${NATIVE_ENABLE_APC:-0}" == "1" ]]; then
+  APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size ${MAMBA_BLOCK_SIZE:-1024} --mamba-ssm-cache-dtype ${MAMBA_SSM_CACHE_DTYPE:-float32} ${APC_BLOCK_SIZE:+--block-size $APC_BLOCK_SIZE}"
+fi
+
+LOG_DIR=${LOG_DIR:-"${FR13_RUN_DIR:-$REPO/output/fr13_native_mtp/live}/logs"}
+
+mkdir -p "$LOG_DIR"
+LOG_DIR=$(realpath "$LOG_DIR")
+
+# WHICH WEIGHTS THIS ARM SERVED. A native arm must always be able to say so:
+# the path, the name it answers to, and an identity for the checkpoint dir
+# itself, because two directories can carry the same name and different bytes.
+# The identity is the sorted (name,size,mtime) digest of the top-level
+# safetensors -- cheap, and enough to tell two checkpoints apart without
+# hashing 22 GB at every boot.
+_fr13_model_identity=$(
+  find "$SERVED_MODEL_PATH" -maxdepth 1 -name '*.safetensors' -printf '%f %s\n' 2>/dev/null \
+    | sort | sha256sum | cut -d' ' -f1
+)
+echo "[launch] serving $SERVED_MODEL_PATH as '$SERVED_MODEL_NAME'" \
+     "(checkpoint identity ${_fr13_model_identity:0:16})" >&2
+printf '{"schema":"fr13.served_model.v1","path":"%s","name":"%s","checkpoint_identity":"%s","overridden":"%s","launcher":"%s"}\n' \
+  "$SERVED_MODEL_PATH" "$SERVED_MODEL_NAME" "$_fr13_model_identity" \
+  "$( [[ -n "${_FR13_SERVED_MODEL_EXPLICIT:-}" ]] && echo true || echo false )" "fr13_launch_native_mtp_server.sh" \
+  > "$LOG_DIR/served_model.json"
+
+# REPO IDENTITY, recorded so a foreign mount can never again be silent. The
+# resolved path AND the HEAD of that path when it is a git tree: two different
+# checkouts of the same project have the same basename and differ only here.
+_fr13_repo_head=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo "")
+_fr13_repo_origin=$( [[ -n "$_FR13_REPO_EXPLICIT" ]] && echo caller-override || echo derived-from-script-dir )
+if [[ -n "$_FR13_REPO_EXPLICIT" ]]; then
+  echo "[launch] REPO OVERRIDDEN BY CALLER: $REPO (head ${_fr13_repo_head:-<not a git tree>})" >&2
+else
+  echo "[launch] repo=$REPO (head ${_fr13_repo_head:-<not a git tree>}, derived from script dir)" >&2
+fi
+printf '{"schema":"fr13.repo_identity.v1","repo":"%s","head":"%s","origin":"%s","script_dir":"%s","launcher":"%s"}\n' \
+  "$REPO" "$_fr13_repo_head" "$_fr13_repo_origin" "$SCRIPT_DIR" "fr13_launch_native_mtp_server.sh" \
+  > "$LOG_DIR/repo_identity.json"
+docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+
+set -a
+if [[ -f "$REPO/.lumo.local.env" ]]; then
+  source "$REPO/.lumo.local.env"
+fi
+set +a
+
+# ---- host-memory recovery + hard pre-boot assert (same as forked launcher) ----
+# WHERE THE STALE EDITABLE INSTALL BIT. The shared .venv carries
+# __editable__.lumo_flywheel_serving-0.1.0.pth pointing at
+# /home/mark/shared/lumoFlyWheel/src -- the OLD checkout. Nothing in the serve
+# closure depends on that resolution: every in-path import PREPENDS the right
+# src, host-side here and container-side via -e PYTHONPATH=/workspace/src, and
+# a prepended path wins over a .pth. But this line read "$REPO/src" while REPO
+# was hardcoded to that same old checkout, so the two defects were the same
+# defect twice and this import really did come from the foreign tree. Deriving
+# REPO above closes the host-side half; the venv is environment, not repo, and
+# is deliberately left alone.
+PYTHONPATH="$REPO/src${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
+from lumo_flywheel_serving.model_server import recover_host_memory
+
+recover_host_memory()
+PY
+
+free -h
+python3 - <<'PY'
+from pathlib import Path
+
+fields = {}
+for line in Path("/proc/meminfo").read_text().splitlines():
+    key, value = line.split(":", 1)
+    fields[key] = int(value.strip().split()[0])
+
+available_gib = fields.get("MemAvailable", 0) / 1024 / 1024
+swap_used_kib = fields.get("SwapTotal", 0) - fields.get("SwapFree", 0)
+if available_gib < 80 or swap_used_kib != 0:
+    raise SystemExit(
+        "FR13 native-MTP launch aborted: host memory recovery did not produce "
+        f"MemAvailable>=80GiB and swap_used==0; "
+        f"MemAvailable={available_gib:.2f}GiB "
+        f"swap_used={swap_used_kib / 1024 / 1024:.2f}GiB"
+    )
+PY
+
+# ---- THE ONE ADMISSIBLE IN-CONTAINER SHIM, OPT-IN AND DEFAULT OFF ----------
+# Stock vLLM CANNOT LOAD a checkpoint whose lm_head is quantized: the checkpoint
+# carries lm_head.input_scale/.weight_scale/.weight_scale_2 while
+# Qwen3_5ForCausalLM declares only lm_head.weight, and the engine dies during
+# model load with "There is no module or parameter named 'lm_head.input_scale'".
+# That is not a tuning gap, it is a hard refusal, and it made the MTP-5
+# drafter-neutrality probe's two requirements -- "the plain native kernel" and
+# "the port's own weights" -- jointly unsatisfiable (ruled Option A, pass 209).
+#
+# fr14_patch_nvfp4_lmhead.py is a WEIGHT-LOADING shim only: constructor wiring,
+# quant-method dispatch, key remapping, and a numel-preserving reshape. It does
+# not touch the decode path, attention, the drafter, or speculative decoding, so
+# it cannot bias a drafter-neutrality result.
+#
+# DEFAULT OFF so the native route stays genuinely plain for every other caller;
+# a caller that needs it asks for it by name, and the decision is taken on the
+# HOST and interpolated as text rather than evaluated inside the container shell,
+# which keeps the quoting honest.
+if [[ "${FR13_NATIVE_NVFP4_LMHEAD_SHIM:-0}" == "1" ]]; then
+  _NATIVE_SHIM_CMD='echo "[launch] applying DECLARED EXCEPTION: NVFP4 lm_head loader shim (weight loading only)" >&2
+python3 /workspace/scripts/fr14_patch_nvfp4_lmhead.py'
+else
+  _NATIVE_SHIM_CMD='# no in-container shim (FR13_NATIVE_NVFP4_LMHEAD_SHIM unset)'
+fi
+
+# ---- docker run skeleton (identical to the forked launcher, stripped) ----
+# NO -v $FORKED_FA2_SO, NO TREE_ATTN, NO APC flags, NO FR13_* tree/APC env.
+# The ONLY in-container code is the opt-in lm_head loader shim above.
+docker run -d --name "$CONTAINER" --gpus all --ipc=host \
+  --memory="$DOCKER_MEM_CAP" --memory-swap="$DOCKER_MEM_CAP" \
+  --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
+  -v "$REPO:/workspace" -v /models:/models:ro -v "$LOG_DIR:/logs" \
+  -e PYTORCH_CUDA_ALLOC_CONF="$PYTORCH_CUDA_ALLOC_CONF" \
+  -e VLLM_BATCH_INVARIANT="$BATCH_INVARIANT" \
+  -e LUMO_BATCH_INVARIANT_VLLM="${LUMO_BATCH_INVARIANT_VLLM:-$BATCH_INVARIANT}" \
+  -e VLLM_SERVER_DEV_MODE=1 \
+  -e PYTHONPATH=/workspace/src \
+  -e SPEC_CONFIG="$SPEC_CONFIG" \
+  -e E1_SHIM_PATH="${E1_SHIM_PATH:-}" \
+  -e E1_RECORD="${E1_RECORD:-}" \
+  -e E1_RUNTIME_DIR="${E1_RUNTIME_DIR:-}" \
+  -e FR13_SFWD_GPU_TIMER="${FR13_SFWD_GPU_TIMER:-}" \
+  -e VLLM_SYNC_SCHED="${VLLM_SYNC_SCHED:-}" \
+  --entrypoint bash \
+  "$IMAGE" \
+  -lc "set -euo pipefail
+# NATIVE path: NO forked-fa2 .so copy, NO fa2-tree-bias patch. Stock vLLM loads the model's native MTP head from the
+# qwen3_5_mtp method. E1 (opt-in): the FR13 patcher (all features OFF by env) only to provide the forward-timer anchors of
+# the E1 event recorder, then the recorder shim.
+$_NATIVE_SHIM_CMD
+if [[ -n \"\${E1_SHIM_PATH:-}\" ]]; then
+  python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
+  python3 \"\${E1_SHIM_PATH}\" --report /logs/e1_event_recorder_shim.json
+fi
+exec vllm serve $SERVED_MODEL_PATH --served-model-name $SERVED_MODEL_NAME \
+  --host 0.0.0.0 --port 9950 --max-num-seqs '$MAX_NUM_SEQS' \
+  --gpu-memory-utilization '$GPU_UTIL' --max-model-len '$MAX_MODEL_LEN' --seed '${SEED:-0}' \
+  --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \
+  --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
+  --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \
+  --speculative-config \"\$SPEC_CONFIG\" $APC_FLAGS \
+  $(if [[ "${ENFORCE_EAGER:-0}" == "1" ]]; then printf '%s' '--enforce-eager'; fi) \
+  $(if [[ "${VLLM_SYNC_SCHED:-0}" == "1" ]]; then printf '%s' '--no-async-scheduling'; fi)"
+
+# DURABLE OOM BACKSTOP: spawn the detached GPU/unified-mem guard for THIS container
+# (identical to the forked launcher). Converts an incipient GPU OOM into a
+# relaunchable+loud container kill instead of a systemd --user session kill.
+if [[ "${GPU_OOM_GUARD:-1}" == "1" ]]; then
+  GPU_GUARD_NAME_GLOB="$CONTAINER" setsid bash "$REPO/scripts/gpu_oom_guard.sh" \
+    >/dev/null 2>&1 </dev/null &
+  disown 2>/dev/null || true
+  echo "[launch] gpu_oom_guard armed for container=$CONTAINER (floor=${GPU_GUARD_FLOOR_MIB:-9000}MiB)"
+fi

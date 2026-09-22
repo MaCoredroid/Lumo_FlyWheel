@@ -1,0 +1,68 @@
+{
+  "observed_utc": "2026-09-22T00:11:21.824456+00:00",
+  "reviewed_files": {
+    "experiments/e7a/inspect_capture.py": "90d59fe8a03bf23a29f6c5a6df9e1f79336290d186616c095a1b931b45a0d3f6",
+    "experiments/e7a/e7a_core.py": "89feb49d2bf17b670fb8b5daf1032fd55467f51de3bf33a84f08a1ed555cabd7",
+    "experiments/e7a/e7a_reduce.py": "af83c9dc770abac27d6fcb5fc35e52960d6faf5bd198cccb322d2379b5a6052a",
+    "experiments/e7a/serve_drivers.v3.sh": "1c5478bdf035ff80e2f570a491ed38cd43dc89f242feba47e7f8b074addd78c1",
+    "experiments/e7a/capture_loop.v3.sh": "1a4954923620153b06030a342853394dfcc02ad9469f80a1a7bc03f98972a90d",
+    "experiments/e7a/e7a_capture_launch.v2.sh": "2cf51435c44d376d4db56967e36ff68c3437af236152c7216c4d4d7248c43bf4",
+    "experiments/e7a/e7a_capture_shim.py": "1d1b511acbe8b5ab218c016d61a89328fdd2cd30907e54efa25b6bff738d788b",
+    "experiments/e7a/emitted_globals_audit.py": "4d912bed82e9312ef0396c40715ae015f10bed9021277102e8ae320b39a80eb1",
+    "experiments/e7a/test_patcher_plain_route_globals.py": "4407c0144f86781bd791a592bb7c54b29302c3d263de302de8d720bd850a800a",
+    "experiments/e7a/make_fixed_patcher.py": "f69aae7ccbff60738d29a4f2775eb6f526c3837c6390c1266f6bf868415be76c",
+    "experiments/e7a/patcher_dryrun.sh": "7425cfb8a33fde12aa642a0f60529f5ab6de35e1058b47aa9658d496f991139c",
+    "experiments/e7a/patcher_dryrun_incontainer.sh": "63d964eaa49e6b11d6bb3ecf94bfe0062bd4ea9a70fe2e721429dd79f5777a47",
+    "experiments/STATUS.md": "e36c159da54d9b2b866299a1f6fff931dc187bd86e860e58c30d3cfc1df22385",
+    "experiments/e2/COVERAGE_MAP.md": "b5989678ca8b87fd5227bc9931341fe8f1c85c7dbca3e7df37216bacb3e265af",
+    "p0/HANDOFF-CLAUDE.md": "a06f3a3530963e599037013eb73beabf37d9abd2324e77f0adb02d43211fa7b2",
+    "p0/P0-REPORT.md": "9999aecafc19d1a3de981229d8f281e15d730b924713437a9abef4aaed7d2c44",
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "a7f8f0943d1a13ac4742e824ea4e126c6ff341342aba677db5169e712c7e7281"
+  },
+  "resources": {
+    "observed_utc": "2026-09-22T00:11:21.824456+00:00",
+    "available_gib": 69.97631072998047,
+    "free_gib": 45.56480026245117,
+    "swap_used_gib": 0.0,
+    "gpu_compute": {
+      "rc": 0,
+      "stdout": "2805378, VLLM::EngineCore",
+      "stderr": ""
+    },
+    "docker_running": {
+      "rc": 0,
+      "stdout": "e7a-capture-000828 Up 2 minutes",
+      "stderr": ""
+    }
+  },
+  "recent_runs": [
+    {
+      "name": "out-20260922T000017Z-e7a-patcher-dryrun-invocation1-armB-invalid",
+      "traces": []
+    },
+    {
+      "name": "out-20260922T000315Z-e7a-patcher-dryrun",
+      "traces": []
+    },
+    {
+      "name": "out-20260922T000828Z-e7a-step2-captures-eager-fixed",
+      "traces": [
+        {
+          "path": "experiments/out-20260922T000828Z-e7a-step2-captures-eager-fixed/capture_01_p072/driver_trace.txt",
+          "tail": "start_utc=2026-09-22T00:08:28Z cmd=capture prefix=p072 layer=62\nguard_pid=2804846 container_id=f038a2c62caf5b99c7cc1c20dc480c9017760a02def609e801f2e9a92f63fc1a container_name=e7a-capture-000828 alive=true utc=2026-09-22T00:08:34Z\n"
+        }
+      ]
+    }
+  ],
+  "real_capture_verdicts": [],
+  "completed_campaigns_verified": 2,
+  "fresh_pilot_verified": 0,
+  "fresh_pilot_planned": 8,
+  "confirmation_verified": 0,
+  "confirmation_planned": 32,
+  "e2_e7b_qualified": 0,
+  "e1_completed": 0,
+  "e1_planned": 18,
+  "failed_capture_attempts": 2,
+  "eta_basis": "Prior health 320-400s; first raw capture + validation approximately 10-15 minutes after repair/preflight, conditional on runtime success. No reliable full-scope ETA before first valid capture and qualification."
+}

@@ -1,0 +1,7077 @@
+{
+ "kind": "RETROSPECTIVE COMPLETENESS AUDIT (review 14): existing data re-evaluated against every machine-evaluable frozen rule; no threshold changed; no earlier verdict replaced",
+ "set": "confirmation",
+ "run_dir": "out-20260922T051611Z-e7a-fresh-confirmation",
+ "freeze": "e7a/PILOT_FREEZE.json",
+ "freeze_sha256": "21f3eb5c3f9ce52aa2492d62c5be4dbc0f3d0df236aec717f70420c2ab2b36ce",
+ "frozen_prefixes": "out-20260921T231853Z-e7a-step2-native-score/frozen_prefixes.json",
+ "n_sets": 31,
+ "prefix_ids": [
+  "p063",
+  "p059",
+  "p049",
+  "p052",
+  "p046",
+  "p065",
+  "p025",
+  "p031",
+  "p013",
+  "p040",
+  "p033",
+  "p038",
+  "p060",
+  "p067",
+  "p019",
+  "p003",
+  "p077",
+  "p089",
+  "p030",
+  "p081",
+  "p012",
+  "p092",
+  "p086",
+  "p079",
+  "p027",
+  "p091",
+  "p082",
+  "p088",
+  "p005",
+  "p076",
+  "p078"
+ ],
+ "rules": [
+  {
+   "id": "T1",
+   "rule": "scan_fp32_out_vs_native_specupdate_bitwise",
+   "pass": true,
+   "n_sets": 31,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": 0.0,
+     "pass": true
+    }
+   ],
+   "tolerance": 0,
+   "pilot_max": 0,
+   "frozen_rule_text": "0 ULP, integer view (bit-identical), production scan fp32 store vs pinned native spec-update kernel; pilot 8/8 bitwise_frac = 1.0",
+   "observed_worst": 0.0
+  },
+  {
+   "id": "T2",
+   "rule": "scan_bf16_out_vs_native_specupdate_bitwise",
+   "pass": false,
+   "n_sets": 31,
+   "failing_prefixes": [
+    "p049",
+    "p005"
+   ],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": 1.6276041666651864e-05,
+     "pass": false
+    },
+    {
+     "prefix": "p052",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": 1.6276041666651864e-05,
+     "pass": false
+    },
+    {
+     "prefix": "p076",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": 0.0,
+     "pass": true
+    }
+   ],
+   "tolerance": 0,
+   "pilot_max": 0,
+   "frozen_rule_text": "0 ULP, integer view, deployed bf16 store vs native spec-update bf16 store; pilot 8/8 bitwise_frac = 1.0",
+   "observed_worst": 1.6276041666651864e-05
+  },
+  {
+   "id": "T3",
+   "rule": "fp32_ieee_realizations_out_vs_fp64_oracle_max_abs",
+   "pass": false,
+   "n_sets": 31,
+   "failing_prefixes": [
+    "p086"
+   ],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 2.8176688787739934e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 2.8005724836410728e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": 4.511258402950524e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": 3.028873604704607e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": 3.8698962590011377e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": 2.1801971880619497e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 2.3879632819745478e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 3.0156291457028583e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 3.418910392294361e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": 3.9995317266394714e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": 3.343805046740478e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 2.124029366279423e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 2.622601761453902e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 3.2217187834193695e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": 4.674223350042972e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 3.39629096790528e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": 8.422742320268739e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": 3.7403147357117916e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 4.8953137210538955e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": 7.292684978121855e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 2.1987837377224206e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 5.2623992774503137e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 9.18150905304671e-08,
+     "pass": false
+    },
+    {
+     "prefix": "p079",
+     "value": 4.4389086198415306e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": 3.740336085300555e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": 3.0779386664403496e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 4.391970263861733e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": 3.081127790405258e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": 7.209285812770361e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": 4.813651445501055e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": 4.748677064070339e-08,
+     "pass": true
+    }
+   ],
+   "tolerance": 8.89305441509336e-08,
+   "pilot_max": 4.44652720754668e-08,
+   "frozen_rule_text": null,
+   "observed_worst": 9.18150905304671e-08
+  },
+  {
+   "id": "T4",
+   "rule": "compact_commit_state_vs_fp64_oracle_max_abs",
+   "pass": true,
+   "n_sets": 31,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 4.457618327791124e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 4.023449760026665e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": 4.112836560210553e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": 4.262433148660705e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": 4.869344878422055e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": 5.073286581946945e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 4.094176766500368e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 3.4991357855673755e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 3.575406899436473e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": 4.0529782019405047e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": 3.5388577623862716e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 4.151888339798404e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 4.284347983052328e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 3.0909358272879217e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": 4.410483898098505e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 4.920572100886034e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": 4.743243282590015e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": 6.352027237532809e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 5.340359883199142e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": 5.989053528665522e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 4.797781594234607e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 4.805383477801684e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 4.538224960271009e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": 5.190252574394094e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": 7.814217335422313e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": 4.673587272741031e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 7.003730901899985e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": 7.238360435479763e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": 6.187369265830966e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": 7.045855028309234e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": 7.294373030042323e-07,
+     "pass": true
+    }
+   ],
+   "tolerance": 1.5734143268275602e-06,
+   "pilot_max": 7.867071634137801e-07,
+   "frozen_rule_text": null,
+   "observed_worst": 7.814217335422313e-07
+  },
+  {
+   "id": "T5",
+   "rule": "compact_commit_state_vs_native_specupdate_max_abs",
+   "pass": true,
+   "n_sets": 31,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 7.152557373046875e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 7.152557373046875e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": 3.5762786865234375e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": 1.1920928955078125e-06,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": 4.76837158203125e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": 7.152557373046875e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 4.76837158203125e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 7.152557373046875e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 4.76837158203125e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": 5.960464477539062e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": 7.152557373046875e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 7.152557373046875e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 7.152557373046875e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 7.152557373046875e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": 7.152557373046875e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 7.152557373046875e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": 4.76837158203125e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": 4.76837158203125e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 4.76837158203125e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": 7.152557373046875e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 7.152557373046875e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 4.76837158203125e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 9.5367431640625e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": 9.5367431640625e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": 9.5367431640625e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": 9.5367431640625e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 7.152557373046875e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": 9.5367431640625e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": 1.9073486328125e-06,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": 9.5367431640625e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": 1.430511474609375e-06,
+     "pass": true
+    }
+   ],
+   "tolerance": 3.814697265625e-06,
+   "pilot_max": 1.9073486328125e-06,
+   "frozen_rule_text": null,
+   "observed_worst": 1.9073486328125e-06
+  },
+  {
+   "id": "T6",
+   "rule": "replay_state_vs_fp64_oracle_max_abs",
+   "pass": true,
+   "n_sets": 31,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 5.657621406918167e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 7.128048387095021e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": 4.7140757941654954e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": 9.930495554755225e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": 5.069027033677287e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": 6.471522153717046e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 6.834668724309267e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 4.4948638455721834e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 5.176934583239756e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": 3.973203401841374e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": 5.209831304142654e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 4.70337166991186e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 7.427092350020814e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 5.493287402735803e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": 6.033259452031814e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 6.153925684593275e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": 4.8544412933893e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": 6.797496538979431e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 6.245071801913582e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": 5.989053528665522e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 6.139544668215535e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 5.268013385517634e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 8.818185635028897e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": 9.133638294578361e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": 1.079853668706221e-06,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": 8.36317940233755e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 6.108476551247577e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": 1.3030120831203362e-06,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": 1.3365283662025718e-06,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": 7.77715101207832e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": 1.03463942657811e-06,
+     "pass": true
+    }
+   ],
+   "tolerance": 2.5938975340977777e-06,
+   "pilot_max": 1.2969487670488888e-06,
+   "frozen_rule_text": null,
+   "observed_worst": 1.3365283662025718e-06
+  },
+  {
+   "id": "T7",
+   "rule": "replay_state_vs_native_specupdate_max_abs",
+   "pass": true,
+   "n_sets": 31,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 2.9802322387695312e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": 2.9802322387695312e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": 2.9802322387695312e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 2.9802322387695312e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 2.9802322387695312e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": 2.9802322387695312e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 2.384185791015625e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 2.9802322387695312e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": 2.9802322387695312e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 2.9802322387695312e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 2.9802322387695312e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 1.4901161193847656e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": 1.1920928955078125e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": 2.9802322387695312e-08,
+     "pass": true
+    }
+   ],
+   "tolerance": 4.76837158203125e-07,
+   "pilot_max": 2.384185791015625e-07,
+   "frozen_rule_text": null,
+   "observed_worst": 2.384185791015625e-07
+  },
+  {
+   "id": "T8",
+   "rule": "bf16_store_realizations_disagreement_with_native (1 - bitwise frac)",
+   "pass": true,
+   "n_sets": 31,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 0.0001464843749999778,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 0.00021158854166669627,
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": 0.00013020833333332593,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": 9.76562500000222e-05,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": 0.00016276041666662966,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": 0.00011393229166667407,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 8.138020833337034e-05,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 3.255208333330373e-05,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 0.00017903645833339255,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": 0.00016276041666662966,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": 0.00013020833333332593,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 0.00017903645833339255,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 9.76562500000222e-05,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 8.138020833337034e-05,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": 8.138020833337034e-05,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 0.0001953125000000444,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": 4.882812500006661e-05,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": 0.00016276041666662966,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 0.0001464843749999778,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": 0.00011393229166667407,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 0.00011393229166667407,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 8.138020833337034e-05,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 3.255208333330373e-05,
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": 0.00017903645833339255,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": 9.76562500000222e-05,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": 6.510416666671848e-05,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 0.00013020833333332593,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": 8.138020833337034e-05,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": 0.00022786458333334814,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": 0.0001464843749999778,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": 4.882812500006661e-05,
+     "pass": true
+    }
+   ],
+   "tolerance": 0.0003173828125000444,
+   "pilot_max": 0.00021158854166669627,
+   "frozen_rule_text": null,
+   "observed_worst": 0.00022786458333334814
+  },
+  {
+   "id": "T9",
+   "rule": "served_bf16_out_vs_fp64_oracle_max_abs (CPU self-test on the payload's serving_out)",
+   "pass": true,
+   "n_sets": 31,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 0.00024284765032941968,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 0.0002174827579195654,
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": 0.00021656729237988503,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": 0.00021416950185550176,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": 0.0002408782945119703,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": 0.00019118160585231136,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 0.00024292893762020706,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 0.00035801046368807987,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 0.0003212760705795237,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": 0.00022920909470243445,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": 0.00023979294457002198,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 0.00023401783472559723,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 0.00023986043058041306,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 0.00021789941979286076,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": 0.00023732888472588476,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 0.00024408402336795199,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": 0.0004695877983093566,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": 0.00023478458885459186,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 0.0004863899152246498,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": 0.00047570463119187,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 0.0002393483363955229,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 0.0004676669848569792,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 0.0004877246362217369,
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": 0.0004466958459024284,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": 0.0002279518737070274,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": 0.00023668535819024172,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 0.0004685892841191086,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": 0.0002314464155725171,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": 0.00043463903269130855,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": 0.00022501851456309396,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": 0.00043017483278662283,
+     "pass": true
+    }
+   ],
+   "tolerance": 0.0007275056663253038,
+   "pilot_max": 0.0004850037775502025,
+   "frozen_rule_text": null,
+   "observed_worst": 0.0004877246362217369
+  },
+  {
+   "id": "T10",
+   "rule": "served_bf16_out_vs_fp64_oracle_ulp16_on_significant",
+   "pass": true,
+   "n_sets": 31,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 1,
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": 1,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": 1,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": 1,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 1,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": 1,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": 0,
+     "pass": true
+    }
+   ],
+   "tolerance": 1,
+   "pilot_max": 1,
+   "frozen_rule_text": "<= 1 ULP (bf16) on significant elements; pilot max = 1",
+   "observed_worst": 1
+  },
+  {
+   "id": "T11",
+   "rule": "native_specupdate_bf16_out_vs_fp64_oracle_max_abs",
+   "pass": true,
+   "n_sets": 31,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 0.00024284765032939193,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 0.00021748275791957927,
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": 0.00021656729237988503,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": 0.00021416950185550176,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": 0.00024087829451194254,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": 0.00019118160585231136,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 0.00024292893762022094,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 0.0003580104636881354,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 0.0003212760705795237,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": 0.00022920909470236506,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": 0.00023979294457002198,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 0.00023401783472558335,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 0.00023986043058044082,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 0.000217899419792833,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": 0.00023732888472587088,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 0.00024408402336799362,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": 0.0004695877983093566,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": 0.00023478458885459186,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 0.0004863899152246498,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": 0.00047570463119184225,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 0.0002393483363955229,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 0.0004676669848570625,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 0.00048772463622170914,
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": 0.0004466958459024839,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": 0.00022795187370699965,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": 0.00023668535819028336,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 0.0004685892841191919,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": 0.00023144641557253098,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": 0.0004346390326913363,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": 0.00022501851456309396,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": 0.00043017483278667834,
+     "pass": true
+    }
+   ],
+   "tolerance": 0.0007275056663253038,
+   "pilot_max": 0.0004850037775502025,
+   "frozen_rule_text": null,
+   "observed_worst": 0.00048772463622170914
+  },
+  {
+   "id": "T12",
+   "rule": "served_bf16_out_bytes_equal_production_scan_out16",
+   "pass": true,
+   "n_sets": 31,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": 0.0,
+     "pass": true
+    }
+   ],
+   "tolerance": 0,
+   "pilot_max": 0,
+   "frozen_rule_text": "byte-identical (integer view): the payload's live served bf16 output equals the production scan's bf16 output AND the native spec-update bf16 output on the captured operands; pilot 8/8 (fresh-pilot-v2)",
+   "observed_worst": 0.0
+  },
+  {
+   "id": "D1",
+   "rule": "any confirmation set where the production-scan fp32 or bf16 store is not bit-identical (integer view) to the pinned native spec-update kernel",
+   "pass": false,
+   "n_sets": 31,
+   "failing_prefixes": [
+    "p049",
+    "p005"
+   ],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": [
+      1.0,
+      0.9999837239583333
+     ],
+     "pass": false
+    },
+    {
+     "prefix": "p052",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": [
+      1.0,
+      0.9999837239583333
+     ],
+     "pass": false
+    },
+    {
+     "prefix": "p076",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    }
+   ]
+  },
+  {
+   "id": "D2",
+   "rule": "any confirmation set where the payload's served bf16 output is not byte-identical to the production scan bf16 output (and to the native spec-update bf16 output) on the captured operands",
+   "pass": false,
+   "n_sets": 31,
+   "failing_prefixes": [
+    "p049",
+    "p005"
+   ],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": [
+      true,
+      false
+     ],
+     "pass": false
+    },
+    {
+     "prefix": "p052",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": [
+      true,
+      false
+     ],
+     "pass": false
+    },
+    {
+     "prefix": "p076",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": [
+      true,
+      true
+     ],
+     "pass": true
+    }
+   ]
+  },
+  {
+   "id": "D3",
+   "rule": "any confirmation set where a candidate's fp32-ieee out vs fp64 oracle, compact-commit state vs oracle/native, or replay state exceeds its frozen tolerance [value = max over candidate classes of observed/tolerance]",
+   "pass": false,
+   "n_sets": 31,
+   "failing_prefixes": [
+    "p086"
+   ],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 0.31683927110485505,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 0.31491682755116396,
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": 0.5072788484566092,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": 0.3828407030044577,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": 0.4351594039988241,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": 0.3224380568706336,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 0.2685200349074305,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 0.3390993695692123,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 0.38444725880590136,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": 0.44973656293516384,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": 0.3760018651258162,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 0.5,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 0.29490449951625197,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 0.362273593867979,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": 0.5256038175263883,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 0.3819037654982825,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": 0.9471146725441819,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": 0.4205883109591347,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 0.5504648338534319,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": 0.820042770203301,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 0.30492804803095097,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 0.5917426152840052,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 1.0324359465813886,
+     "pass": false
+    },
+    {
+     "prefix": "p079",
+     "value": 0.49914331034653076,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": 0.49664078953557916,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": 0.34610590723660123,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 0.49386521872706046,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": 0.5023375310673389,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": 0.8106647588408664,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": 0.5412821310675091,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": 0.5339759369976246,
+     "pass": true
+    }
+   ]
+  },
+  {
+   "id": "D4",
+   "rule": "bf16-store B/C disagreement with native above the frozen class (agreement floor 0.999683) on any confirmation set [value = min bf16 agreement of B_fs[ieee]/C_nm[ieee] out16 vs native]",
+   "pass": true,
+   "n_sets": 31,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 0.999853515625,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 0.9997884114583333,
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": 0.9998697916666667,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": 0.99990234375,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": 0.9998372395833334,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": 0.9998860677083333,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 0.9999186197916666,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 0.9999674479166667,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 0.9998209635416666,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": 0.9998372395833334,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": 0.9998697916666667,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 0.9998209635416666,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 0.99990234375,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 0.9999186197916666,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": 0.9999186197916666,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 0.9998046875,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": 0.9999511718749999,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": 0.9998372395833334,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 0.999853515625,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": 0.9998860677083333,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 0.9998860677083333,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 0.9999186197916666,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 0.9999674479166667,
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": 0.9998209635416666,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": 0.99990234375,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": 0.9999348958333333,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 0.9998697916666667,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": 0.9999186197916666,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": 0.9997721354166667,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": 0.999853515625,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": 0.9999511718749999,
+     "pass": true
+    }
+   ],
+   "floor": 0.999683
+  },
+  {
+   "id": "D5",
+   "rule": "served bf16 output vs fp64 oracle > 1 ULP16 on significant elements or above the frozen max-abs class on any confirmation set [value = (ulp16_max_sig, max_abs)]",
+   "pass": true,
+   "n_sets": 31,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": [
+      0,
+      0.00024284765032941968
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": [
+      1,
+      0.0002174827579195654
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": [
+      1,
+      0.00021656729237988503
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": [
+      1,
+      0.00021416950185550176
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": [
+      0,
+      0.0002408782945119703
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": [
+      0,
+      0.00019118160585231136
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": [
+      0,
+      0.00024292893762020706
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": [
+      0,
+      0.00035801046368807987
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": [
+      0,
+      0.0003212760705795237
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": [
+      1,
+      0.00022920909470243445
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": [
+      0,
+      0.00023979294457002198
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": [
+      1,
+      0.00023401783472559723
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": [
+      0,
+      0.00023986043058041306
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": [
+      0,
+      0.00021789941979286076
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": [
+      0,
+      0.00023732888472588476
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": [
+      0,
+      0.00024408402336795199
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": [
+      0,
+      0.0004695877983093566
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": [
+      0,
+      0.00023478458885459186
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": [
+      0,
+      0.0004863899152246498
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": [
+      0,
+      0.00047570463119187
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": [
+      0,
+      0.0002393483363955229
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": [
+      0,
+      0.0004676669848569792
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": [
+      0,
+      0.0004877246362217369
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": [
+      0,
+      0.0004466958459024284
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": [
+      0,
+      0.0002279518737070274
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": [
+      0,
+      0.00023668535819024172
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": [
+      0,
+      0.0004685892841191086
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": [
+      0,
+      0.0002314464155725171
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": [
+      1,
+      0.00043463903269130855
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": [
+      0,
+      0.00022501851456309396
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": [
+      0,
+      0.00043017483278662283
+     ],
+     "pass": true
+    }
+   ]
+  },
+  {
+   "id": "D6a",
+   "rule": "any non-finite comparison cell [value = non-finite numeric leaves in the result file; summary n_invalid_cells also required == 0]",
+   "pass": true,
+   "n_sets": 31,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": 0,
+     "pass": true
+    }
+   ],
+   "summary_n_invalid_cells": 0,
+   "summary_pass": true
+  },
+  {
+   "id": "D6b",
+   "rule": "any sibling-reorder control not bitwise-invariant [value = min bitwise frac over A/B/C out (+U for B/C)]",
+   "pass": true,
+   "n_sets": 31,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": 1.0,
+     "pass": true
+    }
+   ]
+  },
+  {
+   "id": "D6c",
+   "rule": "any PADDING control not bitwise-invariant (OMITTED BY THE v1 CHECKER) [value = min bitwise frac over B_fs/C_nm npad32-vs-npad16 out and U]",
+   "pass": false,
+   "n_sets": 31,
+   "failing_prefixes": [
+    "p063",
+    "p059",
+    "p049",
+    "p052",
+    "p046",
+    "p065",
+    "p025",
+    "p031",
+    "p013",
+    "p040",
+    "p033",
+    "p038",
+    "p060",
+    "p067",
+    "p019",
+    "p003",
+    "p077",
+    "p089",
+    "p030",
+    "p081",
+    "p012",
+    "p092",
+    "p086",
+    "p079",
+    "p027",
+    "p091",
+    "p082",
+    "p088",
+    "p005",
+    "p076",
+    "p078"
+   ],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 0.887548828125,
+     "pass": false
+    },
+    {
+     "prefix": "p059",
+     "value": 0.9012044270833334,
+     "pass": false
+    },
+    {
+     "prefix": "p049",
+     "value": 0.8633951822916667,
+     "pass": false
+    },
+    {
+     "prefix": "p052",
+     "value": 0.911279296875,
+     "pass": false
+    },
+    {
+     "prefix": "p046",
+     "value": 0.890185546875,
+     "pass": false
+    },
+    {
+     "prefix": "p065",
+     "value": 0.8703450520833333,
+     "pass": false
+    },
+    {
+     "prefix": "p025",
+     "value": 0.8563313802083333,
+     "pass": false
+    },
+    {
+     "prefix": "p031",
+     "value": 0.8829264322916667,
+     "pass": false
+    },
+    {
+     "prefix": "p013",
+     "value": 0.8712727864583333,
+     "pass": false
+    },
+    {
+     "prefix": "p040",
+     "value": 0.9059244791666666,
+     "pass": false
+    },
+    {
+     "prefix": "p033",
+     "value": 0.9187174479166667,
+     "pass": false
+    },
+    {
+     "prefix": "p038",
+     "value": 0.8758951822916666,
+     "pass": false
+    },
+    {
+     "prefix": "p060",
+     "value": 0.9209147135416667,
+     "pass": false
+    },
+    {
+     "prefix": "p067",
+     "value": 0.8821451822916666,
+     "pass": false
+    },
+    {
+     "prefix": "p019",
+     "value": 0.9057128906249999,
+     "pass": false
+    },
+    {
+     "prefix": "p003",
+     "value": 0.8930013020833333,
+     "pass": false
+    },
+    {
+     "prefix": "p077",
+     "value": 0.879052734375,
+     "pass": false
+    },
+    {
+     "prefix": "p089",
+     "value": 0.9001953125,
+     "pass": false
+    },
+    {
+     "prefix": "p030",
+     "value": 0.8963216145833334,
+     "pass": false
+    },
+    {
+     "prefix": "p081",
+     "value": 0.9061848958333333,
+     "pass": false
+    },
+    {
+     "prefix": "p012",
+     "value": 0.896728515625,
+     "pass": false
+    },
+    {
+     "prefix": "p092",
+     "value": 0.9108072916666666,
+     "pass": false
+    },
+    {
+     "prefix": "p086",
+     "value": 0.8993489583333333,
+     "pass": false
+    },
+    {
+     "prefix": "p079",
+     "value": 0.8908854166666667,
+     "pass": false
+    },
+    {
+     "prefix": "p027",
+     "value": 0.8997395833333334,
+     "pass": false
+    },
+    {
+     "prefix": "p091",
+     "value": 0.9072916666666666,
+     "pass": false
+    },
+    {
+     "prefix": "p082",
+     "value": 0.9000976562499999,
+     "pass": false
+    },
+    {
+     "prefix": "p088",
+     "value": 0.9223795572916667,
+     "pass": false
+    },
+    {
+     "prefix": "p005",
+     "value": 0.9202311197916666,
+     "pass": false
+    },
+    {
+     "prefix": "p076",
+     "value": 0.9237141927083333,
+     "pass": false
+    },
+    {
+     "prefix": "p078",
+     "value": 0.9154459635416666,
+     "pass": false
+    }
+   ],
+   "per_set_detail": [
+    {
+     "prefix": "p063",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9146158854166666,
+      "U_exact_frac": 0.887548828125,
+      "out_bitwise_frac": 0.9146158854166666,
+      "U_bitwise_frac": 0.887548828125,
+      "out_max_abs": 1.862645149230957e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9330729166666667,
+      "U_exact_frac": 0.926025390625,
+      "out_bitwise_frac": 0.9330729166666667,
+      "U_bitwise_frac": 0.926025390625,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p059",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.908740234375,
+      "U_exact_frac": 0.9012044270833334,
+      "out_bitwise_frac": 0.908740234375,
+      "U_bitwise_frac": 0.9012044270833334,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9220703124999999,
+      "U_exact_frac": 0.92490234375,
+      "out_bitwise_frac": 0.9220703124999999,
+      "U_bitwise_frac": 0.92490234375,
+      "out_max_abs": 2.7939677238464355e-09
+     }
+    },
+    {
+     "prefix": "p049",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9057291666666667,
+      "U_exact_frac": 0.8633951822916667,
+      "out_bitwise_frac": 0.9057291666666667,
+      "U_bitwise_frac": 0.8633951822916667,
+      "out_max_abs": 1.862645149230957e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9420735677083333,
+      "U_exact_frac": 0.9376790364583333,
+      "out_bitwise_frac": 0.9420735677083333,
+      "U_bitwise_frac": 0.9376790364583333,
+      "out_max_abs": 1.862645149230957e-09
+     }
+    },
+    {
+     "prefix": "p052",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9311848958333333,
+      "U_exact_frac": 0.911279296875,
+      "out_bitwise_frac": 0.9311848958333333,
+      "U_bitwise_frac": 0.911279296875,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.946923828125,
+      "U_exact_frac": 0.947119140625,
+      "out_bitwise_frac": 0.946923828125,
+      "U_bitwise_frac": 0.947119140625,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p046",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9123046874999999,
+      "U_exact_frac": 0.890185546875,
+      "out_bitwise_frac": 0.9123046874999999,
+      "U_bitwise_frac": 0.890185546875,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9224609375,
+      "U_exact_frac": 0.9134114583333334,
+      "out_bitwise_frac": 0.9224609375,
+      "U_bitwise_frac": 0.9134114583333334,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p065",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.8997721354166667,
+      "U_exact_frac": 0.8703450520833333,
+      "out_bitwise_frac": 0.8997721354166667,
+      "U_bitwise_frac": 0.8703450520833333,
+      "out_max_abs": 7.450580596923828e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9300455729166667,
+      "U_exact_frac": 0.9313476562499999,
+      "out_bitwise_frac": 0.9300455729166667,
+      "U_bitwise_frac": 0.9313476562499999,
+      "out_max_abs": 7.450580596923828e-09
+     }
+    },
+    {
+     "prefix": "p025",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9077799479166666,
+      "U_exact_frac": 0.8563313802083333,
+      "out_bitwise_frac": 0.9077799479166666,
+      "U_bitwise_frac": 0.8563313802083333,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9313313802083333,
+      "U_exact_frac": 0.9222005208333334,
+      "out_bitwise_frac": 0.9313313802083333,
+      "U_bitwise_frac": 0.9222005208333334,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p031",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.909912109375,
+      "U_exact_frac": 0.8829264322916667,
+      "out_bitwise_frac": 0.909912109375,
+      "U_bitwise_frac": 0.8829264322916667,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9469889322916667,
+      "U_exact_frac": 0.9423502604166667,
+      "out_bitwise_frac": 0.9469889322916667,
+      "U_bitwise_frac": 0.9423502604166667,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p013",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9092936197916667,
+      "U_exact_frac": 0.8712727864583333,
+      "out_bitwise_frac": 0.9092936197916667,
+      "U_bitwise_frac": 0.8712727864583333,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.93125,
+      "U_exact_frac": 0.9203613281249999,
+      "out_bitwise_frac": 0.93125,
+      "U_bitwise_frac": 0.9203613281249999,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p040",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9231119791666667,
+      "U_exact_frac": 0.9059244791666666,
+      "out_bitwise_frac": 0.9231119791666667,
+      "U_bitwise_frac": 0.9059244791666666,
+      "out_max_abs": 1.862645149230957e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9404947916666666,
+      "U_exact_frac": 0.9398925781249999,
+      "out_bitwise_frac": 0.9404947916666666,
+      "U_bitwise_frac": 0.9398925781249999,
+      "out_max_abs": 4.6566128730773926e-09
+     }
+    },
+    {
+     "prefix": "p033",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.933837890625,
+      "U_exact_frac": 0.9187174479166667,
+      "out_bitwise_frac": 0.933837890625,
+      "U_bitwise_frac": 0.9187174479166667,
+      "out_max_abs": 5.587935447692871e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9622721354166667,
+      "U_exact_frac": 0.9653645833333333,
+      "out_bitwise_frac": 0.9622721354166667,
+      "U_bitwise_frac": 0.9653645833333333,
+      "out_max_abs": 5.587935447692871e-09
+     }
+    },
+    {
+     "prefix": "p038",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9051432291666667,
+      "U_exact_frac": 0.8758951822916666,
+      "out_bitwise_frac": 0.9051432291666667,
+      "U_bitwise_frac": 0.8758951822916666,
+      "out_max_abs": 7.450580596923828e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9345703125,
+      "U_exact_frac": 0.9220703124999999,
+      "out_bitwise_frac": 0.9345703125,
+      "U_bitwise_frac": 0.9220703124999999,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p060",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9424479166666666,
+      "U_exact_frac": 0.9209147135416667,
+      "out_bitwise_frac": 0.9424479166666666,
+      "U_bitwise_frac": 0.9209147135416667,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9636555989583333,
+      "U_exact_frac": 0.9607421875,
+      "out_bitwise_frac": 0.9636555989583333,
+      "U_bitwise_frac": 0.9607421875,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p067",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9138020833333333,
+      "U_exact_frac": 0.8821451822916666,
+      "out_bitwise_frac": 0.9138020833333333,
+      "U_bitwise_frac": 0.8821451822916666,
+      "out_max_abs": 1.862645149230957e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9382975260416666,
+      "U_exact_frac": 0.928564453125,
+      "out_bitwise_frac": 0.9382975260416666,
+      "U_bitwise_frac": 0.928564453125,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p019",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9327311197916667,
+      "U_exact_frac": 0.9057128906249999,
+      "out_bitwise_frac": 0.9327311197916667,
+      "U_bitwise_frac": 0.9057128906249999,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.948486328125,
+      "U_exact_frac": 0.9426595052083333,
+      "out_bitwise_frac": 0.948486328125,
+      "U_bitwise_frac": 0.9426595052083333,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p003",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9137369791666666,
+      "U_exact_frac": 0.8930013020833333,
+      "out_bitwise_frac": 0.9137369791666666,
+      "U_bitwise_frac": 0.8930013020833333,
+      "out_max_abs": 7.450580596923828e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9392740885416666,
+      "U_exact_frac": 0.9382649739583333,
+      "out_bitwise_frac": 0.9392740885416666,
+      "U_bitwise_frac": 0.9382649739583333,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p077",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9303548177083333,
+      "U_exact_frac": 0.879052734375,
+      "out_bitwise_frac": 0.9303548177083333,
+      "U_bitwise_frac": 0.879052734375,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9497233072916667,
+      "U_exact_frac": 0.9338541666666667,
+      "out_bitwise_frac": 0.9497233072916667,
+      "U_bitwise_frac": 0.9338541666666667,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p089",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9251953125,
+      "U_exact_frac": 0.9001953125,
+      "out_bitwise_frac": 0.9251953125,
+      "U_bitwise_frac": 0.9001953125,
+      "out_max_abs": 7.450580596923828e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9447591145833333,
+      "U_exact_frac": 0.9384928385416667,
+      "out_bitwise_frac": 0.9447591145833333,
+      "U_bitwise_frac": 0.9384928385416667,
+      "out_max_abs": 7.450580596923828e-09
+     }
+    },
+    {
+     "prefix": "p030",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9149251302083333,
+      "U_exact_frac": 0.8963216145833334,
+      "out_bitwise_frac": 0.9149251302083333,
+      "U_bitwise_frac": 0.8963216145833334,
+      "out_max_abs": 1.862645149230957e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9342773437499999,
+      "U_exact_frac": 0.9303385416666666,
+      "out_bitwise_frac": 0.9342773437499999,
+      "U_bitwise_frac": 0.9303385416666666,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p081",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.928271484375,
+      "U_exact_frac": 0.9061848958333333,
+      "out_bitwise_frac": 0.928271484375,
+      "U_bitwise_frac": 0.9061848958333333,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.943408203125,
+      "U_exact_frac": 0.939501953125,
+      "out_bitwise_frac": 0.943408203125,
+      "U_bitwise_frac": 0.939501953125,
+      "out_max_abs": 5.122274160385132e-09
+     }
+    },
+    {
+     "prefix": "p012",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9193847656249999,
+      "U_exact_frac": 0.896728515625,
+      "out_bitwise_frac": 0.9193847656249999,
+      "U_bitwise_frac": 0.896728515625,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.935107421875,
+      "U_exact_frac": 0.9277506510416667,
+      "out_bitwise_frac": 0.935107421875,
+      "U_bitwise_frac": 0.9277506510416667,
+      "out_max_abs": 7.450580596923828e-09
+     }
+    },
+    {
+     "prefix": "p092",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9341796875,
+      "U_exact_frac": 0.9108072916666666,
+      "out_bitwise_frac": 0.9341796875,
+      "U_bitwise_frac": 0.9108072916666666,
+      "out_max_abs": 1.862645149230957e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9590657552083334,
+      "U_exact_frac": 0.957080078125,
+      "out_bitwise_frac": 0.9590657552083334,
+      "U_bitwise_frac": 0.957080078125,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p086",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9405436197916667,
+      "U_exact_frac": 0.8993489583333333,
+      "out_bitwise_frac": 0.9405436197916667,
+      "U_bitwise_frac": 0.8993489583333333,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9584798177083333,
+      "U_exact_frac": 0.9427734375,
+      "out_bitwise_frac": 0.9584798177083333,
+      "U_bitwise_frac": 0.9427734375,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p079",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9160807291666666,
+      "U_exact_frac": 0.8908854166666667,
+      "out_bitwise_frac": 0.9160807291666666,
+      "U_bitwise_frac": 0.8908854166666667,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9351725260416667,
+      "U_exact_frac": 0.9271321614583333,
+      "out_bitwise_frac": 0.9351725260416667,
+      "U_bitwise_frac": 0.9271321614583333,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p027",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9132975260416667,
+      "U_exact_frac": 0.8997395833333334,
+      "out_bitwise_frac": 0.9132975260416667,
+      "U_bitwise_frac": 0.8997395833333334,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.922265625,
+      "U_exact_frac": 0.915283203125,
+      "out_bitwise_frac": 0.922265625,
+      "U_bitwise_frac": 0.915283203125,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p091",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9362630208333333,
+      "U_exact_frac": 0.9072916666666666,
+      "out_bitwise_frac": 0.9362630208333333,
+      "U_bitwise_frac": 0.9072916666666666,
+      "out_max_abs": 1.862645149230957e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9658528645833333,
+      "U_exact_frac": 0.95947265625,
+      "out_bitwise_frac": 0.9658528645833333,
+      "U_bitwise_frac": 0.95947265625,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p082",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.92138671875,
+      "U_exact_frac": 0.9000976562499999,
+      "out_bitwise_frac": 0.92138671875,
+      "U_bitwise_frac": 0.9000976562499999,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9466634114583333,
+      "U_exact_frac": 0.9433268229166667,
+      "out_bitwise_frac": 0.9466634114583333,
+      "U_bitwise_frac": 0.9433268229166667,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p088",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9437825520833333,
+      "U_exact_frac": 0.9223795572916667,
+      "out_bitwise_frac": 0.9437825520833333,
+      "U_bitwise_frac": 0.9223795572916667,
+      "out_max_abs": 1.862645149230957e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9666666666666667,
+      "U_exact_frac": 0.9635091145833333,
+      "out_bitwise_frac": 0.9666666666666667,
+      "U_bitwise_frac": 0.9635091145833333,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p005",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.939306640625,
+      "U_exact_frac": 0.9202311197916666,
+      "out_bitwise_frac": 0.939306640625,
+      "U_bitwise_frac": 0.9202311197916666,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.96328125,
+      "U_exact_frac": 0.9601888020833333,
+      "out_bitwise_frac": 0.96328125,
+      "U_bitwise_frac": 0.9601888020833333,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p076",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9331380208333333,
+      "U_exact_frac": 0.9237141927083333,
+      "out_bitwise_frac": 0.9331380208333333,
+      "U_bitwise_frac": 0.9237141927083333,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9520182291666667,
+      "U_exact_frac": 0.9591634114583333,
+      "out_bitwise_frac": 0.9520182291666667,
+      "U_bitwise_frac": 0.9591634114583333,
+      "out_max_abs": 1.862645149230957e-09
+     }
+    },
+    {
+     "prefix": "p078",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9343424479166667,
+      "U_exact_frac": 0.9154459635416666,
+      "out_bitwise_frac": 0.9343424479166667,
+      "U_bitwise_frac": 0.9154459635416666,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9536783854166666,
+      "U_exact_frac": 0.9484212239583333,
+      "out_bitwise_frac": 0.9536783854166666,
+      "U_bitwise_frac": 0.9484212239583333,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    }
+   ]
+  },
+  {
+   "id": "D6d",
+   "rule": "any replay repeat-launch not bitwise-equal",
+   "pass": true,
+   "n_sets": 31,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": true,
+     "pass": true
+    }
+   ]
+  },
+  {
+   "id": "D7a",
+   "rule": "any change in the ordering of A_prod, B_fs[ieee], C_nm[ieee] by worst-case class error relative to the pilot (pilot: A <= B == C for out vs oracle; B == C for compact state) \u2014 out vs oracle: A <= B and B == C (strict float equality) [value = (A,B,C) max_abs]",
+   "pass": false,
+   "n_sets": 31,
+   "failing_prefixes": [
+    "p031",
+    "p038",
+    "p086"
+   ],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": [
+      1.6015593032325803e-08,
+      2.8176688787739934e-08,
+      2.8176688787739934e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": [
+      1.248601691483664e-08,
+      2.8005724836410728e-08,
+      2.8005724836410728e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": [
+      1.2529880959177842e-08,
+      4.511258402950524e-08,
+      4.511258402950524e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": [
+      1.3632780557215618e-08,
+      3.028873604704607e-08,
+      3.028873604704607e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": [
+      1.3024948328221875e-08,
+      3.8698962590011377e-08,
+      3.8698962590011377e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": [
+      1.519342594791251e-08,
+      2.1801971880619497e-08,
+      2.1801971880619497e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": [
+      1.6497556779015987e-08,
+      2.3879632819745478e-08,
+      2.3879632819745478e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": [
+      1.4416382421167384e-08,
+      3.0156291457028583e-08,
+      3.0133185835445886e-08
+     ],
+     "pass": false
+    },
+    {
+     "prefix": "p013",
+     "value": [
+      1.773959518169832e-08,
+      3.418910392294361e-08,
+      3.418910392294361e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": [
+      1.522849293889017e-08,
+      3.9995317266394714e-08,
+      3.9995317266394714e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": [
+      2.117317041139266e-08,
+      3.343805046740478e-08,
+      3.343805046740478e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": [
+      1.2460240172984527e-08,
+      1.973449526015969e-08,
+      2.124029366279423e-08
+     ],
+     "pass": false
+    },
+    {
+     "prefix": "p060",
+     "value": [
+      9.039072254579672e-09,
+      2.622601761453902e-08,
+      2.622601761453902e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": [
+      1.552007568988989e-08,
+      3.2217187834193695e-08,
+      3.2217187834193695e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": [
+      1.2991552653107696e-08,
+      4.674223350042972e-08,
+      4.674223350042972e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": [
+      1.5585385537697505e-08,
+      3.39629096790528e-08,
+      3.39629096790528e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": [
+      5.260587415678586e-08,
+      8.422742320268739e-08,
+      8.422742320268739e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": [
+      1.6753401582692007e-08,
+      3.7403147357117916e-08,
+      3.7403147357117916e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": [
+      2.0729086142035058e-08,
+      4.8953137210538955e-08,
+      4.8953137210538955e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": [
+      2.1068234268284414e-08,
+      7.292684978121855e-08,
+      7.292684978121855e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": [
+      1.02725719458574e-08,
+      2.1987837377224206e-08,
+      2.1987837377224206e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": [
+      2.3483887306996465e-08,
+      5.2623992774503137e-08,
+      5.2623992774503137e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": [
+      9.18150905304671e-08,
+      9.114031201962192e-08,
+      9.114031201962192e-08
+     ],
+     "pass": false
+    },
+    {
+     "prefix": "p079",
+     "value": [
+      2.2305894076257715e-08,
+      4.4389086198415306e-08,
+      4.4389086198415306e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": [
+      2.012392373573757e-08,
+      3.740336085300555e-08,
+      3.740336085300555e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": [
+      1.4802788994572325e-08,
+      3.0779386664403496e-08,
+      3.0779386664403496e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": [
+      2.2598338256241135e-08,
+      4.391970263861733e-08,
+      4.391970263861733e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": [
+      1.3321251504661014e-08,
+      3.081127790405258e-08,
+      3.081127790405258e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": [
+      1.6528227841927645e-08,
+      7.209285812770361e-08,
+      7.209285812770361e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": [
+      1.8535446469347683e-08,
+      4.813651445501055e-08,
+      4.813651445501055e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": [
+      1.3820641547868107e-08,
+      4.748677064070339e-08,
+      4.748677064070339e-08
+     ],
+     "pass": true
+    }
+   ]
+  },
+  {
+   "id": "D7b",
+   "rule": "any change in the ordering of A_prod, B_fs[ieee], C_nm[ieee] by worst-case class error relative to the pilot (pilot: A <= B == C for out vs oracle; B == C for compact state) \u2014 COMPACT STATE: B == C (strict float equality; OMITTED BY THE v1 CHECKER) [value = (B,C) compact_own_vs_oracle max_abs]",
+   "pass": false,
+   "n_sets": 31,
+   "failing_prefixes": [
+    "p031"
+   ],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": [
+      4.457618327791124e-07,
+      4.457618327791124e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": [
+      4.023449760026665e-07,
+      4.023449760026665e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": [
+      4.112836560210553e-07,
+      4.112836560210553e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": [
+      4.262433148660705e-07,
+      4.262433148660705e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": [
+      4.869344878422055e-07,
+      4.869344878422055e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": [
+      5.073286581946945e-07,
+      5.073286581946945e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": [
+      4.094176766500368e-07,
+      4.094176766500368e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": [
+      2.809754127142128e-07,
+      3.4991357855673755e-07
+     ],
+     "pass": false
+    },
+    {
+     "prefix": "p013",
+     "value": [
+      3.575406899436473e-07,
+      3.575406899436473e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": [
+      4.0529782019405047e-07,
+      4.0529782019405047e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": [
+      3.5388577623862716e-07,
+      3.5388577623862716e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": [
+      4.151888339798404e-07,
+      4.151888339798404e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": [
+      4.284347983052328e-07,
+      4.284347983052328e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": [
+      3.0909358272879217e-07,
+      3.0909358272879217e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": [
+      4.410483898098505e-07,
+      4.410483898098505e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": [
+      4.920572100886034e-07,
+      4.920572100886034e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": [
+      4.743243282590015e-07,
+      4.743243282590015e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": [
+      6.352027237532809e-07,
+      6.352027237532809e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": [
+      5.340359883199142e-07,
+      5.340359883199142e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": [
+      5.989053528665522e-07,
+      5.989053528665522e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": [
+      4.797781594234607e-07,
+      4.797781594234607e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": [
+      4.805383477801684e-07,
+      4.805383477801684e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": [
+      4.538224960271009e-07,
+      4.538224960271009e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": [
+      5.190252574394094e-07,
+      5.190252574394094e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": [
+      7.814217335422313e-07,
+      7.814217335422313e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": [
+      4.673587272741031e-07,
+      4.673587272741031e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": [
+      7.003730901899985e-07,
+      7.003730901899985e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": [
+      7.238360435479763e-07,
+      7.238360435479763e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": [
+      6.187369265830966e-07,
+      6.187369265830966e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": [
+      7.045855028309234e-07,
+      7.045855028309234e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": [
+      7.294373030042323e-07,
+      7.294373030042323e-07
+     ],
+     "pass": true
+    }
+   ],
+   "vs_native_sg_equal_per_set": [
+    {
+     "prefix": "p063",
+     "B": 7.152557373046875e-07,
+     "C": 7.152557373046875e-07
+    },
+    {
+     "prefix": "p059",
+     "B": 7.152557373046875e-07,
+     "C": 7.152557373046875e-07
+    },
+    {
+     "prefix": "p049",
+     "B": 3.5762786865234375e-07,
+     "C": 3.5762786865234375e-07
+    },
+    {
+     "prefix": "p052",
+     "B": 1.1920928955078125e-06,
+     "C": 1.1920928955078125e-06
+    },
+    {
+     "prefix": "p046",
+     "B": 4.76837158203125e-07,
+     "C": 4.76837158203125e-07
+    },
+    {
+     "prefix": "p065",
+     "B": 7.152557373046875e-07,
+     "C": 7.152557373046875e-07
+    },
+    {
+     "prefix": "p025",
+     "B": 4.76837158203125e-07,
+     "C": 4.76837158203125e-07
+    },
+    {
+     "prefix": "p031",
+     "B": 7.152557373046875e-07,
+     "C": 7.152557373046875e-07
+    },
+    {
+     "prefix": "p013",
+     "B": 4.76837158203125e-07,
+     "C": 4.76837158203125e-07
+    },
+    {
+     "prefix": "p040",
+     "B": 5.960464477539062e-07,
+     "C": 5.960464477539062e-07
+    },
+    {
+     "prefix": "p033",
+     "B": 7.152557373046875e-07,
+     "C": 7.152557373046875e-07
+    },
+    {
+     "prefix": "p038",
+     "B": 7.152557373046875e-07,
+     "C": 7.152557373046875e-07
+    },
+    {
+     "prefix": "p060",
+     "B": 7.152557373046875e-07,
+     "C": 7.152557373046875e-07
+    },
+    {
+     "prefix": "p067",
+     "B": 7.152557373046875e-07,
+     "C": 7.152557373046875e-07
+    },
+    {
+     "prefix": "p019",
+     "B": 7.152557373046875e-07,
+     "C": 7.152557373046875e-07
+    },
+    {
+     "prefix": "p003",
+     "B": 7.152557373046875e-07,
+     "C": 7.152557373046875e-07
+    },
+    {
+     "prefix": "p077",
+     "B": 4.76837158203125e-07,
+     "C": 4.76837158203125e-07
+    },
+    {
+     "prefix": "p089",
+     "B": 4.76837158203125e-07,
+     "C": 4.76837158203125e-07
+    },
+    {
+     "prefix": "p030",
+     "B": 4.76837158203125e-07,
+     "C": 4.76837158203125e-07
+    },
+    {
+     "prefix": "p081",
+     "B": 7.152557373046875e-07,
+     "C": 7.152557373046875e-07
+    },
+    {
+     "prefix": "p012",
+     "B": 7.152557373046875e-07,
+     "C": 7.152557373046875e-07
+    },
+    {
+     "prefix": "p092",
+     "B": 4.76837158203125e-07,
+     "C": 4.76837158203125e-07
+    },
+    {
+     "prefix": "p086",
+     "B": 9.5367431640625e-07,
+     "C": 9.5367431640625e-07
+    },
+    {
+     "prefix": "p079",
+     "B": 9.5367431640625e-07,
+     "C": 9.5367431640625e-07
+    },
+    {
+     "prefix": "p027",
+     "B": 9.5367431640625e-07,
+     "C": 9.5367431640625e-07
+    },
+    {
+     "prefix": "p091",
+     "B": 9.5367431640625e-07,
+     "C": 9.5367431640625e-07
+    },
+    {
+     "prefix": "p082",
+     "B": 7.152557373046875e-07,
+     "C": 7.152557373046875e-07
+    },
+    {
+     "prefix": "p088",
+     "B": 9.5367431640625e-07,
+     "C": 9.5367431640625e-07
+    },
+    {
+     "prefix": "p005",
+     "B": 1.9073486328125e-06,
+     "C": 1.9073486328125e-06
+    },
+    {
+     "prefix": "p076",
+     "B": 9.5367431640625e-07,
+     "C": 9.5367431640625e-07
+    },
+    {
+     "prefix": "p078",
+     "B": 1.430511474609375e-06,
+     "C": 1.430511474609375e-06
+    }
+   ]
+  },
+  {
+   "id": "D8a",
+   "rule": "every harness set is VERIFIED-FRESH (provenance PASS bound to the payload sha256)",
+   "pass": true,
+   "n_sets": 31,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p063)",
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p059)",
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p049)",
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p052)",
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p046)",
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p065)",
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p025)",
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p031)",
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p013)",
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p040)",
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p033)",
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p038)",
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p060)",
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p067)",
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p019)",
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p003)",
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p077)",
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p089)",
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p030)",
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p081)",
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p012)",
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p092)",
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p086)",
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p079)",
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p027)",
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p091)",
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p082)",
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p088)",
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p005)",
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p076)",
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p078)",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "id": "D8b",
+   "rule": "provenance FAIL on any confirmation prefix (counted as a failure; never dropped or re-run silently); any second passing run for the same prefix (refused by the fill script) \u2014 coverage: every frozen prefix has a VERIFIED-FRESH harness set",
+   "pass": false,
+   "missing_prefixes": [
+    "p087"
+   ],
+   "unexpected_prefixes": [],
+   "n_frozen": 32,
+   "n_present": 31
+  },
+  {
+   "id": "D8c",
+   "rule": "provenance FAIL on any confirmation prefix (counted as a failure; never dropped or re-run silently); any second passing run for the same prefix (refused by the fill script) \u2014 no second run for the same prefix",
+   "pass": true,
+   "duplicates": []
+  },
+  {
+   "id": "D8d",
+   "rule": "provenance FAIL on any confirmation prefix (counted as a failure; never dropped or re-run silently); any second passing run for the same prefix (refused by the fill script) \u2014 provenance verdict of record per frozen prefix from the capture roots (FAIL/missing counted as a failure)",
+   "pass": false,
+   "n_sets": 32,
+   "failing_prefixes": [
+    "p087"
+   ],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": [
+      {
+       "file": "out-20260922T013708Z-e7a-step2-captures-v5-confirmation/capture_01_p063/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": [
+      {
+       "file": "out-20260922T013708Z-e7a-step2-captures-v5-confirmation/capture_02_p059/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p049",
+     "value": [
+      {
+       "file": "out-20260922T013708Z-e7a-step2-captures-v5-confirmation/capture_03_p049/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": [
+      {
+       "file": "out-20260922T013708Z-e7a-step2-captures-v5-confirmation/capture_04_p052/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": [
+      {
+       "file": "out-20260922T013708Z-e7a-step2-captures-v5-confirmation/capture_05_p046/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": [
+      {
+       "file": "out-20260922T013708Z-e7a-step2-captures-v5-confirmation/capture_06_p065/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": [
+      {
+       "file": "out-20260922T013708Z-e7a-step2-captures-v5-confirmation/capture_07_p025/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": [
+      {
+       "file": "out-20260922T013708Z-e7a-step2-captures-v5-confirmation/capture_08_p031",
+       "all_pass": null,
+       "note": "no provenance verdict (boot without a payload)"
+      },
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_08_p031/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_09_p013/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_10_p040/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_11_p033/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_12_p038/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_13_p060/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_14_p067/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_15_p019/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_16_p003/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_17_p077/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_18_p089/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_19_p030/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_20_p081/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_21_p012/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_22_p092/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_23_p086/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_24_p079/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_25_p027/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_26_p091/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_27_p082/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_28_p088/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_29_p005/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p087",
+     "value": [
+      {
+       "file": "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_30_p087/capture_provenance.json",
+       "all_pass": false,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": false
+    },
+    {
+     "prefix": "p076",
+     "value": [
+      {
+       "file": "out-20260922T050330Z-e7a-step2-captures-v5-confirmation-part3/capture_31_p076/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "59c5b2b92d0d1387009fdc3ff1751cdbb5f1dd2ba1ff8ee807a306580b3b52db"
+      }
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": [
+      {
+       "file": "out-20260922T050330Z-e7a-step2-captures-v5-confirmation-part3/capture_32_p078/capture_provenance.json",
+       "all_pass": true,
+       "inspector_sha256": "6e71a24c5b7ea82932b219b7502a5c19d3b367e37105451a306b7afb3c95ed04"
+      }
+     ],
+     "pass": true
+    }
+   ],
+   "capture_roots": [
+    "out-20260922T013708Z-e7a-step2-captures-v5-confirmation",
+    "out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2",
+    "out-20260922T050330Z-e7a-step2-captures-v5-confirmation-part3"
+   ]
+  },
+  {
+   "id": "D9",
+   "rule": "tf32 realizations promoted into the deployed comparison",
+   "pass": true,
+   "evaluation": "static: no frozen tolerance class references a tf32 realization; tf32 rows are reported as ablation only"
+  },
+  {
+   "id": "P1",
+   "rule": "verify-class kernel timing half-width (p90-p10)/(2*median) <= 0.05 per set (OMITTED BY THE v1 CHECKER) [value = max over ['A_prod_scan_verify_out16', 'B_fs[ieee]_verify_out16', 'C_nm[ieee]_verify_out16', 'native_sg_chain_depth5_verify(context)']]",
+   "pass": false,
+   "n_sets": 31,
+   "failing_prefixes": [
+    "p059",
+    "p052",
+    "p046",
+    "p013",
+    "p040",
+    "p003",
+    "p077",
+    "p030",
+    "p079",
+    "p027",
+    "p082",
+    "p076"
+   ],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 0.038617897079893534,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 0.058616831527821295,
+     "pass": false
+    },
+    {
+     "prefix": "p049",
+     "value": 0.032322068080021915,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": 0.07514122428405234,
+     "pass": false
+    },
+    {
+     "prefix": "p046",
+     "value": 0.06963145929696368,
+     "pass": false
+    },
+    {
+     "prefix": "p065",
+     "value": 0.04314720845512731,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 0.04486085196050076,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 0.03756732581436262,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 0.07096315042936806,
+     "pass": false
+    },
+    {
+     "prefix": "p040",
+     "value": 0.05378764835740966,
+     "pass": false
+    },
+    {
+     "prefix": "p033",
+     "value": 0.04736990916707469,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 0.04225351466052571,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 0.030311613796633323,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 0.02704226249995573,
+     "pass": true
+    },
+    {
+     "prefix": "p019",
+     "value": 0.049475454422428844,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 0.07195465936646982,
+     "pass": false
+    },
+    {
+     "prefix": "p077",
+     "value": 0.07444171611944864,
+     "pass": false
+    },
+    {
+     "prefix": "p089",
+     "value": 0.044501141549874626,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 0.29443893902596174,
+     "pass": false
+    },
+    {
+     "prefix": "p081",
+     "value": 0.04096964355853938,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 0.048016998615218354,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 0.04273987834153666,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 0.03569402492606968,
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": 0.19463588064614307,
+     "pass": false
+    },
+    {
+     "prefix": "p027",
+     "value": 0.06214766975112583,
+     "pass": false
+    },
+    {
+     "prefix": "p091",
+     "value": 0.04054438272155053,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 0.05187482494214188,
+     "pass": false
+    },
+    {
+     "prefix": "p088",
+     "value": 0.04506800627877179,
+     "pass": true
+    },
+    {
+     "prefix": "p005",
+     "value": 0.04068611432928339,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": 0.3208609476006917,
+     "pass": false
+    },
+    {
+     "prefix": "p078",
+     "value": 0.03911324728791091,
+     "pass": true
+    }
+   ],
+   "cells_over_target": [
+    {
+     "prefix": "p059",
+     "kernel": "native_sg_chain_depth5_verify(context)",
+     "relative_half_width": 0.058616831527821295,
+     "pass": false
+    },
+    {
+     "prefix": "p052",
+     "kernel": "native_sg_chain_depth5_verify(context)",
+     "relative_half_width": 0.07514122428405234,
+     "pass": false
+    },
+    {
+     "prefix": "p046",
+     "kernel": "A_prod_scan_verify_out16",
+     "relative_half_width": 0.06963145929696368,
+     "pass": false
+    },
+    {
+     "prefix": "p013",
+     "kernel": "native_sg_chain_depth5_verify(context)",
+     "relative_half_width": 0.07096315042936806,
+     "pass": false
+    },
+    {
+     "prefix": "p040",
+     "kernel": "native_sg_chain_depth5_verify(context)",
+     "relative_half_width": 0.05378764835740966,
+     "pass": false
+    },
+    {
+     "prefix": "p003",
+     "kernel": "native_sg_chain_depth5_verify(context)",
+     "relative_half_width": 0.07195465936646982,
+     "pass": false
+    },
+    {
+     "prefix": "p077",
+     "kernel": "A_prod_scan_verify_out16",
+     "relative_half_width": 0.07444171611944864,
+     "pass": false
+    },
+    {
+     "prefix": "p030",
+     "kernel": "C_nm[ieee]_verify_out16",
+     "relative_half_width": 0.29443893902596174,
+     "pass": false
+    },
+    {
+     "prefix": "p079",
+     "kernel": "B_fs[ieee]_verify_out16",
+     "relative_half_width": 0.19463588064614307,
+     "pass": false
+    },
+    {
+     "prefix": "p079",
+     "kernel": "C_nm[ieee]_verify_out16",
+     "relative_half_width": 0.053530019796393186,
+     "pass": false
+    },
+    {
+     "prefix": "p027",
+     "kernel": "native_sg_chain_depth5_verify(context)",
+     "relative_half_width": 0.06214766975112583,
+     "pass": false
+    },
+    {
+     "prefix": "p082",
+     "kernel": "native_sg_chain_depth5_verify(context)",
+     "relative_half_width": 0.05187482494214188,
+     "pass": false
+    },
+    {
+     "prefix": "p076",
+     "kernel": "C_nm[ieee]_verify_out16",
+     "relative_half_width": 0.3208609476006917,
+     "pass": false
+    },
+    {
+     "prefix": "p076",
+     "kernel": "native_sg_chain_depth5_verify(context)",
+     "relative_half_width": 0.06945622137713323,
+     "pass": false
+    }
+   ],
+   "n_cells": 124,
+   "basis": "half-width = (p90 - p10) / (2 * median) of CUDA-event sync timings, iters 200 / warmup 20, per set. Applies to the VERIFY-class kernels (A_prod scan out16, B_fs/C_nm verify out16, native spec-update chain): pilot max 0.0623 (met). COMMIT-class kernels (~18\u2013105 us: B/C compact commit, A replay commit, native one-token) are REPORTED, not gated: pilot half-width max 0.216 on 3/8 sets exceeded 0.05 because of sub-20-us jitter; confirmation rows above 0.05 are labeled imprecise. Probe drift pilot max 0.0370. Timing remains a shared-device diagnostic; attribution label required per run."
+  },
+  {
+   "id": "P2",
+   "rule": "commit-class kernels REPORTED (not gated): rows above 0.05 labeled imprecise",
+   "pass": true,
+   "reported_only": true,
+   "n_imprecise": 23,
+   "cells": [
+    {
+     "prefix": "p063",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.028419193599514322,
+     "label": "ok"
+    },
+    {
+     "prefix": "p063",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.02839932739595155,
+     "label": "ok"
+    },
+    {
+     "prefix": "p063",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.015717408963798567,
+     "label": "ok"
+    },
+    {
+     "prefix": "p063",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.010915683819653816,
+     "label": "ok"
+    },
+    {
+     "prefix": "p063",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.0053191505830596205,
+     "label": "ok"
+    },
+    {
+     "prefix": "p059",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.006791173742158643,
+     "label": "ok"
+    },
+    {
+     "prefix": "p059",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.02292022990938876,
+     "label": "ok"
+    },
+    {
+     "prefix": "p059",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.03363438410457729,
+     "label": "ok"
+    },
+    {
+     "prefix": "p059",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.014626873244213637,
+     "label": "ok"
+    },
+    {
+     "prefix": "p059",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.09431524742128411,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p049",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.006814312500576375,
+     "label": "ok"
+    },
+    {
+     "prefix": "p049",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.021294732761880188,
+     "label": "ok"
+    },
+    {
+     "prefix": "p049",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.018882645432860442,
+     "label": "ok"
+    },
+    {
+     "prefix": "p049",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.01076556231558146,
+     "label": "ok"
+    },
+    {
+     "prefix": "p049",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.03796652842159548,
+     "label": "ok"
+    },
+    {
+     "prefix": "p052",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.015228394149174904,
+     "label": "ok"
+    },
+    {
+     "prefix": "p052",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.12265757542974261,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p052",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.039794020452617256,
+     "label": "ok"
+    },
+    {
+     "prefix": "p052",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.015830362158039565,
+     "label": "ok"
+    },
+    {
+     "prefix": "p052",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.07402597225883299,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p046",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.028013548450663277,
+     "label": "ok"
+    },
+    {
+     "prefix": "p046",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.048551933183553546,
+     "label": "ok"
+    },
+    {
+     "prefix": "p046",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.038977244016971155,
+     "label": "ok"
+    },
+    {
+     "prefix": "p046",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.011057993964356316,
+     "label": "ok"
+    },
+    {
+     "prefix": "p046",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.024601056933437837,
+     "label": "ok"
+    },
+    {
+     "prefix": "p065",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.43123940909638486,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p065",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.035162917547602486,
+     "label": "ok"
+    },
+    {
+     "prefix": "p065",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.030967924734759303,
+     "label": "ok"
+    },
+    {
+     "prefix": "p065",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.01044777156741594,
+     "label": "ok"
+    },
+    {
+     "prefix": "p065",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.02129033387087168,
+     "label": "ok"
+    },
+    {
+     "prefix": "p025",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.011844322975488862,
+     "label": "ok"
+    },
+    {
+     "prefix": "p025",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.014431200966345991,
+     "label": "ok"
+    },
+    {
+     "prefix": "p025",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.03744149267328085,
+     "label": "ok"
+    },
+    {
+     "prefix": "p025",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.005077662021574943,
+     "label": "ok"
+    },
+    {
+     "prefix": "p025",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.023117591546925102,
+     "label": "ok"
+    },
+    {
+     "prefix": "p031",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.03008846740360657,
+     "label": "ok"
+    },
+    {
+     "prefix": "p031",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.030195406123032596,
+     "label": "ok"
+    },
+    {
+     "prefix": "p031",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.0453978352924767,
+     "label": "ok"
+    },
+    {
+     "prefix": "p031",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.00955224233292142,
+     "label": "ok"
+    },
+    {
+     "prefix": "p031",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.2615680994480148,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p013",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.028862451344967552,
+     "label": "ok"
+    },
+    {
+     "prefix": "p013",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.12822721906438148,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p013",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.05123401698696337,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p013",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.010454012089807254,
+     "label": "ok"
+    },
+    {
+     "prefix": "p013",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.02921649779873769,
+     "label": "ok"
+    },
+    {
+     "prefix": "p040",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.028013548450663277,
+     "label": "ok"
+    },
+    {
+     "prefix": "p040",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.00680272344540255,
+     "label": "ok"
+    },
+    {
+     "prefix": "p040",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.03272046899884274,
+     "label": "ok"
+    },
+    {
+     "prefix": "p040",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.002390897866885868,
+     "label": "ok"
+    },
+    {
+     "prefix": "p040",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.02123553367287054,
+     "label": "ok"
+    },
+    {
+     "prefix": "p033",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.010204109916259172,
+     "label": "ok"
+    },
+    {
+     "prefix": "p033",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.1137520984158128,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p033",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.03709475546794569,
+     "label": "ok"
+    },
+    {
+     "prefix": "p033",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.009850752077752926,
+     "label": "ok"
+    },
+    {
+     "prefix": "p033",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.021935500055240947,
+     "label": "ok"
+    },
+    {
+     "prefix": "p038",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.028013548450663277,
+     "label": "ok"
+    },
+    {
+     "prefix": "p038",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.028013548450663277,
+     "label": "ok"
+    },
+    {
+     "prefix": "p038",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.045695592449053773,
+     "label": "ok"
+    },
+    {
+     "prefix": "p038",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.014635609971410096,
+     "label": "ok"
+    },
+    {
+     "prefix": "p038",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.08399469478743463,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p060",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.028013548450663277,
+     "label": "ok"
+    },
+    {
+     "prefix": "p060",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.47193875960067566,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p060",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.015127891637160381,
+     "label": "ok"
+    },
+    {
+     "prefix": "p060",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.016119421968371173,
+     "label": "ok"
+    },
+    {
+     "prefix": "p060",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.03253653767678452,
+     "label": "ok"
+    },
+    {
+     "prefix": "p067",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.006791173742158643,
+     "label": "ok"
+    },
+    {
+     "prefix": "p067",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.10544218865558418,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p067",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.02900811312403025,
+     "label": "ok"
+    },
+    {
+     "prefix": "p067",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.010454012089807254,
+     "label": "ok"
+    },
+    {
+     "prefix": "p067",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.03979461288468054,
+     "label": "ok"
+    },
+    {
+     "prefix": "p019",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.028013548450663277,
+     "label": "ok"
+    },
+    {
+     "prefix": "p019",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.15699659584502576,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p019",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.05179344393821017,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p019",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.01076556231558146,
+     "label": "ok"
+    },
+    {
+     "prefix": "p019",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.0265957529152981,
+     "label": "ok"
+    },
+    {
+     "prefix": "p003",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.028947334829372402,
+     "label": "ok"
+    },
+    {
+     "prefix": "p003",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.09042555167756754,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p003",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.0453978352924767,
+     "label": "ok"
+    },
+    {
+     "prefix": "p003",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.015513106101177142,
+     "label": "ok"
+    },
+    {
+     "prefix": "p003",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.04840847204036616,
+     "label": "ok"
+    },
+    {
+     "prefix": "p077",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.028862451344967552,
+     "label": "ok"
+    },
+    {
+     "prefix": "p077",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.029772352991246934,
+     "label": "ok"
+    },
+    {
+     "prefix": "p077",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.03190163865524905,
+     "label": "ok"
+    },
+    {
+     "prefix": "p077",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.009563661052312367,
+     "label": "ok"
+    },
+    {
+     "prefix": "p077",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.04084321809060317,
+     "label": "ok"
+    },
+    {
+     "prefix": "p089",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.2083333374580259,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p089",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.028013548450663277,
+     "label": "ok"
+    },
+    {
+     "prefix": "p089",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.0394326785213367,
+     "label": "ok"
+    },
+    {
+     "prefix": "p089",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.00985663599649252,
+     "label": "ok"
+    },
+    {
+     "prefix": "p089",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.04557292100887212,
+     "label": "ok"
+    },
+    {
+     "prefix": "p030",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.007627127255657809,
+     "label": "ok"
+    },
+    {
+     "prefix": "p030",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.028013548450663277,
+     "label": "ok"
+    },
+    {
+     "prefix": "p030",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.04287496115859201,
+     "label": "ok"
+    },
+    {
+     "prefix": "p030",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.011350041458179048,
+     "label": "ok"
+    },
+    {
+     "prefix": "p030",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.01347884700710253,
+     "label": "ok"
+    },
+    {
+     "prefix": "p081",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.028013597862938847,
+     "label": "ok"
+    },
+    {
+     "prefix": "p081",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.031195824382350672,
+     "label": "ok"
+    },
+    {
+     "prefix": "p081",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.01993145599276057,
+     "label": "ok"
+    },
+    {
+     "prefix": "p081",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.009569380988696086,
+     "label": "ok"
+    },
+    {
+     "prefix": "p081",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.021883301974019467,
+     "label": "ok"
+    },
+    {
+     "prefix": "p012",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.027966067499378213,
+     "label": "ok"
+    },
+    {
+     "prefix": "p012",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.055555583194522154,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p012",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.04433728568298015,
+     "label": "ok"
+    },
+    {
+     "prefix": "p012",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.008955222843258406,
+     "label": "ok"
+    },
+    {
+     "prefix": "p012",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.041777198823402355,
+     "label": "ok"
+    },
+    {
+     "prefix": "p092",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.030141816157497548,
+     "label": "ok"
+    },
+    {
+     "prefix": "p092",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.005952376827688395,
+     "label": "ok"
+    },
+    {
+     "prefix": "p092",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.01873828620791079,
+     "label": "ok"
+    },
+    {
+     "prefix": "p092",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.015223892733876651,
+     "label": "ok"
+    },
+    {
+     "prefix": "p092",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.014608229574115478,
+     "label": "ok"
+    },
+    {
+     "prefix": "p086",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.006779663190748573,
+     "label": "ok"
+    },
+    {
+     "prefix": "p086",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.20153061401262334,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p086",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.023230429012426345,
+     "label": "ok"
+    },
+    {
+     "prefix": "p086",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.02777777970953335,
+     "label": "ok"
+    },
+    {
+     "prefix": "p086",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.04107828235542719,
+     "label": "ok"
+    },
+    {
+     "prefix": "p079",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.026271188698085056,
+     "label": "ok"
+    },
+    {
+     "prefix": "p079",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.09487177548199677,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p079",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.033697350670559525,
+     "label": "ok"
+    },
+    {
+     "prefix": "p079",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.010143206130836656,
+     "label": "ok"
+    },
+    {
+     "prefix": "p079",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.026957619293202076,
+     "label": "ok"
+    },
+    {
+     "prefix": "p027",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.011016934186769438,
+     "label": "ok"
+    },
+    {
+     "prefix": "p027",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.10306643318816455,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p027",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.03875969495937918,
+     "label": "ok"
+    },
+    {
+     "prefix": "p027",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.012253425501607025,
+     "label": "ok"
+    },
+    {
+     "prefix": "p027",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.023904372153051988,
+     "label": "ok"
+    },
+    {
+     "prefix": "p091",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.028862451344967552,
+     "label": "ok"
+    },
+    {
+     "prefix": "p091",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.029761884138441972,
+     "label": "ok"
+    },
+    {
+     "prefix": "p091",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.029475989430389194,
+     "label": "ok"
+    },
+    {
+     "prefix": "p091",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.010460260799538736,
+     "label": "ok"
+    },
+    {
+     "prefix": "p091",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.09729384623485682,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p082",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.005952376827688395,
+     "label": "ok"
+    },
+    {
+     "prefix": "p082",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.1686541724134751,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p082",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.022734342483652546,
+     "label": "ok"
+    },
+    {
+     "prefix": "p082",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.018518519806355566,
+     "label": "ok"
+    },
+    {
+     "prefix": "p082",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.04107831971592868,
+     "label": "ok"
+    },
+    {
+     "prefix": "p088",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.005952426323999088,
+     "label": "ok"
+    },
+    {
+     "prefix": "p088",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.02749141787059177,
+     "label": "ok"
+    },
+    {
+     "prefix": "p088",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.015288619194398698,
+     "label": "ok"
+    },
+    {
+     "prefix": "p088",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.009563661052312367,
+     "label": "ok"
+    },
+    {
+     "prefix": "p088",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.1251629359123804,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p005",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.011884541695708732,
+     "label": "ok"
+    },
+    {
+     "prefix": "p005",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.02925528456425682,
+     "label": "ok"
+    },
+    {
+     "prefix": "p005",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.02150204425160801,
+     "label": "ok"
+    },
+    {
+     "prefix": "p005",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.0020920312844770785,
+     "label": "ok"
+    },
+    {
+     "prefix": "p005",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.01792830810266904,
+     "label": "ok"
+    },
+    {
+     "prefix": "p076",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.007640027224187348,
+     "label": "ok"
+    },
+    {
+     "prefix": "p076",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.02645051558977027,
+     "label": "ok"
+    },
+    {
+     "prefix": "p076",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.04166665761696826,
+     "label": "ok"
+    },
+    {
+     "prefix": "p076",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.01910448466584284,
+     "label": "ok"
+    },
+    {
+     "prefix": "p076",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.03915275946905646,
+     "label": "ok"
+    },
+    {
+     "prefix": "p078",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.027118652762994293,
+     "label": "ok"
+    },
+    {
+     "prefix": "p078",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.03231292399158444,
+     "label": "ok"
+    },
+    {
+     "prefix": "p078",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.02878929515287618,
+     "label": "ok"
+    },
+    {
+     "prefix": "p078",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.009259259903177783,
+     "label": "ok"
+    },
+    {
+     "prefix": "p078",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.09020620064631509,
+     "label": "imprecise (> 0.05)"
+    }
+   ]
+  },
+  {
+   "id": "P3",
+   "rule": "probe drift (|after-before|/before of the matmul probe) <= 0.05 per set [recomputed from each result's timing block; summary probe_checks cross-checked]",
+   "pass": false,
+   "n_sets": 31,
+   "failing_prefixes": [
+    "p059",
+    "p067",
+    "p088"
+   ],
+   "per_set": [
+    {
+     "prefix": "p063",
+     "value": 0.005148318058437708,
+     "pass": true
+    },
+    {
+     "prefix": "p059",
+     "value": 0.05296377088459357,
+     "pass": false
+    },
+    {
+     "prefix": "p049",
+     "value": 0.0024158844835277422,
+     "pass": true
+    },
+    {
+     "prefix": "p052",
+     "value": 0.01353553476817059,
+     "pass": true
+    },
+    {
+     "prefix": "p046",
+     "value": 0.01130665691601754,
+     "pass": true
+    },
+    {
+     "prefix": "p065",
+     "value": 0.026251678228698082,
+     "pass": true
+    },
+    {
+     "prefix": "p025",
+     "value": 0.004173433307029591,
+     "pass": true
+    },
+    {
+     "prefix": "p031",
+     "value": 0.022686570184158265,
+     "pass": true
+    },
+    {
+     "prefix": "p013",
+     "value": 0.006929970646080007,
+     "pass": true
+    },
+    {
+     "prefix": "p040",
+     "value": 0.03509209893606394,
+     "pass": true
+    },
+    {
+     "prefix": "p033",
+     "value": 0.007656360744649161,
+     "pass": true
+    },
+    {
+     "prefix": "p038",
+     "value": 0.013112640769246134,
+     "pass": true
+    },
+    {
+     "prefix": "p060",
+     "value": 0.02020803570567474,
+     "pass": true
+    },
+    {
+     "prefix": "p067",
+     "value": 0.06554827805781901,
+     "pass": false
+    },
+    {
+     "prefix": "p019",
+     "value": 0.028801412615203716,
+     "pass": true
+    },
+    {
+     "prefix": "p003",
+     "value": 0.004821275527467139,
+     "pass": true
+    },
+    {
+     "prefix": "p077",
+     "value": 0.006212753227420713,
+     "pass": true
+    },
+    {
+     "prefix": "p089",
+     "value": 0.012114408345248885,
+     "pass": true
+    },
+    {
+     "prefix": "p030",
+     "value": 0.04886122485981234,
+     "pass": true
+    },
+    {
+     "prefix": "p081",
+     "value": 0.008929205524802735,
+     "pass": true
+    },
+    {
+     "prefix": "p012",
+     "value": 0.011151789053525853,
+     "pass": true
+    },
+    {
+     "prefix": "p092",
+     "value": 0.012835975234615929,
+     "pass": true
+    },
+    {
+     "prefix": "p086",
+     "value": 0.009485234575526236,
+     "pass": true
+    },
+    {
+     "prefix": "p079",
+     "value": 0.0028222905675195885,
+     "pass": true
+    },
+    {
+     "prefix": "p027",
+     "value": 0.014175669737157753,
+     "pass": true
+    },
+    {
+     "prefix": "p091",
+     "value": 0.02290772456116454,
+     "pass": true
+    },
+    {
+     "prefix": "p082",
+     "value": 0.02084601413107522,
+     "pass": true
+    },
+    {
+     "prefix": "p088",
+     "value": 0.06644816481835286,
+     "pass": false
+    },
+    {
+     "prefix": "p005",
+     "value": 0.0019165216682919077,
+     "pass": true
+    },
+    {
+     "prefix": "p076",
+     "value": 0.00299302194381091,
+     "pass": true
+    },
+    {
+     "prefix": "p078",
+     "value": 0.0016656426601892036,
+     "pass": true
+    }
+   ],
+   "summary_probe_checks_all_pass": false,
+   "summary_probe_fail_sets": [
+    "2",
+    "14",
+    "28"
+   ]
+  },
+  {
+   "id": "I1",
+   "rule": "harness source hashes identical at start and end of the run",
+   "pass": true,
+   "value": true
+  },
+  {
+   "id": "I2",
+   "rule": "attribution label recorded (shared-device timing diagnostic)",
+   "pass": true,
+   "value": "NO FOREIGN COMPUTE PROCESS SAMPLED (1 Hz inventory; only container PID(s) ['3103483'] seen; sampled observation, not a guarantee)"
+  }
+ ],
+ "n_rules": 33,
+ "n_fail": 12,
+ "failing_rule_ids": [
+  "T2",
+  "T3",
+  "D1",
+  "D2",
+  "D3",
+  "D6c",
+  "D7a",
+  "D7b",
+  "D8b",
+  "D8d",
+  "P1",
+  "P3"
+ ],
+ "v1_omitted_rule_ids": [
+  "D6c",
+  "D7b",
+  "P1"
+ ],
+ "v1_omitted_rules_fail": [
+  "D6c",
+  "D7b",
+  "P1"
+ ],
+ "verdict": "OUTSIDE FROZEN CRITERIA on 12 rule(s) (reportable finding; nothing dropped; no promotion)"
+}

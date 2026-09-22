@@ -1,0 +1,25 @@
+{
+  "utc": "2026-09-22T06:41:44.648347+00:00",
+  "source_hashes": {
+    "main.tex": "ca191a41d714854bb8afd478e169adc11eb98d949ab2749e838b492021dcfeb5",
+    "abstract.tex": "e2aa41e1a353592aa0bb8a1d5dc2821bc312c9f24295ba204dbcfe2e0e6523af",
+    "ref.bib": "51c788f1ffcaef1cc1b1a7846be1e862cbbc56e58d041c37bfc267d703e22905",
+    "main.pdf": "d06e7d7188c8251fb0c1e249bb555286db05037d6d8391b4e22e712e6da9d4f7"
+  },
+  "pages": 11,
+  "latex_errors": [],
+  "overfull_hbox": 0,
+  "undefined_references_or_citations": 0,
+  "visual_qa": "All11pages inspected; final changed pages7-11 separately rendered/inspected. No clipping/overlap observed.",
+  "paper_status": "working_revision; E2/E7b/E1 unqualified; redteamround2 pending; packaging pending",
+  "redteam_resolved": [
+    "stale_fresh_status",
+    "bf16_minima",
+    "omitted_frozen_rules_disclosed",
+    "pilot_rationale_error_disclosed",
+    "Neumann_term_count",
+    "fresh_route_scope",
+    "storage_vs_write_traffic",
+    "unsupported_Bole_precision_attribution_removed"
+  ]
+}

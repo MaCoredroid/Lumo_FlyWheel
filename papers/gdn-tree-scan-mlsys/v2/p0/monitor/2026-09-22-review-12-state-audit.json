@@ -1,0 +1,49 @@
+{
+  "observed_utc": "2026-09-22T06:04:27.301938+00:00",
+  "resources": {
+    "observed_utc": "2026-09-22T06:04:27.301938+00:00",
+    "available_gib": 102.2619514465332,
+    "free_gib": 97.64799880981445,
+    "swap_used_gib": 0.0,
+    "gpu_compute": {
+      "rc": 0,
+      "stdout": ""
+    },
+    "docker": {
+      "rc": 0,
+      "stdout": ""
+    }
+  },
+  "reviewed_files": {
+    "experiments/STATUS.md": "da225e46fa980846c5230c972b840641730d9ab64da223e834052f9a4f9bba3c",
+    "experiments/e2/E7B_DESIGN.md": "4746911284bc40e8f3a147dd51280687ab05d5d9dc97b4ad4baf38eaaf26a1db",
+    "experiments/e2/e7b_runtime.py": "79a164f9aae07df539b2626c6cac41970c4c5add171a6c36926f2f5c00eaa301",
+    "experiments/e2/e7b_reduce.py": "94fa8fe95573005f922584710f033d885de8717598bb45bd8a74add673bcf8b6",
+    "experiments/e2/e7b_substitute_shim.py": "40063932a729d22eb12370c185b2f01b4979db013a5872e539c26e739eff3c5e",
+    "experiments/e2/e7b_loop.v1.sh": "362aa357834334dc0c7ba0eee62fa70e6634d787bd2ae939a58568eccc246216",
+    "experiments/e7a/check_confirmation_vs_freeze.py": "7acdd1ed37af1d0a4ef3452e12ba2424e75beaf4aa89dcf7993fa12658a4272a",
+    "experiments/e7a/PILOT_FREEZE.json": "21f3eb5c3f9ce52aa2492d62c5be4dbc0f3d0df236aec717f70420c2ab2b36ce",
+    "experiments/e7a/inspect_capture.py": "6e71a24c5b7ea82932b219b7502a5c19d3b367e37105451a306b7afb3c95ed04",
+    "p0/HANDOFF-CLAUDE.md": "a06f3a3530963e599037013eb73beabf37d9abd2324e77f0adb02d43211fa7b2",
+    "p0/P0-REPORT.md": "9999aecafc19d1a3de981229d8f281e15d730b924713437a9abef4aaed7d2c44",
+    "main.tex": "2dda58d8fc31c68407e8f8324249b3f36bd87662c7eed4729356644247d86097",
+    "abstract.tex": "ede112b273147fe736e8e7a736cb3d9157b1e2983cd8c04e1b4fe9d16668f001"
+  },
+  "counts": {
+    "initial_kernel_campaigns_verified": 2,
+    "pilot_verified": 8,
+    "pilot_planned": 8,
+    "fresh_pilot_harness_completed": 8,
+    "fresh_pilot_harness_planned": 8,
+    "confirmation_verified": 31,
+    "confirmation_planned": 32,
+    "confirmation_provenance_failed": 1,
+    "fresh_confirmation_harness_completed": 31,
+    "fresh_confirmation_harness_eligible": 31,
+    "e7b_diagnostic_boots_completed": 3,
+    "e7b_diagnostic_boots_planned": 28,
+    "e2_e7b_qualified": 0,
+    "e1_completed": 0,
+    "e1_planned": 18
+  }
+}

@@ -1,0 +1,3259 @@
+{
+  "attribution": "Each excluded physical interval is attributed once to its starting request/cohort and phase. B4 ramp/drain subsets retain their frozen cohort identity; no subset is labeled a retained full-B4 interval. 'known_wall_s' sums only observed start-to-next-pure-start spans. A terminal interval has no successor: duration_unobservable_count is explicit and its missing duration is not inferred as zero.",
+  "cells": [
+    {
+      "cell": 1,
+      "batch": "B1",
+      "per_unit_phase_exclusions": {
+        "p072": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 10,
+              "known_wall_s": 3.9071508096531034,
+              "duration_unobservable_count": 0
+            }
+          },
+          "warmup": {
+            "preflight/warmup": {
+              "count": 20,
+              "known_wall_s": 5.249408017843962,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.5467395028099418,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p017": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 13,
+              "known_wall_s": 3.3264801744371653,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.5481367213651538,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p015": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 12,
+              "known_wall_s": 3.119734496809542,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.5665444964542985,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p021": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 9,
+              "known_wall_s": 5.191396779380739,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.1519394451752305,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p085": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 14,
+              "known_wall_s": 6.203152287751436,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.161724948324263,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p095": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 12,
+              "known_wall_s": 5.784867546521127,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.1484369803220034,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p058": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 10,
+              "known_wall_s": 5.258589130826294,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.157321504317224,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p083": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 9,
+              "known_wall_s": 5.063318802975118,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 109,
+          "known_wall_s": 43.10409804619849,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 7,
+          "known_wall_s": 14.280843598768115,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "p072": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p017": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p015": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p021": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p085": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p095": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p058": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p083": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        }
+      },
+      "retained_by_unit": {
+        "p072": {
+          "intervals": 29,
+          "tokens": 125,
+          "wall_s": 6.735802257433534,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.05388641805946827
+        },
+        "p017": {
+          "intervals": 36,
+          "tokens": 123,
+          "wall_s": 8.331856121309102,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.06773866765291953
+        },
+        "p015": {
+          "intervals": 39,
+          "tokens": 121,
+          "wall_s": 9.032349215820432,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07464751418033415
+        },
+        "p021": {
+          "intervals": 39,
+          "tokens": 126,
+          "wall_s": 9.022395360283554,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07160631238320281
+        },
+        "p085": {
+          "intervals": 46,
+          "tokens": 126,
+          "wall_s": 10.774224679917097,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.08550971968188173
+        },
+        "p095": {
+          "intervals": 46,
+          "tokens": 123,
+          "wall_s": 10.767720747739077,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.08754244510356973
+        },
+        "p058": {
+          "intervals": 43,
+          "tokens": 126,
+          "wall_s": 10.07411951199174,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.0799533294602519
+        },
+        "p083": {
+          "intervals": 34,
+          "tokens": 125,
+          "wall_s": 7.983515222556889,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.06386812178045512
+        }
+      },
+      "retained_totals": {
+        "intervals": 312,
+        "tokens": 995,
+        "wall_s": 72.72198311705142,
+        "rate": 13.682245138976391,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "35e0507d47763c927cc6e3c724b69c9a6cfcfb3ad2f2cbeadd7bf675995b4022",
+      "manifest_sha256": "bcaaadddc2ad1aa7131be78d30c31ea7ec4cab8b48aa65d292a1933838eada5d"
+    },
+    {
+      "cell": 2,
+      "batch": "B4",
+      "per_unit_phase_exclusions": {
+        "A(1-4)": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 14,
+              "known_wall_s": 16.452834176830947,
+              "duration_unobservable_count": 0
+            }
+          },
+          "warmup": {
+            "preflight/warmup": {
+              "count": 13,
+              "known_wall_s": 3.838967996649444,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "cohort change": {
+              "count": 3,
+              "known_wall_s": 0.680730652064085,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 11,
+              "known_wall_s": 2.424428687430918,
+              "duration_unobservable_count": 0
+            },
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 12.299369147978723,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "B(5-8)": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 8,
+              "known_wall_s": 5.638781904242933,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "cohort change": {
+              "count": 3,
+              "known_wall_s": 0.7002490218728781,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 12,
+              "known_wall_s": 2.7803583089262247,
+              "duration_unobservable_count": 0
+            },
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 35,
+          "known_wall_s": 25.930584077723324,
+          "duration_unobservable_count": 0
+        },
+        "cohort change": {
+          "count": 6,
+          "known_wall_s": 1.380979673936963,
+          "duration_unobservable_count": 0
+        },
+        "occupancy ramp/drain": {
+          "count": 23,
+          "known_wall_s": 5.204786996357143,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 1,
+          "known_wall_s": 12.299369147978723,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "A(1-4)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        },
+        "B(5-8)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        }
+      },
+      "retained_by_unit": {
+        "A(1-4)": {
+          "intervals": 28,
+          "tokens": 426,
+          "wall_s": 6.594811411574483,
+          "api_tokens_full_timed_requests": 512
+        },
+        "B(5-8)": {
+          "intervals": 28,
+          "tokens": 342,
+          "wall_s": 6.801139108836651,
+          "api_tokens_full_timed_requests": 512
+        }
+      },
+      "retained_totals": {
+        "intervals": 56,
+        "tokens": 768,
+        "wall_s": 13.395950520411134,
+        "rate": 57.33075818918667,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "e33a318a7e897b8910ffbd65782fb81751de029ec7f864ec9b6f0ed07f0a8634",
+      "manifest_sha256": "4c362fed3afdc8cb7a84df4485239c8266a47e2ba657cd9a74df1c164a987128"
+    },
+    {
+      "cell": 3,
+      "batch": "B4",
+      "per_unit_phase_exclusions": {
+        "A(1-4)": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 13,
+              "known_wall_s": 20.543594698421657,
+              "duration_unobservable_count": 0
+            }
+          },
+          "warmup": {
+            "preflight/warmup": {
+              "count": 13,
+              "known_wall_s": 5.75158466398716,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "cohort change": {
+              "count": 3,
+              "known_wall_s": 0.9911858886480331,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 9,
+              "known_wall_s": 2.9986269967630506,
+              "duration_unobservable_count": 0
+            },
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 13.352838296443224,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "B(5-8)": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 9,
+              "known_wall_s": 6.65241826698184,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "cohort change": {
+              "count": 3,
+              "known_wall_s": 1.0104626417160034,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 9,
+              "known_wall_s": 3.008008857257664,
+              "duration_unobservable_count": 0
+            },
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 35,
+          "known_wall_s": 32.94759762939066,
+          "duration_unobservable_count": 0
+        },
+        "cohort change": {
+          "count": 6,
+          "known_wall_s": 2.0016485303640366,
+          "duration_unobservable_count": 0
+        },
+        "occupancy ramp/drain": {
+          "count": 18,
+          "known_wall_s": 6.006635854020715,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 1,
+          "known_wall_s": 13.352838296443224,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "A(1-4)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        },
+        "B(5-8)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        }
+      },
+      "retained_by_unit": {
+        "A(1-4)": {
+          "intervals": 26,
+          "tokens": 417,
+          "wall_s": 8.967796535231173,
+          "api_tokens_full_timed_requests": 512
+        },
+        "B(5-8)": {
+          "intervals": 26,
+          "tokens": 374,
+          "wall_s": 9.228163375519216,
+          "api_tokens_full_timed_requests": 512
+        }
+      },
+      "retained_totals": {
+        "intervals": 52,
+        "tokens": 791,
+        "wall_s": 18.19595991075039,
+        "rate": 43.47118832311055,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "e1a4322e2fdddf29342c36f07c6d7025acb88d6e4f6e806af07a73776deecd97",
+      "manifest_sha256": "2ebb208f59da85ec6182295ad23a9b85a2d6607ea4667848d29495b0a4b36e3c"
+    },
+    {
+      "cell": 4,
+      "batch": "B1",
+      "per_unit_phase_exclusions": {
+        "p072": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 10,
+              "known_wall_s": 5.132794998586178,
+              "duration_unobservable_count": 0
+            }
+          },
+          "warmup": {
+            "preflight/warmup": {
+              "count": 20,
+              "known_wall_s": 7.745445285923779,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.7677702456712723,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p017": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 15,
+              "known_wall_s": 5.605370253324509,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.7682260852307081,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p015": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 9,
+              "known_wall_s": 3.524354850873351,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.7661213958635926,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p021": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 10,
+              "known_wall_s": 6.740008351393044,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.4684378718957305,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p085": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 12,
+              "known_wall_s": 7.332048509269953,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.4923442248255014,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p095": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 15,
+              "known_wall_s": 8.35331301484257,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.4776791613548994,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p058": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 9,
+              "known_wall_s": 6.2567112585529685,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.4957519937306643,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p083": {
+          "preflight": {
+            "preflight/warmup": {
+              "count": 6,
+              "known_wall_s": 5.221604984253645,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 106,
+          "known_wall_s": 55.91165150702,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 7,
+          "known_wall_s": 16.23633097857237,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "p072": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p017": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p015": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p021": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p085": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p095": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p058": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p083": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        }
+      },
+      "retained_by_unit": {
+        "p072": {
+          "intervals": 26,
+          "tokens": 118,
+          "wall_s": 8.957621013745666,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07591204248937004
+        },
+        "p017": {
+          "intervals": 28,
+          "tokens": 122,
+          "wall_s": 9.656124436296523,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07914856095325018
+        },
+        "p015": {
+          "intervals": 35,
+          "tokens": 122,
+          "wall_s": 12.034819783642888,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.09864606380035154
+        },
+        "p021": {
+          "intervals": 24,
+          "tokens": 124,
+          "wall_s": 8.247500425204635,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.06651210020326319
+        },
+        "p085": {
+          "intervals": 38,
+          "tokens": 125,
+          "wall_s": 13.227761984802783,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.10582209587842226
+        },
+        "p095": {
+          "intervals": 37,
+          "tokens": 126,
+          "wall_s": 12.834117038175464,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.1018580717315513
+        },
+        "p058": {
+          "intervals": 35,
+          "tokens": 124,
+          "wall_s": 12.164388533681631,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.09809990752969057
+        },
+        "p083": {
+          "intervals": 26,
+          "tokens": 125,
+          "wall_s": 9.066790820099413,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07253432656079531
+        }
+      },
+      "retained_totals": {
+        "intervals": 249,
+        "tokens": 986,
+        "wall_s": 86.189124035649,
+        "rate": 11.439958475412476,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "3b1304b644c7204f53179f4a3633a18de240e7e2adf0b843df048885ca911cca",
+      "manifest_sha256": "550352cc637b331ec9bcc40517c6e160a6dbb622baa5f598e1bdd31015506497"
+    },
+    {
+      "cell": 5,
+      "batch": "B1",
+      "per_unit_phase_exclusions": {
+        "p072": {
+          "warmup": {
+            "preflight/warmup": {
+              "count": 24,
+              "known_wall_s": 13.129355503246188,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.5695606851950288,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p017": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.5684633729979396,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p015": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.56822017300874,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p021": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.4678937513381243,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p085": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.3114494625478983,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p095": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.323739705607295,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p058": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.3066363874822855,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p083": {
+          "timed": {
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 24,
+          "known_wall_s": 13.129355503246188,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 7,
+          "known_wall_s": 15.115963538177311,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "p072": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p017": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p015": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p021": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p085": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p095": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p058": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p083": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        }
+      },
+      "retained_by_unit": {
+        "p072": {
+          "intervals": 39,
+          "tokens": 125,
+          "wall_s": 9.712802954949439,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07770242363959551
+        },
+        "p017": {
+          "intervals": 40,
+          "tokens": 123,
+          "wall_s": 9.992829789407551,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.08124251861306953
+        },
+        "p015": {
+          "intervals": 40,
+          "tokens": 123,
+          "wall_s": 9.965609173290431,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.08102121279097912
+        },
+        "p021": {
+          "intervals": 38,
+          "tokens": 124,
+          "wall_s": 9.483131636865437,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.0764768680392374
+        },
+        "p085": {
+          "intervals": 46,
+          "tokens": 126,
+          "wall_s": 11.674322916194797,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.09265335647773648
+        },
+        "p095": {
+          "intervals": 42,
+          "tokens": 123,
+          "wall_s": 10.641424522735178,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.08651564652630227
+        },
+        "p058": {
+          "intervals": 35,
+          "tokens": 126,
+          "wall_s": 8.903224444948137,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07066051146784236
+        },
+        "p083": {
+          "intervals": 34,
+          "tokens": 125,
+          "wall_s": 8.611314945854247,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.06889051956683398
+        }
+      },
+      "retained_totals": {
+        "intervals": 314,
+        "tokens": 995,
+        "wall_s": 78.98466038424522,
+        "rate": 12.597382772294214,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "395c3e5b97b2b292bdc2e297f921bad588fa854c5005e0d6ffe71d71eac86b71",
+      "manifest_sha256": "183714818e4421e393bfa995a4827f573b123bf42865626b430d2a07adfc738b"
+    },
+    {
+      "cell": 6,
+      "batch": "B4",
+      "per_unit_phase_exclusions": {
+        "A(1-4)": {
+          "warmup": {
+            "preflight/warmup": {
+              "count": 13,
+              "known_wall_s": 12.286753243766725,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "cohort change": {
+              "count": 3,
+              "known_wall_s": 0.7886625928804278,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 18,
+              "known_wall_s": 4.90012039989233,
+              "duration_unobservable_count": 0
+            },
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 13.641744510270655,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "B(5-8)": {
+          "timed": {
+            "cohort change": {
+              "count": 3,
+              "known_wall_s": 0.8011834435164928,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 15,
+              "known_wall_s": 3.777964022010565,
+              "duration_unobservable_count": 0
+            },
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 13,
+          "known_wall_s": 12.286753243766725,
+          "duration_unobservable_count": 0
+        },
+        "cohort change": {
+          "count": 6,
+          "known_wall_s": 1.5898460363969207,
+          "duration_unobservable_count": 0
+        },
+        "occupancy ramp/drain": {
+          "count": 33,
+          "known_wall_s": 8.678084421902895,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 1,
+          "known_wall_s": 13.641744510270655,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "A(1-4)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        },
+        "B(5-8)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        }
+      },
+      "retained_by_unit": {
+        "A(1-4)": {
+          "intervals": 26,
+          "tokens": 339,
+          "wall_s": 7.229520715773106,
+          "api_tokens_full_timed_requests": 512
+        },
+        "B(5-8)": {
+          "intervals": 25,
+          "tokens": 345,
+          "wall_s": 7.124956291168928,
+          "api_tokens_full_timed_requests": 512
+        }
+      },
+      "retained_totals": {
+        "intervals": 51,
+        "tokens": 684,
+        "wall_s": 14.354477006942034,
+        "rate": 47.65063886822262,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "7b14d94c9f3f15c43aaa629bca7de21b111f8600f421cf0c7fc13d197abaa1e3",
+      "manifest_sha256": "37a0e9c6802d163104792c92d526af2b79a80ef56f4e367caa8ff5f645eaf253"
+    },
+    {
+      "cell": 7,
+      "batch": "B1",
+      "per_unit_phase_exclusions": {
+        "p072": {
+          "warmup": {
+            "preflight/warmup": {
+              "count": 24,
+              "known_wall_s": 12.989665478467941,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.5675106449052691,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p017": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.5671577472239733,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p015": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.5688890749588609,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p021": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.438312371261418,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p085": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.298587773926556,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p095": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.3005512095987797,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p058": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.3006444722414017,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p083": {
+          "timed": {
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 24,
+          "known_wall_s": 12.989665478467941,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 7,
+          "known_wall_s": 15.041653294116259,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "p072": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p017": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p015": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p021": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p085": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p095": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p058": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p083": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        }
+      },
+      "retained_by_unit": {
+        "p072": {
+          "intervals": 39,
+          "tokens": 125,
+          "wall_s": 9.697898291051388,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.0775831863284111
+        },
+        "p017": {
+          "intervals": 40,
+          "tokens": 123,
+          "wall_s": 9.976352604106069,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.08110855775695991
+        },
+        "p015": {
+          "intervals": 40,
+          "tokens": 123,
+          "wall_s": 9.977840754203498,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.08112065653823983
+        },
+        "p021": {
+          "intervals": 38,
+          "tokens": 124,
+          "wall_s": 9.467790333554149,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07635314785124313
+        },
+        "p085": {
+          "intervals": 46,
+          "tokens": 126,
+          "wall_s": 11.636924442835152,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.09235654319710439
+        },
+        "p095": {
+          "intervals": 42,
+          "tokens": 123,
+          "wall_s": 10.66056040674448,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.08667122281906081
+        },
+        "p058": {
+          "intervals": 35,
+          "tokens": 126,
+          "wall_s": 8.89524121209979,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07059715247698246
+        },
+        "p083": {
+          "intervals": 34,
+          "tokens": 125,
+          "wall_s": 8.609861607663333,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.06887889286130666
+        }
+      },
+      "retained_totals": {
+        "intervals": 314,
+        "tokens": 995,
+        "wall_s": 78.92246965225786,
+        "rate": 12.607309482129649,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "9c75160a4fc18c432e4077f4f8f2c6bb25d703a8687950c250cd465aba6925ab",
+      "manifest_sha256": "b9fcfd772d74667063afe5c851aaf48727de383640ad1634204c8ea8df0aaa99"
+    },
+    {
+      "cell": 8,
+      "batch": "B4",
+      "per_unit_phase_exclusions": {
+        "A(1-4)": {
+          "warmup": {
+            "preflight/warmup": {
+              "count": 13,
+              "known_wall_s": 10.982605428434908,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "cohort change": {
+              "count": 2,
+              "known_wall_s": 0.5427429806441069,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 9,
+              "known_wall_s": 2.32640340924263,
+              "duration_unobservable_count": 0
+            },
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 13.55398887488991,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "B(5-8)": {
+          "timed": {
+            "cohort change": {
+              "count": 3,
+              "known_wall_s": 0.8006953559815884,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 7,
+              "known_wall_s": 1.7818501004949212,
+              "duration_unobservable_count": 0
+            },
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 13,
+          "known_wall_s": 10.982605428434908,
+          "duration_unobservable_count": 0
+        },
+        "cohort change": {
+          "count": 5,
+          "known_wall_s": 1.3434383366256952,
+          "duration_unobservable_count": 0
+        },
+        "occupancy ramp/drain": {
+          "count": 16,
+          "known_wall_s": 4.108253509737551,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 1,
+          "known_wall_s": 13.55398887488991,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "A(1-4)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        },
+        "B(5-8)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        }
+      },
+      "retained_by_unit": {
+        "A(1-4)": {
+          "intervals": 30,
+          "tokens": 393,
+          "wall_s": 8.290255506522954,
+          "api_tokens_full_timed_requests": 512
+        },
+        "B(5-8)": {
+          "intervals": 31,
+          "tokens": 411,
+          "wall_s": 8.929946344345808,
+          "api_tokens_full_timed_requests": 512
+        }
+      },
+      "retained_totals": {
+        "intervals": 61,
+        "tokens": 804,
+        "wall_s": 17.22020185086876,
+        "rate": 46.68934818318858,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "7edf4ba21bb07cc03374266c638b7ca2c06e10476993e96a88c150ccb78414ec",
+      "manifest_sha256": "0185446cc18f54597a037ea722c7cefb44cebc2ad98cc3b22f8f4d6e18b795cf"
+    },
+    {
+      "cell": 9,
+      "batch": "B4",
+      "per_unit_phase_exclusions": {
+        "A(1-4)": {
+          "warmup": {
+            "preflight/warmup": {
+              "count": 16,
+              "known_wall_s": 6.021758025512099,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "cohort change": {
+              "count": 3,
+              "known_wall_s": 0.6821774551644921,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 11,
+              "known_wall_s": 2.5131898494437337,
+              "duration_unobservable_count": 0
+            },
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 12.819973330944777,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "B(5-8)": {
+          "timed": {
+            "cohort change": {
+              "count": 3,
+              "known_wall_s": 0.6980296419933438,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 7,
+              "known_wall_s": 1.636888012290001,
+              "duration_unobservable_count": 0
+            },
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 16,
+          "known_wall_s": 6.021758025512099,
+          "duration_unobservable_count": 0
+        },
+        "cohort change": {
+          "count": 6,
+          "known_wall_s": 1.380207097157836,
+          "duration_unobservable_count": 0
+        },
+        "occupancy ramp/drain": {
+          "count": 18,
+          "known_wall_s": 4.150077861733735,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 1,
+          "known_wall_s": 12.819973330944777,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "A(1-4)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        },
+        "B(5-8)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        }
+      },
+      "retained_by_unit": {
+        "A(1-4)": {
+          "intervals": 29,
+          "tokens": 375,
+          "wall_s": 6.824562408961356,
+          "api_tokens_full_timed_requests": 512
+        },
+        "B(5-8)": {
+          "intervals": 35,
+          "tokens": 430,
+          "wall_s": 8.50308959838003,
+          "api_tokens_full_timed_requests": 512
+        }
+      },
+      "retained_totals": {
+        "intervals": 64,
+        "tokens": 805,
+        "wall_s": 15.327652007341385,
+        "rate": 52.51945957635484,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "4991490305ef108557336200cbe5f5d2f9208297f38f58c97883978916199bc9",
+      "manifest_sha256": "10ac059dedd79346cce838f0205d707cebf70235a301ae465eb8e6f7f45999f3"
+    },
+    {
+      "cell": 10,
+      "batch": "B1",
+      "per_unit_phase_exclusions": {
+        "p072": {
+          "warmup": {
+            "preflight/warmup": {
+              "count": 20,
+              "known_wall_s": 6.4938802206888795,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.5494487639516592,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p017": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.5481579890474677,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p015": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.5489845303818583,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p021": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.4157389933243394,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p085": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.1846447261050344,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p095": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.162200008518994,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p058": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.1765921162441373,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p083": {
+          "timed": {
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 20,
+          "known_wall_s": 6.4938802206888795,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 7,
+          "known_wall_s": 14.58576712757349,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "p072": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p017": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p015": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p021": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p085": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p095": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p058": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p083": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        }
+      },
+      "retained_by_unit": {
+        "p072": {
+          "intervals": 29,
+          "tokens": 125,
+          "wall_s": 6.717668409459293,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.053741347275674346
+        },
+        "p017": {
+          "intervals": 36,
+          "tokens": 123,
+          "wall_s": 8.35722023062408,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.067944879923773
+        },
+        "p015": {
+          "intervals": 39,
+          "tokens": 121,
+          "wall_s": 9.031439428217709,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07463999527452653
+        },
+        "p021": {
+          "intervals": 39,
+          "tokens": 126,
+          "wall_s": 9.037083177827299,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07172288236370872
+        },
+        "p085": {
+          "intervals": 46,
+          "tokens": 126,
+          "wall_s": 10.806427562609315,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.08576529811594695
+        },
+        "p095": {
+          "intervals": 46,
+          "tokens": 123,
+          "wall_s": 10.77868003025651,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.08763154496143503
+        },
+        "p058": {
+          "intervals": 43,
+          "tokens": 126,
+          "wall_s": 10.111984508112073,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.08025384530247677
+        },
+        "p083": {
+          "intervals": 34,
+          "tokens": 125,
+          "wall_s": 7.988685255870223,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.06390948204696179
+        }
+      },
+      "retained_totals": {
+        "intervals": 312,
+        "tokens": 995,
+        "wall_s": 72.8291886029765,
+        "rate": 13.66210470123698,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "fe73b65ebf3d06df57052393f1b0ef2ada581aeaf360a68751f0a6697d350e57",
+      "manifest_sha256": "fde0afe46068aa4217d4e4c6bdf5aaa38da2d0aadc7b9d50afbdfe34439be25b"
+    },
+    {
+      "cell": 11,
+      "batch": "B1",
+      "per_unit_phase_exclusions": {
+        "p072": {
+          "warmup": {
+            "preflight/warmup": {
+              "count": 20,
+              "known_wall_s": 8.987610596232116,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.7701362883672118,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p017": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.766867314465344,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p015": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.767155347391963,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p021": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.790294064208865,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p085": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.482764125801623,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p095": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.4982115803286433,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p058": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.4840496769174933,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p083": {
+          "timed": {
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 20,
+          "known_wall_s": 8.987610596232116,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 7,
+          "known_wall_s": 16.559478397481143,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "p072": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p017": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p015": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p021": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p085": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p095": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p058": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p083": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        }
+      },
+      "retained_by_unit": {
+        "p072": {
+          "intervals": 26,
+          "tokens": 118,
+          "wall_s": 8.968201107345521,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07600170429953831
+        },
+        "p017": {
+          "intervals": 28,
+          "tokens": 122,
+          "wall_s": 9.64555855281651,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.079061955350955
+        },
+        "p015": {
+          "intervals": 35,
+          "tokens": 122,
+          "wall_s": 12.01776082534343,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.0985062362733068
+        },
+        "p021": {
+          "intervals": 24,
+          "tokens": 124,
+          "wall_s": 8.248385896906257,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.06651924110408272
+        },
+        "p085": {
+          "intervals": 38,
+          "tokens": 125,
+          "wall_s": 13.208547896705568,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.10566838317364455
+        },
+        "p095": {
+          "intervals": 37,
+          "tokens": 126,
+          "wall_s": 12.856001179665327,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.10203175539416927
+        },
+        "p058": {
+          "intervals": 35,
+          "tokens": 124,
+          "wall_s": 12.176716109737754,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.09819932346562704
+        },
+        "p083": {
+          "intervals": 26,
+          "tokens": 125,
+          "wall_s": 9.064057923853397,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07251246339082718
+        }
+      },
+      "retained_totals": {
+        "intervals": 249,
+        "tokens": 986,
+        "wall_s": 86.18522949237376,
+        "rate": 11.44047542493633,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "02caa95b5b2acc1905e2223a54116f510532ac6dee99d666da22b2b079d29c46",
+      "manifest_sha256": "26bb2cdd6dfd6837785e94794ac8eb3c7a61258a93d24d32ee57e75c678e407c"
+    },
+    {
+      "cell": 12,
+      "batch": "B4",
+      "per_unit_phase_exclusions": {
+        "A(1-4)": {
+          "warmup": {
+            "preflight/warmup": {
+              "count": 12,
+              "known_wall_s": 5.713044461794198,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "cohort change": {
+              "count": 2,
+              "known_wall_s": 0.6776842856779695,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 9,
+              "known_wall_s": 3.0230607902631164,
+              "duration_unobservable_count": 0
+            },
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 13.933068477548659,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "B(5-8)": {
+          "timed": {
+            "cohort change": {
+              "count": 3,
+              "known_wall_s": 1.0137228891253471,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 11,
+              "known_wall_s": 3.763972233980894,
+              "duration_unobservable_count": 0
+            },
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 12,
+          "known_wall_s": 5.713044461794198,
+          "duration_unobservable_count": 0
+        },
+        "cohort change": {
+          "count": 5,
+          "known_wall_s": 1.6914071748033166,
+          "duration_unobservable_count": 0
+        },
+        "occupancy ramp/drain": {
+          "count": 20,
+          "known_wall_s": 6.7870330242440104,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 1,
+          "known_wall_s": 13.933068477548659,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "A(1-4)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        },
+        "B(5-8)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        }
+      },
+      "retained_by_unit": {
+        "A(1-4)": {
+          "intervals": 25,
+          "tokens": 372,
+          "wall_s": 8.633423606865108,
+          "api_tokens_full_timed_requests": 512
+        },
+        "B(5-8)": {
+          "intervals": 27,
+          "tokens": 396,
+          "wall_s": 9.531285892240703,
+          "api_tokens_full_timed_requests": 512
+        }
+      },
+      "retained_totals": {
+        "intervals": 52,
+        "tokens": 768,
+        "wall_s": 18.16470949910581,
+        "rate": 42.27978432783668,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "b5e870a04a743ce2c8e19c3b5ad03d10ed59c193bb40f3ec512875f043f837a4",
+      "manifest_sha256": "88a7f3874b9417d9df28c69689c60a984f7a5b2a720a9e424d0f955464ac0a25"
+    },
+    {
+      "cell": 13,
+      "batch": "B1",
+      "per_unit_phase_exclusions": {
+        "p072": {
+          "warmup": {
+            "preflight/warmup": {
+              "count": 20,
+              "known_wall_s": 8.953775773756206,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.7683158181607723,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p017": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.7698892634361982,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p015": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.7696323879063129,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p021": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.653014460578561,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p085": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.4835759066045284,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p095": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.4915481582283974,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p058": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.5125054605305195,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p083": {
+          "timed": {
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 20,
+          "known_wall_s": 8.953775773756206,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 7,
+          "known_wall_s": 16.44848145544529,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "p072": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p017": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p015": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p021": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p085": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p095": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p058": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p083": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        }
+      },
+      "retained_by_unit": {
+        "p072": {
+          "intervals": 26,
+          "tokens": 118,
+          "wall_s": 8.987771199084818,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.0761675525346171
+        },
+        "p017": {
+          "intervals": 28,
+          "tokens": 122,
+          "wall_s": 9.655591601505876,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07914419345496619
+        },
+        "p015": {
+          "intervals": 35,
+          "tokens": 122,
+          "wall_s": 12.028114078566432,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.09859109900464288
+        },
+        "p021": {
+          "intervals": 24,
+          "tokens": 124,
+          "wall_s": 8.25539623759687,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.06657577610965218
+        },
+        "p085": {
+          "intervals": 38,
+          "tokens": 125,
+          "wall_s": 13.192870846018195,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.10554296676814556
+        },
+        "p095": {
+          "intervals": 37,
+          "tokens": 126,
+          "wall_s": 12.890444704331458,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.10230511670104331
+        },
+        "p058": {
+          "intervals": 35,
+          "tokens": 124,
+          "wall_s": 12.175592318177223,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.09819026063046148
+        },
+        "p083": {
+          "intervals": 26,
+          "tokens": 125,
+          "wall_s": 9.038591790013015,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07230873432010412
+        }
+      },
+      "retained_totals": {
+        "intervals": 249,
+        "tokens": 986,
+        "wall_s": 86.22437277529389,
+        "rate": 11.435281791722367,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "f8ce35fd2fd77cf5d778a6e487861b0dc916f3dd5fa0693e868131b000825475",
+      "manifest_sha256": "dd2adaa49a6578befcb9a2a5437aca22886165663d9e04dde00cd46e7a33568b"
+    },
+    {
+      "cell": 14,
+      "batch": "B4",
+      "per_unit_phase_exclusions": {
+        "A(1-4)": {
+          "warmup": {
+            "preflight/warmup": {
+              "count": 12,
+              "known_wall_s": 6.353110584430397,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "cohort change": {
+              "count": 2,
+              "known_wall_s": 0.6753338323906064,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 11,
+              "known_wall_s": 3.577196425758302,
+              "duration_unobservable_count": 0
+            },
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 13.722598793916404,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "B(5-8)": {
+          "timed": {
+            "cohort change": {
+              "count": 3,
+              "known_wall_s": 1.0284734452143312,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 9,
+              "known_wall_s": 3.0073958383873105,
+              "duration_unobservable_count": 0
+            },
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 12,
+          "known_wall_s": 6.353110584430397,
+          "duration_unobservable_count": 0
+        },
+        "cohort change": {
+          "count": 5,
+          "known_wall_s": 1.7038072776049376,
+          "duration_unobservable_count": 0
+        },
+        "occupancy ramp/drain": {
+          "count": 20,
+          "known_wall_s": 6.584592264145613,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 1,
+          "known_wall_s": 13.722598793916404,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "A(1-4)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        },
+        "B(5-8)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        }
+      },
+      "retained_by_unit": {
+        "A(1-4)": {
+          "intervals": 26,
+          "tokens": 366,
+          "wall_s": 8.987729423679411,
+          "api_tokens_full_timed_requests": 512
+        },
+        "B(5-8)": {
+          "intervals": 26,
+          "tokens": 374,
+          "wall_s": 9.193826691247523,
+          "api_tokens_full_timed_requests": 512
+        }
+      },
+      "retained_totals": {
+        "intervals": 52,
+        "tokens": 740,
+        "wall_s": 18.181556114926934,
+        "rate": 40.70058664519177,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "665ed79ba71e1b4ce96b5302fb16fed14396663e5ecb03201ec681c950607f94",
+      "manifest_sha256": "1595b9036635037e48e462776d1f91624fef4183dce2786f29926245b8788715"
+    },
+    {
+      "cell": 15,
+      "batch": "B4",
+      "per_unit_phase_exclusions": {
+        "A(1-4)": {
+          "warmup": {
+            "preflight/warmup": {
+              "count": 13,
+              "known_wall_s": 12.551428072154522,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "cohort change": {
+              "count": 2,
+              "known_wall_s": 0.5410844553261995,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 4,
+              "known_wall_s": 1.057524697855115,
+              "duration_unobservable_count": 0
+            },
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 13.375443710945547,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "B(5-8)": {
+          "timed": {
+            "cohort change": {
+              "count": 2,
+              "known_wall_s": 0.5361382169649005,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 7,
+              "known_wall_s": 2.084247935563326,
+              "duration_unobservable_count": 0
+            },
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 13,
+          "known_wall_s": 12.551428072154522,
+          "duration_unobservable_count": 0
+        },
+        "cohort change": {
+          "count": 4,
+          "known_wall_s": 1.0772226722911,
+          "duration_unobservable_count": 0
+        },
+        "occupancy ramp/drain": {
+          "count": 11,
+          "known_wall_s": 3.141772633418441,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 1,
+          "known_wall_s": 13.375443710945547,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "A(1-4)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        },
+        "B(5-8)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        }
+      },
+      "retained_by_unit": {
+        "A(1-4)": {
+          "intervals": 32,
+          "tokens": 418,
+          "wall_s": 8.890990647487342,
+          "api_tokens_full_timed_requests": 512
+        },
+        "B(5-8)": {
+          "intervals": 30,
+          "tokens": 410,
+          "wall_s": 8.536247488111258,
+          "api_tokens_full_timed_requests": 512
+        }
+      },
+      "retained_totals": {
+        "intervals": 62,
+        "tokens": 828,
+        "wall_s": 17.4272381355986,
+        "rate": 47.51183139620072,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "b42bb83f96bec3079003255fd5f70cda6cbb7ae7643069156321be0029b400d2",
+      "manifest_sha256": "22a868d74138ac66d83674b65f7d1310d901da53b977cc92b7a7e72cf940d3e0"
+    },
+    {
+      "cell": 16,
+      "batch": "B1",
+      "per_unit_phase_exclusions": {
+        "p072": {
+          "warmup": {
+            "preflight/warmup": {
+              "count": 22,
+              "known_wall_s": 12.529697596095502,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.5699479086324573,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p017": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.5702947555109859,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p015": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.5690663577988744,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p021": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.4562860783189535,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p085": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.3070356100797653,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p095": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.3182185105979443,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p058": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.3190966648980975,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p083": {
+          "timed": {
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 22,
+          "known_wall_s": 12.529697596095502,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 7,
+          "known_wall_s": 15.109945885837078,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "p072": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p017": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p015": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p021": {
+          "api_tokens": 101,
+          "requests": 1,
+          "finish_counts": {
+            "stop": 1
+          }
+        },
+        "p085": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p095": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p058": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p083": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        }
+      },
+      "retained_by_unit": {
+        "p072": {
+          "intervals": 29,
+          "tokens": 123,
+          "wall_s": 7.245372891426086,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.058905470662000706
+        },
+        "p017": {
+          "intervals": 40,
+          "tokens": 125,
+          "wall_s": 9.960125944577157,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07968100755661726
+        },
+        "p015": {
+          "intervals": 40,
+          "tokens": 122,
+          "wall_s": 9.981940879486501,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.0818191875367746
+        },
+        "p021": {
+          "intervals": 38,
+          "tokens": 99,
+          "wall_s": 9.436939221806824,
+          "api_tokens_full_timed_requests": 101,
+          "retained_s_per_token": 0.09532261840208914
+        },
+        "p085": {
+          "intervals": 45,
+          "tokens": 125,
+          "wall_s": 11.386581439524889,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.09109265151619911
+        },
+        "p095": {
+          "intervals": 41,
+          "tokens": 124,
+          "wall_s": 10.365417195484042,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.08359207415712937
+        },
+        "p058": {
+          "intervals": 36,
+          "tokens": 126,
+          "wall_s": 9.160203848034143,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07270003053995353
+        },
+        "p083": {
+          "intervals": 29,
+          "tokens": 121,
+          "wall_s": 7.385676600970328,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.061038649594796095
+        }
+      },
+      "retained_totals": {
+        "intervals": 298,
+        "tokens": 965,
+        "wall_s": 74.92225802130997,
+        "rate": 12.88001757402356,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "fd9374da463d08abff0b722cf83aaf55e3e467ae7d6d1dc9fa3534bc11eb77a8",
+      "manifest_sha256": "6270c2e3b3b7397c4fa10c7cd6231c3f8ad347b08a9aee645740dd77fd7871d5"
+    },
+    {
+      "cell": 17,
+      "batch": "B1",
+      "per_unit_phase_exclusions": {
+        "p072": {
+          "warmup": {
+            "preflight/warmup": {
+              "count": 20,
+              "known_wall_s": 6.5415726732462645,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.5515582989901304,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p017": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.5472614541649818,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p015": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 0.5487988004460931,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p021": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.584739181213081,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p085": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.163327972404659,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p095": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.162087919190526,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p058": {
+          "timed": {
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 3.1593345813453197,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "p083": {
+          "timed": {
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 20,
+          "known_wall_s": 6.5415726732462645,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 7,
+          "known_wall_s": 14.71710820775479,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "p072": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p017": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p015": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p021": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p085": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p095": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p058": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        },
+        "p083": {
+          "api_tokens": 128,
+          "requests": 1,
+          "finish_counts": {
+            "length": 1
+          }
+        }
+      },
+      "retained_by_unit": {
+        "p072": {
+          "intervals": 29,
+          "tokens": 125,
+          "wall_s": 6.7291785487905145,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.053833428390324116
+        },
+        "p017": {
+          "intervals": 36,
+          "tokens": 123,
+          "wall_s": 8.353571319952607,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.06791521398335452
+        },
+        "p015": {
+          "intervals": 39,
+          "tokens": 121,
+          "wall_s": 9.024577124975622,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07458328202459191
+        },
+        "p021": {
+          "intervals": 39,
+          "tokens": 126,
+          "wall_s": 9.009168059565127,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.07150133380607243
+        },
+        "p085": {
+          "intervals": 46,
+          "tokens": 126,
+          "wall_s": 10.773230584338307,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.08550183003443101
+        },
+        "p095": {
+          "intervals": 46,
+          "tokens": 123,
+          "wall_s": 10.807341002859175,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.08786456099885508
+        },
+        "p058": {
+          "intervals": 43,
+          "tokens": 126,
+          "wall_s": 10.113523843698204,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.08026606225157304
+        },
+        "p083": {
+          "intervals": 34,
+          "tokens": 125,
+          "wall_s": 7.993085094727576,
+          "api_tokens_full_timed_requests": 128,
+          "retained_s_per_token": 0.0639446807578206
+        }
+      },
+      "retained_totals": {
+        "intervals": 312,
+        "tokens": 995,
+        "wall_s": 72.80367557890713,
+        "rate": 13.666892393661975,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "9fcd9f904555ce663ee9491760508e344ab27798835fac44072feeb1514ea7b0",
+      "manifest_sha256": "50e93b422c2dc2b424e936d3fa706d7d369ca39276e2e694562d38c940bb6d92"
+    },
+    {
+      "cell": 18,
+      "batch": "B4",
+      "per_unit_phase_exclusions": {
+        "A(1-4)": {
+          "warmup": {
+            "preflight/warmup": {
+              "count": 16,
+              "known_wall_s": 5.2470338540151715,
+              "duration_unobservable_count": 0
+            }
+          },
+          "timed": {
+            "cohort change": {
+              "count": 2,
+              "known_wall_s": 0.46520891785621643,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 11,
+              "known_wall_s": 2.467654336243868,
+              "duration_unobservable_count": 0
+            },
+            "intervening forward": {
+              "count": 1,
+              "known_wall_s": 12.960298639722168,
+              "duration_unobservable_count": 0
+            }
+          }
+        },
+        "B(5-8)": {
+          "timed": {
+            "cohort change": {
+              "count": 3,
+              "known_wall_s": 0.6997283035889268,
+              "duration_unobservable_count": 0
+            },
+            "occupancy ramp/drain": {
+              "count": 9,
+              "known_wall_s": 2.106424001045525,
+              "duration_unobservable_count": 0
+            },
+            "terminal": {
+              "count": 1,
+              "known_wall_s": 0.0,
+              "duration_unobservable_count": 1
+            }
+          }
+        }
+      },
+      "global_exclusions": {
+        "preflight/warmup": {
+          "count": 16,
+          "known_wall_s": 5.2470338540151715,
+          "duration_unobservable_count": 0
+        },
+        "cohort change": {
+          "count": 5,
+          "known_wall_s": 1.1649372214451432,
+          "duration_unobservable_count": 0
+        },
+        "occupancy ramp/drain": {
+          "count": 20,
+          "known_wall_s": 4.574078337289393,
+          "duration_unobservable_count": 0
+        },
+        "intervening forward": {
+          "count": 1,
+          "known_wall_s": 12.960298639722168,
+          "duration_unobservable_count": 0
+        },
+        "terminal": {
+          "count": 1,
+          "known_wall_s": 0.0,
+          "duration_unobservable_count": 1
+        }
+      },
+      "timed_api_by_unit": {
+        "A(1-4)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        },
+        "B(5-8)": {
+          "api_tokens": 512,
+          "requests": 4,
+          "finish_counts": {
+            "length": 4
+          }
+        }
+      },
+      "retained_by_unit": {
+        "A(1-4)": {
+          "intervals": 27,
+          "tokens": 395,
+          "wall_s": 6.359670618548989,
+          "api_tokens_full_timed_requests": 512
+        },
+        "B(5-8)": {
+          "intervals": 33,
+          "tokens": 413,
+          "wall_s": 7.99840921536088,
+          "api_tokens_full_timed_requests": 512
+        }
+      },
+      "retained_totals": {
+        "intervals": 60,
+        "tokens": 808,
+        "wall_s": 14.35807983390987,
+        "rate": 56.27493434684242,
+        "over_1p5_s": 0
+      },
+      "status": "VALID",
+      "event_sha256": "72881fc87a0d7a1cf669fc9766821ebc6b9bbe5072f8f81eececc71ae3d8319d",
+      "manifest_sha256": "6081ec8565779217daf8fc0aa6a7aa63b9c7e06cecb1b2e96e5dcadf835e1c0a"
+    }
+  ]
+}

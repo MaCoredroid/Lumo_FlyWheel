@@ -1,0 +1,92 @@
+{
+  "utc": "2026-09-22T00:26:14.589770+00:00",
+  "container_id": "7aea0bce354b6b0abda32a0ce26d69e17edbc27ae2a18e0d715e04c5813fd962",
+  "image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+  "image_config": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+  "state": {
+    "Status": "running",
+    "Running": true,
+    "Pid": 2815401,
+    "OOMKilled": false,
+    "StartedAt": "2026-09-22T00:22:42.878774762Z"
+  },
+  "mounts": [
+    {
+      "Source": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T002242Z-e7a-step2-captures-v4/capture_01_p072/logs",
+      "Destination": "/logs",
+      "RW": true
+    },
+    {
+      "Source": "/home/mark/lumo-paper-v2-20260921",
+      "Destination": "/workspace",
+      "RW": true
+    },
+    {
+      "Source": "/models",
+      "Destination": "/models",
+      "RW": false
+    }
+  ],
+  "selected_env": {
+    "FR10_TREE_GDN_CAPTURE_PAYLOAD_NUM_TOKENS": "10",
+    "FR13_FINAL_LOGIT_CAPTURE_NUM_TOKENS": "",
+    "E7A_SHIM_PATH": "/workspace/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T002242Z-e7a-step2-captures-v4/capture_01_p072/script_snapshot/e7a_capture_shim.py",
+    "FR10_TREE_GDN_CAPTURE_PAYLOAD": "/logs/tree_gdn_capture_payload.pt",
+    "FR13_FINAL_LOGIT_CAPTURE": "",
+    "FR10_TREE_GDN_CAPTURE_PAYLOAD_LAYER_PREFIX": "language_model.model.layers.62.linear_attn",
+    "FR13_REPLAY_ROUTE": "1",
+    "E7A_CAPTURE_SHIM": "1"
+  },
+  "records": {
+    "layer_selector_check.txt": {
+      "sha256": "fd5ad96f19061e4f6cc9075dbc036a29d3b2ce5913c269fe5b135489741625b8",
+      "text": "selector_ok=language_model.model.layers.62.linear_attn layer_index=62 layer_type=linear_attention num_layers=64 n_linear=48\n"
+    },
+    "patcher_identity.txt": {
+      "sha256": "92c84e9d703d6383181d1fce4a1f00ee89f7a69e70dff1eedf4814d107f6662f",
+      "text": "worktree_sha256=a7f8f0943d1a13ac4742e824ea4e126c6ff341342aba677db5169e712c7e7281\nworktree_blob=98e5590324d9512c63fb50b6a7e718ff9cd95e6c\nHEAD_blob=48d20e1a6ef2a2dc7b598d04875cf6db445ccf6a\ndiffers_from_HEAD=yes\n"
+    },
+    "logs/served_model.json": {
+      "sha256": "c30f6acd65dd231bb00403c61fc0b163842aa5e21c13d18e42306904ce52d61e",
+      "text": "{\"schema\":\"fr13.served_model.v1\",\"path\":\"/models/qwen3.6-27b-fp8\",\"name\":\"qwen3.6-27b\",\"checkpoint_identity\":\"d053823784d5db6f1dbc255bd9ef041e3825efbcfa10ff3e32011671e979c578\",\"overridden\":\"false\",\"launcher\":\"fr10_launch_speed_server.sh\"}\n"
+    },
+    "logs/e7a_capture_shim.json": {
+      "sha256": "612a3c59c235677c00345c21c89609916c8e1c1030a95dfa1234a8f1030a687d",
+      "text": "{\n \"schema\": \"e7a.capture_shim.v1\",\n \"applied_utc\": \"2026-09-22T00:22:48Z\",\n \"target\": \"/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py\",\n \"sha256_before\": \"723974c703d1ad1545399b78526e5d50ae7f7f362e434bad384a0a3327595b28\",\n \"sha256_after\": \"9af4fd3305d71840dd937e081c4d5fff615e6687409b4e7995f75d07439420fc\",\n \"edits\": [\n  {\n   \"anchor\": \"guard\",\n   \"line\": 13727\n  },\n  {\n   \"anchor\": \"serving_state\",\n   \"line\": 15165\n  }\n ],\n \"shim_sha256\": \"1d1b511acbe8b5ab218c016d61a89328fdd2cd30907e54efa25b6bff738d788b\",\n \"scope\": \"capture-only guard + None-safe serving_state; serving arithmetic untouched\"\n}"
+    },
+    "driver_trace.txt": {
+      "sha256": "178486d9cd9bade715cd46899ef344c620d0a0852d20026f14b9cb6324021928",
+      "text": "start_utc=2026-09-22T00:22:42Z cmd=capture prefix=p072 layer=language_model.model.layers.62.linear_attn\nguard_pid=2815581 container_id=7aea0bce354b6b0abda32a0ce26d69e17edbc27ae2a18e0d715e04c5813fd962 container_name=e7a-capture-002242 alive=true utc=2026-09-22T00:22:48Z\n"
+    },
+    "health.txt": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "text": ""
+    }
+  },
+  "loaded_source_hashes": {
+    "rc": 0,
+    "output": "{\"/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/eagle.py\": \"aa022e2a1fc7993d0f7d4223f8366471e02e3c0e2740934c7a9490f7b45b01d7\", \"/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py\": \"9af4fd3305d71840dd937e081c4d5fff615e6687409b4e7995f75d07439420fc\", \"/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py\": \"5be4ad43409da82b63bfd0177926467e9a2b59da553ee6dd04d3130a5d77b12f\"}",
+    "stderr": ""
+  },
+  "compute_apps": {
+    "rc": 0,
+    "stdout": "2816253, VLLM::EngineCore"
+  },
+  "gpu_pid_chain": [
+    2816253,
+    2815401,
+    2815377
+  ],
+  "compute_belongs_to_container": true,
+  "resources": {
+    "observed_utc": "2026-09-22T00:26:14.589770+00:00",
+    "available_gib": 67.29574966430664,
+    "free_gib": 37.01846694946289,
+    "swap_used_gib": 0.0
+  },
+  "controls_expected_output_exists": false,
+  "driver_env_line": [
+    "        FR10_TREE_GDN_CAPTURE_PAYLOAD_LAYER_PREFIX=\"$LAYER\" FR10_TREE_GDN_CAPTURE_PAYLOAD_NUM_TOKENS=\"${CAPTURE_NUM_TOKENS:-10}\" \\ FR13_FINAL_LOGIT_CAPTURE_NUM_TOKENS=10 FR13_FINAL_LOGIT_CAPTURE_LIMIT=4 \\"
+  ],
+  "inspector_tests_output_line": "Path(sys.argv[1]).write_text(json.dumps(res, indent=2)); print(\"ALL CONTROLS OK\" if all_ok else \"CONTROLS FAILED\"); sys.exit(0 if all_ok else 1)"
+}

@@ -1,0 +1,48 @@
+{
+  "utc": "2026-09-21T23:26:46.886841+00:00",
+  "source_sha256": "b70a3165f03b143131311ea4cc2766d8796e320c6fbc4e588e3cde21e08d7954",
+  "selection_CPU_retests": [
+    {
+      "fixture": "undersized",
+      "outcome": "rejected",
+      "reason": "confirmation cell (short,small) has only 1 eligible prefixes, need 8 (per-source cap 3); refusing (use --allow-medium-fill to record medium-context substitutes)",
+      "output_written": false
+    },
+    {
+      "fixture": "sufficient",
+      "outcome": "accepted",
+      "counts": {
+        "pilot": 8,
+        "confirmation": 32
+      },
+      "sets_disjoint": true
+    },
+    {
+      "fixture": "broken_hash_chain",
+      "outcome": "rejected",
+      "reason": "hash chain broken: scores.pool_sha256=wrong != sha256(pool)=eae8648d705abbf5d68b8e19670b1d7b9ed6f6238c68731522f7137492017b52",
+      "output_written": false
+    }
+  ],
+  "reviewed_files": {
+    "main.tex": "8da3e9ded0c9182959e787b96aae74476cb0753da31092382b101b0f09628f28",
+    "abstract.tex": "ede112b273147fe736e8e7a736cb3d9157b1e2983cd8c04e1b4fe9d16668f001",
+    "e7a/e7a_core.py": "357f852db9600b08d43b4d8a9f8fcd69489cdcf9b811c1ba9069d5643a9b5c06",
+    "e7a/inspect_capture.py": "9e6dd6835bfb03bb6c404f1132a4b25ecb4bcb16f1a6f66ce61664a30337dc37",
+    "e7a/e7a_capture_launch.diff": "e592978c9df53beddf5a2e05e366a950efd85c237526cc1cbeff16baaaff19e5",
+    "e7a/prefix_pool.py": "b70a3165f03b143131311ea4cc2766d8796e320c6fbc4e588e3cde21e08d7954",
+    "e7a/e7a_kernels.py": "15c3536252183281c6ff1dd5fc9fcc068e5d056bf6fa5ec8b199cc302ac21a70",
+    "e7a/e7a_native_launch.diff": "d72d1f949cdafd8cacdd2f28b3021b69dd104382012f10fb51dfb2f1df5665e9",
+    "e7a/e7a_selftest_core.py": "8ae7e11a32a67b3994a7c47687d487156b0b7582937e1aba350fa0a2c9a21714",
+    "e7a/run_in_image.sh": "2ef28156c26aa72ea82a486541221e6aea432f7ad0e097f13140b14db6d22a0a",
+    "e7a/e7a_capture_launch.sh": "b0b9848738dee6c1d1d2f2fd9f3c13a029dd0afbfe2e8b33e604fcfdba3456f6",
+    "e7a/legacy_wy_8a975837.py": "e7c2a2a8b658f0c944b35bbb93e571de5ecff0cb99a15860c924e635b28f58c1",
+    "e7a/e7a_reduce.py": "c64211d32289adc17d3e39ea40e14835362db062af55b620c1f8d49277054bbf",
+    "e7a/e7a_device.py": "70e475e3998c1d8b37761afa616ffe5c97a5ca02492366531fd13eee7012d693",
+    "e7a/e7a_test_core.py": "0447a04ebfb2ae1f88652b0ae07121b651d59543c42e10d7accfa3f4d7b0a090",
+    "e7a/e7a_native_launch.sh": "2d430cd69c9eb76efbd1c4e2e7f8c461321bcf410493b0a2b7e640c79ddfe0b7",
+    "e7a/serve_drivers.sh": "d4d9a9e81c2a000c09174c13c7ebd451d578558170c0f171c84009b4d8a1ffc9",
+    "e7a/e7a_capture_shim.py": "1d1b511acbe8b5ab218c016d61a89328fdd2cd30907e54efa25b6bff738d788b",
+    "e7a/capture_loop.sh": "aa1f1f8107670c6682d3dadc975aa4227249bb77756e54b9e37a9dd7d17fb455"
+  }
+}

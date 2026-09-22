@@ -1,0 +1,226 @@
+{
+ "cell": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_04_b1_native-11_B1_a1",
+ "batch": 1,
+ "status": "VALID",
+ "reasons": [],
+ "join": {
+  "n_events": 1169,
+  "invalid": null,
+  "refused": null,
+  "phases": {
+   "warmup": [
+    "cmpl-8633dfb663f5ddde-0-bb1b6cc5",
+    "cmpl-8796b77e596ed25d-0-9578dd0a",
+    "cmpl-8e14d80de639318a-0-9fd7c54f",
+    "cmpl-913d2ab05adf7f26-0-b86ebbc2",
+    "cmpl-a4e01103dfd8d1f0-0-bd66c32e",
+    "cmpl-a6436b84ce4143ff-0-8a3ca054",
+    "cmpl-a95a63e5884e7501-0-993e1f95",
+    "cmpl-a97b77c161b57a73-0-89f89b7d",
+    "cmpl-af39a37ee35b3e27-0-a68fc807",
+    "cmpl-b319541cb2c46fee-0-952a4dd1"
+   ],
+   "timed": [
+    "cmpl-8023932f6f2c6aa9-0-991c1351",
+    "cmpl-973d94dcbf5a7bc3-0-a9af7068",
+    "cmpl-98ab6bdcfc48f9e7-0-870870e7",
+    "cmpl-a1d09a21701dfe94-0-a016e1af",
+    "cmpl-ad093da9f551aa2d-0-a545e71d",
+    "cmpl-ad5dd298ca09f527-0-8ec1971f",
+    "cmpl-b3bb592ca17a4ea6-0-b1f6bea9",
+    "cmpl-ba5b884b517a18ae-0-9aade65a"
+   ]
+  },
+  "n_forwards": 389,
+  "n_output_records": 389,
+  "n_nonpure_output_records": 26,
+  "n_physical_steps": 363,
+  "n_chain_breaks": 26,
+  "n_usable": 249,
+  "n_excluded": 114,
+  "excluded_wall_s_total": 72.14798248559237,
+  "truncated_tail_tokens": {
+   "cmpl-8796b77e596ed25d-0-9578dd0a": 2,
+   "cmpl-913d2ab05adf7f26-0-b86ebbc2": 9,
+   "cmpl-b319541cb2c46fee-0-952a4dd1": 9,
+   "cmpl-a6436b84ce4143ff-0-8a3ca054": 2,
+   "cmpl-a97b77c161b57a73-0-89f89b7d": 3,
+   "cmpl-8e14d80de639318a-0-9fd7c54f": 10,
+   "cmpl-a4e01103dfd8d1f0-0-bd66c32e": 2,
+   "cmpl-a95a63e5884e7501-0-993e1f95": 2,
+   "cmpl-8633dfb663f5ddde-0-bb1b6cc5": 2,
+   "cmpl-8023932f6f2c6aa9-0-991c1351": 1,
+   "cmpl-ad093da9f551aa2d-0-a545e71d": 7,
+   "cmpl-a1d09a21701dfe94-0-a016e1af": 9,
+   "cmpl-b3bb592ca17a4ea6-0-b1f6bea9": 6,
+   "cmpl-ad5dd298ca09f527-0-8ec1971f": 1
+  },
+  "over_cap_diagnostic": {
+   "cap_s": 1.5,
+   "n_intervals_over_cap": 0,
+   "wall_s_over_cap": 0,
+   "physical_step_ids": [],
+   "tokens_per_wall_second_trimmed_DIAGNOSTIC_ONLY": 11.439958475412476
+  },
+  "phase_summary": {
+   "warmup": {
+    "requests": 10,
+    "ledger_tokens": 361,
+    "api_tokens": 320
+   },
+   "timed": {
+    "requests": 8,
+    "ledger_tokens": 1048,
+    "api_tokens": 1024
+   }
+  },
+  "token_evidence": {
+   "cmpl-8796b77e596ed25d-0-9578dd0a": 32,
+   "cmpl-af39a37ee35b3e27-0-a68fc807": 32,
+   "cmpl-913d2ab05adf7f26-0-b86ebbc2": 32,
+   "cmpl-b319541cb2c46fee-0-952a4dd1": 32,
+   "cmpl-a6436b84ce4143ff-0-8a3ca054": 32,
+   "cmpl-a97b77c161b57a73-0-89f89b7d": 32,
+   "cmpl-8e14d80de639318a-0-9fd7c54f": 32,
+   "cmpl-a4e01103dfd8d1f0-0-bd66c32e": 32,
+   "cmpl-8023932f6f2c6aa9-0-991c1351": 128,
+   "cmpl-ad093da9f551aa2d-0-a545e71d": 128,
+   "cmpl-973d94dcbf5a7bc3-0-a9af7068": 128,
+   "cmpl-a1d09a21701dfe94-0-a016e1af": 128,
+   "cmpl-b3bb592ca17a4ea6-0-b1f6bea9": 128,
+   "cmpl-98ab6bdcfc48f9e7-0-870870e7": 128,
+   "cmpl-ba5b884b517a18ae-0-9aade65a": 128,
+   "cmpl-ad5dd298ca09f527-0-8ec1971f": 128,
+   "cmpl-a95a63e5884e7501-0-993e1f95": 32,
+   "cmpl-8633dfb663f5ddde-0-bb1b6cc5": 32
+  },
+  "ledger_tokens_all_forwards": 1409,
+  "sum_wall_s_unique_physical_steps": 86.189124035649,
+  "sum_emitted_tokens_api_bound_pure_support": 986,
+  "n_request_rows": 249,
+  "tokens_per_wall_second": 11.439958475412476
+ },
+ "per_prompt": {
+  "p072": {
+   "intervals": 26,
+   "wall_s": 8.957621013745666,
+   "tokens": 118
+  },
+  "p017": {
+   "intervals": 28,
+   "wall_s": 9.656124436296523,
+   "tokens": 122
+  },
+  "p015": {
+   "intervals": 35,
+   "wall_s": 12.034819783642888,
+   "tokens": 122
+  },
+  "p021": {
+   "intervals": 24,
+   "wall_s": 8.247500425204635,
+   "tokens": 124
+  },
+  "p085": {
+   "intervals": 38,
+   "wall_s": 13.227761984802783,
+   "tokens": 125
+  },
+  "p095": {
+   "intervals": 37,
+   "wall_s": 12.834117038175464,
+   "tokens": 126
+  },
+  "p058": {
+   "intervals": 35,
+   "wall_s": 12.164388533681631,
+   "tokens": 124
+  },
+  "p083": {
+   "intervals": 26,
+   "wall_s": 9.066790820099413,
+   "tokens": 125
+  }
+ },
+ "floor": {
+  "rule": "every one of the 8 timed prompts >= 1 retained interval",
+  "prompts": [
+   "p072",
+   "p017",
+   "p015",
+   "p021",
+   "p085",
+   "p095",
+   "p058",
+   "p083"
+  ],
+  "missing": [],
+  "pass": true
+ },
+ "api_totals": {
+  "p072/f0": 32,
+  "p017/f1": 32,
+  "p015/f2": 32,
+  "p021/f3": 32,
+  "p085/f4": 32,
+  "p095/f5": 32,
+  "p058/f6": 32,
+  "p083/f7": 32,
+  "p072/w0": 32,
+  "p072/w1": 32,
+  "p072/t0": 128,
+  "p017/t1": 128,
+  "p015/t2": 128,
+  "p021/t3": 128,
+  "p085/t4": 128,
+  "p095/t5": 128,
+  "p058/t6": 128,
+  "p083/t7": 128
+ },
+ "finish": {
+  "f0": "length",
+  "f1": "length",
+  "f2": "length",
+  "f3": "length",
+  "f4": "length",
+  "f5": "length",
+  "f6": "length",
+  "f7": "length",
+  "w0": "length",
+  "w1": "length",
+  "t0": "length",
+  "t1": "length",
+  "t2": "length",
+  "t3": "length",
+  "t4": "length",
+  "t5": "length",
+  "t6": "length",
+  "t7": "length"
+ },
+ "primary": {
+  "tokens_per_wall_second": 11.439958475412476,
+  "sum_wall_s_unique_physical_steps": 86.189124035649,
+  "sum_emitted_tokens_api_bound_pure_support": 986,
+  "n_usable": 249,
+  "n_excluded": 114
+ },
+ "diagnostic_over_cap": {
+  "cap_s": 1.5,
+  "n_intervals_over_cap": 0,
+  "wall_s_over_cap": 0,
+  "physical_step_ids": [],
+  "tokens_per_wall_second_trimmed_DIAGNOSTIC_ONLY": 11.439958475412476
+ },
+ "terminal_seal": {
+  "sealed": true,
+  "utc": "2026-09-22T10:33:21Z",
+  "gates": {
+   "verify": "PASS",
+   "summary": "VALID",
+   "preflight_live": "PASS",
+   "preflight_final": "PASS"
+  },
+  "campaign_snapshot_sha256sums": "d1ab57c53464ef814c7eed3b87ebd21a670cf8278541b8adc4864e5cf6dc2ecd",
+  "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+ }
+}

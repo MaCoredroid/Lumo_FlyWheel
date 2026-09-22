@@ -1,0 +1,9 @@
+start_utc=2026-09-21T22:26:16Z
+--- compute apps (before) ---
+pid, process_name, used_gpu_memory [MiB]
+--- procs (before) ---
+  90019  9-23:06:58  3172 /bin/bash -c source /home/mark/.claude/shell-snapshots/snapshot-bash-1789082331006-6puqoi.sh 2>/dev/null || true && shopt -u extglob 2>/dev/null || true && { \builtin unalias -- 'unsetenv'; \builtin unset -f -- 'un
+4033064 10-23:07:17  2912 /bin/bash -c source /home/mark/.claude/shell-snapshots/snapshot-bash-1789082331006-6puqoi.sh 2>/dev/null || true && shopt -u extglob 2>/dev/null || true && { \builtin unalias -- 'unsetenv'; \builtin unset -f -- 'un
+               total        used        free      shared  buff/cache   available
+Mem:             117          58          16           0          43          58
+Swap:             15           6           9

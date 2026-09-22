@@ -1,0 +1,150 @@
+{
+ "cell": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_03_b1_native-11_B4_a1",
+ "arm": "native-11",
+ "batch": 4,
+ "mode": "live",
+ "margin_gate_nats": 0.5,
+ "reference_scores": {
+  "path": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_03_b1_native-11_B4_a1/script_snapshot/prefix_scores.json",
+  "sha256": "2940202fa60523823340e3ea89809800bd9b9b1f75226b3306d3f5ce6b35e870"
+ },
+ "checks": [
+  {
+   "check": "P1_spec_config_requested_length_mtp_no_tree",
+   "pass": true,
+   "detail": {
+    "method": "qwen3_5_mtp",
+    "num_speculative_tokens": 11
+   }
+  },
+  {
+   "check": "P1_decode_mode_naive_mtp_tree_gdn_off",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "check": "P1_cmd_flags",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "check": "P1_no_fr13_engaged_in_server_log",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "check": "P2_occupancy_never_exceeds_declared",
+   "pass": true,
+   "detail": {
+    "max_active": 4,
+    "n_physical_steps": 22
+   }
+  },
+  {
+   "check": "P2_every_preflight_cohort_has_a_full_four_active_pure_step",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "check": "P3_complete_output_and_termination_every_preflight_request",
+   "pass": true,
+   "detail": {
+    "bad_slots": [],
+    "finish": {
+     "fa0": "length",
+     "fa1": "length",
+     "fa2": "length",
+     "fa3": "length",
+     "fb0": "length",
+     "fb1": "length",
+     "fb2": "length",
+     "fb3": "length"
+    }
+   }
+  },
+  {
+   "check": "P4_first_greedy_token_equals_unpatched_native_reference_on_margin_gated_prefixes",
+   "pass": true,
+   "detail": {
+    "gated": [
+     {
+      "slot": "fa2",
+      "prefix": "p015",
+      "first": "_sm",
+      "reference_native_top1": "_sm",
+      "reference_margin_nats": 6.750000038184226,
+      "equal": true
+     },
+     {
+      "slot": "fa3",
+      "prefix": "p021",
+      "first": "_A",
+      "reference_native_top1": "_A",
+      "reference_margin_nats": 3.6249999701976776,
+      "equal": true
+     },
+     {
+      "slot": "fb2",
+      "prefix": "p058",
+      "first": "\n\n",
+      "reference_native_top1": "\n\n",
+      "reference_margin_nats": 2.8749998956918716,
+      "equal": true
+     },
+     {
+      "slot": "fb3",
+      "prefix": "p083",
+      "first": ").",
+      "reference_native_top1": ").",
+      "reference_margin_nats": 3.124999925494194,
+      "equal": true
+     }
+    ],
+    "reported_low_margin_not_gated": [
+     {
+      "slot": "fa0",
+      "prefix": "p072",
+      "first": " tests",
+      "reference_native_top1": " tests",
+      "reference_margin_nats": 0.3750000596046448,
+      "equal": true
+     },
+     {
+      "slot": "fa1",
+      "prefix": "p017",
+      "first": " a",
+      "reference_native_top1": " a",
+      "reference_margin_nats": 0.0,
+      "equal": true
+     },
+     {
+      "slot": "fb0",
+      "prefix": "p085",
+      "first": " grading",
+      "reference_native_top1": " grading",
+      "reference_margin_nats": 0.125,
+      "equal": true
+     },
+     {
+      "slot": "fb1",
+      "prefix": "p095",
+      "first": " Ref",
+      "reference_native_top1": " Ref",
+      "reference_margin_nats": 0.125,
+      "equal": true
+     }
+    ]
+   }
+  },
+  {
+   "check": "P5_live_ledger_prefix_valid_no_seal_claimed",
+   "pass": true,
+   "detail": {
+    "n_events": 97,
+    "unmapped_slots": []
+   }
+  }
+ ],
+ "all_pass": true,
+ "verdict": "NATIVE PREFLIGHT (live) PASS"
+}

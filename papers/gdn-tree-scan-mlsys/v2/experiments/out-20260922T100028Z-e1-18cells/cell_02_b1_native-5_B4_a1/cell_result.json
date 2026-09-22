@@ -1,0 +1,200 @@
+{
+ "cell": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells/cell_02_b1_native-5_B4_a1",
+ "batch": 4,
+ "status": "VALID",
+ "reasons": [],
+ "join": {
+  "n_events": 440,
+  "invalid": null,
+  "refused": null,
+  "phases": {
+   "warmup": [
+    "cmpl-86ffc703a9d0890f-0-9b744e6d",
+    "cmpl-8eb9859b65c229b6-0-85e2b865",
+    "cmpl-8ffa0619bc154a75-0-81f86288",
+    "cmpl-994ffcbbd1ea5c5c-0-8df5d30c",
+    "cmpl-9a4ec04a5c65f713-0-87821661",
+    "cmpl-9a9fc52819e52669-0-bf43a612",
+    "cmpl-a71deb2ee30ebf7b-0-b5728e1e",
+    "cmpl-a96bfa5b5f648705-0-95432c0f",
+    "cmpl-b043efd8de0e6cdb-0-b6768afb",
+    "cmpl-b0e2c470cd253fd8-0-8f0ae5c2",
+    "cmpl-b13ee15b0fa059cb-0-898e1fc0",
+    "cmpl-ba6370adc3ccc7b2-0-ad934e9d"
+   ],
+   "timed": [
+    "cmpl-862cadb0efe04b83-0-a948669b",
+    "cmpl-8a0a6a42eafdf011-0-8091f29f",
+    "cmpl-8b4e1ae5da64b6e5-0-a714620d",
+    "cmpl-8d11da9f5de2f644-0-9d011f28",
+    "cmpl-9c8e54168583f7b3-0-aee79964",
+    "cmpl-a7a6379b1c56f65b-0-b2e96151",
+    "cmpl-b54fe041c497c010-0-a64419b7",
+    "cmpl-bbb358842460ebe0-0-aa9b8a01"
+   ]
+  },
+  "n_forwards": 146,
+  "n_output_records": 146,
+  "n_nonpure_output_records": 24,
+  "n_physical_steps": 122,
+  "n_chain_breaks": 24,
+  "n_usable": 56,
+  "n_excluded": 66,
+  "excluded_wall_s_total": 44.81571989599615,
+  "truncated_tail_tokens": {
+   "cmpl-b13ee15b0fa059cb-0-898e1fc0": 2,
+   "cmpl-b0e2c470cd253fd8-0-8f0ae5c2": 1,
+   "cmpl-ba6370adc3ccc7b2-0-ad934e9d": 2,
+   "cmpl-a96bfa5b5f648705-0-95432c0f": 5,
+   "cmpl-8eb9859b65c229b6-0-85e2b865": 2,
+   "cmpl-994ffcbbd1ea5c5c-0-8df5d30c": 1,
+   "cmpl-9a9fc52819e52669-0-bf43a612": 5,
+   "cmpl-a71deb2ee30ebf7b-0-b5728e1e": 2,
+   "cmpl-9a4ec04a5c65f713-0-87821661": 1,
+   "cmpl-86ffc703a9d0890f-0-9b744e6d": 1,
+   "cmpl-8ffa0619bc154a75-0-81f86288": 1,
+   "cmpl-862cadb0efe04b83-0-a948669b": 1,
+   "cmpl-a7a6379b1c56f65b-0-b2e96151": 3,
+   "cmpl-b54fe041c497c010-0-a64419b7": 1,
+   "cmpl-8a0a6a42eafdf011-0-8091f29f": 1,
+   "cmpl-bbb358842460ebe0-0-aa9b8a01": 1
+  },
+  "over_cap_diagnostic": {
+   "cap_s": 1.5,
+   "n_intervals_over_cap": 0,
+   "wall_s_over_cap": 0,
+   "physical_step_ids": [],
+   "tokens_per_wall_second_trimmed_DIAGNOSTIC_ONLY": 57.33075818918667
+  },
+  "phase_summary": {
+   "warmup": {
+    "requests": 12,
+    "ledger_tokens": 407,
+    "api_tokens": 384
+   },
+   "timed": {
+    "requests": 8,
+    "ledger_tokens": 1031,
+    "api_tokens": 1024
+   }
+  },
+  "token_evidence": {
+   "cmpl-ba6370adc3ccc7b2-0-ad934e9d": 32,
+   "cmpl-b0e2c470cd253fd8-0-8f0ae5c2": 32,
+   "cmpl-a96bfa5b5f648705-0-95432c0f": 32,
+   "cmpl-b13ee15b0fa059cb-0-898e1fc0": 32,
+   "cmpl-8eb9859b65c229b6-0-85e2b865": 32,
+   "cmpl-994ffcbbd1ea5c5c-0-8df5d30c": 32,
+   "cmpl-9a9fc52819e52669-0-bf43a612": 32,
+   "cmpl-a71deb2ee30ebf7b-0-b5728e1e": 32,
+   "cmpl-862cadb0efe04b83-0-a948669b": 128,
+   "cmpl-a7a6379b1c56f65b-0-b2e96151": 128,
+   "cmpl-9c8e54168583f7b3-0-aee79964": 128,
+   "cmpl-b54fe041c497c010-0-a64419b7": 128,
+   "cmpl-bbb358842460ebe0-0-aa9b8a01": 128,
+   "cmpl-8d11da9f5de2f644-0-9d011f28": 128,
+   "cmpl-8b4e1ae5da64b6e5-0-a714620d": 128,
+   "cmpl-8a0a6a42eafdf011-0-8091f29f": 128,
+   "cmpl-9a4ec04a5c65f713-0-87821661": 32,
+   "cmpl-8ffa0619bc154a75-0-81f86288": 32,
+   "cmpl-b043efd8de0e6cdb-0-b6768afb": 32,
+   "cmpl-86ffc703a9d0890f-0-9b744e6d": 32
+  },
+  "ledger_tokens_all_forwards": 1438,
+  "sum_wall_s_unique_physical_steps": 13.395950520411134,
+  "sum_emitted_tokens_api_bound_pure_support": 768,
+  "n_request_rows": 224,
+  "tokens_per_wall_second": 57.33075818918667
+ },
+ "per_cohort": {
+  "A(1-4)": {
+   "intervals": 28,
+   "wall_s": 6.594811411574483,
+   "tokens": 426
+  },
+  "B(5-8)": {
+   "intervals": 28,
+   "wall_s": 6.801139108836651,
+   "tokens": 342
+  }
+ },
+ "floor": {
+  "rule": "each of the 2 timed cohorts >= 1 complete four-request same-cohort interval",
+  "cohorts": [
+   "A(1-4)",
+   "B(5-8)"
+  ],
+  "missing": [],
+  "pass": true
+ },
+ "api_totals": {
+  "p072/fa0": 32,
+  "p017/fa1": 32,
+  "p015/fa2": 32,
+  "p021/fa3": 32,
+  "p085/fb0": 32,
+  "p095/fb1": 32,
+  "p058/fb2": 32,
+  "p083/fb3": 32,
+  "p072/w0": 32,
+  "p017/w1": 32,
+  "p015/w2": 32,
+  "p021/w3": 32,
+  "p072/ta0": 128,
+  "p017/ta1": 128,
+  "p015/ta2": 128,
+  "p021/ta3": 128,
+  "p085/tb0": 128,
+  "p095/tb1": 128,
+  "p058/tb2": 128,
+  "p083/tb3": 128
+ },
+ "finish": {
+  "fa0": "length",
+  "fa1": "length",
+  "fa2": "length",
+  "fa3": "length",
+  "fb0": "length",
+  "fb1": "length",
+  "fb2": "length",
+  "fb3": "length",
+  "w0": "length",
+  "w1": "length",
+  "w2": "length",
+  "w3": "length",
+  "ta0": "length",
+  "ta1": "length",
+  "ta2": "length",
+  "ta3": "length",
+  "tb0": "length",
+  "tb1": "length",
+  "tb2": "length",
+  "tb3": "length"
+ },
+ "primary": {
+  "tokens_per_wall_second": 57.33075818918667,
+  "sum_wall_s_unique_physical_steps": 13.395950520411134,
+  "sum_emitted_tokens_api_bound_pure_support": 768,
+  "n_usable": 56,
+  "n_excluded": 66
+ },
+ "diagnostic_over_cap": {
+  "cap_s": 1.5,
+  "n_intervals_over_cap": 0,
+  "wall_s_over_cap": 0,
+  "physical_step_ids": [],
+  "tokens_per_wall_second_trimmed_DIAGNOSTIC_ONLY": 57.33075818918667
+ },
+ "terminal_seal": {
+  "sealed": true,
+  "utc": "2026-09-22T10:16:31Z",
+  "gates": {
+   "verify": "PASS",
+   "summary": "VALID",
+   "preflight_live": "PASS",
+   "preflight_final": "PASS"
+  },
+  "campaign_snapshot_sha256sums": "d1ab57c53464ef814c7eed3b87ebd21a670cf8278541b8adc4864e5cf6dc2ecd",
+  "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+ }
+}

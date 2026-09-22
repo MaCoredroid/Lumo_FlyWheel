@@ -1,0 +1,236 @@
+{
+ "all_pass": true,
+ "torch": "2.4.1",
+ "checks": {
+  "ulp32_adjacent_positive": {
+   "pass": true,
+   "detail": 1
+  },
+  "ulp32_adjacent_negative": {
+   "pass": true,
+   "detail": 1
+  },
+  "ulp32_cross_zero_min_subnormals": {
+   "pass": true,
+   "detail": 2
+  },
+  "ulp32_neg_min_subnormal_to_zero": {
+   "pass": true,
+   "detail": 1
+  },
+  "ulp32_signed_zero_equal": {
+   "pass": true,
+   "detail": 0
+  },
+  "ulp32_ordinal_monotone": {
+   "pass": true,
+   "detail": [
+    -1077936128,
+    -1069547520,
+    -1065353216,
+    -228737632,
+    0,
+    0,
+    228737632,
+    1065353216,
+    1069547520,
+    1077936128
+   ]
+  },
+  "ulp16_adjacent_positive": {
+   "pass": true,
+   "detail": 1
+  },
+  "ulp16_signed_zero_equal": {
+   "pass": true,
+   "detail": null
+  },
+  "ulp16_adjacent_negative": {
+   "pass": true,
+   "detail": 1
+  },
+  "ulp16_ordinal_monotone": {
+   "pass": true,
+   "detail": [
+    -16448,
+    -16256,
+    0,
+    0,
+    16256,
+    16448
+   ]
+  },
+  "compare_counts_and_excludes_nonfinite": {
+   "pass": true,
+   "detail": {
+    "nonfinite_candidate": 1,
+    "nonfinite_reference": 1,
+    "n_finite": 1,
+    "max_abs": 0.0,
+    "rms": 0.0,
+    "ref_max_abs": 1.0,
+    "max_rel_to_refmax": 0.0,
+    "rms_rel": 0.0,
+    "n": 3,
+    "ulp_significant_frac": 1.0,
+    "ulp32_max_sig": 0,
+    "ulp32_mean_sig": 0.0,
+    "ulp32_frac_ge1_sig": 0.0,
+    "ulp32_frac_ge4_sig": 0.0,
+    "ulp32_frac_ge64_sig": 0.0,
+    "exact_frac_all": 1.0
+   }
+  },
+  "compare_masked_pair_not_exact": {
+   "pass": true,
+   "detail": {
+    "nonfinite_candidate": 1,
+    "nonfinite_reference": 0,
+    "n_finite": 1,
+    "max_abs": 1.0,
+    "rms": 1.0,
+    "ref_max_abs": 1.0,
+    "max_rel_to_refmax": 1.0,
+    "rms_rel": 1.0,
+    "n": 2,
+    "ulp_significant_frac": 1.0,
+    "ulp32_max_sig": 8388608,
+    "ulp32_mean_sig": 8388608.0,
+    "ulp32_frac_ge1_sig": 1.0,
+    "ulp32_frac_ge4_sig": 1.0,
+    "ulp32_frac_ge64_sig": 1.0,
+    "exact_frac_all": 0.0
+   }
+  },
+  "compare_all_nonfinite_gives_nan_not_exact": {
+   "pass": true,
+   "detail": {
+    "nonfinite_candidate": 1,
+    "nonfinite_reference": 0,
+    "n": 1,
+    "n_finite": 0,
+    "max_abs": "nan",
+    "rms": "nan",
+    "ref_max_abs": "nan",
+    "max_rel_to_refmax": "nan",
+    "rms_rel": "nan",
+    "ulp_significant_frac": "nan",
+    "exact_frac_all": "nan",
+    "ulp32_max_sig": null,
+    "ulp32_mean_sig": "nan",
+    "ulp32_frac_ge1_sig": "nan",
+    "ulp32_frac_ge4_sig": "nan",
+    "ulp32_frac_ge64_sig": "nan"
+   }
+  },
+  "decay_expdiff_offpath_finite_zero_float32": {
+   "pass": true,
+   "detail": [
+    [
+     [
+      1.0,
+      0.0
+     ],
+     [
+      3.783505853677006e-44,
+      1.0
+     ]
+    ]
+   ]
+  },
+  "decay_ratio_offpath_zero_float32": {
+   "pass": true,
+   "detail": [
+    [
+     [
+      1.0,
+      0.0
+     ],
+     [
+      0.0,
+      "nan"
+     ]
+    ]
+   ]
+  },
+  "decay_expdiff_offpath_finite_zero_float64": {
+   "pass": true,
+   "detail": [
+    [
+     [
+      1.0,
+      0.0
+     ],
+     [
+      3.720075976020836e-44,
+      1.0
+     ]
+    ]
+   ]
+  },
+  "decay_ratio_offpath_zero_float64": {
+   "pass": true,
+   "detail": [
+    [
+     [
+      1.0,
+      0.0
+     ],
+     [
+      3.720075976020836e-44,
+      1.0
+     ]
+    ]
+   ]
+  },
+  "tiny_gates_chain11_fp32_expdiff_all_finite": {
+   "pass": true,
+   "detail": {
+    "P_min": 0.0,
+    "cum_g_min": -948.5768432617188,
+    "fp32_underflow_risk": true
+   }
+  },
+  "tiny_gates_chain11_fp32_literal_ratio_flagged_nonfinite_or_finite(diagnostic)": {
+   "pass": true,
+   "detail": {
+    "nonfinite_decay_entries": 2511,
+    "P_min": 0.0
+   }
+  },
+  "compare_shape_mismatch_raises": {
+   "pass": true,
+   "detail": "compare(): shape mismatch candidate (48, 16, 128) vs reference (10, 48, 128)"
+  },
+  "fp64_identities_chain11": {
+   "pass": true,
+   "detail": {
+    "B_U": 3.774758283725532e-15,
+    "C_U": 3.774758283725532e-15,
+    "B_state": 2.220446049250313e-15,
+    "C_commit_worst": 2.6645352591003757e-15,
+    "sibling_reverse_relabel": 0.0
+   }
+  },
+  "fp64_identities_binary3": {
+   "pass": true,
+   "detail": {
+    "B_U": 2.6645352591003757e-15,
+    "C_U": 2.6645352591003757e-15,
+    "B_state": 1.3322676295501878e-15,
+    "C_commit_worst": 1.3322676295501878e-15,
+    "sibling_reverse_relabel": 0.0
+   }
+  },
+  "fp64_identities_caterpillar10": {
+   "pass": true,
+   "detail": {
+    "B_U": 3.1086244689504383e-15,
+    "C_U": 3.1086244689504383e-15,
+    "B_state": 1.5543122344752192e-15,
+    "C_commit_worst": 1.7763568394002505e-15,
+    "sibling_reverse_relabel": 0.0
+   }
+  }
+ }
+}

@@ -1,0 +1,1 @@
+healthy after 320s (container e7a-capture-025138 maps 0.0.0.0:9950)

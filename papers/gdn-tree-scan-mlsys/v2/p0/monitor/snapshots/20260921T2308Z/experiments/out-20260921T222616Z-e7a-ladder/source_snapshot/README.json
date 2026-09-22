@@ -1,0 +1,4 @@
+{
+ "note": "byte copies of the sources loaded by this run (taken while the container was still running, before any later patch)",
+ "match_manifest_start": true
+}

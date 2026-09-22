@@ -1,0 +1,166 @@
+{
+  "checks": {
+    "campaign_snapshot_created_with_sums_and_identity": {
+      "pass": true,
+      "detail": [
+        "E1_FREEZE.md",
+        "SHA256SUMS",
+        "campaign_identity.txt",
+        "e1_api_tokens_from_capture.v2.py",
+        "e1_cell_driver.v1.sh",
+        "e1_cell_summary.py",
+        "e1_cell_verify.py",
+        "e1_cells.json",
+        "e1_event_recorder_shim.py",
+        "e1_join.py",
+        "e1_native_launch.v2.sh",
+        "e1_native_preflight.py",
+        "e1_qualification_manifest.json",
+        "e1_recorder.py",
+        "e1_run_cells.v2.sh",
+        "e1_workload.py",
+        "e7a_capture_launch.v7.sh",
+        "frozen_prefixes.json",
+        "gpu_oom_guard.sh",
+        "prefix_pool.json"
+      ]
+    },
+    "runner_exit_10_on_launcher_failure_cell1": {
+      "pass": true,
+      "detail": [
+        10,
+        "ED rc=1 (see /tmp/claude-1000/-home-mark-lumo-paper-v2-20260921/c8955ff9-f3ae-4551-869b-1a98b38ca2c3/scratchpad/e1camp.xZ7w/campaign/cell_01_b1_native-5_B1_a1.driver.log; attempt retained) \u2014 stopping\n"
+      ]
+    },
+    "attempt_a1_driver_from_its_snapshot_and_campaign_source": {
+      "pass": true,
+      "detail": [
+        "start_utc=2026-09-22T09:59:09Z cell=1 block=1 arm=native-5 batch=B1 max_num_seqs=1 gpu_util_frozen=0.6 max_model_len_frozen=16384 spec_config_frozen={\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":5}",
+        "driver_exec=e1_cell_driver.v1.sh sha256=33ccfd67fd4adbb3 from_snapshot=1 snapshot_dir=/tmp/claude-1000/-home-mark-lumo-paper-v2-20260921/c8955ff9-f3ae-4551-869b-1a98b38ca2c3/scratchpad/e1camp.xZ7w/campaign/cell_01_b1_native-5_B1_a1/script_snapshot"
+      ]
+    },
+    "cell1_frozen_gpu_util_max_model_len_not_ambient": {
+      "pass": true,
+      "detail": {
+        "GPU_UTIL": "0.6",
+        "MAX_MODEL_LEN": "16384"
+      }
+    },
+    "cell1_native_frozen_env_exact_spec": {
+      "pass": true,
+      "detail": {
+        "SPEC_CONFIG": "{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":5}",
+        "FR10_DECODE_MODE_DEFAULT": "naive_mtp",
+        "FR10_METRICS": "0",
+        "MAX_NUM_SEQS": "1"
+      }
+    },
+    "rerun_refused_without_retry_flag_exit46": {
+      "pass": true,
+      "detail": 46
+    },
+    "retry_creates_new_attempt_a2_failure_retained": {
+      "pass": true,
+      "detail": 10
+    },
+    "cell5_tree_frozen_env_exact_spec_policyB_no_capture": {
+      "pass": true,
+      "detail": {
+        "SPEC_CONFIG": "{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":9,\"speculative_token_tree\":\"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]\"}",
+        "FR13_ATTN_KV_REMAP": "1",
+        "FR10_METRICS": "0",
+        "MAX_NUM_SEQS": "1"
+      }
+    },
+    "cell6_tree_B4_max_num_seqs_4": {
+      "pass": true,
+      "detail": "4"
+    },
+    "not_qualified_cell_listed_and_skipped": {
+      "pass": true,
+      "detail": [
+        0,
+        {
+          "index": 5,
+          "arm": "tree",
+          "batch": "B1",
+          "status": "NOT_QUALIFIED_NOT_TIMED",
+          "utc": "2026-09-22T09:59:11Z",
+          "terminal_seal": {
+            "sealed": true,
+            "utc": "2026-09-22T09:59:11Z",
+            "gates": {
+              "eligibility": "not qualified \u2014 not timed"
+            },
+            "campaign_snapshot_sha256sums": "8ff750da691fed6a18ec55f44b3e2fa791e2d53f9b9e125a2bea2d49c1c2e14b",
+            "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+          }
+        }
+      ]
+    },
+    "identity_lists_dynamic_deps": {
+      "pass": true,
+      "detail": [
+        "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+        "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+        "src/lumo_flywheel_serving/fr10_decode_modes.py",
+        "scripts/fr13_device_multidraft_kernel.py",
+        "src/lumo_flywheel_serving/fr13_tree_conv_fused.py",
+        "scripts/gpu_oom_guard.sh"
+      ]
+    },
+    "mutated_fr13_device_multidraft_kernel.py_refused_exit45": {
+      "pass": true,
+      "detail": [
+        45,
+        "REFUSING: route dependency changed since the campaign freeze: scripts/fr13_device_multidraft_kernel.py\n"
+      ]
+    },
+    "mutated_fr13_tree_conv_fused.py_refused_exit45": {
+      "pass": true,
+      "detail": [
+        45,
+        "REFUSING: route dependency changed since the campaign freeze: src/lumo_flywheel_serving/fr13_tree_conv_fused.py\n"
+      ]
+    },
+    "mutated_fr10_phase4_patch_vllm_tree_gdn.py_refused_exit45": {
+      "pass": true,
+      "detail": [
+        45,
+        "REFUSING: route dependency changed since the campaign freeze: scripts/fr10_phase4_patch_vllm_tree_gdn.py\n"
+      ]
+    },
+    "mutated_fr10_gdn_tree_kernel.py_refused_exit45": {
+      "pass": true,
+      "detail": [
+        45,
+        "REFUSING: route dependency changed since the campaign freeze: src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py\n"
+      ]
+    },
+    "mutated_fr10_decode_modes.py_refused_exit45": {
+      "pass": true,
+      "detail": [
+        45,
+        "REFUSING: route dependency changed since the campaign freeze: src/lumo_flywheel_serving/fr10_decode_modes.py\n"
+      ]
+    },
+    "restored_deps_pass_guard_again": {
+      "pass": true,
+      "detail": 10
+    },
+    "tampered_snapshot_refused_exit45": {
+      "pass": true,
+      "detail": 45
+    },
+    "driver_refuses_existing_cell_dir_exit44": {
+      "pass": true,
+      "detail": 44
+    },
+    "no_container_inspect_anywhere": {
+      "pass": true,
+      "detail": null
+    }
+  },
+  "scratch": "/tmp/claude-1000/-home-mark-lumo-paper-v2-20260921/c8955ff9-f3ae-4551-869b-1a98b38ca2c3/scratchpad/e1camp.xZ7w",
+  "all_pass": true
+}

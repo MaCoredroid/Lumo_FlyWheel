@@ -1,0 +1,203 @@
+{
+  "observed_utc": "2026-09-22T11:49:09.463834+00:00",
+  "cells": [
+    {
+      "path": "cell_01_b1_native-5_B1_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 13.682245138976391,
+        "sum_wall_s_unique_physical_steps": 72.72198311705142,
+        "sum_emitted_tokens_api_bound_pure_support": 995,
+        "n_usable": 312,
+        "n_excluded": 117
+      },
+      "seal_utc": "2026-09-22T10:08:59Z",
+      "sha256": "954a4a968cd2c12515e556438c4ea6de26117677ecb651f65a6689544e249854"
+    },
+    {
+      "path": "cell_02_b1_native-5_B4_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 57.33075818918667,
+        "sum_wall_s_unique_physical_steps": 13.395950520411134,
+        "sum_emitted_tokens_api_bound_pure_support": 768,
+        "n_usable": 56,
+        "n_excluded": 66
+      },
+      "seal_utc": "2026-09-22T10:16:31Z",
+      "sha256": "45952e2e06318589117ce24a8b3d7f2392d172072eaea942b87797c075955594"
+    },
+    {
+      "path": "cell_03_b1_native-11_B4_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 43.47118832311055,
+        "sum_wall_s_unique_physical_steps": 18.19595991075039,
+        "sum_emitted_tokens_api_bound_pure_support": 791,
+        "n_usable": 52,
+        "n_excluded": 61
+      },
+      "seal_utc": "2026-09-22T10:24:14Z",
+      "sha256": "bdc663bd53e7227c4d4c499c87145473119844e1c5033ac901a03b4d4c9399c9"
+    },
+    {
+      "path": "cell_04_b1_native-11_B1_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 11.439958475412476,
+        "sum_wall_s_unique_physical_steps": 86.189124035649,
+        "sum_emitted_tokens_api_bound_pure_support": 986,
+        "n_usable": 249,
+        "n_excluded": 114
+      },
+      "seal_utc": "2026-09-22T10:33:21Z",
+      "sha256": "79ada4f5fbc542ebb01f1c20aefff56303d7817826336d9ed0fe1e9398e1c1b3"
+    },
+    {
+      "path": "cell_05_b1_tree_B1_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 12.597382772294214,
+        "sum_wall_s_unique_physical_steps": 78.98466038424522,
+        "sum_emitted_tokens_api_bound_pure_support": 995,
+        "n_usable": 314,
+        "n_excluded": 32
+      },
+      "seal_utc": "2026-09-22T10:40:52Z",
+      "sha256": "4ee281136878a174de81289b815b807ebcdd4f69f1087fa897d6c94136e61004"
+    },
+    {
+      "path": "cell_06_b1_tree_B4_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 47.65063886822262,
+        "sum_wall_s_unique_physical_steps": 14.354477006942034,
+        "sum_emitted_tokens_api_bound_pure_support": 684,
+        "n_usable": 51,
+        "n_excluded": 54
+      },
+      "seal_utc": "2026-09-22T10:47:25Z",
+      "sha256": "f3849d486615b96d1b88d652e1ef0aa135e65ce9883aaad7472ba34d84411cb4"
+    },
+    {
+      "path": "cell_07_b2_tree_B1_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 12.607309482129649,
+        "sum_wall_s_unique_physical_steps": 78.92246965225786,
+        "sum_emitted_tokens_api_bound_pure_support": 995,
+        "n_usable": 314,
+        "n_excluded": 32
+      },
+      "seal_utc": "2026-09-22T10:54:54Z",
+      "sha256": "afacaea3ce3fd38a6b905c1493697e8d89d5da5c041f29ff2ff57b83abc40740"
+    },
+    {
+      "path": "cell_08_b2_tree_B4_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 46.68934818318858,
+        "sum_wall_s_unique_physical_steps": 17.22020185086876,
+        "sum_emitted_tokens_api_bound_pure_support": 804,
+        "n_usable": 61,
+        "n_excluded": 36
+      },
+      "seal_utc": "2026-09-22T11:01:15Z",
+      "sha256": "10ce7db48befe05f77574a6eaaadb32d6f10fab71f1f27d46288f47714f9e878"
+    },
+    {
+      "path": "cell_09_b2_native-5_B4_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 52.51945957635484,
+        "sum_wall_s_unique_physical_steps": 15.327652007341385,
+        "sum_emitted_tokens_api_bound_pure_support": 805,
+        "n_usable": 64,
+        "n_excluded": 42
+      },
+      "seal_utc": "2026-09-22T11:08:20Z",
+      "sha256": "3545c6639417489580ce16425e8dd6c88e6ed3fe0c8d78ef9ca845ad61462850"
+    },
+    {
+      "path": "cell_10_b2_native-5_B1_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 13.66210470123698,
+        "sum_wall_s_unique_physical_steps": 72.8291886029765,
+        "sum_emitted_tokens_api_bound_pure_support": 995,
+        "n_usable": 312,
+        "n_excluded": 28
+      },
+      "seal_utc": "2026-09-22T11:16:19Z",
+      "sha256": "e224ba112641393cf121471389205868696d8e852cb024019ea1be02831e76e4"
+    },
+    {
+      "path": "cell_11_b2_native-11_B1_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 11.44047542493633,
+        "sum_wall_s_unique_physical_steps": 86.18522949237376,
+        "sum_emitted_tokens_api_bound_pure_support": 986,
+        "n_usable": 249,
+        "n_excluded": 28
+      },
+      "seal_utc": "2026-09-22T11:24:37Z",
+      "sha256": "e2153d7e26ccb3cdda971627d6261a5c8b5bacc8844d2b648e4613f41e8c3dc4"
+    },
+    {
+      "path": "cell_12_b2_native-11_B4_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 42.27978432783668,
+        "sum_wall_s_unique_physical_steps": 18.16470949910581,
+        "sum_emitted_tokens_api_bound_pure_support": 768,
+        "n_usable": 52,
+        "n_excluded": 39
+      },
+      "seal_utc": "2026-09-22T11:31:51Z",
+      "sha256": "62c69c0b48c378e613eea7c7cf77fe6ea760ffa5f66814acc1fe2d9f3bcb3a7d"
+    },
+    {
+      "path": "cell_13_b3_native-11_B1_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 11.435281791722367,
+        "sum_wall_s_unique_physical_steps": 86.22437277529389,
+        "sum_emitted_tokens_api_bound_pure_support": 986,
+        "n_usable": 249,
+        "n_excluded": 28
+      },
+      "seal_utc": "2026-09-22T11:40:08Z",
+      "sha256": "227bf44eb992ad111fa68b8173b6dbccf6cc4ac221f919b955d3c30bb4c541b9"
+    },
+    {
+      "path": "cell_14_b3_native-11_B4_a1/cell_result.json",
+      "status": "VALID",
+      "primary": {
+        "tokens_per_wall_second": 40.70058664519177,
+        "sum_wall_s_unique_physical_steps": 18.181556114926934,
+        "sum_emitted_tokens_api_bound_pure_support": 740,
+        "n_usable": 52,
+        "n_excluded": 39
+      },
+      "seal_utc": "2026-09-22T11:47:21Z",
+      "sha256": "2082b17f56d429e6fe0aace848a8d83ae1294a8b23a259e67a1ee059ec4e81ca"
+    }
+  ],
+  "hashes": {
+    "p0/HANDOFF-CLAUDE.md": "a06f3a3530963e599037013eb73beabf37d9abd2324e77f0adb02d43211fa7b2",
+    "p0/P0-REPORT.md": "9999aecafc19d1a3de981229d8f281e15d730b924713437a9abef4aaed7d2c44",
+    "main.tex": "f52a828f4cb13aca925be7d081da0c4c438072762b673de9a2933b7396032212",
+    "abstract.tex": "0eddd1990dfe88aa1b0251526448d24983c7d0f67821d2f2921bb63df18755ce",
+    "experiments/e1/e1_run_cells.v2.sh": "910e2dac38a8661361da7f011f8a6a48563b84f6799eb5b1257fc558fa765d72",
+    "experiments/e1/e1_aggregate.py": "98beec9efac26f560783d9d77af3e2154edbd6b24ebadfe141b0cafce6e48a68"
+  },
+  "campaign_tail": "e-5 B1 state=QUALIFIED attempts=0 measured=0 (2026-09-22T11:08:20Z)\nterminal seal: VALID 13.66210470123698\ncell_result (PRELIMINARY): VALID [] 13.66210470123698\n=== cell 11 block 2 native-11 B1 state=QUALIFIED attempts=0 measured=0 (2026-09-22T11:16:19Z)\nterminal seal: VALID 11.44047542493633\ncell_result (PRELIMINARY): VALID [] 11.44047542493633\n=== cell 12 block 2 native-11 B4 state=QUALIFIED attempts=0 measured=0 (2026-09-22T11:24:37Z)\nterminal seal: VALID 42.27978432783668\ncell_result (PRELIMINARY): VALID [] 42.27978432783668\n=== cell 13 block 3 native-11 B1 state=QUALIFIED attempts=0 measured=0 (2026-09-22T11:31:52Z)\nterminal seal: VALID 11.435281791722367\ncell_result (PRELIMINARY): VALID [] 11.435281791722367\n=== cell 14 block 3 native-11 B4 state=QUALIFIED attempts=0 measured=0 (2026-09-22T11:40:08Z)\nterminal seal: VALID 40.70058664519177\ncell_result (PRELIMINARY): VALID [] 40.70058664519177\n=== cell 15 block 3 tree B4 state=QUALIFIED attempts=0 measured=0 (2026-09-22T11:47:21Z)\n",
+  "status_head": "# v2 bounded numerical experiments — execution status\n\nWorktree: `/home/mark/lumo-paper-v2-20260921`, branch `codex/paper-v2-pilot-20260921`, base `984f613d7885d9bf7898866827552b68a3199d0c`.\nSession: Claude Fable 5.1 interactive, tmux `lumo-v2-20260921` (created 2026-09-21T21:45:29Z per `p0/handoff-status.json`), handoff `p0/HANDOFF-CLAUDE.md` (sha256 `a06f3a35…1fa7b2`).\nHost clock is UTC (`date +%Z` = UTC). Times below are MEASURED (file mtimes, `date -u`, telemetry stamps) or marked *observed-by*.\n\n## Authorization scope (from handoff)\n\nBounded scope only: E7a -> E2/E7b -> E1, E3 conditional. No external messages, uploads, publication, push, new quantization campaign, or broad task-quality campaign. Do not touch `/home/mark/shared/lumoFlyWheel` checkout state, its captures, tmux sessions, unrelated processes, or shared model weights. Historical captures are read-only inputs and remain historical. Synthetic inputs are labeled synthetic. The old pre-fix WY state-write bug is NOT the principal baseline (the vendored WY kernel is the post-fix form at commit `8a975837`).\n\n## Stage log (measured chronology)\n\n| UTC (measured) | Stage | State | Evidence |\n| --- | --- | --- | --- |\n| 2026-09-22T11:47:21Z | E1 cell 14 (b3 native-11 B4) SEALED VALID: 40.70 tok/s over 52 four-request intervals (18.18 s, 740 tokens), cohorts A 26 / B 26 (floor PASS), 0 over-cap, verify PASS; cell 15 (tree B4) next | `…/cell_14_b3_native-11_B4_a1/` |\n| 2026-09-22T11:40:08Z | E1 cell 13 (b3 native-11 B1) SEALED VALID: 11.44 tok/s over 249 intervals (86.22 s, 986 tokens), min 24 per prompt (floor PASS), 0 over-cap, verify PASS; cell 14 (native-11 B4) next | `…/cell_13_b3_native-11_B1_a1/` |\n| 2026-09-22T11:31:51Z | E1 cell 12 (b2 native-11 B4) SEALED VALID — block 2 complete (12/12 VALID so far): 42.28 tok/s over 52 four-request intervals (18.16 s, 768 tokens), cohorts A 25 / B 27 (floor PASS), 0 over-cap, verify PASS; block 3 starts with cell 13 (native-11 B1) | `…/cell_12_b2_native-11_B4_a1/` |\n| 2026-09-22T11:24:37Z | E1 cell 11 (b2 native-11 B1) SEALED VALID: 11.44 tok/s over 249 intervals (86.19 s, 986 tokens), min 24 per prompt (floor PASS), 0 over-cap, verify PASS; cell 12 (native-11 B4) next — last cell of block 2 | `…/cell_11_b2_native-11_B1_a1/` |\n| 2026-09-22T11:16:19Z | E1 cell ",
+  "pane": "\n● Monitor event: \"E1 18-cell campaign: per-cell seals/failures in campaign.log and runner exit (re-armed 3)\"\n\n● That expiry is the previous monitor; the replacement watch (b5ly2ti20) is already armed and covers cell 12 onward. Nothing else is\n  actionable until its next event.\n\n✻ Brewed for 2s · done 11:31 AM · 2 monitors still running\n\n● Monitor event: \"E1 18-cell campaign: per-cell seals/failures in campaign.log and runner exit (re-armed 4)\"\n\n● Cell 12 (block 2, native-11, B4) sealed VALID at 42.28 tok/s, completing block 2. Recording it.\n\n  Ran 1 shell command\n\n● Cell 12 is recorded: 42.28 tok/s over 52 four-request intervals (18.16 s, 768 API-bound tokens), cohorts A 25 and B 27 intervals,\n  floor pass, no over-cap intervals, verification PASS. Block 2 is complete; all 12 cells so far are sealed VALID. Cell 13 (block 3,\n  native-11, B1) started at 11:31:52Z; the armed monitor is watching for its seal, and nothing else is actionable until then.\n\n✻ Crunched for 15s · done 11:32 AM · 2 monitors still running\n\n● Monitor event: \"E1 18-cell campaign: per-cell seals/failures in campaign.log and runner exit (re-armed 4)\"\n\n● Cell 13 (block 3, native-11, B1) sealed VALID at 11.44 tok/s. Recording it.\n\n  Ran 1 shell command\n\n● Cell 13 is recorded: 11.44 tok/s over 249 retained intervals (86.22 s, 986 API-bound tokens), every prompt at least 24 intervals,\n  floor pass, no over-cap intervals, verification PASS. Cell 14 (block 3, native-11, B4) started at 11:40:08Z; the armed monitor is\n  watching for its seal, and nothing else is actionable until then.\n\n✻ Crunched for 13s · done 11:40 AM · 2 monitors still running\n\n● Monitor event: \"E1 18-cell campaign: per-cell seals/failures in campaign.log and runner exit (re-armed 4)\"\n\n● Cell 14 (block 3, native-11, B4) sealed VALID at 40.70 tok/s. Recording it and re-arming the watch, which is near expiry.\n\n  Ran 1 shell command\n\n● Monitor(E1 18-cell campaign: per-cell seals/failures in campaign.log and runner exit (re-armed 5))\n  ⎿  Monitor started · task bxopafhzh · timeout 1800s\n\n● Cell 14 is recorded: 40.70 tok/s over 52 four-request intervals (18.18 s, 740 API-bound tokens), cohorts A 26 and B 26 intervals,\n  floor pass, no over-cap intervals, verification PASS. Cell 15 (block 3, tree, B4) started at 11:47:21Z; a fresh 30-minute watch is\n  armed for its seal. Nothing else is actionable until the next event.\n\n✻ Sautéed for 18s · done 11:47 AM · 2 monitors still running\n                                                                                             ✔ Update installed · Restart to update\n───────────────────────────────────────────────────────────────────────────────────────────────────── Lumo v2 numerical experiments ─\n❯ \n─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n  ⏵⏵ bypass permissions on · 2 monitors · ← for agents · ↓ to manage\n",
+  "available_gib": 70.28321838378906,
+  "swap_used_gib": 0,
+  "containers": "e1-cell15-114721 Up About a minute\n",
+  "compute": "3440147, VLLM::EngineCore, 29591 MiB\n",
+  "runner": "3335600    01:48:40 bash\n"
+}

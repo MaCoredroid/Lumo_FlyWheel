@@ -1,0 +1,30 @@
+--- /home/mark/lumo-paper-v2-20260921/scripts/fr13_launch_native_mtp_server.sh	2026-09-21 21:41:59.157083942 +0000
++++ e7a_native_launch.v2.sh	2026-09-21 23:26:49.584222973 +0000
+@@ -1,4 +1,9 @@
+ #!/usr/bin/env bash
++# DERIVED LAUNCHER (E7a native reference boots). Byte-for-byte copy of scripts/fr13_launch_native_mtp_server.sh at
++# HEAD 984f613d with TWO changes: (1) the shared checkpoint mount is READ-ONLY (`-v /models:/models:ro`); (2) the OOM
++# guard path is `$REPO/scripts/gpu_oom_guard.sh` instead of `$(dirname "$0")/gpu_oom_guard.sh`, which resolves to a
++# non-existent file when this copy lives in experiments/e7a/ (review 06: the v1 copy logged "armed" but started nothing).
++# Nothing else (gates, memory check, flags) is changed. Diff recorded in e7a_native_launch.v2.diff.
+ set -euo pipefail
+ 
+ # ============================================================================
+@@ -206,7 +211,7 @@
+ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
+   --memory="$DOCKER_MEM_CAP" --memory-swap="$DOCKER_MEM_CAP" \
+   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
+-  -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
++  -v "$REPO:/workspace" -v /models:/models:ro -v "$LOG_DIR:/logs" \
+   -e PYTORCH_CUDA_ALLOC_CONF="$PYTORCH_CUDA_ALLOC_CONF" \
+   -e VLLM_BATCH_INVARIANT="$BATCH_INVARIANT" \
+   -e LUMO_BATCH_INVARIANT_VLLM="${LUMO_BATCH_INVARIANT_VLLM:-$BATCH_INVARIANT}" \
+@@ -232,7 +237,7 @@
+ # (identical to the forked launcher). Converts an incipient GPU OOM into a
+ # relaunchable+loud container kill instead of a systemd --user session kill.
+ if [[ "${GPU_OOM_GUARD:-1}" == "1" ]]; then
+-  GPU_GUARD_NAME_GLOB="$CONTAINER" setsid bash "$(dirname "$0")/gpu_oom_guard.sh" \
++  GPU_GUARD_NAME_GLOB="$CONTAINER" setsid bash "$REPO/scripts/gpu_oom_guard.sh" \
+     >/dev/null 2>&1 </dev/null &
+   disown 2>/dev/null || true
+   echo "[launch] gpu_oom_guard armed for container=$CONTAINER (floor=${GPU_GUARD_FLOOR_MIB:-9000}MiB)"

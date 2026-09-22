@@ -1,0 +1,50 @@
+{
+  "checked_utc": "2026-09-22T19:45:23.049712+00:00",
+  "status": "PASS",
+  "scope": "Remove historical quantitative results from the v2 manuscript; preserve raw audit evidence and fresh adverse findings",
+  "source_hashes": {
+    "main.tex": "09d5fbd626233c5f363aaa94f3fce6dd9e06164d01b419c63d1d1fa8e2285d92",
+    "abstract.tex": "36983c20ae3fd466dc485abb4e59baf84cbfd364df9011d27095bfdb70a04899",
+    "ref.bib": "64ca0fc74b5185f2f61358945a2f1250de76a7ec7c2ad793504dff0fc22693c0",
+    "main.pdf": "a6ea40498508018780d6baac4f916218d78be6fb9744243e9d25f3dc07568fc9"
+  },
+  "pages": 11,
+  "citation_lint": {
+    "returncode": 0,
+    "output": "BibTeX lint: ref.bib (27 entries) vs main.tex (27 unique citations)\nSummary: 0 FAIL, 0 WARN",
+    "cited_keys": 27,
+    "bib_entries": 27
+  },
+  "visual_qa": {
+    "initial_removal_pages_inspected": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "final_changed_pages_inspected": [
+      1,
+      2,
+      6
+    ],
+    "other_pages_pixel_identical": true,
+    "clipping_or_overlap": false
+  },
+  "undefined_references_or_overflow": false,
+  "historical_value_absence_check": "PASS on extracted PDF text; full source/include review by independent reviewer",
+  "fresh_e1_section_unchanged": true,
+  "evidence_companions_unchanged": true,
+  "independent_delta_review": {
+    "file": "p0/monitor/historical-numbers-removal-redteam.md",
+    "sha256": "4128141b4a4c5fdc51378dc3319641195cdcb9ebc42f6cbb4ab514bc7db59f3c"
+  },
+  "no_new_experiments": true,
+  "no_publication_or_submission": true
+}

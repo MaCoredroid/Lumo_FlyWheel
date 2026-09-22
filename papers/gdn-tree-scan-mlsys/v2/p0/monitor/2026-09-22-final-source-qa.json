@@ -1,0 +1,32 @@
+{
+  "checked_utc": "2026-09-22T12:39:33.127962+00:00",
+  "manuscript_sha256": "9de0d3464994c6392ce0991f8e062005ccd41dbf48635aa42fb0134d30ae86c7",
+  "abstract_sha256": "9c4061adc247f22c297a8f05627958a4f564e1c38b5803a79ab91df5a7cae0a5",
+  "bibliography_sha256": "51c788f1ffcaef1cc1b1a7846be1e862cbbc56e58d041c37bfc267d703e22905",
+  "issues_sha256": "a8a6e6923493a44016d53dd70a91a0d0bfe557982b16983430f22a854b69e24d",
+  "citation_commands": 62,
+  "unique_citations": 28,
+  "bibliography_entries": 28,
+  "bibtex_lint": "PASS: 0 FAIL, 0 WARN; citation_policy.py lint-bib --fail-on-lint",
+  "citation_scope": "No bibliography/citation changes during E1 integration; prior primary-source verification and final independent manuscript review retained. No new literature verification implied.",
+  "issues_unique_ids_and_resolving_acyclic_dependencies": true,
+  "issues_all_done_or_explicit_skip": true,
+  "abstract_whitespace_words": 219,
+  "result_placeholders": 0,
+  "generic_template_validator": {
+    "exit_code": 1,
+    "messages": [
+      "row 19: Writing issues must set 'Source_Policy' to one of ['core', 'frontier', 'standard']",
+      "row 19: Writing issues must set 'Target_Citations' > 0 unless Evidence_Type is n/a",
+      "row 19: DONE writing issues must record Verified_Citations > 0 unless Evidence_Type is n/a",
+      "row 19: Writing issues must define a concrete 'Visualization' plan",
+      "row 21: 'Phase' must be one of ['Experiment', 'QA', 'Refinement', 'Research', 'Visual', 'Writing'], got 'Audit'",
+      "row 21: invalid 'Evidence_Type' 'manifest'",
+      "row 21: invalid 'Result_Status' 'verified_with_historical_gaps'",
+      "row 21: only Writing/Experiment/Visual issues may set 'Section_Path' (use N/A otherwise)"
+    ],
+    "disposition": "Not a generic-template pass. Only inherited W9 prose-reasoning row and P0 audit extension differ: W9 retains historical zero external-citation/visualization quotas; P0 intentionally uses Audit/manifest/verified_with_historical_gaps and its section pointer. These documented metadata exceptions do not change the reviewed text, cited sources, evidence or completion status. Repository-specific ID/dependency/status/citation checks passed."
+  },
+  "paper_review": "p0/monitor/paper-final-e1-redteam.md",
+  "artifact_review": "p0/monitor/e1-artifact-final-redteam.md"
+}

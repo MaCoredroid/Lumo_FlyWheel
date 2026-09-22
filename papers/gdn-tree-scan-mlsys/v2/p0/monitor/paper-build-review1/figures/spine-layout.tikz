@@ -1,0 +1,9 @@
+\begin{tikzpicture}[font=\scriptsize]
+\node[anchor=west] at (-0.4,0.65) {Interleaved physical columns};
+\foreach \i/\lab/\col in {0/s_0/inkblue,1/s_1/inkblue,2/b_0/mutedamber,3/s_2/inkblue,4/b_1/mutedamber,5/s_3/inkblue,6/s_4/inkblue}{
+\node[draw=\col,fill=\col!10,minimum width=0.72cm,minimum height=0.55cm] at (\i*0.85,0) {$\lab$};}
+\node[anchor=west] at (-0.4,-0.8) {Spine-first physical columns};
+\foreach \i/\lab/\col in {0/s_0/inkblue,1/s_1/inkblue,2/s_2/inkblue,3/s_3/inkblue,4/s_4/inkblue,5/b_0/mutedamber,6/b_1/mutedamber}{
+\node[draw=\col,fill=\col!10,minimum width=0.72cm,minimum height=0.55cm] at (\i*0.85,-1.45) {$\lab$};}
+\node[align=center,text width=7cm] at (2.55,-2.35) {Masked branches have zero weight. Physical placement\\can still change the association of visible partial sums.};
+\end{tikzpicture}

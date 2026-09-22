@@ -1,0 +1,48 @@
+{
+  "checks": {
+    "commit_only_bank_overwritten_and_saved_after_matches_bank": {
+      "pass": true,
+      "detail": [
+        1.0000100135803223,
+        1.0000100135803223
+      ]
+    },
+    "commit_only_compact_called_once_into_scratch": {
+      "pass": true,
+      "detail": null
+    },
+    "sham_both_runs_compact_into_scratch_bank_unchanged": {
+      "pass": true,
+      "detail": null
+    },
+    "sham_verify_stage_never_writes_tree_out": {
+      "pass": true,
+      "detail": null
+    },
+    "sham_verify_only_no_compact_commit": {
+      "pass": true,
+      "detail": null
+    },
+    "sham_requires_shadow": {
+      "pass": true,
+      "detail": null
+    },
+    "sham_C_uses_neumann": {
+      "pass": true,
+      "detail": null
+    },
+    "zero_accept_row_col0_target_root": {
+      "pass": true,
+      "detail": null
+    },
+    "row_reuse_second_replay_before_equals_first_published_after": {
+      "pass": true,
+      "detail": null
+    },
+    "none_capture_noop_before_equals_after_no_kernels": {
+      "pass": true,
+      "detail": null
+    }
+  },
+  "all_pass": true
+}

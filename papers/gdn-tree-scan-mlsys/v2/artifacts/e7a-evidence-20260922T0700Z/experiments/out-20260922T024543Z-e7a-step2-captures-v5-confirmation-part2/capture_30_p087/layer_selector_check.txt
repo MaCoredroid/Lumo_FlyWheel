@@ -1,0 +1,1 @@
+selector_ok=language_model.model.layers.62.linear_attn layer_index=62 layer_type=linear_attention num_layers=64 n_linear=48

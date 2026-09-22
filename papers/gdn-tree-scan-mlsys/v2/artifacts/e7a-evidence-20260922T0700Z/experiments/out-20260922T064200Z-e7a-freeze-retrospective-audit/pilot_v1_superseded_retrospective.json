@@ -1,0 +1,2010 @@
+{
+ "kind": "RETROSPECTIVE COMPLETENESS AUDIT (review 14): existing data re-evaluated against every machine-evaluable frozen rule; no threshold changed; no earlier verdict replaced",
+ "set": "pilot",
+ "run_dir": "out-20260922T012554Z-e7a-fresh-pilot",
+ "freeze": "e7a/PILOT_FREEZE.json",
+ "freeze_sha256": "21f3eb5c3f9ce52aa2492d62c5be4dbc0f3d0df236aec717f70420c2ab2b36ce",
+ "frozen_prefixes": "out-20260921T231853Z-e7a-step2-native-score/frozen_prefixes.json",
+ "n_sets": 8,
+ "prefix_ids": [
+  "p072",
+  "p017",
+  "p015",
+  "p021",
+  "p085",
+  "p095",
+  "p058",
+  "p083"
+ ],
+ "rules": [
+  {
+   "id": "T1",
+   "rule": "scan_fp32_out_vs_native_specupdate_bitwise",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": 0.0,
+     "pass": true
+    }
+   ],
+   "tolerance": 0,
+   "pilot_max": 0,
+   "frozen_rule_text": "0 ULP, integer view (bit-identical), production scan fp32 store vs pinned native spec-update kernel; pilot 8/8 bitwise_frac = 1.0",
+   "observed_worst": 0.0
+  },
+  {
+   "id": "T2",
+   "rule": "scan_bf16_out_vs_native_specupdate_bitwise",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": 0.0,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": 0.0,
+     "pass": true
+    }
+   ],
+   "tolerance": 0,
+   "pilot_max": 0,
+   "frozen_rule_text": "0 ULP, integer view, deployed bf16 store vs native spec-update bf16 store; pilot 8/8 bitwise_frac = 1.0",
+   "observed_worst": 0.0
+  },
+  {
+   "id": "T3",
+   "rule": "fp32_ieee_realizations_out_vs_fp64_oracle_max_abs",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 1.949136478607283e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": 2.678237241704462e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": 2.2529564130957525e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": 2.7343400238466486e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": 4.2034260516743416e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": 4.44652720754668e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": 2.750410912910617e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": 4.1924793234282554e-08,
+     "pass": true
+    }
+   ],
+   "tolerance": 8.89305441509336e-08,
+   "pilot_max": 4.44652720754668e-08,
+   "frozen_rule_text": null,
+   "observed_worst": 4.44652720754668e-08
+  },
+  {
+   "id": "T4",
+   "rule": "compact_commit_state_vs_fp64_oracle_max_abs",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 4.143200422745963e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": 3.971868167695902e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": 4.7578603235010064e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": 4.2000297639788187e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": 5.110995462409562e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": 4.585079405039494e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": 6.95234765757391e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": 7.867071634137801e-07,
+     "pass": true
+    }
+   ],
+   "tolerance": 1.5734143268275602e-06,
+   "pilot_max": 7.867071634137801e-07,
+   "frozen_rule_text": null,
+   "observed_worst": 7.867071634137801e-07
+  },
+  {
+   "id": "T5",
+   "rule": "compact_commit_state_vs_native_specupdate_max_abs",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 7.152557373046875e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": 5.960464477539062e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": 1.1920928955078125e-06,
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": 7.152557373046875e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": 7.152557373046875e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": 1.430511474609375e-06,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": 1.9073486328125e-06,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": 4.76837158203125e-07,
+     "pass": true
+    }
+   ],
+   "tolerance": 3.814697265625e-06,
+   "pilot_max": 1.9073486328125e-06,
+   "frozen_rule_text": null,
+   "observed_worst": 1.9073486328125e-06
+  },
+  {
+   "id": "T6",
+   "rule": "replay_state_vs_fp64_oracle_max_abs",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 5.062497452357206e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": 5.60204698185629e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": 8.447943660172541e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": 6.817905342515473e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": 6.309351192612667e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": 1.1742487084909214e-06,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": 1.2969487670488888e-06,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": 9.093922113123654e-07,
+     "pass": true
+    }
+   ],
+   "tolerance": 2.5938975340977777e-06,
+   "pilot_max": 1.2969487670488888e-06,
+   "frozen_rule_text": null,
+   "observed_worst": 1.2969487670488888e-06
+  },
+  {
+   "id": "T7",
+   "rule": "replay_state_vs_native_specupdate_max_abs",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 2.9802322387695312e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": 2.9802322387695312e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": 2.384185791015625e-07,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": 5.960464477539063e-08,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": 2.9802322387695312e-08,
+     "pass": true
+    }
+   ],
+   "tolerance": 4.76837158203125e-07,
+   "pilot_max": 2.384185791015625e-07,
+   "frozen_rule_text": null,
+   "observed_worst": 2.384185791015625e-07
+  },
+  {
+   "id": "T8",
+   "rule": "bf16_store_realizations_disagreement_with_native (1 - bitwise frac)",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 9.76562500000222e-05,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": 8.138020833337034e-05,
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": 0.00011393229166667407,
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": 0.00021158854166669627,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": 9.76562500000222e-05,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": 9.76562500000222e-05,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": 0.0001464843749999778,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": 9.76562500000222e-05,
+     "pass": true
+    }
+   ],
+   "tolerance": 0.0003173828125000444,
+   "pilot_max": 0.00021158854166669627,
+   "frozen_rule_text": null,
+   "observed_worst": 0.00021158854166669627
+  },
+  {
+   "id": "T9",
+   "rule": "served_bf16_out_vs_fp64_oracle_max_abs (CPU self-test on the payload's serving_out)",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 0.00012107269665398435,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": 0.00024081768380034008,
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": 0.0002298629817051312,
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": 0.00024118581192209,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": 0.00026933581935575934,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": 0.0004850037775502025,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": 0.0002241708359878719,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": 0.0002397635736664655,
+     "pass": true
+    }
+   ],
+   "tolerance": 0.0007275056663253038,
+   "pilot_max": 0.0004850037775502025,
+   "frozen_rule_text": null,
+   "observed_worst": 0.0004850037775502025
+  },
+  {
+   "id": "T10",
+   "rule": "served_bf16_out_vs_fp64_oracle_ulp16_on_significant",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 1,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": 1,
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": 1,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": 1,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": 0,
+     "pass": true
+    }
+   ],
+   "tolerance": 1,
+   "pilot_max": 1,
+   "frozen_rule_text": "<= 1 ULP (bf16) on significant elements; pilot max = 1",
+   "observed_worst": 1
+  },
+  {
+   "id": "T11",
+   "rule": "native_specupdate_bf16_out_vs_fp64_oracle_max_abs",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 0.00012107269665396353,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": 0.0002408176838002707,
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": 0.00022986298170514508,
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": 0.00024118581192209,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": 0.0002693358193557316,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": 0.0004850037775502025,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": 0.00022417083598789966,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": 0.00023976357366650713,
+     "pass": true
+    }
+   ],
+   "tolerance": 0.0007275056663253038,
+   "pilot_max": 0.0004850037775502025,
+   "frozen_rule_text": null,
+   "observed_worst": 0.0004850037775502025
+  },
+  {
+   "id": "T12",
+   "rule": "served_bf16_out_bytes_equal_production_scan_out16",
+   "pass": false,
+   "n_sets": 8,
+   "failing_prefixes": [
+    "p072",
+    "p017",
+    "p015",
+    "p021",
+    "p085",
+    "p095",
+    "p058",
+    "p083"
+   ],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": null,
+     "pass": false,
+     "reason": "missing"
+    },
+    {
+     "prefix": "p017",
+     "value": null,
+     "pass": false,
+     "reason": "missing"
+    },
+    {
+     "prefix": "p015",
+     "value": null,
+     "pass": false,
+     "reason": "missing"
+    },
+    {
+     "prefix": "p021",
+     "value": null,
+     "pass": false,
+     "reason": "missing"
+    },
+    {
+     "prefix": "p085",
+     "value": null,
+     "pass": false,
+     "reason": "missing"
+    },
+    {
+     "prefix": "p095",
+     "value": null,
+     "pass": false,
+     "reason": "missing"
+    },
+    {
+     "prefix": "p058",
+     "value": null,
+     "pass": false,
+     "reason": "missing"
+    },
+    {
+     "prefix": "p083",
+     "value": null,
+     "pass": false,
+     "reason": "missing"
+    }
+   ],
+   "tolerance": 0,
+   "pilot_max": 0,
+   "frozen_rule_text": "byte-identical (integer view): the payload's live served bf16 output equals the production scan's bf16 output AND the native spec-update bf16 output on the captured operands; pilot 8/8 (fresh-pilot-v2)",
+   "observed_worst": null
+  },
+  {
+   "id": "D1",
+   "rule": "any confirmation set where the production-scan fp32 or bf16 store is not bit-identical (integer view) to the pinned native spec-update kernel",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": [
+      1.0,
+      1.0
+     ],
+     "pass": true
+    }
+   ]
+  },
+  {
+   "id": "D2",
+   "rule": "any confirmation set where the payload's served bf16 output is not byte-identical to the production scan bf16 output (and to the native spec-update bf16 output) on the captured operands",
+   "pass": false,
+   "n_sets": 8,
+   "failing_prefixes": [
+    "p072",
+    "p017",
+    "p015",
+    "p021",
+    "p085",
+    "p095",
+    "p058",
+    "p083"
+   ],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": [
+      "<object object at 0xe4dbc0578560>",
+      "<object object at 0xe4dbc0578560>"
+     ],
+     "pass": false
+    },
+    {
+     "prefix": "p017",
+     "value": [
+      "<object object at 0xe4dbc0578560>",
+      "<object object at 0xe4dbc0578560>"
+     ],
+     "pass": false
+    },
+    {
+     "prefix": "p015",
+     "value": [
+      "<object object at 0xe4dbc0578560>",
+      "<object object at 0xe4dbc0578560>"
+     ],
+     "pass": false
+    },
+    {
+     "prefix": "p021",
+     "value": [
+      "<object object at 0xe4dbc0578560>",
+      "<object object at 0xe4dbc0578560>"
+     ],
+     "pass": false
+    },
+    {
+     "prefix": "p085",
+     "value": [
+      "<object object at 0xe4dbc0578560>",
+      "<object object at 0xe4dbc0578560>"
+     ],
+     "pass": false
+    },
+    {
+     "prefix": "p095",
+     "value": [
+      "<object object at 0xe4dbc0578560>",
+      "<object object at 0xe4dbc0578560>"
+     ],
+     "pass": false
+    },
+    {
+     "prefix": "p058",
+     "value": [
+      "<object object at 0xe4dbc0578560>",
+      "<object object at 0xe4dbc0578560>"
+     ],
+     "pass": false
+    },
+    {
+     "prefix": "p083",
+     "value": [
+      "<object object at 0xe4dbc0578560>",
+      "<object object at 0xe4dbc0578560>"
+     ],
+     "pass": false
+    }
+   ]
+  },
+  {
+   "id": "D3",
+   "rule": "any confirmation set where a candidate's fp32-ieee out vs fp64 oracle, compact-commit state vs oracle/native, or replay state exceeds its frozen tolerance [value = max over candidate classes of observed/tolerance]",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 0.2633254542114031,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": 0.3011605593190723,
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": 0.32568532677644674,
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": 0.3074691659601122,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": 0.4726639302397897,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": 0.5,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": 0.5,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": 0.5,
+     "pass": true
+    }
+   ]
+  },
+  {
+   "id": "D4",
+   "rule": "bf16-store B/C disagreement with native above the frozen class (agreement floor 0.999683) on any confirmation set [value = min bf16 agreement of B_fs[ieee]/C_nm[ieee] out16 vs native]",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 0.99990234375,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": 0.9999186197916666,
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": 0.9998860677083333,
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": 0.9997884114583333,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": 0.99990234375,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": 0.99990234375,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": 0.999853515625,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": 0.99990234375,
+     "pass": true
+    }
+   ],
+   "floor": 0.999683
+  },
+  {
+   "id": "D5",
+   "rule": "served bf16 output vs fp64 oracle > 1 ULP16 on significant elements or above the frozen max-abs class on any confirmation set [value = (ulp16_max_sig, max_abs)]",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": [
+      1,
+      0.00012107269665398435
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": [
+      1,
+      0.00024081768380034008
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": [
+      0,
+      0.0002298629817051312
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": [
+      0,
+      0.00024118581192209
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": [
+      1,
+      0.00026933581935575934
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": [
+      0,
+      0.0004850037775502025
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": [
+      1,
+      0.0002241708359878719
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": [
+      0,
+      0.0002397635736664655
+     ],
+     "pass": true
+    }
+   ]
+  },
+  {
+   "id": "D6a",
+   "rule": "any non-finite comparison cell [value = non-finite numeric leaves in the result file; summary n_invalid_cells also required == 0]",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": 0,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": 0,
+     "pass": true
+    }
+   ],
+   "summary_n_invalid_cells": 0,
+   "summary_pass": true
+  },
+  {
+   "id": "D6b",
+   "rule": "any sibling-reorder control not bitwise-invariant [value = min bitwise frac over A/B/C out (+U for B/C)]",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": 1.0,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": 1.0,
+     "pass": true
+    }
+   ]
+  },
+  {
+   "id": "D6c",
+   "rule": "any PADDING control not bitwise-invariant (OMITTED BY THE v1 CHECKER) [value = min bitwise frac over B_fs/C_nm npad32-vs-npad16 out and U]",
+   "pass": false,
+   "n_sets": 8,
+   "failing_prefixes": [
+    "p072",
+    "p017",
+    "p015",
+    "p021",
+    "p085",
+    "p095",
+    "p058",
+    "p083"
+   ],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 0.9036783854166667,
+     "pass": false
+    },
+    {
+     "prefix": "p017",
+     "value": 0.8589192708333333,
+     "pass": false
+    },
+    {
+     "prefix": "p015",
+     "value": 0.8909830729166667,
+     "pass": false
+    },
+    {
+     "prefix": "p021",
+     "value": 0.8938313802083333,
+     "pass": false
+    },
+    {
+     "prefix": "p085",
+     "value": 0.91259765625,
+     "pass": false
+    },
+    {
+     "prefix": "p095",
+     "value": 0.8883138020833333,
+     "pass": false
+    },
+    {
+     "prefix": "p058",
+     "value": 0.8720540364583333,
+     "pass": false
+    },
+    {
+     "prefix": "p083",
+     "value": 0.893115234375,
+     "pass": false
+    }
+   ],
+   "per_set_detail": [
+    {
+     "prefix": "p072",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.923681640625,
+      "U_exact_frac": 0.9036783854166667,
+      "out_bitwise_frac": 0.923681640625,
+      "U_bitwise_frac": 0.9036783854166667,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9443196614583333,
+      "U_exact_frac": 0.9409830729166666,
+      "out_bitwise_frac": 0.9443196614583333,
+      "U_bitwise_frac": 0.9409830729166666,
+      "out_max_abs": 5.587935447692871e-09
+     }
+    },
+    {
+     "prefix": "p017",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9071614583333333,
+      "U_exact_frac": 0.8589192708333333,
+      "out_bitwise_frac": 0.9071614583333333,
+      "U_bitwise_frac": 0.8589192708333333,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9447102864583333,
+      "U_exact_frac": 0.9333007812499999,
+      "out_bitwise_frac": 0.9447102864583333,
+      "U_bitwise_frac": 0.9333007812499999,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p015",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9124837239583333,
+      "U_exact_frac": 0.8909830729166667,
+      "out_bitwise_frac": 0.9124837239583333,
+      "U_bitwise_frac": 0.8909830729166667,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9308430989583333,
+      "U_exact_frac": 0.9250162760416667,
+      "out_bitwise_frac": 0.9308430989583333,
+      "U_bitwise_frac": 0.9250162760416667,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p021",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9276041666666667,
+      "U_exact_frac": 0.8938313802083333,
+      "out_bitwise_frac": 0.9276041666666667,
+      "U_bitwise_frac": 0.8938313802083333,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9471516927083333,
+      "U_exact_frac": 0.939990234375,
+      "out_bitwise_frac": 0.9471516927083333,
+      "U_bitwise_frac": 0.939990234375,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p085",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9279622395833333,
+      "U_exact_frac": 0.91259765625,
+      "out_bitwise_frac": 0.9279622395833333,
+      "U_bitwise_frac": 0.91259765625,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9435221354166666,
+      "U_exact_frac": 0.94443359375,
+      "out_bitwise_frac": 0.9435221354166666,
+      "U_bitwise_frac": 0.94443359375,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p095",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9165852864583334,
+      "U_exact_frac": 0.8883138020833333,
+      "out_bitwise_frac": 0.9165852864583334,
+      "U_bitwise_frac": 0.8883138020833333,
+      "out_max_abs": 7.450580596923828e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9421223958333333,
+      "U_exact_frac": 0.9319010416666667,
+      "out_bitwise_frac": 0.9421223958333333,
+      "U_bitwise_frac": 0.9319010416666667,
+      "out_max_abs": 3.725290298461914e-09
+     }
+    },
+    {
+     "prefix": "p058",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.8727539062499999,
+      "U_exact_frac": 0.8720540364583333,
+      "out_bitwise_frac": 0.8727539062499999,
+      "U_bitwise_frac": 0.8720540364583333,
+      "out_max_abs": 3.725290298461914e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.8868977864583333,
+      "U_exact_frac": 0.8921223958333333,
+      "out_bitwise_frac": 0.8868977864583333,
+      "U_bitwise_frac": 0.8921223958333333,
+      "out_max_abs": 4.6566128730773926e-09
+     }
+    },
+    {
+     "prefix": "p083",
+     "B_fs_npad32_vs_npad16": {
+      "out_exact_frac": 0.9169596354166667,
+      "U_exact_frac": 0.893115234375,
+      "out_bitwise_frac": 0.9169596354166667,
+      "U_bitwise_frac": 0.893115234375,
+      "out_max_abs": 5.587935447692871e-09
+     },
+     "C_nm_npad32_vs_npad16": {
+      "out_exact_frac": 0.9310709635416666,
+      "U_exact_frac": 0.9259602864583333,
+      "out_bitwise_frac": 0.9310709635416666,
+      "U_bitwise_frac": 0.9259602864583333,
+      "out_max_abs": 7.450580596923828e-09
+     }
+    }
+   ]
+  },
+  {
+   "id": "D6d",
+   "rule": "any replay repeat-launch not bitwise-equal",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": true,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": true,
+     "pass": true
+    }
+   ]
+  },
+  {
+   "id": "D7a",
+   "rule": "any change in the ordering of A_prod, B_fs[ieee], C_nm[ieee] by worst-case class error relative to the pilot (pilot: A <= B == C for out vs oracle; B == C for compact state) \u2014 out vs oracle: A <= B and B == C (strict float equality) [value = (A,B,C) max_abs]",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": [
+      9.9375310272376e-09,
+      1.949136478607283e-08,
+      1.949136478607283e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": [
+      2.0529423855331075e-08,
+      2.678237241704462e-08,
+      2.678237241704462e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": [
+      1.0344187686972539e-08,
+      2.2529564130957525e-08,
+      2.2529564130957525e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": [
+      1.188308446087305e-08,
+      2.7343400238466486e-08,
+      2.7343400238466486e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": [
+      1.5813119924601438e-08,
+      4.2034260516743416e-08,
+      4.2034260516743416e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": [
+      2.7237625183085257e-08,
+      4.44652720754668e-08,
+      4.44652720754668e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": [
+      1.512118645574656e-08,
+      2.750410912910617e-08,
+      2.750410912910617e-08
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": [
+      1.3101993670550094e-08,
+      4.1924793234282554e-08,
+      4.1924793234282554e-08
+     ],
+     "pass": true
+    }
+   ]
+  },
+  {
+   "id": "D7b",
+   "rule": "any change in the ordering of A_prod, B_fs[ieee], C_nm[ieee] by worst-case class error relative to the pilot (pilot: A <= B == C for out vs oracle; B == C for compact state) \u2014 COMPACT STATE: B == C (strict float equality; OMITTED BY THE v1 CHECKER) [value = (B,C) compact_own_vs_oracle max_abs]",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": [
+      4.143200422745963e-07,
+      4.143200422745963e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": [
+      3.971868167695902e-07,
+      3.971868167695902e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": [
+      4.7578603235010064e-07,
+      4.7578603235010064e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": [
+      4.2000297639788187e-07,
+      4.2000297639788187e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": [
+      5.110995462409562e-07,
+      5.110995462409562e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": [
+      4.585079405039494e-07,
+      4.585079405039494e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": [
+      6.95234765757391e-07,
+      6.95234765757391e-07
+     ],
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": [
+      7.867071634137801e-07,
+      7.867071634137801e-07
+     ],
+     "pass": true
+    }
+   ],
+   "vs_native_sg_equal_per_set": [
+    {
+     "prefix": "p072",
+     "B": 7.152557373046875e-07,
+     "C": 7.152557373046875e-07
+    },
+    {
+     "prefix": "p017",
+     "B": 5.960464477539062e-07,
+     "C": 5.960464477539062e-07
+    },
+    {
+     "prefix": "p015",
+     "B": 1.1920928955078125e-06,
+     "C": 1.1920928955078125e-06
+    },
+    {
+     "prefix": "p021",
+     "B": 7.152557373046875e-07,
+     "C": 7.152557373046875e-07
+    },
+    {
+     "prefix": "p085",
+     "B": 7.152557373046875e-07,
+     "C": 7.152557373046875e-07
+    },
+    {
+     "prefix": "p095",
+     "B": 1.430511474609375e-06,
+     "C": 1.430511474609375e-06
+    },
+    {
+     "prefix": "p058",
+     "B": 1.9073486328125e-06,
+     "C": 1.9073486328125e-06
+    },
+    {
+     "prefix": "p083",
+     "B": 4.76837158203125e-07,
+     "C": 4.76837158203125e-07
+    }
+   ]
+  },
+  {
+   "id": "D8a",
+   "rule": "every harness set is VERIFIED-FRESH (provenance PASS bound to the payload sha256)",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p072)",
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p017)",
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p015)",
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p021)",
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p085)",
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p095)",
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p058)",
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p083)",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "id": "D8b",
+   "rule": "provenance FAIL on any confirmation prefix (counted as a failure; never dropped or re-run silently); any second passing run for the same prefix (refused by the fill script) \u2014 coverage: every frozen prefix has a VERIFIED-FRESH harness set",
+   "pass": true,
+   "missing_prefixes": [],
+   "unexpected_prefixes": [],
+   "n_frozen": 8,
+   "n_present": 8
+  },
+  {
+   "id": "D8c",
+   "rule": "provenance FAIL on any confirmation prefix (counted as a failure; never dropped or re-run silently); any second passing run for the same prefix (refused by the fill script) \u2014 no second run for the same prefix",
+   "pass": true,
+   "duplicates": []
+  },
+  {
+   "id": "D9",
+   "rule": "tf32 realizations promoted into the deployed comparison",
+   "pass": true,
+   "evaluation": "static: no frozen tolerance class references a tf32 realization; tf32 rows are reported as ablation only"
+  },
+  {
+   "id": "P1",
+   "rule": "verify-class kernel timing half-width (p90-p10)/(2*median) <= 0.05 per set (OMITTED BY THE v1 CHECKER) [value = max over ['A_prod_scan_verify_out16', 'B_fs[ieee]_verify_out16', 'C_nm[ieee]_verify_out16', 'native_sg_chain_depth5_verify(context)']]",
+   "pass": false,
+   "n_sets": 8,
+   "failing_prefixes": [
+    "p017",
+    "p015"
+   ],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 0.039124499422064,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": 0.06225841089426249,
+     "pass": false
+    },
+    {
+     "prefix": "p015",
+     "value": 0.05168602074033193,
+     "pass": false
+    },
+    {
+     "prefix": "p021",
+     "value": 0.03606963605314871,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": 0.021001389406380286,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": 0.024067880564743245,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": 0.03560583232068394,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": 0.0375417084771205,
+     "pass": true
+    }
+   ],
+   "cells_over_target": [
+    {
+     "prefix": "p017",
+     "kernel": "native_sg_chain_depth5_verify(context)",
+     "relative_half_width": 0.06225841089426249,
+     "pass": false
+    },
+    {
+     "prefix": "p015",
+     "kernel": "native_sg_chain_depth5_verify(context)",
+     "relative_half_width": 0.05168602074033193,
+     "pass": false
+    }
+   ],
+   "n_cells": 32,
+   "basis": "half-width = (p90 - p10) / (2 * median) of CUDA-event sync timings, iters 200 / warmup 20, per set. Applies to the VERIFY-class kernels (A_prod scan out16, B_fs/C_nm verify out16, native spec-update chain): pilot max 0.0623 (met). COMMIT-class kernels (~18\u2013105 us: B/C compact commit, A replay commit, native one-token) are REPORTED, not gated: pilot half-width max 0.216 on 3/8 sets exceeded 0.05 because of sub-20-us jitter; confirmation rows above 0.05 are labeled imprecise. Probe drift pilot max 0.0370. Timing remains a shared-device diagnostic; attribution label required per run."
+  },
+  {
+   "id": "P2",
+   "rule": "commit-class kernels REPORTED (not gated): rows above 0.05 labeled imprecise",
+   "pass": true,
+   "reported_only": true,
+   "n_imprecise": 3,
+   "cells": [
+    {
+     "prefix": "p072",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.029359448481349623,
+     "label": "ok"
+    },
+    {
+     "prefix": "p072",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.024955418225139546,
+     "label": "ok"
+    },
+    {
+     "prefix": "p072",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.02611707058900585,
+     "label": "ok"
+    },
+    {
+     "prefix": "p072",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.010155324043149887,
+     "label": "ok"
+    },
+    {
+     "prefix": "p072",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.019946805010998308,
+     "label": "ok"
+    },
+    {
+     "prefix": "p017",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.02461803569799731,
+     "label": "ok"
+    },
+    {
+     "prefix": "p017",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.030172443208390253,
+     "label": "ok"
+    },
+    {
+     "prefix": "p017",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.038402225924148055,
+     "label": "ok"
+    },
+    {
+     "prefix": "p017",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.0032855337416307366,
+     "label": "ok"
+    },
+    {
+     "prefix": "p017",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.21605748728322205,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p015",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.028061240399324356,
+     "label": "ok"
+    },
+    {
+     "prefix": "p015",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.19150778514816977,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p015",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.030209632269695398,
+     "label": "ok"
+    },
+    {
+     "prefix": "p015",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.01704544465534277,
+     "label": "ok"
+    },
+    {
+     "prefix": "p015",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.03225808389849215,
+     "label": "ok"
+    },
+    {
+     "prefix": "p021",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.008488930118491625,
+     "label": "ok"
+    },
+    {
+     "prefix": "p021",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.03344768858682586,
+     "label": "ok"
+    },
+    {
+     "prefix": "p021",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.015880370854772768,
+     "label": "ok"
+    },
+    {
+     "prefix": "p021",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.0026865529526401604,
+     "label": "ok"
+    },
+    {
+     "prefix": "p021",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.025265955594057928,
+     "label": "ok"
+    },
+    {
+     "prefix": "p085",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.02758007541310352,
+     "label": "ok"
+    },
+    {
+     "prefix": "p085",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.031194324659908006,
+     "label": "ok"
+    },
+    {
+     "prefix": "p085",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.15225279310522782,
+     "label": "imprecise (> 0.05)"
+    },
+    {
+     "prefix": "p085",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.010746246561404046,
+     "label": "ok"
+    },
+    {
+     "prefix": "p085",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.005992017412383521,
+     "label": "ok"
+    },
+    {
+     "prefix": "p095",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.026360547163896044,
+     "label": "ok"
+    },
+    {
+     "prefix": "p095",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.02915954130367585,
+     "label": "ok"
+    },
+    {
+     "prefix": "p095",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.04700986314812005,
+     "label": "ok"
+    },
+    {
+     "prefix": "p095",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.01792114371304083,
+     "label": "ok"
+    },
+    {
+     "prefix": "p095",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.04316071166714246,
+     "label": "ok"
+    },
+    {
+     "prefix": "p058",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.022959210189350116,
+     "label": "ok"
+    },
+    {
+     "prefix": "p058",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.028157013283366127,
+     "label": "ok"
+    },
+    {
+     "prefix": "p058",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.0147601522248428,
+     "label": "ok"
+    },
+    {
+     "prefix": "p058",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.010752700136464623,
+     "label": "ok"
+    },
+    {
+     "prefix": "p058",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.018691575711691628,
+     "label": "ok"
+    },
+    {
+     "prefix": "p083",
+     "kernel": "B_fs[ieee]_commit_deepest",
+     "relative_half_width": 0.03108346069059722,
+     "label": "ok"
+    },
+    {
+     "prefix": "p083",
+     "kernel": "C_nm[ieee]_commit_deepest",
+     "relative_half_width": 0.030648016428628588,
+     "label": "ok"
+    },
+    {
+     "prefix": "p083",
+     "kernel": "A_prod_replay_commit_deepest",
+     "relative_half_width": 0.03163389613608407,
+     "label": "ok"
+    },
+    {
+     "prefix": "p083",
+     "kernel": "A_prod_replay_commit_zero_accept",
+     "relative_half_width": 0.023937734594111474,
+     "label": "ok"
+    },
+    {
+     "prefix": "p083",
+     "kernel": "native_pk_one_token(context)",
+     "relative_half_width": 0.003989353261819445,
+     "label": "ok"
+    }
+   ]
+  },
+  {
+   "id": "P3",
+   "rule": "probe drift (|after-before|/before of the matmul probe) <= 0.05 per set [recomputed from each result's timing block; summary probe_checks cross-checked]",
+   "pass": true,
+   "n_sets": 8,
+   "failing_prefixes": [],
+   "per_set": [
+    {
+     "prefix": "p072",
+     "value": 0.02900160876175263,
+     "pass": true
+    },
+    {
+     "prefix": "p017",
+     "value": 0.03172669566682275,
+     "pass": true
+    },
+    {
+     "prefix": "p015",
+     "value": 0.0010285414201605984,
+     "pass": true
+    },
+    {
+     "prefix": "p021",
+     "value": 0.004488345948400096,
+     "pass": true
+    },
+    {
+     "prefix": "p085",
+     "value": 0.003130237830907239,
+     "pass": true
+    },
+    {
+     "prefix": "p095",
+     "value": 0.016341192352559722,
+     "pass": true
+    },
+    {
+     "prefix": "p058",
+     "value": 0.004389600431171239,
+     "pass": true
+    },
+    {
+     "prefix": "p083",
+     "value": 0.037038217093046014,
+     "pass": true
+    }
+   ],
+   "summary_probe_checks_all_pass": true,
+   "summary_probe_fail_sets": []
+  },
+  {
+   "id": "I1",
+   "rule": "harness source hashes identical at start and end of the run",
+   "pass": true,
+   "value": true
+  },
+  {
+   "id": "I2",
+   "rule": "attribution label recorded (shared-device timing diagnostic)",
+   "pass": true,
+   "value": "NO FOREIGN COMPUTE PROCESS SAMPLED (1 Hz inventory; only container PID(s) ['2874036'] seen; sampled observation, not a guarantee)"
+  }
+ ],
+ "n_rules": 32,
+ "n_fail": 4,
+ "failing_rule_ids": [
+  "T12",
+  "D2",
+  "D6c",
+  "P1"
+ ],
+ "v1_omitted_rule_ids": [
+  "D6c",
+  "D7b",
+  "P1"
+ ],
+ "v1_omitted_rules_fail": [
+  "D6c",
+  "P1"
+ ],
+ "verdict": "OUTSIDE FROZEN CRITERIA on 4 rule(s) (reportable finding; nothing dropped; no promotion)"
+}

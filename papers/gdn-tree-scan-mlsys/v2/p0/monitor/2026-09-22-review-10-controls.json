@@ -1,0 +1,430 @@
+{
+  "utc": "2026-09-22T00:40:36.141813+00:00",
+  "inspector_sha256": "e888b7160f11b8951945061c76c30c38cb5371855ba7389fe33047d12e6b3d53",
+  "cases": {
+    "positive_length": {
+      "expected_all_pass": true,
+      "all_pass": true,
+      "rc": 0,
+      "failed": [],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "length",
+        "n_ids": 32,
+        "n_body": 32,
+        "no_inner_eos": true,
+        "decoded_len": 119,
+        "response_len": 119,
+        "decoded_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "response_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "first_mismatch_index": null
+      },
+      "control_ok": true
+    },
+    "positive_eos_stop": {
+      "expected_all_pass": true,
+      "all_pass": true,
+      "rc": 0,
+      "failed": [],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "stop",
+        "n_ids": 32,
+        "n_body": 31,
+        "no_inner_eos": true,
+        "decoded_len": 115,
+        "response_len": 115,
+        "decoded_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "response_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "first_mismatch_index": null
+      },
+      "control_ok": true
+    },
+    "neg_tokenizer_unavailable": {
+      "expected_all_pass": false,
+      "all_pass": false,
+      "rc": 1,
+      "failed": [
+        "tokenizer_loaded",
+        "emitted_tokens_decode_exactly_to_response_text",
+        "finish_consistent_with_request_max_tokens",
+        "recorded_finish_reason_matches_inferred",
+        "first_step_draft_accept_consistent_with_api_sequence",
+        "per_step_accepted_paths_match_api_sequence"
+      ],
+      "unverified": [],
+      "token_binding": {
+        "reason": "tokenizer unavailable",
+        "n_ids": 32
+      },
+      "control_ok": true
+    },
+    "neg_empty_response": {
+      "expected_all_pass": false,
+      "all_pass": false,
+      "rc": 1,
+      "failed": [
+        "emitted_tokens_decode_exactly_to_response_text"
+      ],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "length",
+        "n_ids": 32,
+        "n_body": 32,
+        "no_inner_eos": true,
+        "decoded_len": 119,
+        "response_len": 0,
+        "decoded_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "response_head": "",
+        "first_mismatch_index": 0
+      },
+      "control_ok": true
+    },
+    "neg_truncated_response": {
+      "expected_all_pass": false,
+      "all_pass": false,
+      "rc": 1,
+      "failed": [
+        "emitted_tokens_decode_exactly_to_response_text"
+      ],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "length",
+        "n_ids": 32,
+        "n_body": 32,
+        "no_inner_eos": true,
+        "decoded_len": 119,
+        "response_len": 116,
+        "decoded_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "response_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "first_mismatch_index": 116
+      },
+      "control_ok": true
+    },
+    "neg_extended_response": {
+      "expected_all_pass": false,
+      "all_pass": false,
+      "rc": 1,
+      "failed": [
+        "emitted_tokens_decode_exactly_to_response_text"
+      ],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "length",
+        "n_ids": 32,
+        "n_body": 32,
+        "no_inner_eos": true,
+        "decoded_len": 119,
+        "response_len": 120,
+        "decoded_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "response_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "first_mismatch_index": 119
+      },
+      "control_ok": true
+    },
+    "neg_inner_eos": {
+      "expected_all_pass": false,
+      "all_pass": false,
+      "rc": 1,
+      "failed": [
+        "emitted_tokens_decode_exactly_to_response_text"
+      ],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "length",
+        "n_ids": 32,
+        "n_body": 32,
+        "no_inner_eos": false,
+        "decoded_len": 125,
+        "response_len": 125,
+        "decoded_head": "w1 w2 w3 w4 w5 <|im_end|>w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20",
+        "response_head": "w1 w2 w3 w4 w5 <|im_end|>w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20",
+        "first_mismatch_index": null
+      },
+      "control_ok": true
+    },
+    "neg_length_not_max": {
+      "expected_all_pass": false,
+      "all_pass": false,
+      "rc": 1,
+      "failed": [
+        "completion_tokens_consistent_with_accepted_counts",
+        "finish_consistent_with_request_max_tokens",
+        "per_step_accepted_paths_match_api_sequence"
+      ],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "length",
+        "n_ids": 31,
+        "n_body": 31,
+        "no_inner_eos": true,
+        "decoded_len": 115,
+        "response_len": 115,
+        "decoded_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "response_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "first_mismatch_index": null
+      },
+      "control_ok": true
+    },
+    "neg_missing_max_tokens": {
+      "expected_all_pass": false,
+      "all_pass": false,
+      "rc": 1,
+      "failed": [
+        "finish_consistent_with_request_max_tokens"
+      ],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "length",
+        "n_ids": 32,
+        "n_body": 32,
+        "no_inner_eos": true,
+        "decoded_len": 119,
+        "response_len": 119,
+        "decoded_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "response_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "first_mismatch_index": null
+      },
+      "control_ok": true
+    },
+    "neg_state_index_negative": {
+      "expected_all_pass": false,
+      "all_pass": false,
+      "rc": 1,
+      "failed": [
+        "state_index_nonnegative_int"
+      ],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "length",
+        "n_ids": 32,
+        "n_body": 32,
+        "no_inner_eos": true,
+        "decoded_len": 119,
+        "response_len": 119,
+        "decoded_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "response_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "first_mismatch_index": null
+      },
+      "control_ok": true
+    },
+    "neg_h0_all_zero": {
+      "expected_all_pass": false,
+      "all_pass": false,
+      "rc": 1,
+      "failed": [
+        "h0_pre_state_nontrivial"
+      ],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "length",
+        "n_ids": 32,
+        "n_body": 32,
+        "no_inner_eos": true,
+        "decoded_len": 119,
+        "response_len": 119,
+        "decoded_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "response_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "first_mismatch_index": null
+      },
+      "control_ok": true
+    },
+    "neg_finish_reason_mismatch": {
+      "expected_all_pass": false,
+      "all_pass": false,
+      "rc": 1,
+      "failed": [
+        "recorded_finish_reason_matches_inferred"
+      ],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "length",
+        "n_ids": 32,
+        "n_body": 32,
+        "no_inner_eos": true,
+        "decoded_len": 119,
+        "response_len": 119,
+        "decoded_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "response_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "first_mismatch_index": null
+      },
+      "control_ok": true
+    },
+    "neg_api_ids_missing": {
+      "expected_all_pass": false,
+      "all_pass": false,
+      "rc": 1,
+      "failed": [
+        "api_emitted_token_ids_recorded",
+        "emitted_tokens_decode_exactly_to_response_text",
+        "finish_consistent_with_request_max_tokens",
+        "recorded_finish_reason_matches_inferred",
+        "first_step_draft_accept_consistent_with_api_sequence",
+        "per_step_accepted_paths_match_api_sequence"
+      ],
+      "unverified": [],
+      "token_binding": {
+        "reason": "no API-side emitted ids",
+        "n_ids": 0
+      },
+      "control_ok": true
+    },
+    "neg_api_ids_count": {
+      "expected_all_pass": false,
+      "all_pass": false,
+      "rc": 1,
+      "failed": [
+        "api_emitted_token_ids_recorded",
+        "emitted_tokens_decode_exactly_to_response_text",
+        "finish_consistent_with_request_max_tokens",
+        "per_step_accepted_paths_match_api_sequence"
+      ],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "length",
+        "n_ids": 31,
+        "n_body": 31,
+        "no_inner_eos": true,
+        "decoded_len": 115,
+        "response_len": 119,
+        "decoded_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "response_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "first_mismatch_index": 115
+      },
+      "control_ok": true
+    },
+    "neg_foreign_rid": {
+      "expected_all_pass": false,
+      "all_pass": false,
+      "rc": 1,
+      "failed": [
+        "spec_trace_rows_for_this_request",
+        "spec_trace_every_step_drafts_n_minus_1",
+        "spec_trace_first_step_within_request_window",
+        "draft_trace_rows_for_this_request",
+        "completion_tokens_consistent_with_accepted_counts",
+        "per_step_accepted_paths_match_api_sequence",
+        "first_step_draft_accept_consistent_with_api_sequence"
+      ],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "length",
+        "n_ids": 32,
+        "n_body": 32,
+        "no_inner_eos": true,
+        "decoded_len": 119,
+        "response_len": 119,
+        "decoded_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "response_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "first_mismatch_index": null
+      },
+      "control_ok": true
+    },
+    "neg_acc_count_inconsistent": {
+      "expected_all_pass": false,
+      "all_pass": false,
+      "rc": 1,
+      "failed": [
+        "completion_tokens_consistent_with_accepted_counts",
+        "per_step_accepted_paths_match_api_sequence"
+      ],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "length",
+        "n_ids": 32,
+        "n_body": 32,
+        "no_inner_eos": true,
+        "decoded_len": 119,
+        "response_len": 119,
+        "decoded_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "response_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "first_mismatch_index": null
+      },
+      "control_ok": true
+    },
+    "neg_first_step_draft_inconsistent": {
+      "expected_all_pass": false,
+      "all_pass": false,
+      "rc": 1,
+      "failed": [
+        "per_step_accepted_paths_match_api_sequence",
+        "first_step_draft_accept_consistent_with_api_sequence"
+      ],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "length",
+        "n_ids": 32,
+        "n_body": 32,
+        "no_inner_eos": true,
+        "decoded_len": 119,
+        "response_len": 119,
+        "decoded_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "response_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "first_mismatch_index": null
+      },
+      "control_ok": true
+    },
+    "neg_draft_mode_not_tree": {
+      "expected_all_pass": false,
+      "all_pass": false,
+      "rc": 1,
+      "failed": [
+        "draft_trace_rows_for_this_request"
+      ],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "length",
+        "n_ids": 32,
+        "n_body": 32,
+        "no_inner_eos": true,
+        "decoded_len": 119,
+        "response_len": 119,
+        "decoded_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "response_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "first_mismatch_index": null
+      },
+      "control_ok": true
+    },
+    "neg_step3_path_mismatch": {
+      "expected_all_pass": false,
+      "all_pass": false,
+      "rc": 1,
+      "failed": [
+        "per_step_accepted_paths_match_api_sequence"
+      ],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "length",
+        "n_ids": 32,
+        "n_body": 32,
+        "no_inner_eos": true,
+        "decoded_len": 119,
+        "response_len": 119,
+        "decoded_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "response_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "first_mismatch_index": null
+      },
+      "control_ok": true
+    },
+    "positive_two_trailing_drafts": {
+      "expected_all_pass": true,
+      "all_pass": true,
+      "rc": 0,
+      "failed": [],
+      "unverified": [],
+      "token_binding": {
+        "finish_inferred": "length",
+        "n_ids": 32,
+        "n_body": 32,
+        "no_inner_eos": true,
+        "decoded_len": 119,
+        "response_len": 119,
+        "decoded_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "response_head": "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 w16 w17 w18 w19 w20 w21 w22 w",
+        "first_mismatch_index": null
+      },
+      "control_ok": true
+    }
+  },
+  "all_controls_ok": true
+}

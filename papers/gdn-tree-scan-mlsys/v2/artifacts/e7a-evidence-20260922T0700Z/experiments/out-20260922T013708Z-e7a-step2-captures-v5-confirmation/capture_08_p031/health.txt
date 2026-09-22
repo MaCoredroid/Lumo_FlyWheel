@@ -1,0 +1,41 @@
+health timeout
+(EngineCore pid=191) Loading safetensors checkpoint shards:  86% Completed | 57/66 [02:18<00:21,  2.42s/it]
+(EngineCore pid=191) Loading safetensors checkpoint shards:  88% Completed | 58/66 [02:20<00:19,  2.42s/it]
+(EngineCore pid=191) Loading safetensors checkpoint shards:  89% Completed | 59/66 [02:22<00:16,  2.42s/it]
+(EngineCore pid=191) Loading safetensors checkpoint shards:  91% Completed | 60/66 [02:25<00:14,  2.39s/it]
+(EngineCore pid=191) Loading safetensors checkpoint shards:  92% Completed | 61/66 [02:27<00:12,  2.40s/it]
+(EngineCore pid=191) Loading safetensors checkpoint shards:  94% Completed | 62/66 [02:30<00:09,  2.41s/it]
+(EngineCore pid=191) Loading safetensors checkpoint shards:  95% Completed | 63/66 [02:32<00:07,  2.41s/it]
+(EngineCore pid=191) Loading safetensors checkpoint shards:  97% Completed | 64/66 [02:34<00:04,  2.40s/it]
+(EngineCore pid=191) Loading safetensors checkpoint shards:  98% Completed | 65/66 [02:35<00:01,  1.82s/it]
+(EngineCore pid=191) Loading safetensors checkpoint shards: 100% Completed | 66/66 [03:13<00:00, 12.68s/it]
+(EngineCore pid=191) Loading safetensors checkpoint shards: 100% Completed | 66/66 [03:13<00:00,  2.93s/it]
+(EngineCore pid=191) 
+(EngineCore pid=191) INFO 09-22 02:23:26 [default_loader.py:384] Loading weights took 193.49 seconds
+(EngineCore pid=191) INFO 09-22 02:23:26 [gpu_model_runner.py:7991] Loading drafter model...
+(EngineCore pid=191) Loading safetensors checkpoint shards:   0% Completed | 0/66 [00:00<?, ?it/s]
+(EngineCore pid=191) INFO 09-22 02:23:27 [weight_utils.py:904] Filesystem type for checkpoints: EXT4. Checkpoint size: 28.75 GiB. Available RAM: 65.10 GiB.
+(EngineCore pid=191) Loading safetensors checkpoint shards:  98% Completed | 65/66 [00:02<00:00, 24.08it/s]
+(EngineCore pid=191) Loading safetensors checkpoint shards:  98% Completed | 65/66 [00:15<00:00, 24.08it/s]
+(EngineCore pid=191) Loading safetensors checkpoint shards: 100% Completed | 66/66 [00:31<00:00,  1.53it/s]
+(EngineCore pid=191) Loading safetensors checkpoint shards: 100% Completed | 66/66 [00:31<00:00,  2.11it/s]
+(EngineCore pid=191) 
+(EngineCore pid=191) INFO 09-22 02:23:58 [default_loader.py:384] Loading weights took 31.40 seconds
+(EngineCore pid=191) INFO 09-22 02:23:58 [eagle.py:7668] Detected MTP model. Sharing target model embedding weights with the draft model.
+(EngineCore pid=191) INFO 09-22 02:23:58 [eagle.py:7724] Detected MTP model. Sharing target model lm_head weights with the draft model.
+(EngineCore pid=191) INFO 09-22 02:23:59 [gpu_model_runner.py:8069] Model loading took 28.95 GiB memory and 226.986185 seconds
+(EngineCore pid=191) INFO 09-22 02:23:59 [interface.py:606] Setting attention block size to 832 tokens to ensure that attention page size is >= mamba page size.
+(EngineCore pid=191) INFO 09-22 02:23:59 [interface.py:630] Padding mamba page size by 0.48% to ensure that mamba page size and attention page size are exactly equal.
+(EngineCore pid=191) INFO 09-22 02:23:59 [gpu_model_runner.py:9010] Encoder cache will be initialized with a budget of 16384 tokens, and profiled with 1 image items of the maximum feature size.
+(EngineCore pid=191) INFO 09-22 02:24:49 [gpu_worker.py:440] Available KV cache memory: 32.81 GiB
+(EngineCore pid=191) WARNING 09-22 02:24:49 [kv_cache_utils.py:1070] Add 3 padding layers, may waste at most 6.25% KV cache memory
+(EngineCore pid=191) INFO 09-22 02:24:49 [kv_cache_utils.py:1337] GPU KV cache size: 126,464 tokens
+(EngineCore pid=191) INFO 09-22 02:24:49 [kv_cache_utils.py:1342] Maximum concurrency for 16,384 tokens per request: 12.16x
+(EngineCore pid=191) [FR13_SUBTREE_PARALLEL] preseeded: n=10 schedule=heavy_path levels=[1, 4] lens=[6, 1] critical=7 (monolith 10) single_launch=0 route_armed=0 selfcheck_armed=0
+(EngineCore pid=191) INFO 09-22 02:24:49 [gdn_attn.py:1007] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=1 owner=language_model.model.layers.0.linear_attn b_max=1 path_cols=10
+(EngineCore pid=191) INFO 09-22 02:24:49 [gdn_attn.py:601] FR13_EAGER_PACK stacked rings rebuilt at metadata-builder init: union 32 layers (group adds 16)
+(EngineCore pid=191) INFO 09-22 02:24:49 [gdn_attn.py:1007] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=2 owner=language_model.model.layers.1.linear_attn b_max=1 path_cols=10
+(EngineCore pid=191) INFO 09-22 02:24:49 [gdn_attn.py:601] FR13_EAGER_PACK stacked rings rebuilt at metadata-builder init: union 48 layers (group adds 16)
+(EngineCore pid=191) INFO 09-22 02:24:49 [gdn_attn.py:1007] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=3 owner=language_model.model.layers.2.linear_attn b_max=1 path_cols=10
+(EngineCore pid=191) 2026-09-22 02:24:50,606 - INFO - autotuner.py:457 - flashinfer.jit: [Autotuner]: Autotuning process starts ...
+(EngineCore pid=191) 2026-09-22 02:24:51,637 - INFO - autotuner.py:466 - flashinfer.jit: [Autotuner]: Autotuning process ends

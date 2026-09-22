@@ -1,0 +1,432 @@
+#!/usr/bin/env bash
+# DERIVED LAUNCHER (E7a fresh-operand capture). Byte-for-byte copy of scripts/fr10_launch_speed_server.sh at
+# HEAD 984f613d with EXACTLY three additions, each marked "# E7A-ADD": pass-through of the documented capture
+# selectors FR13_REPLAY_ROUTE (the capture hook refuses to run unless the replay route is OFF),
+# FR10_TREE_GDN_CAPTURE_PAYLOAD_LAYER_PREFIX and FR10_TREE_GDN_CAPTURE_PAYLOAD_NUM_TOKENS. No gate, hash,
+# model pin, memory check, or numerical flag is changed. The diff against the original is recorded next to
+# every capture run (launcher.diff) together with both files' sha256.
+set -euo pipefail
+
+# REPO IS DERIVED, NOT HARDCODED. This read
+# `REPO=${REPO:-/home/mark/shared/lumoFlyWheel}` -- a path to a DIFFERENT
+# CHECKOUT. Launched from any other tree without an explicit override it
+# mounted that foreign repo at /workspace and silently ran its code whenever
+# it happened to carry the file being asked for; it burned two pre-boot
+# refusals on the MTP-5 probe (a missing model_server, a missing chat
+# template) before anyone looked at the mount. The fixed32-family launchers
+# have always derived from SCRIPT_DIR; this now matches them exactly,
+# caller-override included.
+_FR13_SERVED_MODEL_EXPLICIT=${SERVED_MODEL_PATH:+1}${SERVED_MODEL_NAME:+1}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+_FR13_REPO_EXPLICIT=${REPO:+1}
+REPO=${REPO:-$(cd "$SCRIPT_DIR/.." && pwd)}
+REPO=$(cd "$REPO" && pwd)
+# THE SERVED CHECKPOINT, parameterized -- the shape the forked launcher has
+# always had (SERVED_MODEL_PATH / SERVED_MODEL_NAME at :602-603). These were
+# EXEC-LINE LITERALS here, so a native arm could not be pointed at other
+# weights without editing the launcher, and nothing it produced said which
+# weights it had served. Defaults preserve the legacy 3.6 pair exactly.
+#
+# Override with SERVED_MODEL_PATH / SERVED_MODEL_NAME. They are NOT FR13_*/
+# LUMO_*/VLLM_* on purpose: those prefixes are auto-forwarded into the
+# container by the env sweeper, and this pair is host-side plumbing that
+# decides the serve line, not engine config.
+SERVED_MODEL_PATH=${SERVED_MODEL_PATH:-/models/qwen3.6-27b-fp8}
+SERVED_MODEL_NAME=${SERVED_MODEL_NAME:-qwen3.6-27b}
+readonly SERVED_MODEL_PATH SERVED_MODEL_NAME
+[[ -d "$SERVED_MODEL_PATH" && ! -L "$SERVED_MODEL_PATH" ]] \
+  || { echo "served checkpoint directory is missing or symlinked: $SERVED_MODEL_PATH" >&2; exit 2; }
+IMAGE=${IMAGE:-"vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776"}
+CONTAINER=${CONTAINER:-fr10-speed-start}
+PORT=${PORT:-9950}
+GPU_UTIL=${GPU_UTIL:-0.88}
+MAX_MODEL_LEN=${MAX_MODEL_LEN:-131072}
+MAX_NUM_SEQS=${MAX_NUM_SEQS:-4}
+BATCH_INVARIANT=${BATCH_INVARIANT:-0}
+FR10_METRICS=${FR10_METRICS:-0}
+FR10_ENABLE_TREE_GDN=${FR10_ENABLE_TREE_GDN:-1}
+FR10_ALLOW_LINEAR_FALLBACK=${FR10_ALLOW_LINEAR_FALLBACK:-0}
+FR10_DECODE_MODE_DEFAULT=${FR10_DECODE_MODE_DEFAULT:-tree_mtp}
+FR11_TREE_CONV_NATIVE_BF16_TAPS=${FR11_TREE_CONV_NATIVE_BF16_TAPS:-1}
+FR12_TREE_CONV_NATIVE_BF16_TAPS=${FR12_TREE_CONV_NATIVE_BF16_TAPS:-$FR11_TREE_CONV_NATIVE_BF16_TAPS}
+FR12_NATIVE_SPINE_ORACLE=${FR12_NATIVE_SPINE_ORACLE:-0}
+FR12_TREE_CONV_NATIVE_PRIOR_READ=${FR12_TREE_CONV_NATIVE_PRIOR_READ:-0}
+FR12_TREE_CONV_NATIVE_SPINE=${FR12_TREE_CONV_NATIVE_SPINE:-0}
+FR12_TREE_SCAN_NATIVE_SPINE=${FR12_TREE_SCAN_NATIVE_SPINE:-0}
+FR12_TREE_CONV_STATE_FULL_CAPTURE=${FR12_TREE_CONV_STATE_FULL_CAPTURE:-0}
+FR10_TREE_GDN_CAPTURE_PAYLOAD=${FR10_TREE_GDN_CAPTURE_PAYLOAD:-}
+FR10_TREE_GDN_COMMIT_HANDOFF_LOG=${FR10_TREE_GDN_COMMIT_HANDOFF_LOG:-}
+FR10_TREE_GDN_COMMIT_HANDOFF_LAYER_PREFIX=${FR10_TREE_GDN_COMMIT_HANDOFF_LAYER_PREFIX:-}
+FR10_TREE_GDN_COMMIT_HANDOFF_LIMIT=${FR10_TREE_GDN_COMMIT_HANDOFF_LIMIT:-32}
+FR10_TREE_GDN_SRC_NATIVE_PAYLOAD=${FR10_TREE_GDN_SRC_NATIVE_PAYLOAD:-}
+FR10_TREE_GDN_ROOT_H0_LOG=${FR10_TREE_GDN_ROOT_H0_LOG:-}
+FR10_TREE_GDN_ROOT_H0_LOG_LIMIT=${FR10_TREE_GDN_ROOT_H0_LOG_LIMIT:-20}
+FR10_TREE_GDN_ROOT_H0_LOG_LAYER_PREFIX=${FR10_TREE_GDN_ROOT_H0_LOG_LAYER_PREFIX:-language_model.model.layers.0.linear_attn}
+FR10_TREE_DEPTH_POSITION_LOG=${FR10_TREE_DEPTH_POSITION_LOG:-/logs/fr10_tree_depth_positions.jsonl}
+FR10_ROOT_HIDDEN_CAPTURE=${FR10_ROOT_HIDDEN_CAPTURE:-}
+FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS=${FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS:-}
+FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW=${FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW:-0}
+FR10_ROOT_HIDDEN_CAPTURE_POSITION=${FR10_ROOT_HIDDEN_CAPTURE_POSITION:-}
+FR10_ROOT_LOGIT_CAPTURE_NUM_TOKENS=${FR10_ROOT_LOGIT_CAPTURE_NUM_TOKENS:-}
+FR10_ROOT_LOGIT_CAPTURE_ROOT_ROW=${FR10_ROOT_LOGIT_CAPTURE_ROOT_ROW:-}
+FR10_LAYER_HIDDEN_CAPTURE=${FR10_LAYER_HIDDEN_CAPTURE:-}
+FR10_LAYER_HIDDEN_CAPTURE_NUM_TOKENS=${FR10_LAYER_HIDDEN_CAPTURE_NUM_TOKENS:-}
+FR10_LAYER_HIDDEN_CAPTURE_ROWS=${FR10_LAYER_HIDDEN_CAPTURE_ROWS:-}
+FR10_LAYER_HIDDEN_CAPTURE_SKIP=${FR10_LAYER_HIDDEN_CAPTURE_SKIP:-0}
+FR10_LAYER_HIDDEN_CAPTURE_LIMIT=${FR10_LAYER_HIDDEN_CAPTURE_LIMIT:-1}
+FR12_SUBKERNEL_CAPTURE=${FR12_SUBKERNEL_CAPTURE:-}
+FR12_SUBKERNEL_CAPTURE_DEBUG_LOG=${FR12_SUBKERNEL_CAPTURE_DEBUG_LOG:-}
+FR12_SUBKERNEL_CAPTURE_LAYER_PREFIX=${FR12_SUBKERNEL_CAPTURE_LAYER_PREFIX:-language_model.model.layers.0.linear_attn}
+FR12_SUBKERNEL_CAPTURE_NUM_TOKENS=${FR12_SUBKERNEL_CAPTURE_NUM_TOKENS:-}
+FR12_SUBKERNEL_CAPTURE_SKIP=${FR12_SUBKERNEL_CAPTURE_SKIP:-0}
+FR12_SUBKERNEL_CAPTURE_LIMIT=${FR12_SUBKERNEL_CAPTURE_LIMIT:-1}
+FR12_SUBKERNEL_CAPTURE_Z=${FR12_SUBKERNEL_CAPTURE_Z:-0}
+FR12_SUBKERNEL_CAPTURE_INPUT=${FR12_SUBKERNEL_CAPTURE_INPUT:-0}
+FR12_FULL_ATTN_CAPTURE=${FR12_FULL_ATTN_CAPTURE:-}
+FR12_FULL_ATTN_CAPTURE_LAYER_PREFIX=${FR12_FULL_ATTN_CAPTURE_LAYER_PREFIX:-language_model.model.layers.3.self_attn}
+FR12_FULL_ATTN_CAPTURE_NUM_TOKENS=${FR12_FULL_ATTN_CAPTURE_NUM_TOKENS:-}
+FR12_FULL_ATTN_CAPTURE_SKIP=${FR12_FULL_ATTN_CAPTURE_SKIP:-0}
+FR12_FULL_ATTN_CAPTURE_LIMIT=${FR12_FULL_ATTN_CAPTURE_LIMIT:-1}
+FR13_TREE_ATTN_OP_CAPTURE=${FR13_TREE_ATTN_OP_CAPTURE:-}
+FR13_TREE_ATTN_OP_CAPTURE_LAYER=${FR13_TREE_ATTN_OP_CAPTURE_LAYER:-language_model.model.layers.3.self_attn}
+FR13_TREE_ATTN_OP_CAPTURE_SKIP=${FR13_TREE_ATTN_OP_CAPTURE_SKIP:-0}
+FR13_TREE_ATTN_OP_CAPTURE_LIMIT=${FR13_TREE_ATTN_OP_CAPTURE_LIMIT:-1}
+FR13_FLASH_ATTN_OP_CAPTURE=${FR13_FLASH_ATTN_OP_CAPTURE:-}
+FR13_FLASH_ATTN_OP_CAPTURE_LAYER=${FR13_FLASH_ATTN_OP_CAPTURE_LAYER:-language_model.model.layers.3.self_attn}
+FR13_FLASH_ATTN_OP_CAPTURE_SKIP=${FR13_FLASH_ATTN_OP_CAPTURE_SKIP:-0}
+FR13_FLASH_ATTN_OP_CAPTURE_LIMIT=${FR13_FLASH_ATTN_OP_CAPTURE_LIMIT:-1}
+FR10_SPINE_LOGIT_CAPTURE=${FR10_SPINE_LOGIT_CAPTURE:-}
+FR10_SPINE_LOGIT_CAPTURE_SKIP=${FR10_SPINE_LOGIT_CAPTURE_SKIP:-0}
+FR10_SPINE_LOGIT_CAPTURE_LIMIT=${FR10_SPINE_LOGIT_CAPTURE_LIMIT:-1}
+FR13_PREPROCESS_INPUT_CAPTURE=${FR13_PREPROCESS_INPUT_CAPTURE:-}
+FR13_PREPROCESS_INPUT_CAPTURE_NUM_TOKENS=${FR13_PREPROCESS_INPUT_CAPTURE_NUM_TOKENS:-}
+FR13_PREPROCESS_INPUT_CAPTURE_SKIP=${FR13_PREPROCESS_INPUT_CAPTURE_SKIP:-0}
+FR13_PREPROCESS_INPUT_CAPTURE_LIMIT=${FR13_PREPROCESS_INPUT_CAPTURE_LIMIT:-1}
+FR13_PREFILL_GDN_CAPTURE=${FR13_PREFILL_GDN_CAPTURE:-}
+FR13_PREFILL_GDN_CAPTURE_LAYER_PREFIX=${FR13_PREFILL_GDN_CAPTURE_LAYER_PREFIX:-}
+FR13_PREFILL_GDN_CAPTURE_LIMIT_PER_PREFIX=${FR13_PREFILL_GDN_CAPTURE_LIMIT_PER_PREFIX:-1}
+LUMO_MTP_DRAFT_TRACE_FILE=${LUMO_MTP_DRAFT_TRACE_FILE:-}
+LUMO_TREE_SAMPLER_DEBUG_LOG=${LUMO_TREE_SAMPLER_DEBUG_LOG:-}
+LUMO_TREE_PATH_LCP_LOG=${LUMO_TREE_PATH_LCP_LOG:-}
+FR12_ENABLE_SWE_PRELAUNCH=${FR12_ENABLE_SWE_PRELAUNCH:-0}
+FR12_NO_SPECULATIVE_CONFIG=${FR12_NO_SPECULATIVE_CONFIG:-0}
+FR13_TREE_ATTN_EXP2_SOFTMAX=${FR13_TREE_ATTN_EXP2_SOFTMAX:-1}
+# FR13_DRAFTER_SINGLE_LOGITS (FIX-1, default ON): the caterpillar drafter
+# takes draft tokens as argmax of the single already-computed logits tensor
+# instead of _greedy_sample's second compute_logits (double full-vocab bf16
+# lm-head read per drafter step, FR13_B1_SPEED_ATTRIBUTION_BIND.md). =0 is
+# the exact legacy double-logits path (the A/B instrument).
+FR13_DRAFTER_SINGLE_LOGITS=${FR13_DRAFTER_SINGLE_LOGITS:-1}
+# FR13_EAGER_PACK (FIX-2, default OFF until the lossless gate passes): pack
+# the committer's eager DtoH/HtoD storm and batch the 48 per-layer replay
+# launches into one (FR13_B1_SPEED_ATTRIBUTION_BIND.md). SEMANTICS-PRESERVING
+# ONLY: no computed value changes, only WHERE/HOW the same ints move. =0 is
+# the exact legacy transport path (the A/B instrument).
+FR13_EAGER_PACK=${FR13_EAGER_PACK:-1}
+# FR13_TREE_CONV_FUSED (FIX-3, default OFF until the byte A/B + live gate
+# pass): fuse the tree causal-conv emulation's per-node state write-back
+# loop / per-col tap loop / remap + committed-prior row math into vectorized
+# torch ops over init-time static index tensors (census contributors 1-4,
+# FR13_B1_SPEED_ATTRIBUTION_BIND.md). BIT-EXACT-PRESERVING by construction
+# (same per-element ops in the same order; tree-only — native
+# causal_conv1d_update untouched). =0 is the exact legacy emulation (the
+# A/B instrument).
+FR13_TREE_CONV_FUSED=${FR13_TREE_CONV_FUSED:-1}
+ENFORCE_EAGER=${ENFORCE_EAGER:-0}
+LOG_DIR=${LOG_DIR:-"${FR10_RUN_DIR:-$REPO/output/fr10_speed_starting_point/live_logs}/logs"}
+TREE=${TREE:-"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]"}
+NUM_SPECULATIVE_TOKENS=${NUM_SPECULATIVE_TOKENS:-$(TREE="$TREE" python3 - <<'PY'
+import ast
+import os
+print(len(ast.literal_eval(os.environ["TREE"])))
+PY
+)}
+SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":$NUM_SPECULATIVE_TOKENS,\"speculative_token_tree\":\"$TREE\"}"}
+# APC (prefix caching) — gated, default OFF (byte-identical to the native E5 baseline
+# when off). For the SPINE TEST: native MTP-5 (FLASH_ATTN, no tree) + APC, to check
+# whether the cache-ON degradation is OUR-TREE-specific (the mamba 'align' cache is
+# linear-layout, native-aware but NOT tree/node-bank-aware). Mirrors the forked launcher.
+FR13_ENABLE_APC=${FR13_ENABLE_APC:-0}
+MAMBA_BLOCK_SIZE=${MAMBA_BLOCK_SIZE:-1024}
+MAMBA_SSM_CACHE_DTYPE=${MAMBA_SSM_CACHE_DTYPE:-float32}
+APC_MAX_NUM_BATCHED_TOKENS=${APC_MAX_NUM_BATCHED_TOKENS:-$MAMBA_BLOCK_SIZE}
+APC_FLAGS=""
+if [[ "$FR13_ENABLE_APC" == "1" ]]; then
+  APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size $MAMBA_BLOCK_SIZE --mamba-ssm-cache-dtype $MAMBA_SSM_CACHE_DTYPE --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS"
+fi
+# CUDAGRAPH_MODE knob (mirrors the forked launcher fr13_launch_forked_fa2_tree_server.sh
+# lines ~284-298): the APC cache-ON garble is GRAPH-SPECIFIC (the FULL decode CUDA-graph
+# reads GDN recurrent state via capture-time-baked persistent indexing, so an APC cache-hit
+# re-prefill that rewrites the restored boundary state into block-pool rows is read at the
+# wrong row by the captured graph). cudagraph_mode=PIECEWISE runs the GDN/mamba scan EAGER
+# every step (always reads the live restored state) while keeping graph capture for the dense
+# GEMMs/norms/MLP. Unset => vLLM default FULL_AND_PIECEWISE (byte-identical to the prior
+# behavior of this launcher; only matters with APC on). Added so a no-spec + cache-ON arm can
+# MATCH the tree/spine arms' PIECEWISE cache path (which the forked launcher set but this one
+# previously could not), making the cache comparison apples-to-apples.
+CG_FLAGS=""
+if [[ -n "${CUDAGRAPH_MODE:-}" ]]; then
+  CG_FLAGS="--compilation-config '{\"cudagraph_mode\":\"$CUDAGRAPH_MODE\"}'"
+fi
+if [[ -z "${ATTENTION_BACKEND+x}" ]]; then
+  ATTENTION_BACKEND=FLASH_ATTN
+fi
+
+mkdir -p "$LOG_DIR"
+LOG_DIR=$(realpath "$LOG_DIR")
+
+# WHICH WEIGHTS THIS ARM SERVED. A native arm must always be able to say so:
+# the path, the name it answers to, and an identity for the checkpoint dir
+# itself, because two directories can carry the same name and different bytes.
+# The identity is the sorted (name,size,mtime) digest of the top-level
+# safetensors -- cheap, and enough to tell two checkpoints apart without
+# hashing 22 GB at every boot.
+_fr13_model_identity=$(
+  find "$SERVED_MODEL_PATH" -maxdepth 1 -name '*.safetensors' -printf '%f %s\n' 2>/dev/null \
+    | sort | sha256sum | cut -d' ' -f1
+)
+echo "[launch] serving $SERVED_MODEL_PATH as '$SERVED_MODEL_NAME'" \
+     "(checkpoint identity ${_fr13_model_identity:0:16})" >&2
+printf '{"schema":"fr13.served_model.v1","path":"%s","name":"%s","checkpoint_identity":"%s","overridden":"%s","launcher":"%s"}\n' \
+  "$SERVED_MODEL_PATH" "$SERVED_MODEL_NAME" "$_fr13_model_identity" \
+  "$( [[ -n "${_FR13_SERVED_MODEL_EXPLICIT:-}" ]] && echo true || echo false )" "fr10_launch_speed_server.sh" \
+  > "$LOG_DIR/served_model.json"
+
+# REPO IDENTITY, recorded so a foreign mount can never again be silent. The
+# resolved path AND the HEAD of that path when it is a git tree: two different
+# checkouts of the same project have the same basename and differ only here.
+_fr13_repo_head=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo "")
+_fr13_repo_origin=$( [[ -n "$_FR13_REPO_EXPLICIT" ]] && echo caller-override || echo derived-from-script-dir )
+if [[ -n "$_FR13_REPO_EXPLICIT" ]]; then
+  echo "[launch] REPO OVERRIDDEN BY CALLER: $REPO (head ${_fr13_repo_head:-<not a git tree>})" >&2
+else
+  echo "[launch] repo=$REPO (head ${_fr13_repo_head:-<not a git tree>}, derived from script dir)" >&2
+fi
+printf '{"schema":"fr13.repo_identity.v1","repo":"%s","head":"%s","origin":"%s","script_dir":"%s","launcher":"%s"}\n' \
+  "$REPO" "$_fr13_repo_head" "$_fr13_repo_origin" "$SCRIPT_DIR" "fr10_launch_speed_server.sh" \
+  > "$LOG_DIR/repo_identity.json"
+docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+
+_lumo_truthy() {
+  case "${1,,}" in
+    1|true|yes|on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+LUMO_NSYS_WRAP_VLLM=${LUMO_NSYS_WRAP_VLLM:-0}
+LUMO_NSYS_BIN=${LUMO_NSYS_BIN:-/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys}
+LUMO_NSYS_DELAY_S=${LUMO_NSYS_DELAY_S:-600}
+LUMO_NSYS_DURATION_S=${LUMO_NSYS_DURATION_S:-150}
+# Periodic CUPTI buffer flush (ms). Without it, per-kernel records (incl. graph
+# node-level kernels) are dropped as "incomplete" at the delayed-duration session
+# stop on GB10 (fr13_b1_profile_bind: 55k/78k events dropped, zero kernel rows).
+LUMO_NSYS_FLUSH_MS=${LUMO_NSYS_FLUSH_MS:-100}
+# Semicolon-separated lines appended to the in-container nsys user config
+# ("$nsys -z"). Default works around the GB10 drop class where ALL per-kernel
+# rows are "incomplete CUPTI events dropped ... GPU timestamp information have
+# not been retrieved" even with periodic flushes (NVIDIA-documented
+# CuptiUseRawGpuTimestamps=false workaround; fr13_b1_profile_node: 102,320
+# dropped with --cuda-flush-interval 100 and zero kernel tables).
+LUMO_NSYS_CONFIG_DIRECTIVES=${LUMO_NSYS_CONFIG_DIRECTIVES:-CuptiUseRawGpuTimestamps=false}
+# nsys --trace value. On GB10 + CUDA 13 the default 'cuda' engages the HARDWARE
+# trace engine for kernel records; in delayed-duration sessions ALL kernel rows
+# are then dropped ("GPU timestamp information have not been retrieved").
+# 'cuda,cuda-sw' forces the software CUPTI kernel-record path (memcpy/memset/
+# runtime rows always survived; only hw-trace kernel rows dropped).
+LUMO_NSYS_TRACE=${LUMO_NSYS_TRACE:-cuda,nvtx}
+LUMO_NSYS_OUTPUT=${LUMO_NSYS_OUTPUT:-/logs/nsys_vllm_${CONTAINER}}
+NSYS_DOCKER_ARGS=()
+if _lumo_truthy "$LUMO_NSYS_WRAP_VLLM"; then
+  for nsight_mount in /opt/nvidia /usr/local/cuda-13.0; do
+    if [[ ! -e "$nsight_mount" ]]; then
+      echo "LUMO_NSYS_WRAP_VLLM enabled but Nsight mount path is missing: $nsight_mount" >&2
+      exit 2
+    fi
+    NSYS_DOCKER_ARGS+=(-v "$nsight_mount:$nsight_mount:ro")
+  done
+fi
+
+# WHERE THE STALE EDITABLE INSTALL BIT. The shared .venv carries
+# __editable__.lumo_flywheel_serving-0.1.0.pth pointing at
+# /home/mark/shared/lumoFlyWheel/src -- the OLD checkout. Nothing in the serve
+# closure depends on that resolution: every in-path import PREPENDS the right
+# src, host-side here and container-side via -e PYTHONPATH=/workspace/src, and
+# a prepended path wins over a .pth. But this line read "$REPO/src" while REPO
+# was hardcoded to that same old checkout, so the two defects were the same
+# defect twice and this import really did come from the foreign tree. Deriving
+# REPO above closes the host-side half; the venv is environment, not repo, and
+# is deliberately left alone.
+PYTHONPATH="$REPO/src${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
+from lumo_flywheel_serving.model_server import recover_host_memory
+
+recover_host_memory()
+PY
+free -h
+python3 - <<'PY'
+from pathlib import Path
+
+fields = {}
+for line in Path("/proc/meminfo").read_text().splitlines():
+    key, value = line.split(":", 1)
+    fields[key] = int(value.strip().split()[0])
+
+mem_free_gib = fields.get("MemFree", 0) / 1024 / 1024
+swap_used_kib = fields.get("SwapTotal", 0) - fields.get("SwapFree", 0)
+if mem_free_gib < 100 or swap_used_kib != 0:
+    raise SystemExit(
+        "FR10 launch aborted: host memory recovery did not produce "
+        f"MemFree>=100GiB and swap_used==0; "
+        f"MemFree={mem_free_gib:.2f}GiB swap_used={swap_used_kib / 1024 / 1024:.2f}GiB"
+    )
+PY
+
+docker run -d --name "$CONTAINER" --gpus all --ipc=host \
+  --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
+  -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
+  "${NSYS_DOCKER_ARGS[@]}" \
+  -e VLLM_BATCH_INVARIANT="$BATCH_INVARIANT" \
+  -e LUMO_BATCH_INVARIANT_VLLM="${LUMO_BATCH_INVARIANT_VLLM:-$BATCH_INVARIANT}" \
+  -e LUMO_NSYS_WRAP_VLLM="$LUMO_NSYS_WRAP_VLLM" \
+  -e LUMO_NSYS_BIN="$LUMO_NSYS_BIN" \
+  -e LUMO_NSYS_DELAY_S="$LUMO_NSYS_DELAY_S" \
+  -e LUMO_NSYS_DURATION_S="$LUMO_NSYS_DURATION_S" \
+  -e LUMO_NSYS_FLUSH_MS="$LUMO_NSYS_FLUSH_MS" \
+  -e LUMO_NSYS_CONFIG_DIRECTIVES="$LUMO_NSYS_CONFIG_DIRECTIVES" \
+  -e LUMO_NSYS_TRACE="$LUMO_NSYS_TRACE" \
+  -e LUMO_NSYS_OUTPUT="$LUMO_NSYS_OUTPUT" \
+  -e VLLM_SERVER_DEV_MODE=1 \
+  -e CUDA_LAUNCH_BLOCKING="${CUDA_LAUNCH_BLOCKING:-0}" \
+  -e PYTHONPATH=/workspace/src \
+  -e FR10_ENABLE_TREE_GDN="$FR10_ENABLE_TREE_GDN" \
+  -e FR10_ALLOW_LINEAR_FALLBACK="$FR10_ALLOW_LINEAR_FALLBACK" \
+  -e FR10_METRICS="$FR10_METRICS" \
+  -e FR10_DECODE_MODE_DEFAULT="$FR10_DECODE_MODE_DEFAULT" \
+  -e FR13_DRAFTER_SINGLE_LOGITS="$FR13_DRAFTER_SINGLE_LOGITS" \
+  -e FR13_EAGER_PACK="$FR13_EAGER_PACK" \
+  -e FR13_SFWD_GPU_TIMER="${FR13_SFWD_GPU_TIMER:-0}" \
+  -e FR13_SFWD_GPU_TIMER_JSON="${FR13_SFWD_GPU_TIMER_JSON:-}" \
+  -e FR13_SFWD_GPU_TIMER_MAXPENDING="${FR13_SFWD_GPU_TIMER_MAXPENDING:-256}" \
+  -e FR13_DFWD_GPU_TIMER="${FR13_DFWD_GPU_TIMER:-0}" \
+  -e FR13_DFWD_GPU_TIMER_JSON="${FR13_DFWD_GPU_TIMER_JSON:-}" \
+  -e FR13_CFWD_GPU_TIMER="${FR13_CFWD_GPU_TIMER:-0}" \
+  -e FR13_CFWD_GPU_TIMER_JSON="${FR13_CFWD_GPU_TIMER_JSON:-}" \
+  -e FR13_TREE_CONV_FUSED="$FR13_TREE_CONV_FUSED" \
+  -e FR11_TREE_CONV_NATIVE_BF16_TAPS="$FR11_TREE_CONV_NATIVE_BF16_TAPS" \
+  -e FR12_TREE_CONV_NATIVE_BF16_TAPS="$FR12_TREE_CONV_NATIVE_BF16_TAPS" \
+  -e FR12_NATIVE_SPINE_ORACLE="$FR12_NATIVE_SPINE_ORACLE" \
+  -e FR12_TREE_CONV_NATIVE_PRIOR_READ="$FR12_TREE_CONV_NATIVE_PRIOR_READ" \
+  -e FR12_TREE_CONV_NATIVE_SPINE="$FR12_TREE_CONV_NATIVE_SPINE" \
+  -e FR12_TREE_SCAN_NATIVE_SPINE="$FR12_TREE_SCAN_NATIVE_SPINE" \
+  -e FR12_TREE_CONV_STATE_FULL_CAPTURE="$FR12_TREE_CONV_STATE_FULL_CAPTURE" \
+  -e FR10_TREE_GDN_COUNTER_DUMP=/logs/fr10_tree_gdn_counters.json \
+  -e FR10_TREE_GDN_CAPTURE_PAYLOAD="$FR10_TREE_GDN_CAPTURE_PAYLOAD" \
+  -e FR13_REPLAY_ROUTE="${FR13_REPLAY_ROUTE:-1}" \  # E7A-ADD
+  -e FR10_TREE_GDN_CAPTURE_PAYLOAD_LAYER_PREFIX="${FR10_TREE_GDN_CAPTURE_PAYLOAD_LAYER_PREFIX:-}" \  # E7A-ADD
+  -e FR10_TREE_GDN_CAPTURE_PAYLOAD_NUM_TOKENS="${FR10_TREE_GDN_CAPTURE_PAYLOAD_NUM_TOKENS:-}" \  # E7A-ADD
+  -e FR10_TREE_GDN_COMMIT_HANDOFF_LOG="$FR10_TREE_GDN_COMMIT_HANDOFF_LOG" \
+  -e FR10_TREE_GDN_COMMIT_HANDOFF_LAYER_PREFIX="$FR10_TREE_GDN_COMMIT_HANDOFF_LAYER_PREFIX" \
+  -e FR10_TREE_GDN_COMMIT_HANDOFF_LIMIT="$FR10_TREE_GDN_COMMIT_HANDOFF_LIMIT" \
+  -e FR10_TREE_GDN_SRC_NATIVE_PAYLOAD="$FR10_TREE_GDN_SRC_NATIVE_PAYLOAD" \
+  -e FR10_TREE_GDN_ROOT_H0_LOG="$FR10_TREE_GDN_ROOT_H0_LOG" \
+  -e FR10_TREE_GDN_ROOT_H0_LOG_LIMIT="$FR10_TREE_GDN_ROOT_H0_LOG_LIMIT" \
+  -e FR10_TREE_GDN_ROOT_H0_LOG_LAYER_PREFIX="$FR10_TREE_GDN_ROOT_H0_LOG_LAYER_PREFIX" \
+  -e FR10_TREE_DEPTH_POSITION_LOG="$FR10_TREE_DEPTH_POSITION_LOG" \
+  -e FR10_ROOT_HIDDEN_CAPTURE="$FR10_ROOT_HIDDEN_CAPTURE" \
+  -e FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS="$FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS" \
+  -e FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW="$FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW" \
+  -e FR10_ROOT_HIDDEN_CAPTURE_POSITION="$FR10_ROOT_HIDDEN_CAPTURE_POSITION" \
+  -e FR10_ROOT_LOGIT_CAPTURE_NUM_TOKENS="$FR10_ROOT_LOGIT_CAPTURE_NUM_TOKENS" \
+  -e FR10_ROOT_LOGIT_CAPTURE_ROOT_ROW="$FR10_ROOT_LOGIT_CAPTURE_ROOT_ROW" \
+  -e FR10_LAYER_HIDDEN_CAPTURE="$FR10_LAYER_HIDDEN_CAPTURE" \
+  -e FR10_LAYER_HIDDEN_CAPTURE_NUM_TOKENS="$FR10_LAYER_HIDDEN_CAPTURE_NUM_TOKENS" \
+  -e FR10_LAYER_HIDDEN_CAPTURE_ROWS="$FR10_LAYER_HIDDEN_CAPTURE_ROWS" \
+  -e FR10_LAYER_HIDDEN_CAPTURE_SKIP="$FR10_LAYER_HIDDEN_CAPTURE_SKIP" \
+  -e FR10_LAYER_HIDDEN_CAPTURE_LIMIT="$FR10_LAYER_HIDDEN_CAPTURE_LIMIT" \
+  -e FR12_SUBKERNEL_CAPTURE="$FR12_SUBKERNEL_CAPTURE" \
+  -e FR12_SUBKERNEL_CAPTURE_DEBUG_LOG="$FR12_SUBKERNEL_CAPTURE_DEBUG_LOG" \
+  -e FR12_SUBKERNEL_CAPTURE_LAYER_PREFIX="$FR12_SUBKERNEL_CAPTURE_LAYER_PREFIX" \
+  -e FR12_SUBKERNEL_CAPTURE_NUM_TOKENS="$FR12_SUBKERNEL_CAPTURE_NUM_TOKENS" \
+  -e FR12_SUBKERNEL_CAPTURE_SKIP="$FR12_SUBKERNEL_CAPTURE_SKIP" \
+  -e FR12_SUBKERNEL_CAPTURE_LIMIT="$FR12_SUBKERNEL_CAPTURE_LIMIT" \
+  -e FR12_SUBKERNEL_CAPTURE_Z="$FR12_SUBKERNEL_CAPTURE_Z" \
+  -e FR12_SUBKERNEL_CAPTURE_INPUT="$FR12_SUBKERNEL_CAPTURE_INPUT" \
+  -e FR12_FULL_ATTN_CAPTURE="$FR12_FULL_ATTN_CAPTURE" \
+  -e FR12_FULL_ATTN_CAPTURE_LAYER_PREFIX="$FR12_FULL_ATTN_CAPTURE_LAYER_PREFIX" \
+  -e FR12_FULL_ATTN_CAPTURE_NUM_TOKENS="$FR12_FULL_ATTN_CAPTURE_NUM_TOKENS" \
+  -e FR12_FULL_ATTN_CAPTURE_SKIP="$FR12_FULL_ATTN_CAPTURE_SKIP" \
+  -e FR12_FULL_ATTN_CAPTURE_LIMIT="$FR12_FULL_ATTN_CAPTURE_LIMIT" \
+  -e FR13_TREE_ATTN_OP_CAPTURE="$FR13_TREE_ATTN_OP_CAPTURE" \
+  -e FR13_TREE_ATTN_OP_CAPTURE_LAYER="$FR13_TREE_ATTN_OP_CAPTURE_LAYER" \
+  -e FR13_TREE_ATTN_OP_CAPTURE_SKIP="$FR13_TREE_ATTN_OP_CAPTURE_SKIP" \
+  -e FR13_TREE_ATTN_OP_CAPTURE_LIMIT="$FR13_TREE_ATTN_OP_CAPTURE_LIMIT" \
+  -e FR13_FLASH_ATTN_OP_CAPTURE="$FR13_FLASH_ATTN_OP_CAPTURE" \
+  -e FR13_FLASH_ATTN_OP_CAPTURE_LAYER="$FR13_FLASH_ATTN_OP_CAPTURE_LAYER" \
+  -e FR13_FLASH_ATTN_OP_CAPTURE_SKIP="$FR13_FLASH_ATTN_OP_CAPTURE_SKIP" \
+  -e FR13_FLASH_ATTN_OP_CAPTURE_LIMIT="$FR13_FLASH_ATTN_OP_CAPTURE_LIMIT" \
+  -e FR10_SPINE_LOGIT_CAPTURE="$FR10_SPINE_LOGIT_CAPTURE" \
+  -e FR10_SPINE_LOGIT_CAPTURE_SKIP="$FR10_SPINE_LOGIT_CAPTURE_SKIP" \
+  -e FR10_SPINE_LOGIT_CAPTURE_LIMIT="$FR10_SPINE_LOGIT_CAPTURE_LIMIT" \
+  -e FR13_FINAL_LOGIT_CAPTURE="${FR13_FINAL_LOGIT_CAPTURE:-}" \
+  -e FR13_FINAL_LOGIT_CAPTURE_NUM_TOKENS="${FR13_FINAL_LOGIT_CAPTURE_NUM_TOKENS:-}" \
+  -e FR13_FINAL_LOGIT_CAPTURE_ROWS="${FR13_FINAL_LOGIT_CAPTURE_ROWS:-}" \
+  -e FR13_FINAL_LOGIT_CAPTURE_SKIP="${FR13_FINAL_LOGIT_CAPTURE_SKIP:-0}" \
+  -e FR13_FINAL_LOGIT_CAPTURE_LIMIT="${FR13_FINAL_LOGIT_CAPTURE_LIMIT:-1}" \
+  -e FR13_PREPROCESS_INPUT_CAPTURE="$FR13_PREPROCESS_INPUT_CAPTURE" \
+  -e FR13_PREPROCESS_INPUT_CAPTURE_NUM_TOKENS="$FR13_PREPROCESS_INPUT_CAPTURE_NUM_TOKENS" \
+  -e FR13_PREPROCESS_INPUT_CAPTURE_SKIP="$FR13_PREPROCESS_INPUT_CAPTURE_SKIP" \
+  -e FR13_PREPROCESS_INPUT_CAPTURE_LIMIT="$FR13_PREPROCESS_INPUT_CAPTURE_LIMIT" \
+  -e FR13_PREFILL_GDN_CAPTURE="$FR13_PREFILL_GDN_CAPTURE" \
+  -e FR13_PREFILL_GDN_CAPTURE_LAYER_PREFIX="$FR13_PREFILL_GDN_CAPTURE_LAYER_PREFIX" \
+  -e FR13_PREFILL_GDN_CAPTURE_LIMIT_PER_PREFIX="$FR13_PREFILL_GDN_CAPTURE_LIMIT_PER_PREFIX" \
+  -e LUMO_MTP_DRAFT_TRACE_FILE="$LUMO_MTP_DRAFT_TRACE_FILE" \
+  -e LUMO_TREE_SAMPLER_DEBUG_LOG="$LUMO_TREE_SAMPLER_DEBUG_LOG" \
+  -e LUMO_TREE_PATH_LCP_LOG="$LUMO_TREE_PATH_LCP_LOG" \
+  -e FR12_ENABLE_SWE_PRELAUNCH="$FR12_ENABLE_SWE_PRELAUNCH" \
+  -e FR12_NO_SPECULATIVE_CONFIG="$FR12_NO_SPECULATIVE_CONFIG" \
+  -e FR13_TREE_ATTN_EXP2_SOFTMAX="$FR13_TREE_ATTN_EXP2_SOFTMAX" \
+  -e SPEC_CONFIG="$SPEC_CONFIG" \
+  --entrypoint bash \
+  "$IMAGE" \
+  -lc "set -euo pipefail
+if [[ \"\${FR12_ENABLE_SWE_PRELAUNCH:-0}\" == \"1\" ]]; then
+  python3 /workspace/scripts/fr12_apply_swe_prelaunch.py
+fi
+python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
+SPEC_ARGS=()
+if [[ \"\${FR12_NO_SPECULATIVE_CONFIG:-0}\" != \"1\" ]]; then
+  SPEC_ARGS=(--speculative-config \"\$SPEC_CONFIG\")
+fi
+NSYS_PREFIX=()
+case \"\${LUMO_NSYS_WRAP_VLLM,,}\" in
+  1|true|yes|on)
+    if [[ -n \"\${LUMO_NSYS_CONFIG_DIRECTIVES:-}\" ]]; then
+      NSYS_CFG_PATH=\$(\"\$LUMO_NSYS_BIN\" -z)
+      mkdir -p \"\$(dirname \"\$NSYS_CFG_PATH\")\"
+      printf '%s\n' \"\$LUMO_NSYS_CONFIG_DIRECTIVES\" | tr ';' '\n' >> \"\$NSYS_CFG_PATH\"
+      echo \"nsys config directives appended to \$NSYS_CFG_PATH:\"
+      cat \"\$NSYS_CFG_PATH\"
+    fi
+    NSYS_PREFIX=(
+      \"\$LUMO_NSYS_BIN\"
+      profile
+      --delay \"\$LUMO_NSYS_DELAY_S\"
+      --duration \"\$LUMO_NSYS_DURATION_S\"
+      --trace=\"\$LUMO_NSYS_TRACE\"
+      --cuda-graph-trace=node
+      --cuda-flush-interval \"\$LUMO_NSYS_FLUSH_MS\"
+      --sample=none
+      --cpuctxsw=none
+      --force-overwrite=true
+      -o \"\$LUMO_NSYS_OUTPUT\"
+    )
+    ;;
+esac
+exec \"\${NSYS_PREFIX[@]}\" vllm serve $SERVED_MODEL_PATH --served-model-name $SERVED_MODEL_NAME \
+  --host 0.0.0.0 --port 9950 --max-num-seqs '$MAX_NUM_SEQS' \
+  --gpu-memory-utilization '$GPU_UTIL' --max-model-len '$MAX_MODEL_LEN' \
+  --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \
+  --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
+  --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \
+  \"\${SPEC_ARGS[@]}\" $APC_FLAGS $CG_FLAGS \
+  $(if [[ "$ENFORCE_EAGER" == "1" ]]; then printf '%s' '--enforce-eager'; fi)"

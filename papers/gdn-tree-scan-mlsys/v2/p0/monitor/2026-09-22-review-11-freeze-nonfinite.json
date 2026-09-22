@@ -1,0 +1,140 @@
+{
+  "checks": {
+    "positive_consistent_fixture_VALID": {
+      "pass": true,
+      "detail": []
+    },
+    "neg_status_only_template_INVALID": {
+      "pass": true,
+      "detail": [
+        "eight_unique_pilot_ids_match_frozen_set",
+        "single_inspector_version_across_pilot",
+        "harness_summary_hash_bound_and_covers_pilot",
+        "candidate_selection_filled",
+        "tolerances_filled_numeric_bounded_by_pilot",
+        "decision_change_criteria_filled"
+      ]
+    },
+    "neg_stale_provenance_hash_INVALID": {
+      "pass": true,
+      "detail": [
+        "evidence_p021"
+      ]
+    },
+    "neg_stale_summary_hash_INVALID": {
+      "pass": true,
+      "detail": [
+        "harness_summary_hash_bound_and_covers_pilot"
+      ]
+    },
+    "neg_summary_missing_one_payload_INVALID": {
+      "pass": true,
+      "detail": [
+        "harness_summary_hash_bound_and_covers_pilot"
+      ]
+    },
+    "neg_seven_entries_INVALID": {
+      "pass": true,
+      "detail": [
+        "eight_unique_pilot_ids_match_frozen_set",
+        "harness_summary_hash_bound_and_covers_pilot"
+      ]
+    },
+    "neg_duplicate_id_INVALID": {
+      "pass": true,
+      "detail": [
+        "eight_unique_pilot_ids_match_frozen_set"
+      ]
+    },
+    "neg_wrong_id_INVALID": {
+      "pass": true,
+      "detail": [
+        "eight_unique_pilot_ids_match_frozen_set",
+        "evidence_p999"
+      ]
+    },
+    "neg_payload_sha_mismatch_INVALID": {
+      "pass": true,
+      "detail": [
+        "evidence_p017"
+      ]
+    },
+    "neg_inspector_mismatch_INVALID": {
+      "pass": true,
+      "detail": [
+        "evidence_p095",
+        "single_inspector_version_across_pilot"
+      ]
+    },
+    "neg_provenance_not_all_pass_INVALID": {
+      "pass": true,
+      "detail": [
+        "evidence_p085"
+      ]
+    },
+    "neg_empty_tolerances_INVALID": {
+      "pass": true,
+      "detail": [
+        "tolerances_filled_numeric_bounded_by_pilot"
+      ]
+    },
+    "neg_tolerance_below_pilot_max_INVALID": {
+      "pass": true,
+      "detail": [
+        "tolerances_filled_numeric_bounded_by_pilot"
+      ]
+    },
+    "neg_empty_candidates_INVALID": {
+      "pass": true,
+      "detail": [
+        "candidate_selection_filled"
+      ]
+    },
+    "neg_empty_decision_changes_INVALID": {
+      "pass": true,
+      "detail": [
+        "decision_change_criteria_filled"
+      ]
+    },
+    "neg_timing_precision_missing_INVALID": {
+      "pass": true,
+      "detail": [
+        "timing_precision_filled"
+      ]
+    },
+    "neg_cost_variance_missing_INVALID": {
+      "pass": true,
+      "detail": [
+        "cost_variance_filled_numeric"
+      ]
+    },
+    "neg_frozen_utc_missing_INVALID": {
+      "pass": true,
+      "detail": [
+        "frozen_utc_iso"
+      ]
+    },
+    "neg_nonfinite_tolerance_INVALID": {
+      "pass": false,
+      "detail": []
+    },
+    "loop_refuses_status_only_json_rc30": {
+      "pass": true,
+      "detail": "sion_filled\": false,\n \"cost_variance_filled_numeric\": false,\n \"resampling_unit_is_prefix\": true\n}\nPILOT FREEZE: INVALID\n"
+    },
+    "loop_refuses_md_not_frozen_rc32": {
+      "pass": true,
+      "detail": "recision_filled\": true,\n \"cost_variance_filled_numeric\": true,\n \"resampling_unit_is_prefix\": true\n}\nPILOT FREEZE: VALID\n"
+    },
+    "loop_passes_gate_no_boot_all_prefixes_skipped": {
+      "pass": true,
+      "detail": {
+        "rc": 0,
+        "tail": "skip [30] p087 (proven in an earlier root)\nskip [31] p076 (proven in an earlier root)\nskip [32] p078 (proven in an earlier root)\nCAPTURE LOOP DONE: 32 prefixes\n"
+      }
+    }
+  },
+  "check_pilot_freeze_sha256": "982cc89cb5cd060f688500dc1f9c8303b9b078de5d40db9f47a3f11e6b316af6",
+  "loop_v5_sha256": "39a09b3364fe676ea9454abcadae87b6682fae770e64e2eb7cf73cdf21ba271d",
+  "all_pass": false
+}

@@ -1,0 +1,140 @@
+{
+  "observed_utc": "2026-09-21T22:29:40.585363+00:00",
+  "run": "out-20260921T222051Z-e7a-smoke",
+  "start_end_source_hashes_match": true,
+  "compiled_cubin_checks": [
+    {
+      "path": "2X3Q7EEZJXGPSB2BFL6FDF55A2EMCEOGUUW3MXUYK2TJTYWN2UUQ/_tree_gdn_factor_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "3W2ECLCAHSZGI6UEWKN6LVYQSWESX2PJ4BE52YQZAIEY445LIOBQ/_tree_gdn_compact_commit_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "3WB6SM67ZDWMTNQ7B2246M73DHYI5L4SACO7F55M44UYNWLIGWAQ/fused_recurrent_gated_delta_rule_packed_decode_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "3YIKVGW4LX7A3CJZI2AX5OKGITN7IMZOZOZR3YK2FHFKO7RG56KA/_tree_gdn_wy_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "4EXYBA3LMZYS5WX4427LZGVILCEPZBHD5OV7KWQ3Y6U2A3QRWEQA/_tree_gdn_factor_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "7PYRMNPG6XGGAR6F7HH3YHUJ35WMCOI7ZHDZ3T4MR2WV3FHBFYMA/_tree_gdn_wy_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "A4U4ZKYHOE3PG555U4OPAC6P3D6Z6NPA7ABDPZY5N2LMZJNYEPXQ/fused_sigmoid_gating_delta_rule_update_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "AAZUYM3FJ5QXLLLJH5FDQHBKJAHDY42B6D6SD3F5LT6NNMFAXIZQ/_tree_gdn_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "BBPNTB6IBN7FIYZNFTXAQE2MBEMLVZVOI2W7B7DE4ISXL4V36MRA/_tree_gdn_replay_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "BHV4PJGJ6SCTLV6F346BYXBVABIHDZPQW6D2YWEXTUU7C6PXA7QA/fused_recurrent_gated_delta_rule_packed_decode_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "E5PUN3CQHZVNGAEI7G5TSUM27MM6TXCPVISW5O7YNSPBFG666B4A/_tree_gdn_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "HW5PJDJB36IZZSTQO5K3AVVSY5RZGAE7WFK2JNHIOQZAGXJ5Q3AQ/_tree_gdn_factor_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "KCVWYTQSO4SKRDLPR7MKDMSVZHL6ZU2D4HMQJXUT5WSFG7RV7NCA/_tree_gdn_factor_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "KNIORV6Q4JRKMHV3WXEMTDNSVAWUTJHLVGQ43T4WYAZFLCG2GBVQ/_tree_gdn_factor_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "KXKT4Z2QX2K67UQFYAG5EU7NUH3GGZMTWQB6XIYLHF2O6J6EHTCA/_tree_gdn_factor_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "MQN76ZL5QS7XRN2SQFZRG5UF7L64AQNQEYSDFXQTH3J6DMOVSITA/_tree_gdn_factor_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "MV2SHVU65ATJIJXLDGXZJA2IMTFF32QGPMCWWHJNVPROXE4YVXFA/_tree_gdn_compact_commit_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "OISRBQIWAJPRGP2UBJXYTFRBXXVL2EQA6FQ3V6NHEI62LXPM5HOQ/_tree_gdn_factor_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "QBPGH57SUNVBCHMZIH6XE23SYFCOOTFFRGXT4IOVOPUGUXSX2LMQ/_tree_gdn_wy_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "RC5OC2IWUD62LO7QQDDWLDZZCFING42ABZJYCT4NR43RUMKUCGSQ/_tree_gdn_factor_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "SCMWCIARQ4FQ2KRVHMEK6ZYOVX2UZ2DLTJOQ4C6HUZPWPIKZ56PQ/fused_sigmoid_gating_delta_rule_update_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "TH4XGDQDZEYXNZH2ABZ6LPPTHAPSCIRJWSVFIQZSINFYTE7OZ55Q/_tree_gdn_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "TP3ZSQFNVEJ2JKNJZFPDD2L4B54R3XSGGBFQM7JTJ4KYTYKPORSA/_tree_gdn_factor_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "UO6HB355RPP6UZ5EIKT43HQITZQ6AWIJWD77Z3MXAPS54VJIIUMQ/_tree_gdn_factor_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "URCDFFRCJUCHM5RHZR7E6EOIPG45LETE4BMJ5ZLWVH4SXIMGTEZA/_tree_gdn_wy_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "UWPEJI6222UZNCNXN5RW4IKWV6TE2N776VXYRHXXRHARQ7G4SEMQ/_tree_gdn_factor_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "V7G5XX4OX5LHBHY4BIIJGLEFQ4DZ5PPBGOBJA3MQ22TBZHWBK2ZA/_tree_gdn_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "VU2FCM5BIXAF5KDKQL644MM5Q374AE5GFINRV2ZDM42MUVYQBJBA/_tree_gdn_factor_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "WQBSTDNOICQZMPIA6WPLS54HEIBA2O7IBQRMFPPJY2UY3OK5OOBA/_tree_gdn_factor_kernel.cubin",
+      "match": true
+    },
+    {
+      "path": "XF2B4DWFPRTKYQTKEF365NKFQFHDEN7EOCSFEINABH5BB5APFR4Q/_tree_gdn_factor_kernel.cubin",
+      "match": true
+    }
+  ],
+  "cubins_all_match": true,
+  "manifest_status": "completed",
+  "b4_exercised": false,
+  "historical_payloads": [
+    "/hist/fr13_replay_gpu_gates/boot1a_eager_capture_logs/tree_gdn_capture_payload.pt"
+  ],
+  "replay_repeat_equal_all_ten_paths": true,
+  "observed_compute_pid_names": [
+    "2746563, [No data]",
+    "2746563, python3"
+  ],
+  "telemetry_record_count": 112,
+  "scope": "Artifact audit of one completed smoke; no independent GPU rerun or full-model qualification"
+}

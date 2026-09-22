@@ -1,0 +1,72 @@
+{
+  "utc": "2026-09-22T06:02:51.387541+00:00",
+  "runs": {
+    "out-20260922T013313Z-e7a-fresh-pilot-v2": {
+      "cubins_checked": 30,
+      "bad": []
+    },
+    "out-20260922T051611Z-e7a-fresh-confirmation": {
+      "cubins_checked": 30,
+      "bad": []
+    }
+  },
+  "freeze": {
+    "rc": 0,
+    "stderr": ""
+  },
+  "confirmation": {
+    "rc": 1,
+    "stderr": ""
+  },
+  "confirmation_result": {
+    "verdict": "OUTSIDE FROZEN CRITERIA (reportable finding; nothing dropped)",
+    "n_sets": 31,
+    "failed_classes": {
+      "scan_bf16_out_vs_native_specupdate_bitwise": {
+        "observed_worst": 1.6276041666651864e-05,
+        "tolerance": 0,
+        "pilot_max": 0,
+        "rule": "0 ULP, integer view, deployed bf16 store vs native spec-update bf16 store; pilot 8/8 bitwise_frac = 1.0",
+        "pass": false,
+        "n_sets": 31,
+        "note": null
+      },
+      "fp32_ieee_realizations_out_vs_fp64_oracle_max_abs": {
+        "observed_worst": 9.18150905304671e-08,
+        "tolerance": 8.89305441509336e-08,
+        "pilot_max": 4.44652720754668e-08,
+        "rule": null,
+        "pass": false,
+        "n_sets": 31,
+        "note": null
+      }
+    },
+    "failed_decision_checks": [
+      "set_coverage_equals_frozen_set",
+      "ordering_A_le_B_eq_C_out_vs_oracle",
+      "probe_drift_all_pass"
+    ]
+  },
+  "first_substitution_smoke": {
+    "verify_records": 12,
+    "commit_records": 0,
+    "min_bf16_bitwise_frac": 0.9998047351837158,
+    "max_output_delta": 3.0517578125e-05,
+    "applied_records": 12,
+    "unique_layers": 1,
+    "step_indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ]
+  }
+}

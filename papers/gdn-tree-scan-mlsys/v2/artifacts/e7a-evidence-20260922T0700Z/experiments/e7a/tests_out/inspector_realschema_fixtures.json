@@ -1,0 +1,21 @@
+{
+ "inspector_sha256": "1c8f4fcce30ca3de003b4bbb8853a0e3f25f1e28174fd98feb77fa5048995e00",
+ "fixtures": {
+  "positive_realschema": {
+   "rc": 0,
+   "verdict": "PROVENANCE: PASS",
+   "failing": [],
+   "unverified": []
+  },
+  "negative_realschema": {
+   "rc": 1,
+   "verdict": "PROVENANCE: FAIL",
+   "failing": [
+    "depth_position_first_step_is_full_tree",
+    "emitted_token_count_equals_usage_completion_tokens"
+   ],
+   "unverified": []
+  }
+ },
+ "schema_source": "real emitted lines from the June fr13_wy_l1 capture logs"
+}

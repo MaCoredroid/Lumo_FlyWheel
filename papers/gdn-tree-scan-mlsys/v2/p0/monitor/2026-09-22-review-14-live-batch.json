@@ -1,0 +1,293 @@
+{
+  "observed_utc": "2026-09-22T06:42:32.462153+00:00",
+  "runs": [
+    {
+      "run": "e7b_001_p072_arm1_none-B_fs_ieee-all",
+      "provenance_pass": true,
+      "state_count": 13,
+      "state_checks": [
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step5.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 5,
+          "mode": "none",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step4.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 4,
+          "mode": "none",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step6.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 6,
+          "mode": "none",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step2.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 2,
+          "mode": "none",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step10.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 10,
+          "mode": "none",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step9.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 9,
+          "mode": "none",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step7.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 7,
+          "mode": "none",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step0.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 0,
+          "mode": "none",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step8.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 8,
+          "mode": "none",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step1.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 1,
+          "mode": "none",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step11.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 11,
+          "mode": "none",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step12.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 12,
+          "mode": "none",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step3.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 3,
+          "mode": "none",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        }
+      ],
+      "snapshot_runtime_sha256": "d6468150e17e6a5a55476821565f3c29e279ee6ef089fc3d8c21a13051319a8c",
+      "image": "image_digest=vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776\nsha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc arm64"
+    },
+    {
+      "run": "e7b_002_p072_arm2_sham-B_fs_ieee-all-verify_only",
+      "provenance_pass": true,
+      "state_count": 13,
+      "state_checks": [
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step5.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 5,
+          "mode": "sham",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step4.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 4,
+          "mode": "sham",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step6.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 6,
+          "mode": "sham",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step2.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 2,
+          "mode": "sham",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step10.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 10,
+          "mode": "sham",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step9.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 9,
+          "mode": "sham",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step7.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 7,
+          "mode": "sham",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step0.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 0,
+          "mode": "sham",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step8.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 8,
+          "mode": "sham",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step1.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 1,
+          "mode": "sham",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step11.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 11,
+          "mode": "sham",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step12.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 12,
+          "mode": "sham",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        },
+        {
+          "file": "language_model_model_layers_62_linear_attn.row0.step3.pt",
+          "layer": "language_model.model.layers.62.linear_attn",
+          "row": 0,
+          "step": 3,
+          "mode": "sham",
+          "applied": false,
+          "finite": true,
+          "before_after_equal": true
+        }
+      ],
+      "snapshot_runtime_sha256": "d6468150e17e6a5a55476821565f3c29e279ee6ef089fc3d8c21a13051319a8c",
+      "image": "image_digest=vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776\nsha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc arm64"
+    },
+    {
+      "run": "e7b_003_p072_arm3_verify_only-B_fs_ieee-all",
+      "provenance_pass": null,
+      "state_count": 0,
+      "state_checks": [],
+      "snapshot_runtime_sha256": "d6468150e17e6a5a55476821565f3c29e279ee6ef089fc3d8c21a13051319a8c",
+      "image": "image_digest=vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776\nsha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc arm64"
+    }
+  ],
+  "docker": "3ad22b20b5c4 e7a-capture-064223 Up 2 seconds\n",
+  "gpu": ""
+}

@@ -1,0 +1,26 @@
+payload: layers.62.linear_attn synthetic=False n=10 parents=[-1, 0, 1, 1, 2, 2, 4, 4, 6, 6] depth=5
+gates: {"g_min": -2.9128858857030995, "g_max": -8.267632011059837e-06, "beta_min": 0.005730246514992078, "beta_max": 0.9965165758069192, "cum_g_min": -14.57226390674514, "cum_g_max": -0.00013758785849633985, "P_min": 4.691872442309726e-07, "P_max": 0.999862421606279, "decay_ratio_min_visible": 3.4400977905910174e-06, "decay_ratio_max_visible": 1.0, "fp32_underflow_risk": false, "max_depth": 5, "ratio_mode": "expdiff"}
+fp64 identities: {"A_ckpt_vs_A_replay_state": 0.0, "B_U_vs_oracle_u": 6.38378239159465e-16, "C_U_vs_oracle_u": 6.38378239159465e-16, "B_out_vs_oracle": 5.551115123125783e-17, "C_out_vs_oracle": 5.551115123125783e-17, "B_state_vs_oracle": 1.3322676295501878e-15, "C_state_vs_oracle": 1.3322676295501878e-15, "oracle_out_max_abs": 0.0814131290678657, "oracle_state_max_abs": 3.508287263758031}
+fp64 worst commit identity error over all accept paths: 1.3322676295501878e-15
+fp32 A_u      max_abs=2.994e-07 rel=2.558e-07 ulp32_max_sig=236 frac>=1ulp_sig=0.688 exact=0.239
+fp32 B_U      max_abs=2.135e-07 rel=1.825e-07 ulp32_max_sig=343 frac>=1ulp_sig=0.739 exact=0.202
+fp32 C_U      max_abs=3.114e-07 rel=2.661e-07 ulp32_max_sig=343 frac>=1ulp_sig=0.737 exact=0.203
+fp32 A_out    max_abs=4.024e-08 rel=4.943e-07 ulp32_max_sig=70 frac>=1ulp_sig=0.826 exact=0.156
+fp32 B_out    max_abs=2.318e-08 rel=2.848e-07 ulp32_max_sig=63 frac>=1ulp_sig=0.819 exact=0.155
+fp32 C_out    max_abs=2.318e-08 rel=2.848e-07 ulp32_max_sig=57 frac>=1ulp_sig=0.821 exact=0.153
+fp32 A_state  max_abs=5.697e-07 rel=1.624e-07 ulp32_max_sig=56 frac>=1ulp_sig=0.566 exact=0.342
+fp32 B_state  max_abs=2.740e-07 rel=7.809e-08 ulp32_max_sig=24 frac>=1ulp_sig=0.358 exact=0.420
+fp32 C_state  max_abs=2.740e-07 rel=7.809e-08 ulp32_max_sig=23 frac>=1ulp_sig=0.359 exact=0.419
+fp32 commit stages (max_abs vs oracle) per accepted leaf:
+  to_0   compact_with_oracle_factors=2.01e-07 A_replay_fp32=2.01e-07 B_compact_own_factors=2.01e-07 C_compact_own_factors=2.01e-07
+  to_1   compact_with_oracle_factors=2.67e-07 A_replay_fp32=2.45e-07 B_compact_own_factors=2.67e-07 C_compact_own_factors=2.67e-07
+  to_2   compact_with_oracle_factors=3.28e-07 A_replay_fp32=3.44e-07 B_compact_own_factors=3.28e-07 C_compact_own_factors=3.28e-07
+  to_3   compact_with_oracle_factors=2.77e-07 A_replay_fp32=2.66e-07 B_compact_own_factors=2.77e-07 C_compact_own_factors=2.77e-07
+  to_4   compact_with_oracle_factors=2.16e-07 A_replay_fp32=4.20e-07 B_compact_own_factors=2.16e-07 C_compact_own_factors=2.16e-07
+  to_5   compact_with_oracle_factors=3.48e-07 A_replay_fp32=4.75e-07 B_compact_own_factors=3.48e-07 C_compact_own_factors=3.48e-07
+  to_6   compact_with_oracle_factors=2.83e-07 A_replay_fp32=5.05e-07 B_compact_own_factors=2.80e-07 C_compact_own_factors=2.80e-07
+  to_7   compact_with_oracle_factors=3.91e-07 A_replay_fp32=4.33e-07 B_compact_own_factors=3.91e-07 C_compact_own_factors=3.91e-07
+  to_8   compact_with_oracle_factors=3.59e-07 A_replay_fp32=4.91e-07 B_compact_own_factors=2.52e-07 C_compact_own_factors=3.59e-07
+  to_9   compact_with_oracle_factors=4.80e-07 A_replay_fp32=5.70e-07 B_compact_own_factors=4.80e-07 C_compact_own_factors=4.80e-07
+VERIFIED-FRESH served_state_vs_A32_mirror: N/A (stateless route: no served tree state)
+wrote /home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_21_p012/cpu_selftest_fresh_p012.json

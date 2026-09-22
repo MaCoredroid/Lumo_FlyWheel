@@ -1,0 +1,60 @@
+{
+ "run_dir": "papers/gdn-tree-scan-mlsys/v2/experiments/out-20260921T223658Z-e7a-tinygates",
+ "manifest_status": "completed",
+ "source_hashes_start_end_match": true,
+ "attribution": {
+  "available": true,
+  "container_host_pids": [
+   "2754027"
+  ],
+  "util_samples": 335,
+  "util_zero_frac": 0.9492537313432836,
+  "util_gt5_count": 11,
+  "util_max": 96,
+  "window_utc": [
+   "2026-09-21T22:36:58.901000",
+   "2026-09-21T22:42:33.072000"
+  ],
+  "coverage_gaps": [],
+  "inventory_seconds": 324,
+  "compute_pids_seen": {
+   "2754027": {
+    "samples": 324,
+    "names": [
+     "python3"
+    ]
+   }
+  },
+  "foreign_pids": {},
+  "label": "NO FOREIGN COMPUTE PROCESS SAMPLED (1 Hz inventory; only container PID(s) ['2754027'] seen; sampled observation, not a guarantee)"
+ },
+ "probe_checks": {
+  "1": {
+   "drift": 0.027174897214782952,
+   "pass": true,
+   "before_us": 1928.5455703735352,
+   "after_us": 1980.953598022461,
+   "criterion": "<= 5%"
+  },
+  "2": {
+   "drift": 0.008548418650016945,
+   "pass": true,
+   "before_us": 1916.8048858642578,
+   "after_us": 1900.4192352294922,
+   "criterion": "<= 5%"
+  },
+  "3": {
+   "drift": 0.010031785978272827,
+   "pass": true,
+   "before_us": 1976.5968322753906,
+   "after_us": 1996.4256286621094,
+   "criterion": "<= 5%"
+  }
+ },
+ "n_invalid_cells": 0,
+ "n_operand_sets": 3,
+ "n_historical": 0,
+ "n_synthetic": 3,
+ "b4_exercised": false,
+ "independent_prefixes_established": 0
+}

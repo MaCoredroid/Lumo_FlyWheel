@@ -1,0 +1,164 @@
+{
+ "run_dir": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T013313Z-e7a-fresh-pilot-v2",
+ "manifest_status": "completed",
+ "source_hashes_start_end_match": true,
+ "attribution": {
+  "available": true,
+  "container_host_pids": [
+   "2883522"
+  ],
+  "util_samples": 140,
+  "util_zero_frac": 0.8214285714285714,
+  "util_gt5_count": 24,
+  "util_max": 96,
+  "window_utc": [
+   "2026-09-22T01:33:13.975000",
+   "2026-09-22T01:35:33.061000"
+  ],
+  "coverage_gaps": [],
+  "inventory_seconds": 134,
+  "compute_pids_seen": {
+   "2883522": {
+    "samples": 134,
+    "names": [
+     "[No data]",
+     "python3"
+    ]
+   }
+  },
+  "foreign_pids": {},
+  "label": "NO FOREIGN COMPUTE PROCESS SAMPLED (1 Hz inventory; only container PID(s) ['2883522'] seen; sampled observation, not a guarantee)"
+ },
+ "probe_checks": {
+  "1": {
+   "drift": 0.007422299153609151,
+   "pass": true,
+   "before_us": 1746.7391967773438,
+   "after_us": 1733.7743759155273,
+   "criterion": "<= 5%"
+  },
+  "2": {
+   "drift": 0.011657065222010665,
+   "pass": true,
+   "before_us": 1727.9104232788086,
+   "after_us": 1748.0527877807617,
+   "criterion": "<= 5%"
+  },
+  "3": {
+   "drift": 0.023376439025681494,
+   "pass": true,
+   "before_us": 1808.585548400879,
+   "after_us": 1766.307258605957,
+   "criterion": "<= 5%"
+  },
+  "4": {
+   "drift": 0.04571585450935731,
+   "pass": true,
+   "before_us": 1743.1167602539062,
+   "after_us": 1822.804832458496,
+   "criterion": "<= 5%"
+  },
+  "5": {
+   "drift": 0.03150969234473658,
+   "pass": true,
+   "before_us": 1793.3792114257812,
+   "after_us": 1736.8703842163086,
+   "criterion": "<= 5%"
+  },
+  "6": {
+   "drift": 0.003425862356792759,
+   "pass": true,
+   "before_us": 1776.6447067260742,
+   "after_us": 1782.7312469482422,
+   "criterion": "<= 5%"
+  },
+  "7": {
+   "drift": 0.004307356617541379,
+   "pass": true,
+   "before_us": 1745.1215744018555,
+   "after_us": 1737.6047134399414,
+   "criterion": "<= 5%"
+  },
+  "8": {
+   "drift": 0.01737382648164774,
+   "pass": true,
+   "before_us": 1817.905616760254,
+   "after_us": 1786.3216400146484,
+   "criterion": "<= 5%"
+  }
+ },
+ "n_invalid_cells": 0,
+ "n_operand_sets": 8,
+ "n_historical": 0,
+ "n_verified_fresh": 8,
+ "n_unverified_capture": 0,
+ "n_synthetic": 0,
+ "b4_exercised": false,
+ "operand_sets": [
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p072)",
+   "payload_sha256": "02b37fff1f856247b4b7f9a694061bca1b2500c76afc7bad12b401c1c36d8c54",
+   "prefix_id": "p072",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p017)",
+   "payload_sha256": "dfafbe339d71f52d66adcce34068ababe997b913718efa054e69c106a72ef728",
+   "prefix_id": "p017",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p015)",
+   "payload_sha256": "6742e2d92016f061e5bfb562b87ad5ac1a45494ebcc0129ed18f107d8c267f8a",
+   "prefix_id": "p015",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p021)",
+   "payload_sha256": "d8307e795dc7dac1a77c2f81caa40f5b16c3f725f273be2a86f95f334c62a023",
+   "prefix_id": "p021",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p085)",
+   "payload_sha256": "eb35f6708ad5b3cac34f299445fc27710c1b053e3e274ae710d281c729dedf57",
+   "prefix_id": "p085",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p095)",
+   "payload_sha256": "e0b635931358f7738d03c895aab44816be1025270cbf10c35b9378cce8a59d81",
+   "prefix_id": "p095",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p058)",
+   "payload_sha256": "3b411271f4e3e1064f99c959df302d37dfd9e292fd83b7bcb048e56c1dd3bc38",
+   "prefix_id": "p058",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  },
+  {
+   "label": "layers.62.linear_attn",
+   "status": "VERIFIED-FRESH (provenance PASS bound to this payload sha256; prefix p083)",
+   "payload_sha256": "f2672729ea958f0b1f65190a8bbe875737f5199ad1f6d2324737712552675d74",
+   "prefix_id": "p083",
+   "layer_prefix": "language_model.model.layers.62.linear_attn",
+   "synthetic": false
+  }
+ ],
+ "independent_prefixes_established": 8
+}

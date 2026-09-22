@@ -1,0 +1,23 @@
+--- scripts/fr10_launch_speed_server.sh	2026-09-21 21:41:59.124083899 +0000
++++ papers/gdn-tree-scan-mlsys/v2/experiments/e7a/e7a_capture_launch.sh	2026-09-21 23:06:41.441737680 +0000
+@@ -1,4 +1,10 @@
+ #!/usr/bin/env bash
++# DERIVED LAUNCHER (E7a fresh-operand capture). Byte-for-byte copy of scripts/fr10_launch_speed_server.sh at
++# HEAD 984f613d with EXACTLY three additions, each marked "# E7A-ADD": pass-through of the documented capture
++# selectors FR13_REPLAY_ROUTE (the capture hook refuses to run unless the replay route is OFF),
++# FR10_TREE_GDN_CAPTURE_PAYLOAD_LAYER_PREFIX and FR10_TREE_GDN_CAPTURE_PAYLOAD_NUM_TOKENS. No gate, hash,
++# model pin, memory check, or numerical flag is changed. The diff against the original is recorded next to
++# every capture run (launcher.diff) together with both files' sha256.
+ set -euo pipefail
+ 
+ # REPO IS DERIVED, NOT HARDCODED. This read
+@@ -315,6 +321,9 @@
+   -e FR12_TREE_CONV_STATE_FULL_CAPTURE="$FR12_TREE_CONV_STATE_FULL_CAPTURE" \
+   -e FR10_TREE_GDN_COUNTER_DUMP=/logs/fr10_tree_gdn_counters.json \
+   -e FR10_TREE_GDN_CAPTURE_PAYLOAD="$FR10_TREE_GDN_CAPTURE_PAYLOAD" \
++  -e FR13_REPLAY_ROUTE="${FR13_REPLAY_ROUTE:-1}" \  # E7A-ADD
++  -e FR10_TREE_GDN_CAPTURE_PAYLOAD_LAYER_PREFIX="${FR10_TREE_GDN_CAPTURE_PAYLOAD_LAYER_PREFIX:-}" \  # E7A-ADD
++  -e FR10_TREE_GDN_CAPTURE_PAYLOAD_NUM_TOKENS="${FR10_TREE_GDN_CAPTURE_PAYLOAD_NUM_TOKENS:-}" \  # E7A-ADD
+   -e FR10_TREE_GDN_COMMIT_HANDOFF_LOG="$FR10_TREE_GDN_COMMIT_HANDOFF_LOG" \
+   -e FR10_TREE_GDN_COMMIT_HANDOFF_LAYER_PREFIX="$FR10_TREE_GDN_COMMIT_HANDOFF_LAYER_PREFIX" \
+   -e FR10_TREE_GDN_COMMIT_HANDOFF_LIMIT="$FR10_TREE_GDN_COMMIT_HANDOFF_LIMIT" \

@@ -1,0 +1,223 @@
+{
+  "checks": {
+    "cell1_native-5_B1_driver_reexec_from_snapshot": {
+      "pass": true,
+      "detail": [
+        "start_utc=2026-09-22T09:49:21Z cell=1 block=1 arm=native-5 batch=B1 max_num_seqs=1 gpu_util_frozen=0.6 max_model_len_frozen=16384 spec_config_frozen={\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":5}",
+        "driver_exec=e1_cell_driver.v1.sh sha256=8872ffae80561b65 from_snapshot=1 snapshot_dir=/tmp/claude-1000/-home-mark-lumo-paper-v2-20260921/c8955ff9-f3ae-4551-869b-1a98b38ca2c3/scratchpad/e1drv.uy1f/runs/cell_01_b1_native-5_B1_a1/script_snapshot"
+      ]
+    },
+    "cell1_native-5_B1_snapshot_complete": {
+      "pass": true,
+      "detail": []
+    },
+    "cell1_native-5_B1_no_heavy_capture": {
+      "pass": true,
+      "detail": {
+        "FR10_METRICS": "0",
+        "LUMO_MTP_DRAFT_TRACE_FILE": ""
+      }
+    },
+    "cell1_native-5_B1_frozen_common_env": {
+      "pass": true,
+      "detail": {
+        "MAX_NUM_SEQS": "1",
+        "VLLM_SYNC_SCHED": "1",
+        "ENFORCE_EAGER": "1",
+        "FR13_ENABLE_APC": "0",
+        "E1_RECORD": "/logs/e1_events.jsonl",
+        "FR13_SFWD_GPU_TIMER": "1",
+        "SEED": "20260921"
+      }
+    },
+    "cell1_native-5_B1_native_route_env": {
+      "pass": true,
+      "detail": {
+        "NUM_SPECULATIVE_TOKENS": "5",
+        "ATTENTION_BACKEND": "FLASH_ATTN",
+        "FR10_DECODE_MODE_DEFAULT": "naive_mtp",
+        "FR10_ENABLE_TREE_GDN": "0"
+      }
+    },
+    "cell1_native-5_B1_aborted_without_container": {
+      "pass": true,
+      "detail": 1
+    },
+    "cell2_native-5_B4_driver_reexec_from_snapshot": {
+      "pass": true,
+      "detail": [
+        "start_utc=2026-09-22T09:49:21Z cell=2 block=1 arm=native-5 batch=B4 max_num_seqs=4 gpu_util_frozen=0.6 max_model_len_frozen=16384 spec_config_frozen={\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":5}",
+        "driver_exec=e1_cell_driver.v1.sh sha256=8872ffae80561b65 from_snapshot=1 snapshot_dir=/tmp/claude-1000/-home-mark-lumo-paper-v2-20260921/c8955ff9-f3ae-4551-869b-1a98b38ca2c3/scratchpad/e1drv.uy1f/runs/cell_02_b1_native-5_B4_a1/script_snapshot"
+      ]
+    },
+    "cell2_native-5_B4_snapshot_complete": {
+      "pass": true,
+      "detail": []
+    },
+    "cell2_native-5_B4_no_heavy_capture": {
+      "pass": true,
+      "detail": {
+        "FR10_METRICS": "0",
+        "LUMO_MTP_DRAFT_TRACE_FILE": ""
+      }
+    },
+    "cell2_native-5_B4_frozen_common_env": {
+      "pass": true,
+      "detail": {
+        "MAX_NUM_SEQS": "4",
+        "VLLM_SYNC_SCHED": "1",
+        "ENFORCE_EAGER": "1",
+        "FR13_ENABLE_APC": "0",
+        "E1_RECORD": "/logs/e1_events.jsonl",
+        "FR13_SFWD_GPU_TIMER": "1",
+        "SEED": "20260921"
+      }
+    },
+    "cell2_native-5_B4_native_route_env": {
+      "pass": true,
+      "detail": {
+        "NUM_SPECULATIVE_TOKENS": "5",
+        "ATTENTION_BACKEND": "FLASH_ATTN",
+        "FR10_DECODE_MODE_DEFAULT": "naive_mtp",
+        "FR10_ENABLE_TREE_GDN": "0"
+      }
+    },
+    "cell2_native-5_B4_aborted_without_container": {
+      "pass": true,
+      "detail": 1
+    },
+    "cell5_tree_B1_driver_reexec_from_snapshot": {
+      "pass": true,
+      "detail": [
+        "start_utc=2026-09-22T09:49:21Z cell=5 block=1 arm=tree batch=B1 max_num_seqs=1 gpu_util_frozen=0.6 max_model_len_frozen=16384 spec_config_frozen={\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":9,\"speculative_token_tree\":\"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]\"}",
+        "driver_exec=e1_cell_driver.v1.sh sha256=8872ffae80561b65 from_snapshot=1 snapshot_dir=/tmp/claude-1000/-home-mark-lumo-paper-v2-20260921/c8955ff9-f3ae-4551-869b-1a98b38ca2c3/scratchpad/e1drv.uy1f/runs/cell_05_b1_tree_B1_a1/script_snapshot"
+      ]
+    },
+    "cell5_tree_B1_snapshot_complete": {
+      "pass": true,
+      "detail": []
+    },
+    "cell5_tree_B1_no_heavy_capture": {
+      "pass": true,
+      "detail": {
+        "FR10_METRICS": "0",
+        "LUMO_MTP_DRAFT_TRACE_FILE": ""
+      }
+    },
+    "cell5_tree_B1_frozen_common_env": {
+      "pass": true,
+      "detail": {
+        "MAX_NUM_SEQS": "1",
+        "VLLM_SYNC_SCHED": "1",
+        "ENFORCE_EAGER": "1",
+        "FR13_ENABLE_APC": "0",
+        "E1_RECORD": "/logs/e1_events.jsonl",
+        "FR13_SFWD_GPU_TIMER": "1",
+        "SEED": "20260921"
+      }
+    },
+    "cell5_tree_B1_policy_B_and_route_flags_no_capture": {
+      "pass": true,
+      "detail": {
+        "FR13_ATTN_KV_REMAP": "1",
+        "FR13_SLOT_REORDER": "0",
+        "FR13_KV_REMAP_SYNCFREE": "1",
+        "ATTENTION_BACKEND": "TREE_ATTN",
+        "FR13_FINAL_LOGIT_CAPTURE": ""
+      }
+    },
+    "cell5_tree_B1_aborted_without_container": {
+      "pass": true,
+      "detail": 1
+    },
+    "cell6_tree_B4_driver_reexec_from_snapshot": {
+      "pass": true,
+      "detail": [
+        "start_utc=2026-09-22T09:49:22Z cell=6 block=1 arm=tree batch=B4 max_num_seqs=4 gpu_util_frozen=0.6 max_model_len_frozen=16384 spec_config_frozen={\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":9,\"speculative_token_tree\":\"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]\"}",
+        "driver_exec=e1_cell_driver.v1.sh sha256=8872ffae80561b65 from_snapshot=1 snapshot_dir=/tmp/claude-1000/-home-mark-lumo-paper-v2-20260921/c8955ff9-f3ae-4551-869b-1a98b38ca2c3/scratchpad/e1drv.uy1f/runs/cell_06_b1_tree_B4_a1/script_snapshot"
+      ]
+    },
+    "cell6_tree_B4_snapshot_complete": {
+      "pass": true,
+      "detail": []
+    },
+    "cell6_tree_B4_no_heavy_capture": {
+      "pass": true,
+      "detail": {
+        "FR10_METRICS": "0",
+        "LUMO_MTP_DRAFT_TRACE_FILE": ""
+      }
+    },
+    "cell6_tree_B4_frozen_common_env": {
+      "pass": true,
+      "detail": {
+        "MAX_NUM_SEQS": "4",
+        "VLLM_SYNC_SCHED": "1",
+        "ENFORCE_EAGER": "1",
+        "FR13_ENABLE_APC": "0",
+        "E1_RECORD": "/logs/e1_events.jsonl",
+        "FR13_SFWD_GPU_TIMER": "1",
+        "SEED": "20260921"
+      }
+    },
+    "cell6_tree_B4_policy_B_and_route_flags_no_capture": {
+      "pass": true,
+      "detail": {
+        "FR13_ATTN_KV_REMAP": "1",
+        "FR13_SLOT_REORDER": "0",
+        "FR13_KV_REMAP_SYNCFREE": "1",
+        "ATTENTION_BACKEND": "TREE_ATTN",
+        "FR13_FINAL_LOGIT_CAPTURE": ""
+      }
+    },
+    "cell6_tree_B4_aborted_without_container": {
+      "pass": true,
+      "detail": 1
+    },
+    "cell3_native-11_B4_driver_reexec_from_snapshot": {
+      "pass": true,
+      "detail": [
+        "start_utc=2026-09-22T09:49:22Z cell=3 block=1 arm=native-11 batch=B4 max_num_seqs=4 gpu_util_frozen=0.6 max_model_len_frozen=16384 spec_config_frozen={\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":11}",
+        "driver_exec=e1_cell_driver.v1.sh sha256=8872ffae80561b65 from_snapshot=1 snapshot_dir=/tmp/claude-1000/-home-mark-lumo-paper-v2-20260921/c8955ff9-f3ae-4551-869b-1a98b38ca2c3/scratchpad/e1drv.uy1f/runs/cell_03_b1_native-11_B4_a1/script_snapshot"
+      ]
+    },
+    "cell3_native-11_B4_snapshot_complete": {
+      "pass": true,
+      "detail": []
+    },
+    "cell3_native-11_B4_no_heavy_capture": {
+      "pass": true,
+      "detail": {
+        "FR10_METRICS": "0",
+        "LUMO_MTP_DRAFT_TRACE_FILE": ""
+      }
+    },
+    "cell3_native-11_B4_frozen_common_env": {
+      "pass": true,
+      "detail": {
+        "MAX_NUM_SEQS": "4",
+        "VLLM_SYNC_SCHED": "1",
+        "ENFORCE_EAGER": "1",
+        "FR13_ENABLE_APC": "0",
+        "E1_RECORD": "/logs/e1_events.jsonl",
+        "FR13_SFWD_GPU_TIMER": "1",
+        "SEED": "20260921"
+      }
+    },
+    "cell3_native-11_B4_native_route_env": {
+      "pass": true,
+      "detail": {
+        "NUM_SPECULATIVE_TOKENS": "11",
+        "ATTENTION_BACKEND": "FLASH_ATTN",
+        "FR10_DECODE_MODE_DEFAULT": "naive_mtp",
+        "FR10_ENABLE_TREE_GDN": "0"
+      }
+    },
+    "cell3_native-11_B4_aborted_without_container": {
+      "pass": true,
+      "detail": 1
+    }
+  },
+  "scratch": "/tmp/claude-1000/-home-mark-lumo-paper-v2-20260921/c8955ff9-f3ae-4551-869b-1a98b38ca2c3/scratchpad/e1drv.uy1f",
+  "all_pass": true
+}

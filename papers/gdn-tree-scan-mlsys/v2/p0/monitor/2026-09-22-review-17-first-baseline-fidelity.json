@@ -1,0 +1,268 @@
+{
+ "kind": "layer-level fixed-input state continuation (offline oracle on recorded served operands); cross-layer propagation NOT exercised; NOT whole-model E2",
+ "ref": "out-20260922T071945Z-e7b-r16-p072-commit-batch/e7b_001_p072_arm1_none-B_fs_ieee-all",
+ "layer": "language_model_model_layers_62_linear_attn",
+ "row": 0,
+ "arithmetic_dtype": "float64",
+ "carry_dtype_between_steps": "float32",
+ "carry_boundary_note": "served bank carries fp32 between steps; carry=float32 rounds the oracle state to fp32 at that boundary; carry=float64 is exact and NOT the served behaviour",
+ "n_steps_with_operands": 13,
+ "n_steps_with_states": 13,
+ "fidelity": [
+  {
+   "step": 0,
+   "n": 10,
+   "oracle_out_bf16_vs_production_bitwise_frac": 0.999951183795929,
+   "oracle_out_vs_production_max_abs": 0.00012107269665398435,
+   "served_out_vs_oracle_ulp16_max_sig": 1,
+   "pass": true,
+   "accepted_len": 1,
+   "path": [
+    0,
+    1
+   ],
+   "oracle_replay_vs_published_after_max_abs": 2.384185791015625e-07,
+   "oracle_replay_vs_replay_before_max_abs": 2.384185791015625e-07,
+   "published_after_equals_replay_before": true,
+   "applied": false
+  },
+  {
+   "step": 1,
+   "n": 10,
+   "oracle_out_bf16_vs_production_bitwise_frac": 1.0,
+   "oracle_out_vs_production_max_abs": 0.00011930491512102126,
+   "served_out_vs_oracle_ulp16_max_sig": 0,
+   "pass": true,
+   "h0_equals_previous_published_after_bitwise_frac": 1.0,
+   "accepted_len": 3,
+   "path": [
+    0,
+    1,
+    2,
+    5
+   ],
+   "oracle_replay_vs_published_after_max_abs": 2.384185791015625e-07,
+   "oracle_replay_vs_replay_before_max_abs": 2.384185791015625e-07,
+   "published_after_equals_replay_before": true,
+   "applied": false
+  },
+  {
+   "step": 2,
+   "n": 10,
+   "oracle_out_bf16_vs_production_bitwise_frac": 0.9998860955238342,
+   "oracle_out_vs_production_max_abs": 0.000118513048195025,
+   "served_out_vs_oracle_ulp16_max_sig": 1,
+   "pass": true,
+   "h0_equals_previous_published_after_bitwise_frac": 1.0,
+   "accepted_len": 1,
+   "path": [
+    0,
+    1
+   ],
+   "oracle_replay_vs_published_after_max_abs": 2.384185791015625e-07,
+   "oracle_replay_vs_replay_before_max_abs": 2.384185791015625e-07,
+   "published_after_equals_replay_before": true,
+   "applied": false
+  },
+  {
+   "step": 3,
+   "n": 10,
+   "oracle_out_bf16_vs_production_bitwise_frac": 0.9999837279319763,
+   "oracle_out_vs_production_max_abs": 0.00011696418464066105,
+   "served_out_vs_oracle_ulp16_max_sig": 0,
+   "pass": true,
+   "h0_equals_previous_published_after_bitwise_frac": 1.0,
+   "accepted_len": 0,
+   "path": [
+    0
+   ],
+   "oracle_replay_vs_published_after_max_abs": 2.384185791015625e-07,
+   "oracle_replay_vs_replay_before_max_abs": 2.384185791015625e-07,
+   "published_after_equals_replay_before": true,
+   "applied": false
+  },
+  {
+   "step": 4,
+   "n": 10,
+   "oracle_out_bf16_vs_production_bitwise_frac": 0.999951183795929,
+   "oracle_out_vs_production_max_abs": 0.00019950295822547537,
+   "served_out_vs_oracle_ulp16_max_sig": 0,
+   "pass": true,
+   "h0_equals_previous_published_after_bitwise_frac": 1.0,
+   "accepted_len": 3,
+   "path": [
+    0,
+    1,
+    2,
+    5
+   ],
+   "oracle_replay_vs_published_after_max_abs": 2.384185791015625e-07,
+   "oracle_replay_vs_replay_before_max_abs": 2.384185791015625e-07,
+   "published_after_equals_replay_before": true,
+   "applied": false
+  },
+  {
+   "step": 5,
+   "n": 10,
+   "oracle_out_bf16_vs_production_bitwise_frac": 0.9999674558639526,
+   "oracle_out_vs_production_max_abs": 0.00018373688995552973,
+   "served_out_vs_oracle_ulp16_max_sig": 0,
+   "pass": true,
+   "h0_equals_previous_published_after_bitwise_frac": 1.0,
+   "accepted_len": 3,
+   "path": [
+    0,
+    1,
+    2,
+    4
+   ],
+   "oracle_replay_vs_published_after_max_abs": 4.76837158203125e-07,
+   "oracle_replay_vs_replay_before_max_abs": 4.76837158203125e-07,
+   "published_after_equals_replay_before": true,
+   "applied": false
+  },
+  {
+   "step": 6,
+   "n": 10,
+   "oracle_out_bf16_vs_production_bitwise_frac": 0.999951183795929,
+   "oracle_out_vs_production_max_abs": 0.00012176042466529452,
+   "served_out_vs_oracle_ulp16_max_sig": 0,
+   "pass": true,
+   "h0_equals_previous_published_after_bitwise_frac": 1.0,
+   "accepted_len": 1,
+   "path": [
+    0,
+    1
+   ],
+   "oracle_replay_vs_published_after_max_abs": 3.5762786865234375e-07,
+   "oracle_replay_vs_replay_before_max_abs": 3.5762786865234375e-07,
+   "published_after_equals_replay_before": true,
+   "applied": false
+  },
+  {
+   "step": 7,
+   "n": 10,
+   "oracle_out_bf16_vs_production_bitwise_frac": 0.9999349117279053,
+   "oracle_out_vs_production_max_abs": 0.00012185023599840805,
+   "served_out_vs_oracle_ulp16_max_sig": 1,
+   "pass": true,
+   "h0_equals_previous_published_after_bitwise_frac": 1.0,
+   "accepted_len": 2,
+   "path": [
+    0,
+    1,
+    2
+   ],
+   "oracle_replay_vs_published_after_max_abs": 4.76837158203125e-07,
+   "oracle_replay_vs_replay_before_max_abs": 4.76837158203125e-07,
+   "published_after_equals_replay_before": true,
+   "applied": false
+  },
+  {
+   "step": 8,
+   "n": 10,
+   "oracle_out_bf16_vs_production_bitwise_frac": 0.9999186396598816,
+   "oracle_out_vs_production_max_abs": 0.00014569797787537808,
+   "served_out_vs_oracle_ulp16_max_sig": 1,
+   "pass": true,
+   "h0_equals_previous_published_after_bitwise_frac": 1.0,
+   "accepted_len": 0,
+   "path": [
+    0
+   ],
+   "oracle_replay_vs_published_after_max_abs": 2.384185791015625e-07,
+   "oracle_replay_vs_replay_before_max_abs": 2.384185791015625e-07,
+   "published_after_equals_replay_before": true,
+   "applied": false
+  },
+  {
+   "step": 9,
+   "n": 10,
+   "oracle_out_bf16_vs_production_bitwise_frac": 0.9999674558639526,
+   "oracle_out_vs_production_max_abs": 0.00013786007157076674,
+   "served_out_vs_oracle_ulp16_max_sig": 0,
+   "pass": true,
+   "h0_equals_previous_published_after_bitwise_frac": 1.0,
+   "accepted_len": 0,
+   "path": [
+    0
+   ],
+   "oracle_replay_vs_published_after_max_abs": 2.384185791015625e-07,
+   "oracle_replay_vs_replay_before_max_abs": 2.384185791015625e-07,
+   "published_after_equals_replay_before": true,
+   "applied": false
+  },
+  {
+   "step": 10,
+   "n": 10,
+   "oracle_out_bf16_vs_production_bitwise_frac": 0.999951183795929,
+   "oracle_out_vs_production_max_abs": 0.00015095459820521628,
+   "served_out_vs_oracle_ulp16_max_sig": 0,
+   "pass": true,
+   "h0_equals_previous_published_after_bitwise_frac": 1.0,
+   "accepted_len": 4,
+   "path": [
+    0,
+    1,
+    2,
+    4,
+    7
+   ],
+   "oracle_replay_vs_published_after_max_abs": 7.152557373046875e-07,
+   "oracle_replay_vs_replay_before_max_abs": 7.152557373046875e-07,
+   "published_after_equals_replay_before": true,
+   "applied": false
+  },
+  {
+   "step": 11,
+   "n": 10,
+   "oracle_out_bf16_vs_production_bitwise_frac": 0.9999349117279053,
+   "oracle_out_vs_production_max_abs": 0.00023373506989901593,
+   "served_out_vs_oracle_ulp16_max_sig": 1,
+   "pass": true,
+   "h0_equals_previous_published_after_bitwise_frac": 1.0,
+   "accepted_len": 5,
+   "path": [
+    0,
+    1,
+    2,
+    4,
+    6,
+    8
+   ],
+   "oracle_replay_vs_published_after_max_abs": 4.76837158203125e-07,
+   "oracle_replay_vs_replay_before_max_abs": 4.76837158203125e-07,
+   "published_after_equals_replay_before": true,
+   "applied": false
+  },
+  {
+   "step": 12,
+   "n": 10,
+   "oracle_out_bf16_vs_production_bitwise_frac": 0.9999186396598816,
+   "oracle_out_vs_production_max_abs": 0.00012140479521700887,
+   "served_out_vs_oracle_ulp16_max_sig": 0,
+   "pass": true,
+   "h0_equals_previous_published_after_bitwise_frac": 1.0,
+   "accepted_len": 2,
+   "path": [
+    0,
+    1,
+    2
+   ],
+   "oracle_replay_vs_published_after_max_abs": 2.384185791015625e-07,
+   "oracle_replay_vs_replay_before_max_abs": 2.384185791015625e-07,
+   "published_after_equals_replay_before": true,
+   "applied": false
+  }
+ ],
+ "fidelity_thresholds": {
+  "served_out_vs_oracle_ulp16_max_sig": 1,
+  "served_out_vs_oracle_max_abs": 0.0007275056663253038,
+  "replay_state_vs_oracle_max_abs": 2.5938975340977777e-06,
+  "h0_chain_bitwise_frac": 1.0
+ },
+ "fidelity_pass": true,
+ "continuation": {
+  "skipped": "no --arm and no --perturb"
+ }
+}

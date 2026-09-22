@@ -1,0 +1,33 @@
+{
+  "observed_utc": "2026-09-22T08:19:57.655608+00:00",
+  "root": "experiments/out-20260922T081202Z-e2-j1prime-p072-kvpolicyA-b1",
+  "completed_boots": 1,
+  "provenance": "PASS",
+  "operand_gate": "PASS",
+  "operand_files": 7,
+  "api_output_tokens": 18,
+  "kv_env": {
+    "FR13_ATTN_KV_REMAP": "1",
+    "FR13_SLOT_REORDER": "1",
+    "FR13_KV_REMAP_SYNCFREE": "1"
+  },
+  "loaded_slot_pi": [
+    0,
+    1,
+    2,
+    4,
+    6,
+    8,
+    3,
+    5,
+    7,
+    9
+  ],
+  "recorder": {
+    "errors": 8,
+    "output_records": 0,
+    "run_close_seal": true,
+    "verdict": "INVALID async output boundary unsupported"
+  },
+  "scope": "canonical B1 diagnostic only; not E1 qualification or timing; selected-route fixture repairs pending"
+}

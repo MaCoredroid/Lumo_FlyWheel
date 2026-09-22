@@ -1,0 +1,40 @@
+{
+  "observed_utc": "2026-09-21T22:15:38.970186+00:00",
+  "scope": "CPU tiny tensor reproductions; no model inference; host torch 2.4.1, not a pinned-image experiment result",
+  "source_sha256": {
+    "e7a_core.py": "f33efc5c642f5320e9a12ba7b2a3b56643a6e2338621476da9d159f856526032",
+    "e7a_device.py": "ff85df274f878b50e4d210e026ba363422d65bbf4de18d0765e10cf86e412124",
+    "e7a_kernels.py": "6df5b3ac2f622abf8b866970b357cc7db808e045e550eacb89fdeba1976c0396",
+    "run_in_image.sh": "cc24fcb668d061d6a05b0e9633a542066a8b95f17375534b85a86144daa50c63"
+  },
+  "fp32_signed_zero_ulp": 4294967296,
+  "fp32_negative_min_subnormal_to_zero_ulp": 4294967295,
+  "bf16_signed_zero_ulp": 65536,
+  "masked_exp_diff_nonfinite": true,
+  "decay_values": [
+    [
+      [
+        1.0,
+        "nan"
+      ],
+      [
+        3.783505853677006e-44,
+        1.0
+      ]
+    ]
+  ],
+  "factor_current_shape": [
+    48,
+    16,
+    128
+  ],
+  "oracle_factor_shape": [
+    10,
+    48,
+    128
+  ],
+  "factor_comparison_exception": "The size of tensor a (16) must match the size of tensor b (48) at non-singleton dimension 1",
+  "manifest_flag_path_exception": "argument should be a str or an os.PathLike object where __fspath__ returns a str, not 'bool'",
+  "device_initial_reviewed_sha256": "85ec615ad102d0a757ce100aad55a5f2eb739f4128c5f227b1d4571dd2f12425",
+  "factor_shape_reproduction_scope": "Earlier reviewed snapshot; source fix observed in ff85df274f878b50e4d210e026ba363422d65bbf4de18d0765e10cf86e412124; runtime confirmation pending"
+}

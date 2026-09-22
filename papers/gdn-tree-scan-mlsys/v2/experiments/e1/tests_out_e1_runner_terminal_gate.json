@@ -1,0 +1,111 @@
+{
+  "checks": {
+    "final_audit_fail_runner_exit12_no_qualification": {
+      "pass": true,
+      "detail": [
+        12,
+        "ark-lumo-paper-v2-20260921/c8955ff9-f3ae-4551-869b-1a98b38ca2c3/scratchpad/e1f1.AspF/campaign/cell_01_b1_native-5_B1_a1.preflight_final.log; sealed INVALID) \u2014 native-5/B1 stays unqualified \u2014 stopping\n"
+      ]
+    },
+    "terminal_result_sealed_INVALID_rate_not_eligible": {
+      "pass": true,
+      "detail": {
+        "status": "INVALID",
+        "rate_not_eligible": true,
+        "terminal_seal": {
+          "sealed": true,
+          "utc": "2026-09-22T09:58:10Z",
+          "gates": {
+            "verify": "PASS",
+            "summary": "VALID",
+            "preflight_final": "FAIL"
+          },
+          "campaign_snapshot_sha256sums": "156ab4dca988ab9b05060bf0792566ba1ba8269276b6f8aaf6e0dadd5ce8c353",
+          "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+        }
+      }
+    },
+    "preliminary_VALID_123_preserved_separately": {
+      "pass": true,
+      "detail": null
+    },
+    "aggregate_refuses_unqualified_123": {
+      "pass": true,
+      "detail": {
+        "index": 1,
+        "block": 1,
+        "arm": "native-5",
+        "batch": "B1",
+        "attempts": [
+          "cell_01_b1_native-5_B1_a1"
+        ],
+        "status": "INVALID",
+        "rate": null,
+        "diag": null,
+        "support": null,
+        "attempt": "cell_01_b1_native-5_B1_a1",
+        "terminal_seal_utc": "2026-09-22T09:58:10Z"
+      }
+    },
+    "resume_treats_failed_final_as_failed_attempt_exit46": {
+      "pass": true,
+      "detail": 46
+    },
+    "retry_pass_sealed_VALID_qualified": {
+      "pass": true,
+      "detail": [
+        0,
+        "VALID",
+        [
+          "native-5/B1"
+        ]
+      ]
+    },
+    "aggregate_counts_only_the_sealed_valid_attempt": {
+      "pass": true,
+      "detail": {
+        "index": 1,
+        "block": 1,
+        "arm": "native-5",
+        "batch": "B1",
+        "attempts": [
+          "cell_01_b1_native-5_B1_a1",
+          "cell_01_b1_native-5_B1_a2"
+        ],
+        "status": "VALID",
+        "rate": 123.0,
+        "diag": null,
+        "support": {
+          "n_usable": 50,
+          "sum_wall_s_unique_physical_steps": null,
+          "sum_emitted_tokens_api_bound_pure_support": null
+        },
+        "attempt": "cell_01_b1_native-5_B1_a2",
+        "terminal_seal_utc": "2026-09-22T09:58:10Z",
+        "floor": null
+      }
+    },
+    "measured_cell_never_rerun": {
+      "pass": true,
+      "detail": 0
+    },
+    "tree_cell_sealed_after_verify_and_summary": {
+      "pass": true,
+      "detail": [
+        0,
+        {
+          "sealed": true,
+          "utc": "2026-09-22T09:58:11Z",
+          "gates": {
+            "verify": "PASS",
+            "summary": "VALID"
+          },
+          "campaign_snapshot_sha256sums": "156ab4dca988ab9b05060bf0792566ba1ba8269276b6f8aaf6e0dadd5ce8c353",
+          "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+        }
+      ]
+    }
+  },
+  "scratch": "/tmp/claude-1000/-home-mark-lumo-paper-v2-20260921/c8955ff9-f3ae-4551-869b-1a98b38ca2c3/scratchpad/e1f1.AspF",
+  "all_pass": true
+}

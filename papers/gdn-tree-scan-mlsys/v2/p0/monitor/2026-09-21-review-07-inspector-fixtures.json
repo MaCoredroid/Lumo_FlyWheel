@@ -1,0 +1,27 @@
+{
+  "utc": "2026-09-21T23:45:30.584070+00:00",
+  "source_sha256": "63f610c1c6adfbae0d95ca5d36189eee56955b9c3764e948408ee2de53cdf011",
+  "fixtures": [
+    {
+      "fixture": "ideal_scalar_base",
+      "returncode": 0,
+      "all_pass": true,
+      "failed_checks": []
+    },
+    {
+      "fixture": "negative_state_index",
+      "returncode": 0,
+      "all_pass": true,
+      "failed_checks": []
+    },
+    {
+      "fixture": "actual_emitted_depth_schema",
+      "returncode": 1,
+      "all_pass": false,
+      "failed_checks": [
+        "depth_position_base_equals_prompt_tokens"
+      ]
+    }
+  ],
+  "scope": "CPU inspector control; actual-schema fixture copies the source-emitted keys but is synthetic, not a captured request"
+}

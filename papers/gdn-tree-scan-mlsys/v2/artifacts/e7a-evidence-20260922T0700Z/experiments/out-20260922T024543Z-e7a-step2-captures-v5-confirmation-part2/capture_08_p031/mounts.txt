@@ -1,0 +1,4 @@
+/home/mark/lumo-paper-v2-20260921->/workspace rw=true
+/models->/models rw=false
+/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T024543Z-e7a-step2-captures-v5-confirmation-part2/capture_08_p031/logs->/logs rw=true
+

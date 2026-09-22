@@ -1,0 +1,44 @@
+{
+ "run_dir": "papers/gdn-tree-scan-mlsys/v2/experiments/out-20260921T222051Z-e7a-smoke",
+ "manifest_status": "completed",
+ "source_hashes_start_end_match": true,
+ "attribution": {
+  "available": true,
+  "util_samples": 118,
+  "util_zero_frac": 0.9661016949152542,
+  "util_gt5_count": 2,
+  "util_max": 56,
+  "window_utc": [
+   "2026-09-21T22:20:51.953000",
+   "2026-09-21T22:22:49.012000"
+  ],
+  "coverage_gaps": [],
+  "inventory_seconds": 112,
+  "compute_pids_seen": {
+   "2746563": {
+    "samples": 112,
+    "names": [
+     "[No data]",
+     "python3"
+    ]
+   }
+  },
+  "label": "ATTRIBUTION UNVERIFIED (container host PID not recorded; PIDs seen: ['2746563'])",
+  "foreign_pids": null
+ },
+ "probe_checks": {
+  "1": {
+   "drift": 0.006590623246669729,
+   "pass": true,
+   "before_us": 1883.6687088012695,
+   "after_us": 1896.0832595825195,
+   "criterion": "<= 5%"
+  }
+ },
+ "n_invalid_cells": 0,
+ "n_operand_sets": 1,
+ "n_historical": 1,
+ "n_synthetic": 0,
+ "b4_exercised": false,
+ "independent_prefixes_established": 0
+}

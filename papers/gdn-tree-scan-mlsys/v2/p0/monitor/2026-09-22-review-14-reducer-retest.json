@@ -1,0 +1,125 @@
+{
+  "checks": {
+    "none_repeat_all_steps_all_rows_zero": {
+      "pass": true,
+      "detail": null
+    },
+    "none_repeat_states_keyed_by_layer_both_layers": {
+      "pass": true,
+      "detail": null
+    },
+    "sham_vs_none_emitted_zero": {
+      "pass": true,
+      "detail": null
+    },
+    "sham_repeat_variability_emitted": {
+      "pass": true,
+      "detail": null
+    },
+    "verify_arm_reference_is_matched_sham": {
+      "pass": true,
+      "detail": null
+    },
+    "reversed_row_ids_keyed_by_id_zero_delta": {
+      "pass": true,
+      "detail": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "unmatched_arm_flagged": {
+      "pass": true,
+      "detail": null
+    },
+    "arm_divergence_and_contiguous_steps": {
+      "pass": true,
+      "detail": [
+        12,
+        [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      ]
+    },
+    "step3_excludes_differing_leaf_only_by_ancestry": {
+      "pass": true,
+      "detail": {
+        "3": "ancestry tokens differ"
+      }
+    },
+    "same_node_ids_different_tokens_state_not_comparable": {
+      "pass": true,
+      "detail": {
+        "not_comparable": "accepted path/tokens or committed tokens differ",
+        "ref_path": [
+          1,
+          2
+        ],
+        "arm_path": [
+          1,
+          2
+        ],
+        "ref_tokens": [
+          109,
+          110
+        ],
+        "arm_tokens": [
+          888888,
+          110
+        ]
+      }
+    },
+    "step5_rows_under_changed_spine_token_excluded": {
+      "pass": true,
+      "detail": [
+        [
+          0
+        ],
+        [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      ]
+    },
+    "multi_layer_states_compared_where_tokens_match": {
+      "pass": true,
+      "detail": {
+        "L61|row0": {
+          "max_abs": 9.5367431640625e-07,
+          "ref_max": 10.0,
+          "bitwise_frac": 0.0
+        },
+        "L62|row0": {
+          "max_abs": 9.5367431640625e-07,
+          "ref_max": 1.0,
+          "bitwise_frac": 0.0
+        }
+      }
+    },
+    "missing_positions_rows_excluded_no_numeric_logits": {
+      "pass": true,
+      "detail": null
+    },
+    "topology_mismatch_not_comparable": {
+      "pass": true,
+      "detail": null
+    },
+    "missing_logit_row_ids_excluded": {
+      "pass": true,
+      "detail": null
+    }
+  },
+  "all_pass": true
+}

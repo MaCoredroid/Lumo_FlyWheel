@@ -1,0 +1,12 @@
+id,category,selected,citation,reason,execution_status
+native5,strong_chain,yes,qwen2026qwen36fp8,Historical and final-stack strong control,historical_verified; current_planned
+native11,depth_control,yes,lumo2026cost,Depth matched to tail6; drafter source differs,historical_verified; current_planned
+tree,method,yes,lumo2026archive,Frozen selected tree implementation,historical_verified; current_planned
+autoregressive,foundational,conditional,leviathan2023fast,Context baseline; not replacement for chain,planned_if_requested
+tree_no_kv_remap,ablation,yes,lumo2026stateless,Accepted-path KV witness,historical_verified; fixture_refresh_planned
+tree_interleaved,ablation,yes,lumo2026spine,Controlled spine numerical witness,historical_verified; fixture_refresh_planned
+sglang_tree,direct,conditional,zheng2024sglang,Existing calibration has unequal model/KV configurations,matched_comparison_planned
+bole,direct,conditional,wang2026bole,Same problem and overlapping platform; implementation feasibility first,literature_only
+treewy,direct,conditional,ghantasala2026treewy,Alternative verifier and state reconstruction,literature_only
+replayssm,chain_state,conditional,replayssm2026,Alternative state materialization policy,literature_only
+stree,foundational,no,wu2025stree,Different recurrence; related work not direct GDN control,literature_only

@@ -1,0 +1,61 @@
+{
+  "utc": "2026-09-22T12:02:55.031231+00:00",
+  "cell_result_sha256": "4a0b66b01ad61a20924fd1162bb20de66c19792186b1b09c199cf0b1283e4820",
+  "finish": {
+    "w0": "length",
+    "w1": "length",
+    "t0": "length",
+    "t1": "length",
+    "t2": "length",
+    "t3": "stop",
+    "t4": "length",
+    "t5": "length",
+    "t6": "length",
+    "t7": "length"
+  },
+  "api_totals": {
+    "p072/w0": 32,
+    "p072/w1": 32,
+    "p072/t0": 128,
+    "p017/t1": 128,
+    "p015/t2": 128,
+    "p021/t3": 101,
+    "p085/t4": 128,
+    "p095/t5": 128,
+    "p058/t6": 128,
+    "p083/t7": 128
+  },
+  "per_request": null,
+  "floor": {
+    "rule": "every one of the 8 timed prompts >= 1 retained interval",
+    "prompts": [
+      "p072",
+      "p017",
+      "p015",
+      "p021",
+      "p085",
+      "p095",
+      "p058",
+      "p083"
+    ],
+    "missing": [],
+    "pass": true
+  },
+  "terminal_seal": {
+    "sealed": true,
+    "utc": "2026-09-22T12:01:22Z",
+    "gates": {
+      "verify": "PASS",
+      "summary": "VALID"
+    },
+    "campaign_snapshot_sha256sums": "d1ab57c53464ef814c7eed3b87ebd21a670cf8278541b8adc4864e5cf6dc2ecd",
+    "rule": "eligible for the aggregate / counted as measured ONLY with this seal and status VALID or INSUFFICIENT_SUPPORT; written by the runner after every gate of the cell passed"
+  },
+  "primary": {
+    "tokens_per_wall_second": 12.88001757402356,
+    "sum_wall_s_unique_physical_steps": 74.92225802130997,
+    "sum_emitted_tokens_api_bound_pure_support": 965,
+    "n_usable": 298,
+    "n_excluded": 30
+  }
+}

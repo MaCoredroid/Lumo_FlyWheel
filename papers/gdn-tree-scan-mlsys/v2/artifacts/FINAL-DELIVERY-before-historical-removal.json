@@ -1,0 +1,113 @@
+{
+  "completed_utc": "2026-09-22T12:43:20.931680+00:00",
+  "status": "FINAL_BOUNDED_REVIEW_AND_DELIVERY_VERIFIED",
+  "paper_archive": {
+    "file": "artifacts/paper-final-20260922T1239Z.tar.gz",
+    "sha256": "a9bc52b1cbacba54c105f0061113646420fefec2ef34083235e9969600555e0a",
+    "files": 149,
+    "bytes": 1597326,
+    "members_verified": 149
+  },
+  "paper_manifest_sha256": "7ad4dcc71ffd57b61d84fc41d4b45e79f8da159c6110b6153695cae5b05d893c",
+  "paper": {
+    "main_tex_sha256": "9de0d3464994c6392ce0991f8e062005ccd41dbf48635aa42fb0134d30ae86c7",
+    "abstract_sha256": "9c4061adc247f22c297a8f05627958a4f564e1c38b5803a79ab91df5a7cae0a5",
+    "pdf_sha256": "fd5f2ce85165c81a8dcd75105a6e939d4daf4b64b5588eabd3ad79996937968a",
+    "pages": 15
+  },
+  "all_companions": [
+    {
+      "file": "e7a-evidence-20260922T0709Z.tar.gz",
+      "sha256": "776ddcaf5d938cc665bafca20f46e29d1e9a550a34914d798e78f70636cd180b",
+      "bytes": 268871594,
+      "manifest": "e7a-evidence-20260922T0709Z.tar.gz.manifest.json",
+      "manifest_sha256": "50dd06ea612e00caec86e84db0b49321d3fd9878e8e4f79d68bb95dfa88c0e7d"
+    },
+    {
+      "file": "e7b-diagnostics-20260922T0801Z.tar.gz",
+      "sha256": "c573b5064d944547df280e314520a97dd0c10678fb877c8d75b3a898d548ad05",
+      "bytes": 2179735658,
+      "manifest": "e7b-diagnostics-20260922T0801Z.tar.gz.manifest.json",
+      "manifest_sha256": "f36db7f4f0b16f9f43a0d70b535ca664a66f1ef447789985b82f3a78db8b4682"
+    },
+    {
+      "file": "selected-route-20260922T0930Z.tar.gz",
+      "sha256": "7f127f0c2e8198f067eb0f59737e1a58afc34991aa562dacbc11d7d147d25a30",
+      "bytes": 1735458237,
+      "manifest": "selected-route-20260922T0930Z.tar.gz.manifest.json",
+      "manifest_sha256": "d1fe338b3bae56a755725a622fa679692377156b56be0d85952fd654d9e386b8"
+    },
+    {
+      "file": "e1-timing-20260922T1225Z.tar.gz",
+      "sha256": "bf50b33386eb9614cf7874039f60cb62a484ee62bc0882e32ab32731857318d6",
+      "bytes": 12955447,
+      "manifest": "e1-timing-20260922T1225Z.tar.gz.manifest.json",
+      "manifest_sha256": "47936b8a7cb22bf389b452ce2f013e5092d9f9c34b639b640f54768b3ecd4414"
+    }
+  ],
+  "historical_accounting_reproduced": true,
+  "extracted_paper_build": {
+    "passed": true,
+    "pages": 15,
+    "rendered_text_exactly_matches_canonical": true,
+    "overflow_or_undefined_references": false,
+    "underfull_hboxes": 4,
+    "underfull_vboxes": 4
+  },
+  "extracted_e1_replay": {
+    "scratch": "/tmp/lumo-v2-e1-extracted-final",
+    "aggregate_semantic_match_except_mapped_root": true,
+    "original_campaign_path": "/home/mark/lumo-paper-v2-20260921/papers/gdn-tree-scan-mlsys/v2/experiments/out-20260922T100028Z-e1-18cells",
+    "cells": 18,
+    "all_six_contrasts_match": true,
+    "raw_join_smokes": [
+      {
+        "cell": "cell_01_b1_native-5_B1_a1",
+        "raw_join_entire_json_exact_match": true
+      },
+      {
+        "cell": "cell_06_b1_tree_B4_a1",
+        "raw_join_entire_json_exact_match": true
+      }
+    ]
+  },
+  "reviews": {
+    "paper-final-e1-redteam.md": "c1eff492271f0354afe0fa38ff75e061a7bfdbeccbb6f5726eef3a8804acc8c2",
+    "e1-artifact-final-redteam.md": "8a499e9d9f7c77189fac4b8eb48021c9ed7b82400d60d61fc4a5849e40c0173a",
+    "e1-remaining-cells-redteam.md": "6e97dab8031d9c35270d59120132c341f8039232aadf984fe6ed554246e910ca",
+    "e1-remaining-cells-redteam.json": "347ef2f472908b70c5e7f7cb20fe2f7e0efdb553d064a66239bb6698b6f0a8f8"
+  },
+  "remote_copy": {
+    "host": "mark@100.103.10.122",
+    "worktree": "/home/mark/lumo-paper-v2-20260921",
+    "checked_utc": "2026-09-22T12:42:03Z",
+    "exact_hash_matches": [
+      "main.tex",
+      "abstract.tex",
+      "main.pdf",
+      "artifacts/paper-final-20260922T1239Z.tar.gz",
+      "artifacts/e1-timing-20260922T1225Z.tar.gz"
+    ],
+    "gpu_jobs": 0,
+    "running_containers": 0,
+    "ram_available_display_gib": 102,
+    "swap_used_bytes": 0
+  },
+  "monitor": {
+    "id": "review-lumo-v2-experiments-every-10-minutes",
+    "status": "PAUSED",
+    "verified_utc": "2026-09-22T12:44:22.760395+00:00",
+    "method": "automation_update tool; persisted status independently checked"
+  },
+  "no_publication_or_submission": true,
+  "limits": [
+    "Three paired boot blocks and fixed selected prefixes; no broad workload precision",
+    "T1 native/tree engine seed difference; no isolated causal speedup estimate",
+    "Full API continuations differ; no matched-output or quality-preservation claim",
+    "No full-model sequential-equivalence proof",
+    "E7a frozen criteria failed; no compact candidate promoted",
+    "Local mechanism reimplementations, not a benchmark of the Bole/TreeWY authors systems",
+    "Conditional composed-stack and broader task-quality studies remain deferred"
+  ],
+  "source_metadata_exceptions": "See p0/monitor/2026-09-22-final-source-qa.json for inherited W9/P0 generic-template exceptions; no new evidence or text failure."
+}

@@ -1,0 +1,11 @@
+# P0 measurement addendum: H3 observation populations
+
+Written 2026-09-22T06:54:51.445892+00:00. This addendum supersedes any interpretation in the original P0 report that unit normalization established a common observed event population or that the subtraction residual directly measured host cost. Original reports, hashes and raw files are preserved.
+
+Independent paper review round2 found and the coordinator independently reproduced the following from all three historical revisions and hash-matched raw JSON. `scripts/fr13_measure.py` SHA256 b8fd03920debea2902666efb943beb04c075188fac93bb9f756ca4ac9faee8b9, lines1586-1587 uses global accepted/drafts+1;1620-1626 divides this by mean retained pure-wall seconds/event;1628-1630 derives residual by subtraction. `scripts/fr10_phase4_patch_vllm_tree_gdn.py` SHA256 31cbd3fbab034755c76eb457ee915606d6d8e86afb5b84bc4115565ac6e269e2, lines15926-15947 retains only consecutive pure-decode wall intervals;16101-16110 gates verification to pure-forward steps;16151-16156 states draft/commit span timers have no pure-decode gate. Historical loaded-binary identity remains unresolved.
+
+The proxy is `(global accepted / global draft events + 1) / (retained pure-wall seconds / retained wall events)`. The wall event supports are 85805/115663 (74.19%),69077/113620 (60.80%),65488/103456 (63.30%) for MTP5/MTP11/tree. The structural token totals also exceed recorded generation tokens by978/1923/2115, with cause not fully identified. Do not mechanically replace with global generation tokens; that would still mix supports.
+
+The unit-normalized components and ratio1.017-1.025 are reproducible arithmetic, not proof of population equality. The residual closes the sum by definition and is not measured host cost. Historical 42.74/39.95/32.85 and break-even5.88/123.66ms/23.1% remain only proxy observations/conditional calculations. No new historical inference is needed to correct the labels.
+
+See `monitor/paper-redteam-round2.md` for exact source revisions and raw hashes, and `../results/historical-supports.json` for machine-readable counters. `../scripts/audit_evidence.py` reproduces numbers and now emits support accounting; its sum check tests arithmetic only. Current E1 must align actual emitted tokens and retained intervals by event IDs, and align component spans before assigning host cost.

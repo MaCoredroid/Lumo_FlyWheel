@@ -1,0 +1,9 @@
+{
+  "status": "PASS",
+  "container_id": "3c9ba76484d9fd5c890f44e1b6c17ebca691ab4790b54b9fb468741420744da8",
+  "run_id": "out-20260922T215254Z-e8-timing",
+  "workload_start_monotonic": 4301864.789579832,
+  "workload_end_monotonic": 4302003.048114681,
+  "sampling_interval_seconds": 5,
+  "visibility_limit": "occasional host process samples; cannot exclude contention entirely between samples"
+}

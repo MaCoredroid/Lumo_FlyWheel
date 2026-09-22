@@ -1,0 +1,96 @@
+{
+  "checks": {
+    "live_pass": {
+      "pass": true,
+      "detail": [
+        "NATIVE PREFLIGHT (live) PASS"
+      ]
+    },
+    "final_pass": {
+      "pass": true,
+      "detail": [
+        "NATIVE PREFLIGHT (final) PASS"
+      ]
+    },
+    "verify_native_pass": {
+      "pass": true,
+      "detail": []
+    },
+    "gated_prefix_wrong_first_token_fail_P4": {
+      "pass": true,
+      "detail": null
+    },
+    "low_margin_prefix_wrong_still_pass_reported": {
+      "pass": true,
+      "detail": {
+        "reported": [
+          [
+            "p072",
+            true
+          ],
+          [
+            "p017",
+            false
+          ],
+          [
+            "p085",
+            true
+          ],
+          [
+            "p095",
+            true
+          ]
+        ]
+      }
+    },
+    "engaged_line_fail_P1": {
+      "pass": true,
+      "detail": null
+    },
+    "tree_mtp_decode_mode_fail_P1": {
+      "pass": true,
+      "detail": null
+    },
+    "missing_output_rows_fail_P5_live": {
+      "pass": true,
+      "detail": null
+    },
+    "unsealed_ledger_final_fail_P5": {
+      "pass": true,
+      "detail": null
+    },
+    "unsealed_ledger_live_still_pass_no_seal_claimed": {
+      "pass": true,
+      "detail": null
+    },
+    "occupancy_2_with_batch_1_fail_P2": {
+      "pass": true,
+      "detail": null
+    },
+    "verify_spec_config_mismatch_fail": {
+      "pass": true,
+      "detail": null
+    },
+    "verify_metrics_on_fail": {
+      "pass": true,
+      "detail": null
+    },
+    "verify_missing_explicit_no_prefix_caching_fail": {
+      "pass": true,
+      "detail": null
+    },
+    "verify_gpu_util_not_frozen_fail": {
+      "pass": true,
+      "detail": null
+    },
+    "verify_max_model_len_not_frozen_fail": {
+      "pass": true,
+      "detail": null
+    },
+    "verify_tree_pass": {
+      "pass": true,
+      "detail": []
+    }
+  },
+  "all_pass": true
+}

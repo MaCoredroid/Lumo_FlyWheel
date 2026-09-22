@@ -1,0 +1,12 @@
+{
+  "utc": "2026-09-21T23:46:37.973435+00:00",
+  "main_tex_sha256": "a78861718e9556772d6c909f836614a245f1851031accd29814ac8d1edd3673b",
+  "abstract_tex_sha256": "ede112b273147fe736e8e7a736cb3d9157b1e2983cd8c04e1b4fe9d16668f001",
+  "pdf_sha256": "57f859b66864bcfde9d24ca92bcbee18f70c1950e955d135897e752c340c42e7",
+  "pages": 10,
+  "latex_build": "latexmk exited 0",
+  "overfull_boxes": false,
+  "undefined_references": false,
+  "visual_review": "All 10 rendered pages inspected; E7a table expanded across both columns and long paths made breakable; no visible clipping/overlap",
+  "scope": "Draft including reviewed kernel-only v3 pilot; fresh capture and E2/E7b/E1 still pending"
+}

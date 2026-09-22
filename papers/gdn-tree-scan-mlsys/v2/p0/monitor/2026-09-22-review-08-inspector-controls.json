@@ -1,0 +1,58 @@
+{
+  "utc": "2026-09-22T00:09:56.381449+00:00",
+  "scope": "Synthetic CPU provenance negative controls only; zero model inference",
+  "inspector_sha256": "90d59fe8a03bf23a29f6c5a6df9e1f79336290d186616c095a1b931b45a0d3f6",
+  "cases": {
+    "positive_exact": {
+      "rc": 0,
+      "all_pass": true,
+      "unverified": [],
+      "failed": [],
+      "token_binding": {
+        "pass": true,
+        "detail": {
+          "decoded_head": "complete text",
+          "response_head": "complete text"
+        }
+      }
+    },
+    "tokenizer_unavailable": {
+      "rc": 0,
+      "all_pass": true,
+      "unverified": [
+        "emitted_tokens_decode_to_response_text"
+      ],
+      "failed": [],
+      "token_binding": {
+        "pass": null,
+        "detail": "UNVERIFIED (tokenizer unavailable here): ImportError"
+      }
+    },
+    "negative_empty_response": {
+      "rc": 0,
+      "all_pass": true,
+      "unverified": [],
+      "failed": [],
+      "token_binding": {
+        "pass": true,
+        "detail": {
+          "decoded_head": "complete text",
+          "response_head": ""
+        }
+      }
+    },
+    "negative_truncated_response": {
+      "rc": 0,
+      "all_pass": true,
+      "unverified": [],
+      "failed": [],
+      "token_binding": {
+        "pass": true,
+        "detail": {
+          "decoded_head": "complete text",
+          "response_head": "complete"
+        }
+      }
+    }
+  }
+}

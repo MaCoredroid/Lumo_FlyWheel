@@ -1,0 +1,106 @@
+{
+  "checks": {
+    "untouched_pilot_v2_fails_exactly_D6c_P1": {
+      "pass": true,
+      "detail": [
+        "D6c",
+        "P1"
+      ]
+    },
+    "missing_padding_key_fails_closed": {
+      "pass": true,
+      "detail": null
+    },
+    "nan_cell_fails_D6a_and_T3": {
+      "pass": true,
+      "detail": null
+    },
+    "compact_state_B_ne_C_fails_D7b_only_that_set": {
+      "pass": true,
+      "detail": null
+    },
+    "widened_p90_fails_P1_cell": {
+      "pass": true,
+      "detail": null
+    },
+    "nonfinite_timing_fails_closed": {
+      "pass": true,
+      "detail": null
+    },
+    "unverified_status_fails_D8a": {
+      "pass": true,
+      "detail": null
+    },
+    "pilot_padding_failed_prefixes_match_parent": {
+      "pass": true,
+      "detail": [
+        8,
+        8
+      ]
+    },
+    "pilot_half_width_cells_match_parent": {
+      "pass": true,
+      "detail": [
+        7,
+        7,
+        []
+      ]
+    },
+    "pilot_half_width_values_match_parent": {
+      "pass": true,
+      "detail": null
+    },
+    "pilot_state_order_failures_match_parent": {
+      "pass": true,
+      "detail": [
+        [],
+        []
+      ]
+    },
+    "pilot_minimum_bf16_agreement_matches_parent": {
+      "pass": true,
+      "detail": [
+        0.9997884114583333,
+        0.9997884114583333
+      ]
+    },
+    "confirmation_padding_failed_prefixes_match_parent": {
+      "pass": true,
+      "detail": [
+        31,
+        31
+      ]
+    },
+    "confirmation_half_width_cells_match_parent": {
+      "pass": true,
+      "detail": [
+        14,
+        14,
+        []
+      ]
+    },
+    "confirmation_half_width_values_match_parent": {
+      "pass": true,
+      "detail": null
+    },
+    "confirmation_state_order_failures_match_parent": {
+      "pass": true,
+      "detail": [
+        [
+          "p031"
+        ],
+        [
+          "p031"
+        ]
+      ]
+    },
+    "confirmation_minimum_bf16_agreement_matches_parent": {
+      "pass": true,
+      "detail": [
+        0.9997721354166667,
+        0.9997721354166667
+      ]
+    }
+  },
+  "all_pass": true
+}
