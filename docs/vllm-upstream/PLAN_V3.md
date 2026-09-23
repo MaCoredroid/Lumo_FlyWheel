@@ -229,3 +229,6 @@ Threads used now: 55688 53651 53798 54080 54928 55122 51508 55291 53142 54076 58
 
 ### 2026-09-23 23:18Z — Karl0007 pushed the adapted fixture branch (#53142)
 Karl0007/vllm:oracle/53142-adapted-arms (based on our p8-restore-fidelity; adds oracle-53142/ with README, adapted test, arm patches A/B/C, run.sh). Re-verified on their cluster: A (#53798 as-is) 10 passed; B (#55507 as written) 2 failed; C (#55507 + adc7d30) 10 passed. Agrees with our scope caveat. Nothing asked of us; no reply (loop closed). Not run on our side.
+
+### 2026-09-23 23:18Z — Karl0007 FIXED both #55506 findings in 5f71d6f, using our test as the acceptance run
+Padded rows: mapping load clamped by a runtime `num_mapping_rows` (do_not_specialize); padded rows → slot 0. Capture-time binding: `_ensure_align_ctx` returns (ctx, temporary); `preprocess_state` asserts not temporary; `prepare_attn` releases temporary bindings in a finally. Their run (sm_80): our file 8 pass / 1 fail (C8 characterises the OLD behaviour, fails by design); updated C8 → 9 pass; branch Karl0007/vllm:test/55506-aligned-state-index-expectations. Scoreboard: evidence acted on in 5 threads (#55122 ×2, #54076, #53142/#55507, #55506). Confirmation run on GB10 at 5f71d6f requested from the item I agent.
