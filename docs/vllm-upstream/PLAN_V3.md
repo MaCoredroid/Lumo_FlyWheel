@@ -226,3 +226,6 @@ Branch fix/modelopt-lmhead-quant-gaps rebased from base 6d4562c59b onto origin/m
 - I #55506 — PR review COMMENT: FULL-cudagraph padding OOB read (sanitizer), capture-binding question, nine-case model-free test offered on MaCoredroid/vllm:p9-mamba-aligned-state-indices @9cef61298f. https://github.com/vllm-project/vllm/pull/55506#pullrequestreview-5296410826
 - C #53651 — second #pr-reviews request approved; posts after 2026-09-24T00:09:03Z (timer).
 Threads used now: 55688 53651 53798 54080 54928 55122 51508 55291 53142 54076 58021 55506 (12).
+
+### 2026-09-23 23:18Z — Karl0007 pushed the adapted fixture branch (#53142)
+Karl0007/vllm:oracle/53142-adapted-arms (based on our p8-restore-fidelity; adds oracle-53142/ with README, adapted test, arm patches A/B/C, run.sh). Re-verified on their cluster: A (#53798 as-is) 10 passed; B (#55507 as written) 2 failed; C (#55507 + adc7d30) 10 passed. Agrees with our scope caveat. Nothing asked of us; no reply (loop closed). Not run on our side.
