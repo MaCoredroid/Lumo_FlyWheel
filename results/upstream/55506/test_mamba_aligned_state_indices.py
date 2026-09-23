@@ -314,9 +314,10 @@ def _capture(ctx, seq_lens_gpu, num_reqs, mapping_gpu):
 
 
 def test_cuda_graph_replay_matches_eager():
-    """Capture the launch, then replay it after updating the mapping, the
-    sequence lengths and the block-table contents IN PLACE.  The replay must be
-    bytewise identical to an eager launch over the same buffers.
+    """Capture the launch, then replay it after updating the mapping and the
+    sequence lengths IN PLACE (the block-table contents are left unchanged).
+    The replay must be bytewise identical to an eager launch over the same
+    buffers.
 
     This shows the kernel's addressing depends only on its pointer arguments
     and on the runtime ``num_requests`` scalar.  It does NOT show that the
@@ -336,7 +337,7 @@ def test_cuda_graph_replay_matches_eager():
 
     graph = _capture(ctx, seq_lens_gpu, num_reqs, mapping_gpu)
 
-    # A different step: new permutation, new lengths, mutated tables.
+    # A different step: new permutation, new lengths; tables unchanged.
     new_mapping = [1, 6, 2, 7, 4]
     new_seq_lens = [64, 20, 96, 5, 49]
     mapping_gpu.copy_(torch.tensor(new_mapping, dtype=torch.int64))
