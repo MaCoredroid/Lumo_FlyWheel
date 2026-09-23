@@ -1,4 +1,5 @@
 # #55506 review comment (funded item I) — v1 (Codex replacement verbatim; agent draft NO-GO; AWAITING MARK GO — on GO: push p9-mamba-aligned-state-indices @9cef61298f to the fork, verify the compare link, then post ONE PR review of type COMMENT; no @mentions; no merge position)
+> **POSTED 2026-09-23T20:28:15Z (Mark GO "go all"):** https://github.com/vllm-project/vllm/pull/55506#pullrequestreview-5296410826 (PR review, COMMENT); branch p9-mamba-aligned-state-indices @9cef61298f pushed to MaCoredroid/vllm
 > Codex I_review.md: provenance GO (evidence @c8479bbf4 verified); padding defect verified from source
 > and sanitizer log; FULL reachability GO (default O2 → FULL_AND_PIECEWISE; KDA UNIFORM_BATCH); ordering
 > hazard supported conditionally (posed as a question). Prose corrections applied on the branch

@@ -220,3 +220,9 @@ Startup geometry persists on main: identical 800/200 lines across 0.28.0 (ours),
 
 ### 2026-09-23T18:58:39Z — #53651 rebased onto main (Mark GO "go, rebase first")
 Branch fix/modelopt-lmhead-quant-gaps rebased from base 6d4562c59b onto origin/main 711fc55c10 (clean; patch content identical, hunk offsets only; sign-offs preserved). Tests on GB10 (vllm-head venv, Python sources from the rebased tree; compiled build 0.26.1rc1.dev1159): tests/model_executor/model_loader/test_weight_tying.py + tests/v1/sample/test_head_dtype.py → 15 passed (log tmp-scratch/rebase53651_tests_20260923T185717Z.log). Force-pushed with lease; new head e3ca45951b. Second #pr-reviews request (Codex-approved v2) to be posted after 2026-09-24T00:09:03Z on Mark's GO.
+
+### 2026-09-23T20:28:15Z — items G and I posted (Mark GO "go all"); C scheduled
+- G #58021 — static review as PR review COMMENT: MRV2 PIECEWISE profiling pre-stamp path (Codex-traced, G2-verified), reproduction-description question, CPU test attempt disclosed. https://github.com/vllm-project/vllm/pull/58021#pullrequestreview-5296407251
+- I #55506 — PR review COMMENT: FULL-cudagraph padding OOB read (sanitizer), capture-binding question, nine-case model-free test offered on MaCoredroid/vllm:p9-mamba-aligned-state-indices @9cef61298f. https://github.com/vllm-project/vllm/pull/55506#pullrequestreview-5296410826
+- C #53651 — second #pr-reviews request approved; posts after 2026-09-24T00:09:03Z (timer).
+Threads used now: 55688 53651 53798 54080 54928 55122 51508 55291 53142 54076 58021 55506 (12).

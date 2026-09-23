@@ -1,4 +1,5 @@
 # #58021 review comment (funded item G) — v3 (Codex GO on this exact text after the G2-verified refinement; post as ONE PR review of type COMMENT; AWAITING MARK GO)
+> **POSTED 2026-09-23T20:28:15Z (Mark GO "go all"):** https://github.com/vllm-project/vllm/pull/58021#pullrequestreview-5296407251 (PR review, COMMENT)
 > Codex: post as ONE PR review with event COMMENT, no merge verdict. F1 (LCM back-off → checkpoint
 > consumer) OMITTED: MambaManager already computes checkpoint validity with hash_block_size, so a
 > coarser unit / checkpoint=None may be intentional agreement with allocation. Q1 trimmed of
