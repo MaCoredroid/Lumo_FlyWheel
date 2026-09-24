@@ -232,3 +232,6 @@ Karl0007/vllm:oracle/53142-adapted-arms (based on our p8-restore-fidelity; adds 
 
 ### 2026-09-23 23:18Z — Karl0007 FIXED both #55506 findings in 5f71d6f, using our test as the acceptance run
 Padded rows: mapping load clamped by a runtime `num_mapping_rows` (do_not_specialize); padded rows → slot 0. Capture-time binding: `_ensure_align_ctx` returns (ctx, temporary); `preprocess_state` asserts not temporary; `prepare_attn` releases temporary bindings in a finally. Their run (sm_80): our file 8 pass / 1 fail (C8 characterises the OLD behaviour, fails by design); updated C8 → 9 pass; branch Karl0007/vllm:test/55506-aligned-state-index-expectations. Scoreboard: evidence acted on in 5 threads (#55122 ×2, #54076, #53142/#55507, #55506). Confirmation run on GB10 at 5f71d6f requested from the item I agent.
+
+### 2026-09-24T00:10:04Z — #53651 second #pr-reviews request posted (item C; this week's unsolicited ask)
+Threaded reply under the 2026-09-17 post, after rechecking no review/reply had arrived. message_ts 1790208594.140899. PR head e3ca45951b (rebased 2026-09-23). Next allowed ping: not before 2026-10-01.
