@@ -1,4 +1,5 @@
 # #58021 follow-up after the author's fix (funded item G3) — v1 (Codex replacement verbatim; agent draft NO-GO on defect/reachability framing; AWAITING MARK GO)
+> **POSTED 2026-09-25T17:59:31Z (Mark GO):** https://github.com/vllm-project/vllm/pull/58021#issuecomment-5837051278
 > Codex G3_review.md: one ordinary PR comment referencing Dustin's comment (issuecomment-5821960748);
 > adds the concrete regression-test gap and the scheduler-only backstop; no reachable-failure claim
 > (custom executors are supported extension points but discarding stamped configs is hypothetical);

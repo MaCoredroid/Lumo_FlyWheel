@@ -243,3 +243,6 @@ Threaded reply under the 2026-09-17 post, after rechecking no review/reply had a
 
 ### 2026-09-25T00:44:07Z — #55506 GB10 confirmation posted (Mark GO)
 Second-architecture confirmation of Karl0007's fix 5f71d6f (updated file 9 passed; sanitizer 0 errors; real rows unchanged) plus the precision note that padded rows now use slot 0's block IDs rather than null block 0. https://github.com/vllm-project/vllm/pull/55506#issuecomment-5824722220
+
+### 2026-09-25T17:59:31Z — #58021 follow-up posted (item G3, Mark GO)
+After the author's fix (cdcfa2329d7): asks whether tests can distinguish unresolved profiling from an unstamped serving worker; notes the regression only proves the early return and that core.py:169 reads back the scheduler's own stamped config; references Dustin's comment; no reachability claim. https://github.com/vllm-project/vllm/pull/58021#issuecomment-5837051278
