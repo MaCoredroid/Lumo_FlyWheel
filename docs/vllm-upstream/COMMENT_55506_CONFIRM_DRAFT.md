@@ -1,4 +1,5 @@
 # #55506 confirmation of 5f71d6f on GB10 (item I follow-up) — v2 (Codex replacement verbatim: dropped "this looks inert"; ordinary PR comment; GO; AWAITING MARK GO)
+> **POSTED 2026-09-25T00:44:07Z (Mark GO):** https://github.com/vllm-project/vllm/pull/55506#issuecomment-5824722220
 > Karl0007 fixed both findings in 5f71d6f using our test as the acceptance run (his run: sm_80).
 > Our GB10 confirmation (agent I2): original file 8 pass / 1 fail (old C8 by design); his updated
 > file 9 pass; padding probe track mode shows padded rows constant [1,2,3]; compute-sanitizer
