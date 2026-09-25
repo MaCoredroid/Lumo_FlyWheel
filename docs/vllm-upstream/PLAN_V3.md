@@ -246,3 +246,6 @@ Second-architecture confirmation of Karl0007's fix 5f71d6f (updated file 9 passe
 
 ### 2026-09-25T17:59:31Z — #58021 follow-up posted (item G3, Mark GO)
 After the author's fix (cdcfa2329d7): asks whether tests can distinguish unresolved profiling from an unstamped serving worker; notes the regression only proves the early return and that core.py:169 reads back the scheduler's own stamped config; references Dustin's comment; no reachability claim. https://github.com/vllm-project/vllm/pull/58021#issuecomment-5837051278
+
+### 2026-09-25 18:09Z — #58021 author asked reviewers to hold
+QHarshil thanked us and Dustin, said the profiling-path fix was useful, and asked to hold further review threads until a maintainer/requested reviewer weighs in and CI is triggered. RULE: no further posts on #58021 from us unless a maintainer engages or asks; no acknowledgement reply (would be noise). Thread stays watched.
