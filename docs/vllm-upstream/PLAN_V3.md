@@ -235,3 +235,8 @@ Padded rows: mapping load clamped by a runtime `num_mapping_rows` (do_not_specia
 
 ### 2026-09-24T00:10:04Z — #53651 second #pr-reviews request posted (item C; this week's unsolicited ask)
 Threaded reply under the 2026-09-17 post, after rechecking no review/reply had arrived. message_ts 1790208594.140899. PR head e3ca45951b (rebased 2026-09-23). Next allowed ping: not before 2026-10-01.
+
+### 2026-09-24/25 — three threads moved
+- #58021: QHarshil "You're right" on our pre-stamp trace; fixed (builder returns None when geometry unresolved, profiling only; real runs still abort at core.py:169; regression test added); will correct the PR body per our 16/1600 question. Head cdcfa2329d7 (rebased). dustinCodes84600 raised a follow-on: Worker.initialize_from_config treats missing hash_block_size as optional → silent None; asks for unconditional get_hash_block_size(). Not addressed to us. Scoreboard: evidence/review acted on in 6 threads.
+- #55506: tomasruizt confirmed Kimi-K3 (pruned) affected on main with EAGLE3+PP; PR restores AL (3.27→3.82 at PP4/TP2). njhill (maintainer): "thanks for the fix. But the changes look quite messy, we'll want to clean them up a bit before we merge this." First maintainer engagement on a thread we contributed to. Our GB10 confirmation comment (v2, Codex GO) still awaiting Mark GO.
+- #55122: jschmied posted same-build perf (PR never slower; e2e indistinguishable from stock; 3–4 % vs torch.topk at 30k); k3dani corrected their 21–28 % (mixed images, not isolated). Our scope note unaffected; no action.
