@@ -1,15 +1,32 @@
 # Item J — recurrent-state oracle for vllm-project/vllm#58400
 
 **Target.** PR #58400 "[Perf][MRV2] Allow FULL decode graphs for one-token prompt tails"
-(njhill, OPEN, no human review as of 2026-09-26; `mergeable_state: blocked`, CI #91329 in
-flight). Head `d5a8e22778175b5e732c8718b82f9a27a6cbbbc8`, merge base
-`4ccfe1239843998f9b3e109f159278dc0fcbf753`. 144+/42- over 12 files, 4 of them tests.
+(njhill, OPEN). Head `d5a8e22778175b5e732c8718b82f9a27a6cbbbc8`, merge base
+`4ccfe1239843998f9b3e109f159278dc0fcbf753`. 144+/42- over 12 files, 4 of them tests. As of
+2026-09-26 the only submitted review is `claude[bot]`'s "automated review is disabled" note
+— no human review of any state; the one substantive comment is seongyun1104's on the
+cudagraph candidate ladder, which is about dispatch coverage, not state. Latest CI run
+triggered: Buildkite #91329 on `d5a8e277` (2026-09-25); the API reports
+`mergeable_state: unknown` at the time of writing.
 
 **Scope.** The gap the brief named: the PR's own hybrid checks assert metadata counts and
 the benchmarks assert throughput and gsm8k, so neither establishes the **state invariant** —
 that the conv/SSM state committed after a FULL-path step equals eager execution's, with
 rejected placeholder slots not leaking into it. A model-free oracle was built for exactly
 that and run at both refs.
+
+The brief's stop-early condition — "stop and report if existing coverage already exercises
+the state bytes" — was checked first and does **not** hold. A sweep of `tests/` found three
+disjoint buckets that never intersect: state-byte assertions that are kernel-only (no
+runner, no graph, no placeholder drafts); one V2-runner state-byte test
+(`tests/v1/e2e/general/test_mamba_prefix_cache.py:1221`) that is `enforce_eager=True` and
+checks only the align block-migration copies of the temporal tensor; and
+classification/metadata tests for the padded tail that are pure-CPU mocks with no state at
+all (including this PR's own
+`tests/v1/worker/test_mamba_hybrid_model_state.py::test_padded_prompt_tail_builds_as_spec_decode`,
+which asserts `num_spec_decodes == 2 / num_prefills == 1 / num_prefill_tokens == 4`). No
+test anywhere compares eager against a FULL cudagraph for a hybrid model, on state bytes or
+on tokens. Work therefore continued.
 
 ---
 
