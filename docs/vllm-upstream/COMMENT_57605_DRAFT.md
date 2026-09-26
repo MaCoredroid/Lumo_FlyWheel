@@ -1,30 +1,10 @@
-DRAFT — not posted. Target: vllm-project/vllm#57605 (jsolman).
+# #57605 review comment (funded item M) — v2 (Codex replacement verbatim; AWAITING MARK GO — on GO: push m-57605-align-lookahead @cc514ed2179a8fcfea16607ffaa74be2b1d10da5 to the fork, resolve {{BRANCH_LINK}} = https://github.com/vllm-project/vllm/compare/ef97fad96ac4bcab3321933f1855755a61d38d09...MaCoredroid:vllm:m-57605-align-lookahead, post ONE ordinary PR comment)
+> Codex M_review.md: independent sweep confirms 29 (+1) head-only failures all at :1932; restoring the checkpoint-aware bound makes the 12 no-lookahead cases pass; under-reserve/double-count/negative-estimate executed via a CPU allocate_slots probe; docstring should-fix applied on the branch.
 
 ---
 
-Ran the align-mode allocation paths CPU-only at `ef97fad` and at merge-base
-`63d9ad0`.
-
-At merge-base `tests/v1/core/test_single_type_kv_cache_manager.py` is 34/34
-green; at this head 18 fail, plus 11 in `test_mamba_align_chunk_split.py` and
-`prefix_cache/test_partial_prefix_cache_hits.py` — every one at
-`single_type_kv_cache_manager.py:1932`. Twelve need no lookahead at all: the
-rewritten bound drops the `checkpoint_block` term the merge-base bound carried
-(1882-1885), and a chunk exporting an internal checkpoint needs exactly that
-extra block.
-
-Two questions rather than claims:
-
-- At a page-aligned main end the estimate returns 1 while `allocate_new_blocks`
-  takes 2 — `num_required_blocks` already carries the reserved page and 1938
-  adds another. Squeezing the pool to the estimate gives
-  `ValueError: Cannot get 2 free blocks from the pool`. Is
-  `physical_block_cap += 1` (1840) intended to bind? The `min` never clamps
-  there.
-- With `num_speculative_blocks > 0` that next page column already holds a real
-  speculative block at merge-base. Is the corruption about the block's contents
-  rather than its allocation?
-
-Model-free repro: {{BRANCH_LINK}}
-
-Drafted with AI assistance; happy to share the CPU-only logs.
+At `ef97fad` versus `63d9ad0`, 29 existing tests regress across the manager, chunk-split and partial-hit suites (18+6+5); a broader CPU sweep adds `test_hybrid_mamba_retention_mtp_resend_of_aligned_prompt`. All 30 stop at `single_type_kv_cache_manager.py:1932`. Twelve checkpoint cases need no lookahead: the rewritten bound drops `checkpoint_block` and its speculative-block allowance. Restoring that bound alone makes those 12 pass.
+The missing-next-column probe distinguishes base/head only with `num_speculative_blocks=0`; with positive counts, the next column already holds a scratch block at base. Does that explain the MTP configuration you reported, or is its problem the block’s contents rather than allocation? These probes do not execute worker writes.
+Also, base derives null padding solely from `num_tokens_main_model`; the displacement in mechanism (b) appears to be a hazard introduced by lookahead inflation, which your new clamp handles.
+At a running boundary, admission estimates one block while allocation takes two; limiting the pool to that estimate raises `ValueError`. The inflated requirement already includes the extra page before `num_new_blocks += 1`. CPU probe/tests: {{BRANCH_LINK}}; [logs](https://github.com/MaCoredroid/Lumo_FlyWheel/tree/913f802e7c72180405749ab9247be72549a30ae4/results/upstream/57605).
+*Investigated with AI assistance; CPU-only, without reproducing the serving symptoms.*

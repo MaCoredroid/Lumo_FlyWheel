@@ -1,24 +1,11 @@
-Second GB10 here (cc 12.1, 48 SMs, driver 590.48.01) — but torch 2.13 / CUDA 13.2 and
-Triton ptxas 13.1, not your 13.0, which may explain the gaps.
+# #58718 second-GB10 measurement comment (funded item L) — v2 (Codex replacement verbatim; agent draft NO-GO on '90/90' and the 2.24B-element claim; AWAITING MARK GO — one ordinary PR comment, no branch)
+> Codex L_review.md: ratios recomputed from raw p50s; sm120 baseline mapping verified (batch_invariant_configs.py:492–524 main; head :719–754 selects sm121); isolated BLOCK_K 128→64 covers 2,201,511,168 elements on 12 shapes; build-scoped question, not a policy claim.
 
-At `b40edf4`: 34 passed, 15 keys set-equal, `sm120` byte-identical, row-0 hashes match
-across M ∈ {1, 8, 32, 2048} on all 15 shapes, and the per-M tile survives `torch.compile`
-and cudagraph replay.
+---
 
-Both effects reproduce: tuned/default 0.72 / 0.75 / 0.93 at M=1/32/256, and
-1.03 / 1.26 / 1.20 at M=512/1024/2048 (worst shape 1.72x).
-
-Two questions:
-
-1. Against `sm120` — what a GB10 runs today, not the default tile — I measure 0.89x at
-M ≤ 256 but 1.16x at M=1024 and 2048. Is deepening the large-M regression versus the
-status quo intended?
-
-2. I could not reproduce the `BLOCK_K` argument: changing only `BLOCK_SIZE_K` (32/64/128)
-left all 2.24e9 output elements bitwise identical, while split-K halves and cuBLAS do
-change them. Does `BLOCK_K` move the bits on your box? If not, could M ≥ 512 take the
-default tile?
-
-Probe: {{BRANCH_LINK}}
-
-Numbers gathered with AI assistance; I ran and reviewed them.
+Second GB10 measurement at `b40edf4`: both the small-M win and large-M penalty reproduce. Mean per-shape tuned/default p50 ratios over 15 BF16 `weight.t()` GEMMs (both timing orders agree within the stated 3% direction threshold):
+| M | 1 | 32 | 256 | 512 | 1024 | 2048 |
+|---|---|---|---|---|---|---|
+| tuned/default | 0.721 | 0.754 | 0.929 | 1.027 | 1.263 | 1.202 |
+The large-M penalty is larger here: torch 2.13.0+cu132, Triton 3.7.1, ptxas 13.1, driver 590.48.01; your report lists CUDA 13.0. Against main’s sm120 table, normalized ratios are 0.89–0.91 at measured M≤256 and ~1.16 at M=1024/2048 (direct timing ratios ~1.15). Is that the intended tradeoff? All 15 shapes pass the M-invariance hash check. Isolated BLOCK_K 128→64 swaps on the 12 affected shapes changed zero of 2.20 billion BF16 elements at M={1,2048}, across rand/randn inputs; split-K and cuBLAS controls did change outputs. This is build-specific, not a reduction-order guarantee. Does your build differ, or would a validated default-tile fallback at large M be worth exploring? [Evidence](https://github.com/MaCoredroid/Lumo_FlyWheel/tree/db66544e84131c7d009053dd1bca8923ce5c270b/results/upstream/58718).
+*Investigated with AI assistance; these are isolated-GEMM measurements, not serving results.*
