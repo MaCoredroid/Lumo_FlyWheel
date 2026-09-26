@@ -1,0 +1,1039 @@
+From 7932dbdbea3bb251864697b9f12b9b6413f00eed Mon Sep 17 00:00:00 2001
+From: Mark Ma <coredroid0401@gmail.com>
+Date: Sat, 26 Sep 2026 19:17:40 +0000
+Subject: [PATCH] [Test] Committed recurrent state for one-token prompt tails
+ on FULL graphs
+
+Model-free coverage for the state invariant behind #58400: after a step in
+which a cached one-token prompt tail (optionally padded with K placeholder
+drafts) rides the FULL decode graph, the recurrent state bytes the next step
+reads must equal the eager, unpadded execution's, and no placeholder-derived
+state may become the committed state.
+
+Drives the real gather_batch_req_state, MambaHybridModelState.prepare_attn at
+CUDAGraphMode.FULL and NONE, GDNAttentionMetadataBuilder.build and
+MambaHybridModelState.postprocess_state over synthetic conv/SSM pools; the
+mixer is a reimplementation of the three state-write contracts, each cited to
+its source. Includes a negative control that routes the padded tail through
+the prefill write contract and requires the same expectations to fail.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01VLD8eK1yhEDSqocmQkR7ty
+---
+ .../test_mamba_hybrid_prompt_tail_state.py    | 1004 +++++++++++++++++
+ 1 file changed, 1004 insertions(+)
+ create mode 100644 tests/v1/worker/test_mamba_hybrid_prompt_tail_state.py
+
+diff --git a/tests/v1/worker/test_mamba_hybrid_prompt_tail_state.py b/tests/v1/worker/test_mamba_hybrid_prompt_tail_state.py
+new file mode 100644
+index 0000000000..121dd8dcfd
+--- /dev/null
++++ b/tests/v1/worker/test_mamba_hybrid_prompt_tail_state.py
+@@ -0,0 +1,1004 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
++"""Committed recurrent-state coverage for one-token prompt tails on the V2
++FULL decode-graph path.
++
++A cached one-token prompt tail (full prefix-cache hit, P/D KV import on the
++decode node, or the final one-token chunk) is scheduled with exactly one new
++prompt token over existing context, and the scheduler may pad it with K
++placeholder drafts to keep the uniform K+1 spec-decode shape. The runner now
++classifies such a row as decode-like (``prefill_runs_as_decode_np``) and lets
++the whole batch reach the FULL decode graph (``decode_graph_eligible``).
++
++Metadata counts are already covered elsewhere. What is *not* covered anywhere is
++the state invariant that makes the reclassification safe:
++
++    after the step, the recurrent state bytes the NEXT step reads as this
++    request's initial state must equal the bytes the eager, unpadded execution
++    of the same logical request leaves there, and no state that folded a
++    placeholder token may become the committed state.
++
++These tests establish it without a model. Real units executed:
++
++* ``GPUModelRunner.gather_batch_req_state`` -- the mask and the FULL-graph gate.
++* ``MambaHybridModelState.prepare_attn`` at ``CUDAGraphMode.FULL`` (request- and
++  token-padded) and at ``CUDAGraphMode.NONE``.
++* ``GDNAttentionMetadataBuilder.build`` -- the real ``spec_state_indices_tensor``
++  / ``non_spec_state_indices_tensor`` / ``prefill_state_indices`` /
++  ``has_initial_state`` / ``num_accepted_tokens``.
++* ``MambaHybridModelState.postprocess_state`` -- the real acceptance-count
++  commit, which is what selects the committed column at the next step.
++
++Standing in for the mixer is ``_run_synthetic_mixer``, a reimplementation of the
++three state-write contracts, each cited to the source it was read from:
++
++* spec-decode row, recurrent state: initial state from
++  ``ssm_state_indices[row, num_accepted - 1]``, the state after token ``t``
++  written to ``ssm_state_indices[row, t]``, indices ``<= 0`` skipped --
++  ``vllm/third_party/flash_linear_attention/ops/fused_recurrent.py:103-163``.
++* spec-decode row, conv state: read and written at
++  ``spec_state_indices[row, 0]``, window base offset ``num_accepted - 1``,
++  ``state_len = width - 1 + (max_query_len - 1)`` --
++  ``vllm/model_executor/layers/mamba/ops/causal_conv1d.py:860-950,1219-1222``
++  and the call site ``.../mamba/gdn/qwen_gdn_linear_attn.py:1336-1348``.
++* non-spec decode row: in place at ``non_spec_state_indices_tensor[row]``
++  (``qwen_gdn_linear_attn.py:1368-1378,1488``).
++* prefill row: initial state from ``prefill_state_indices`` gated by
++  ``has_initial_state``, only the FINAL state written back
++  (``qwen_gdn_linear_attn.py:1500-1523``).
++
++State values are tags, not arithmetic: the recurrent state of a request after
++``n`` consumed tokens is ``[req_tag, n, poison]`` and a conv state is the window
++of the last ``width - 1`` token tags. A placeholder draft carries ``POISON_TOK``,
++so "a placeholder leaked into the committed state" is a literal byte check.
++Every comparison is exact; there is no tolerance anywhere.
++
++``test_negative_control_committing_the_placeholders_is_detected`` re-runs the
++padded tail through the *prefill* write contract -- what
++``mamba_hybrid.py``'s own comment says the prefill kernels do, "the prefill
++kernels can't roll them back" -- and requires the byte assertions to fail. If
++that test fails, the passes above mean nothing.
++"""
++
++import functools
++import inspect
++from dataclasses import dataclass, field
++from types import SimpleNamespace
++from typing import Any
++from unittest.mock import Mock
++
++import numpy as np
++import pytest
++import torch
++
++from tests.v1.attention.utils import create_vllm_config
++from vllm.config import SpeculativeConfig
++from vllm.config.compilation import CUDAGraphMode
++from vllm.v1.attention.backend import CommonAttentionMetadata
++from vllm.v1.attention.backends.gdn_attn import (
++    GDNAttentionMetadata,
++    GDNAttentionMetadataBuilder,
++)
++from vllm.v1.attention.backends.registry import MambaAttentionBackendEnum
++from vllm.v1.kv_cache_interface import MambaSpec
++from vllm.v1.worker.gpu.model_runner import GPUModelRunner
++from vllm.v1.worker.gpu.model_states import mamba_hybrid
++from vllm.v1.worker.gpu.model_states.mamba_hybrid import MambaHybridModelState
++
++pytestmark = pytest.mark.skipif(
++    not torch.cuda.is_available(), reason="requires CUDA"
++)
++
++DEVICE = torch.device("cuda")
++
++K = 3  # num_speculative_tokens
++SPEC_SHAPE = K + 1  # uniform spec-decode query length
++MAMBA_BLOCK_SIZE = 16
++CONV_WIDTH = 4
++# causal_conv1d.py:1219-1222 -- spec decode needs width-1 + (seqlen-1) columns.
++CONV_STATE_LEN = CONV_WIDTH - 1 + (SPEC_SHAPE - 1)
++MAX_REQS = 8
++# Block id 0 is NULL_BLOCK_ID; slot ids start at 1.
++NUM_SLOTS = 1 + MAX_REQS * SPEC_SHAPE
++NULL_BLOCK_ID = 0
++
++UNSET = -1  # pool pre-fill: no write has touched this slot
++STALE = -2  # conv columns outside the live window
++POISON_TOK = 999_999  # token tag of a placeholder draft
++SSM_CHANNELS = 3  # [req_tag, num_consumed_tokens, poison]
++CONV_WINDOW = CONV_WIDTH - 1  # live conv history, causal_conv1d.py:1222
++
++# The merge base has neither field; the same expectations then report the gap
++# instead of erroring. Upstream can delete both shims once this lands.
++_HAS_RUNS_AS_DECODE = "prefill_runs_as_decode_np" in inspect.getsource(
++    GPUModelRunner.gather_batch_req_state
++)
++
++
++def _slot_id(req_slot: int, col: int) -> int:
++    """A unique, non-zero state slot per (request slot, block-table column)."""
++    return 1 + req_slot * SPEC_SHAPE + col
++
++
++# ---------------------------------------------------------------------------
++# The batch
++# ---------------------------------------------------------------------------
++@dataclass
++class Req:
++    """One scheduled request, in the terms the runner reads from req_states."""
++
++    rid: str
++    slot: int  # request-state slot (idx_mapping target)
++    prefill_len: int
++    num_computed_prefill: int
++    num_computed_tokens: int
++    num_scheduled: int
++    num_drafts: int
++    accepted_before: int = 1  # num_accepted_tokens_gpu at entry
++    tag: int = 0  # request tag written into the state
++    # Number of leading scheduled tokens that are real (the rest are
++    # placeholders). For a padded prompt tail this is 1.
++    num_real: int = 1
++    poison_cols: list[int] = field(default_factory=list)
++    block_table: list[int] | None = None
++
++    def table(self) -> list[int]:
++        if self.block_table is not None:
++            return self.block_table
++        return [_slot_id(self.slot, c) for c in range(SPEC_SHAPE)]
++
++
++def _make_runner(reqs: list[Req], decode_query_len: int) -> Any:
++    """A runner stub carrying only what gather_batch_req_state reads."""
++    by_slot = {r.slot: r for r in reqs}
++    n = max(by_slot) + 1
++    prefill_len = np.zeros(n, dtype=np.int32)
++    computed_prefill = np.zeros(n, dtype=np.int32)
++    for slot, r in by_slot.items():
++        prefill_len[slot] = r.prefill_len
++        computed_prefill[slot] = r.num_computed_prefill
++    runner: Any = GPUModelRunner.__new__(GPUModelRunner)
++    runner.decode_query_len = decode_query_len
++    runner.adaptive_verification = None
++    runner.pcp_manager = None
++    runner.req_states = SimpleNamespace(
++        req_id_to_index={r.rid: r.slot for r in reqs},
++        num_computed_prefill_tokens=np.minimum(computed_prefill, prefill_len),
++        prefill_len=SimpleNamespace(np=prefill_len),
++    )
++    return runner
++
++
++def _gather(reqs: list[Req], decode_query_len: int = SPEC_SHAPE):
++    """Drive the real pre-dispatch gather, as execute_model does."""
++    scheduler_output = SimpleNamespace(
++        num_scheduled_tokens={r.rid: r.num_scheduled for r in reqs},
++        total_num_scheduled_tokens=sum(r.num_scheduled for r in reqs),
++        scheduled_spec_decode_tokens={
++            r.rid: [-1] * r.num_drafts for r in reqs if r.num_drafts
++        },
++    )
++    runner = _make_runner(reqs, decode_query_len)
++    return runner.gather_batch_req_state(scheduler_output, False)
++
++
++def _eligible(batch_state: Any) -> bool:
++    return bool(
++        getattr(batch_state, "decode_graph_eligible", not batch_state.has_prefill)
++    )
++
++
++# ---------------------------------------------------------------------------
++# The model state and the metadata
++# ---------------------------------------------------------------------------
++def _make_model_state(reqs: list[Req]) -> MambaHybridModelState:
++    """A real MambaHybridModelState with only the fields these paths touch."""
++    state = object.__new__(MambaHybridModelState)
++    state.vllm_config = SimpleNamespace(num_speculative_tokens=K)
++    state.model_config = SimpleNamespace(max_model_len=1024)
++    state._align_mode = False
++    state.recoverssm = None
++    state._mamba_ctx = None
++    accepted = torch.ones(MAX_REQS, dtype=torch.int32, device=DEVICE)
++    for r in reqs:
++        accepted[r.slot] = r.accepted_before
++    state.num_accepted_tokens_gpu = accepted
++    return state
++
++
++def _make_input_batch(
++    batch_state: Any,
++    ordered: list[Req],
++    *,
++    num_reqs_padded: int,
++    num_tokens_padded: int,
++) -> Any:
++    """An InputBatch-shaped namespace, as prepare_inputs would fill it."""
++    num_reqs = len(ordered)
++    num_tokens = int(sum(r.num_scheduled for r in ordered))
++    query_start_loc_np = np.zeros(num_reqs_padded + 1, dtype=np.int32)
++    np.cumsum(
++        np.array([r.num_scheduled for r in ordered], dtype=np.int32),
++        out=query_start_loc_np[1 : num_reqs + 1],
++    )
++    # model_runner.py: padded rows repeat the final offset.
++    query_start_loc_np[num_reqs + 1 :] = num_tokens
++    seq_lens_np = np.zeros(num_reqs_padded, dtype=np.int32)
++    for i, r in enumerate(ordered):
++        seq_lens_np[i] = r.num_computed_tokens + r.num_scheduled
++    drafts = getattr(batch_state, "num_draft_tokens_np", None)
++    if drafts is None:
++        drafts = np.array([r.num_drafts for r in ordered], dtype=np.int32)
++    return SimpleNamespace(
++        num_reqs=num_reqs,
++        num_tokens=num_tokens,
++        num_reqs_after_padding=num_reqs_padded,
++        num_tokens_after_padding=num_tokens_padded,
++        idx_mapping=torch.tensor(
++            batch_state.idx_mapping_np, dtype=torch.int32, device=DEVICE
++        ),
++        query_start_loc_np=query_start_loc_np,
++        query_start_loc=torch.from_numpy(query_start_loc_np).to(DEVICE),
++        num_scheduled_tokens=batch_state.num_scheduled_tokens,
++        num_draft_tokens_per_req=drafts,
++        max_query_len=SPEC_SHAPE,
++        seq_lens_cpu_upper_bound=torch.from_numpy(seq_lens_np),
++        seq_lens=torch.from_numpy(seq_lens_np).to(DEVICE),
++        is_prefilling_np=batch_state.is_prefilling_np,
++        prefill_runs_as_decode_np=getattr(
++            batch_state, "prefill_runs_as_decode_np", None
++        ),
++        # Read by the merge base's own prompt-tail test.
++        prefill_len_np=batch_state.prefill_len_np,
++        num_computed_prefill_tokens_np=batch_state.num_computed_prefill_tokens_np,
++        dcp_local_seq_lens=None,
++        positions=torch.zeros(num_tokens_padded, dtype=torch.int64, device=DEVICE),
++        prompt_lens=None,
++    )
++
++
++def _prepare_attn(
++    state: MambaHybridModelState,
++    input_batch: Any,
++    cudagraph_mode: CUDAGraphMode,
++    monkeypatch: pytest.MonkeyPatch,
++):
++    """Call the real prepare_attn and return the model-specific metadata."""
++    build = Mock(return_value={})
++    monkeypatch.setattr(mamba_hybrid, "build_attn_metadata", build)
++    state.prepare_attn(
++        input_batch=input_batch,
++        cudagraph_mode=cudagraph_mode,
++        block_tables=(),
++        slot_mappings=torch.empty(0, dtype=torch.int64),
++        attn_groups=[],
++        kv_cache_config=Mock(),
++    )
++    return build.call_args.kwargs["model_specific_attn_metadata"]
++
++
++@functools.cache
++def _builder_config():
++    vllm_config = create_vllm_config(
++        model_name="Qwen/Qwen3.5-0.8B", block_size=MAMBA_BLOCK_SIZE
++    )
++    return vllm_config
++
++
++def _make_builder() -> GDNAttentionMetadataBuilder:
++    # One config, rebuilt into a fresh builder per call: the builder owns
++    # persistent buffers that must not be shared between arms.
++    vllm_config = _builder_config()
++    vllm_config.compilation_config.cudagraph_mode = CUDAGraphMode.FULL_AND_PIECEWISE
++    # "none" is the mamba cache mode without mamba prefix caching; the block
++    # table is then (num_reqs, 1 + num_speculative_blocks) and is used as is.
++    vllm_config.cache_config.mamba_cache_mode = "none"
++    vllm_config.speculative_config = SpeculativeConfig(
++        method="ngram", num_speculative_tokens=K
++    )
++    mamba_spec = MambaSpec(
++        block_size=MAMBA_BLOCK_SIZE,
++        shapes=((CONV_WIDTH, 8), (SSM_CHANNELS,)),
++        dtypes=(torch.float32, torch.float32),
++        mamba_type=MambaAttentionBackendEnum.GDN_ATTN,
++        mamba_cache_mode="none",
++        num_speculative_blocks=K,
++    )
++    return GDNAttentionMetadataBuilder(
++        kv_cache_spec=mamba_spec,
++        layer_names=["layer.0"],
++        vllm_config=vllm_config,
++        device=DEVICE,
++    )
++
++
++def _common_metadata(
++    ordered: list[Req],
++    *,
++    num_reqs_padded: int,
++    num_tokens_padded: int,
++    is_prefilling: torch.Tensor,
++    pad_table_rows: list[int] | None = None,
++) -> CommonAttentionMetadata:
++    num_reqs = len(ordered)
++    query_lens = [r.num_scheduled for r in ordered] + [0] * (
++        num_reqs_padded - num_reqs
++    )
++    query_start_loc = torch.zeros(num_reqs_padded + 1, dtype=torch.int32)
++    torch.cumsum(
++        torch.tensor(query_lens, dtype=torch.int32), 0, out=query_start_loc[1:]
++    )
++    seq_lens = torch.zeros(num_reqs_padded, dtype=torch.int32)
++    for i, r in enumerate(ordered):
++        seq_lens[i] = r.num_computed_tokens + r.num_scheduled
++    table = torch.zeros((num_reqs_padded, SPEC_SHAPE), dtype=torch.int32)
++    for i, r in enumerate(ordered):
++        table[i] = torch.tensor(r.table(), dtype=torch.int32)
++    if pad_table_rows is not None:
++        for row in range(num_reqs, num_reqs_padded):
++            table[row] = torch.tensor(pad_table_rows, dtype=torch.int32)
++    num_tokens = int(query_start_loc[-1])
++    return CommonAttentionMetadata(
++        query_start_loc=query_start_loc.to(DEVICE),
++        query_start_loc_cpu=query_start_loc,
++        seq_lens=seq_lens.to(DEVICE),
++        seq_lens_cpu_upper_bound=seq_lens,
++        max_seq_len=int(seq_lens.max()),
++        num_reqs=num_reqs_padded,
++        num_actual_tokens=max(num_tokens, num_tokens_padded),
++        max_query_len=SPEC_SHAPE,
++        block_table_tensor=table.to(DEVICE),
++        slot_mapping=torch.zeros(
++            max(num_tokens, num_tokens_padded), dtype=torch.int64, device=DEVICE
++        ),
++        causal=True,
++        is_prefilling=is_prefilling,
++    )
++
++
++# ---------------------------------------------------------------------------
++# Synthetic conv / SSM pools and the write contracts
++# ---------------------------------------------------------------------------
++@dataclass
++class Pools:
++    ssm: torch.Tensor  # [NUM_SLOTS, SSM_CHANNELS] int32
++    conv: torch.Tensor  # [NUM_SLOTS, CONV_STATE_LEN] int32
++
++    @classmethod
++    def create(cls) -> "Pools":
++        return cls(
++            ssm=torch.full(
++                (NUM_SLOTS, SSM_CHANNELS), UNSET, dtype=torch.int32, device=DEVICE
++            ),
++            conv=torch.full(
++                (NUM_SLOTS, CONV_STATE_LEN), UNSET, dtype=torch.int32, device=DEVICE
++            ),
++        )
++
++    def seed(self, reqs: list[Req]) -> None:
++        """Put each request's entering state in its column-0 slot."""
++        for r in reqs:
++            col0 = r.table()[0]
++            if r.num_computed_tokens == 0:
++                continue
++            self.ssm[col0] = torch.tensor(
++                [r.tag, r.num_computed_tokens, 0], dtype=torch.int32, device=DEVICE
++            )
++            # The live conv window sits at base ``num_accepted - 1``; the
++            # remaining columns are last step's scratch (causal_conv1d.py:874).
++            base = r.accepted_before - 1
++            buf = [STALE] * CONV_STATE_LEN
++            for i in range(CONV_WINDOW):
++                buf[base + i] = _tok_tag(
++                    r.tag, r.num_computed_tokens - CONV_WINDOW + 1 + i
++                )
++            self.conv[col0] = torch.tensor(buf, dtype=torch.int32, device=DEVICE)
++        for r in reqs:
++            for col in r.poison_cols:
++                slot = r.table()[col]
++                self.ssm[slot] = torch.tensor(
++                    [r.tag, POISON_TOK, 1], dtype=torch.int32, device=DEVICE
++                )
++                self.conv[slot] = POISON_TOK
++
++
++def _tok_tag(req_tag: int, abs_pos: int) -> int:
++    """Tag of the ``abs_pos``-th token (1-based) of request ``req_tag``."""
++    return req_tag * 10_000 + abs_pos
++
++
++def _row_tokens(r: Req) -> list[int]:
++    """Token tags for this row's scheduled tokens, in order."""
++    toks = []
++    for t in range(r.num_scheduled):
++        if t < r.num_real:
++            toks.append(_tok_tag(r.tag, r.num_computed_tokens + t + 1))
++        else:
++            toks.append(POISON_TOK)
++    return toks
++
++
++def _advance_ssm(prev: list[int], tok: int) -> list[int]:
++    req_tag, n, poison = prev
++    return [req_tag, n + 1, 1 if (poison or tok == POISON_TOK) else 0]
++
++
++def _advance_conv(
++    prev: list[int], toks: list[int], offset: int, *, spec: bool
++) -> list[int]:
++    """causal_conv1d.py:912-950, with the two effective state lengths of
++    :1219-1222: ``width - 1 + (seqlen - 1)`` under spec decode, ``width - 1``
++    otherwise. Columns beyond the effective length are left untouched.
++
++    ``new[i] = old[offset + i + shift]`` while ``i + seqlen < state_len``
++    (``shift`` is 1 under spec decode and ``seqlen`` otherwise), else
++    ``new[i] = x[i - (state_len - seqlen)]``.
++    """
++    seqlen = len(toks)
++    state_len = CONV_STATE_LEN if spec else CONV_WINDOW
++    shift = 1 if spec else seqlen
++    out = list(prev)
++    for i in range(state_len):
++        if i + seqlen < state_len:
++            src = offset + i + shift
++            out[i] = prev[src] if src < CONV_STATE_LEN else STALE
++        else:
++            out[i] = toks[i - (state_len - seqlen)]
++    return out
++
++
++def _run_synthetic_mixer(
++    meta: GDNAttentionMetadata,
++    pools: Pools,
++    ordered: list[Req],
++    *,
++    tail_as_prefill_rid: str | None = None,
++) -> None:
++    """Write state exactly where the GDN layer would, given ``meta``.
++
++    ``tail_as_prefill_rid`` is the negative control: route that request through
++    the prefill write contract (one final state, placeholders folded in) instead
++    of the spec-decode contract.
++    """
++    spec_rows: list[int] = []
++    non_spec_rows: list[int] = []
++    masks = meta.spec_sequence_masks
++    if masks is None:
++        non_spec_rows = list(range(len(ordered)))
++    else:
++        mask_cpu = masks.cpu().tolist()
++        for row in range(len(ordered)):
++            (spec_rows if mask_cpu[row] else non_spec_rows).append(row)
++
++    # ---- spec-decode rows -------------------------------------------------
++    if spec_rows:
++        assert meta.spec_state_indices_tensor is not None
++        assert meta.num_accepted_tokens is not None
++        spec_idx = meta.spec_state_indices_tensor.cpu().tolist()
++        accepted = meta.num_accepted_tokens.cpu().tolist()
++        for j, row in enumerate(spec_rows):
++            r = ordered[row]
++            if r.rid == tail_as_prefill_rid:
++                continue
++            offset = accepted[j] - 1
++            init_slot = spec_idx[j][offset]
++            if init_slot <= 0:  # fused_recurrent.py:111-113
++                continue
++            h = pools.ssm[init_slot].cpu().tolist()
++            conv_slot = spec_idx[j][0]
++            conv_prev = pools.conv[conv_slot].cpu().tolist()
++            toks = _row_tokens(r)
++            for t, tok in enumerate(toks):
++                h = _advance_ssm(h, tok)
++                write_slot = spec_idx[j][t]
++                if write_slot <= 0:  # fused_recurrent.py:155-160
++                    continue
++                pools.ssm[write_slot] = torch.tensor(
++                    h, dtype=torch.int32, device=DEVICE
++                )
++            pools.conv[conv_slot] = torch.tensor(
++                _advance_conv(conv_prev, toks, offset, spec=True),
++                dtype=torch.int32,
++                device=DEVICE,
++            )
++
++    if not non_spec_rows and tail_as_prefill_rid is None:
++        return
++
++    # ---- non-spec rows: prefill front / decode front ----------------------
++    # split_decodes_and_prefills puts decodes first, then prefills; the builder
++    # gathers non-spec rows in batch order.
++    prefill_slots = (
++        None
++        if meta.prefill_state_indices is None
++        else meta.prefill_state_indices.cpu().tolist()
++    )
++    has_init = (
++        None
++        if meta.has_initial_state is None
++        else meta.has_initial_state.cpu().tolist()
++    )
++    non_spec_slots = (
++        None
++        if meta.non_spec_state_indices_tensor is None
++        else meta.non_spec_state_indices_tensor.cpu().tolist()
++    )
++    forced = [
++        row
++        for row in range(len(ordered))
++        if ordered[row].rid == tail_as_prefill_rid
++    ]
++    num_decodes = meta.num_decodes
++    for i, row in enumerate(non_spec_rows + forced):
++        r = ordered[row]
++        if r.num_scheduled == 0:
++            continue
++        toks = _row_tokens(r)
++        if row in forced or (prefill_slots is not None and i >= num_decodes):
++            # Prefill contract: qwen_gdn_linear_attn.py:1500-1523.
++            if row in forced:
++                slot = r.table()[0]
++                initial = r.num_computed_tokens > 0
++            else:
++                slot = prefill_slots[i - num_decodes]
++                initial = bool(has_init[i - num_decodes]) if has_init else False
++            if slot <= 0:
++                continue
++            h = (
++                pools.ssm[slot].cpu().tolist()
++                if initial
++                else [r.tag, 0, 0]
++            )
++            conv_prev = (
++                pools.conv[slot].cpu().tolist()
++                if initial
++                else [UNSET] * CONV_STATE_LEN
++            )
++            for tok in toks:
++                h = _advance_ssm(h, tok)
++            # Only the final state is written back.
++            pools.ssm[slot] = torch.tensor(h, dtype=torch.int32, device=DEVICE)
++            pools.conv[slot] = torch.tensor(
++                _advance_conv(conv_prev, toks, 0, spec=False),
++                dtype=torch.int32,
++                device=DEVICE,
++            )
++        else:
++            # Non-spec decode contract: qwen_gdn_linear_attn.py:1368-1378,1488.
++            assert non_spec_slots is not None
++            slot = non_spec_slots[i]
++            if slot <= 0:
++                continue
++            h = pools.ssm[slot].cpu().tolist()
++            conv_prev = pools.conv[slot].cpu().tolist()
++            for tok in toks:
++                h = _advance_ssm(h, tok)
++            pools.ssm[slot] = torch.tensor(h, dtype=torch.int32, device=DEVICE)
++            pools.conv[slot] = torch.tensor(
++                _advance_conv(conv_prev, toks, 0, spec=False),
++                dtype=torch.int32,
++                device=DEVICE,
++            )
++
++
++def _committed_slot(state: MambaHybridModelState, r: Req) -> int:
++    """The slot the NEXT step reads as this request's initial state.
++
++    ``fused_recurrent.py:106-110``: ``ssm_state_indices[row, num_accepted - 1]``,
++    with ``num_accepted`` read from ``num_accepted_tokens_gpu[req_slot]`` by
++    ``prepare_attn`` (``mamba_hybrid.py:274-277``). In ``mamba_cache_mode="none"``
++    the gathered table is the request's block-table row, unchanged step to step.
++    """
++    accepted = int(state.num_accepted_tokens_gpu[r.slot].item())
++    return r.table()[accepted - 1]
++
++
++def _committed(state: MambaHybridModelState, pools: Pools, r: Req):
++    """The recurrent state and the conv window the next step will read."""
++    accepted = int(state.num_accepted_tokens_gpu[r.slot].item())
++    slot = _committed_slot(state, r)
++    base = accepted - 1
++    conv_window = pools.conv[r.table()[0]][base : base + CONV_WINDOW]
++    return pools.ssm[slot].clone(), conv_window.clone()
++
++
++# ---------------------------------------------------------------------------
++# One arm = one step
++# ---------------------------------------------------------------------------
++def _run_arm(
++    reqs: list[Req],
++    monkeypatch: pytest.MonkeyPatch,
++    *,
++    cudagraph_mode: CUDAGraphMode,
++    num_reqs_padded: int | None = None,
++    num_tokens_padded: int | None = None,
++    num_sampled: dict[str, int] | None = None,
++    tail_as_prefill_rid: str | None = None,
++    pad_table_rows: list[int] | None = None,
++):
++    """Gather -> prepare_attn -> build -> synthetic mixer -> postprocess."""
++    batch_state, uniform_tok_count = _gather(reqs)
++    assert batch_state is not None
++    ordered = [next(r for r in reqs if r.rid == rid) for rid in batch_state.req_ids]
++    num_reqs = len(ordered)
++    num_tokens = int(sum(r.num_scheduled for r in ordered))
++    num_reqs_padded = num_reqs_padded or num_reqs
++    num_tokens_padded = num_tokens_padded or num_tokens
++
++    state = _make_model_state(reqs)
++    input_batch = _make_input_batch(
++        batch_state,
++        ordered,
++        num_reqs_padded=num_reqs_padded,
++        num_tokens_padded=num_tokens_padded,
++    )
++    mamba_meta = _prepare_attn(state, input_batch, cudagraph_mode, monkeypatch)
++
++    builder = _make_builder()
++    common = _common_metadata(
++        ordered,
++        num_reqs_padded=num_reqs_padded,
++        num_tokens_padded=num_tokens_padded,
++        is_prefilling=mamba_meta.get_extra_common_attn_kwargs(0, num_reqs_padded)[
++            "is_prefilling"
++        ],
++        pad_table_rows=pad_table_rows,
++    )
++    extra = mamba_meta.get_extra_attn_kwargs(builder, num_reqs_padded)
++    meta = builder.build(
++        common_prefix_len=0, common_attn_metadata=common, **extra
++    )
++
++    pools = Pools.create()
++    pools.seed(reqs)
++    before = pools.ssm.clone(), pools.conv.clone()
++    _run_synthetic_mixer(
++        meta, pools, ordered, tail_as_prefill_rid=tail_as_prefill_rid
++    )
++
++    sampled = num_sampled or {}
++    num_sampled_t = torch.tensor(
++        [sampled.get(r.rid, 1) for r in ordered], dtype=torch.int32, device=DEVICE
++    )
++    state.postprocess_state(input_batch.idx_mapping, num_sampled_t)
++
++    return SimpleNamespace(
++        state=state,
++        pools=pools,
++        before=before,
++        meta=meta,
++        mamba_meta=mamba_meta,
++        batch_state=batch_state,
++        uniform_tok_count=uniform_tok_count,
++        ordered=ordered,
++    )
++
++
++# ---------------------------------------------------------------------------
++# The batch under test
++# ---------------------------------------------------------------------------
++def _decode_row() -> Req:
++    """A real verify decode: K drafts over a finished prompt."""
++    return Req(
++        rid="d0",
++        slot=1,
++        prefill_len=16,
++        num_computed_prefill=16,
++        num_computed_tokens=40,
++        num_scheduled=SPEC_SHAPE,
++        num_drafts=K,
++        tag=1,
++        num_real=SPEC_SHAPE,  # real drafts, not placeholders
++    )
++
++
++def _padded_tail_row(poison: bool = False) -> Req:
++    """A one-token prompt tail over 128 cached tokens, padded with K drafts."""
++    return Req(
++        rid="tail",
++        slot=4,
++        prefill_len=129,
++        num_computed_prefill=128,
++        num_computed_tokens=128,
++        num_scheduled=SPEC_SHAPE,
++        num_drafts=K,
++        tag=2,
++        num_real=1,
++        poison_cols=[1, 2, 3] if poison else [],
++    )
++
++
++def _eager_tail_row() -> Req:
++    """The same request, unpadded: one real token, no drafts."""
++    return Req(
++        rid="tail",
++        slot=4,
++        prefill_len=129,
++        num_computed_prefill=128,
++        num_computed_tokens=128,
++        num_scheduled=1,
++        num_drafts=0,
++        tag=2,
++        num_real=1,
++    )
++
++
++def _assert_tail_committed_state_is_clean(full: Any, eager: Any) -> None:
++    """The invariant, in one place: cases A and B assert it holds and the
++    negative control asserts it does not."""
++    tail_full = next(r for r in full.ordered if r.rid == "tail")
++    tail_eager = next(r for r in eager.ordered if r.rid == "tail")
++    # Same committed slot, and the same bytes in it.
++    assert _committed_slot(full.state, tail_full) == _committed_slot(
++        eager.state, tail_eager
++    )
++    ssm_f, conv_f = _committed(full.state, full.pools, tail_full)
++    ssm_e, conv_e = _committed(eager.state, eager.pools, tail_eager)
++    assert torch.equal(ssm_f, ssm_e), f"{ssm_f.tolist()} != {ssm_e.tolist()}"
++    assert torch.equal(conv_f, conv_e), f"{conv_f.tolist()} != {conv_e.tolist()}"
++    # The right bytes: the state after all 129 real prompt tokens, unpoisoned.
++    assert ssm_f.tolist() == [2, 129, 0]
++    assert ssm_f[2].item() == 0, "committed recurrent state carries the poison"
++    assert POISON_TOK not in ssm_f.tolist()
++    assert POISON_TOK not in conv_f.tolist()
++
++
++# ---------------------------------------------------------------------------
++# A: the FULL path commits what eager commits
++# ---------------------------------------------------------------------------
++def test_full_path_is_reachable_for_a_padded_prompt_tail(
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    """The gate this PR opens. Fails on the merge base, where any prefilling
++    row sends the whole batch to PIECEWISE."""
++    reqs = [_decode_row(), _padded_tail_row()]
++    batch_state, uniform_tok_count = _gather(reqs)
++    assert batch_state is not None
++    assert batch_state.has_prefill
++    assert _eligible(batch_state), (
++        "the batch must be eligible for the FULL decode graph"
++    )
++    assert uniform_tok_count == SPEC_SHAPE
++    runs_as_decode = getattr(batch_state, "prefill_runs_as_decode_np", None)
++    assert runs_as_decode is not None
++    by_rid = dict(zip(batch_state.req_ids, runs_as_decode.tolist()))
++    assert by_rid == {"d0": False, "tail": True}
++
++
++def test_committed_state_on_full_path_matches_eager(
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    """Case A. Same logical request; the committed bytes must be identical."""
++    full = _run_arm(
++        [_decode_row(), _padded_tail_row()],
++        monkeypatch,
++        cudagraph_mode=CUDAGraphMode.FULL,
++        num_reqs_padded=4,
++        num_tokens_padded=16,
++        num_sampled={"d0": 2, "tail": 1},
++    )
++    eager = _run_arm(
++        [_decode_row(), _eager_tail_row()],
++        monkeypatch,
++        cudagraph_mode=CUDAGraphMode.NONE,
++        num_sampled={"d0": 2, "tail": 1},
++    )
++
++    _assert_tail_committed_state_is_clean(full, eager)
++
++    # The verify decode in the same batch is unaffected.
++    d_full = next(r for r in full.ordered if r.rid == "d0")
++    d_eager = next(r for r in eager.ordered if r.rid == "d0")
++    assert torch.equal(
++        _committed(full.state, full.pools, d_full)[0],
++        _committed(eager.state, eager.pools, d_eager)[0],
++    )
++    # ... and its committed column really is the accepted one, not column 0.
++    assert _committed_slot(full.state, d_full) == _slot_id(d_full.slot, 1)
++
++
++# ---------------------------------------------------------------------------
++# B: poisoned placeholder slots must not reach the committed state
++# ---------------------------------------------------------------------------
++def test_poisoned_placeholder_slots_do_not_reach_committed_state(
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    """Case B. The tail's placeholder columns start poisoned AND the
++    placeholder tokens themselves are poison-tagged."""
++    full = _run_arm(
++        [_decode_row(), _padded_tail_row(poison=True)],
++        monkeypatch,
++        cudagraph_mode=CUDAGraphMode.FULL,
++        num_reqs_padded=4,
++        num_tokens_padded=16,
++        num_sampled={"d0": 2, "tail": 1},
++    )
++    eager = _run_arm(
++        [_decode_row(), _eager_tail_row()],
++        monkeypatch,
++        cudagraph_mode=CUDAGraphMode.NONE,
++        num_sampled={"d0": 2, "tail": 1},
++    )
++    _assert_tail_committed_state_is_clean(full, eager)
++    tail = next(r for r in full.ordered if r.rid == "tail")
++    # The scratch columns did fold the placeholders in -- the poison is real.
++    scratch = full.pools.ssm[_slot_id(tail.slot, K)]
++    assert scratch[2].item() == 1
++    assert scratch[1].item() == 129 + K
++
++
++# ---------------------------------------------------------------------------
++# C: fresh-prompt control
++# ---------------------------------------------------------------------------
++def test_fresh_one_token_prompt_is_not_reclassified(
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    """Case C. A fresh prompt has no prior state, must stay a prefill, and must
++    keep the batch off the FULL decode graph."""
++    fresh = Req(
++        rid="fresh",
++        slot=6,
++        prefill_len=1,
++        num_computed_prefill=0,
++        num_computed_tokens=0,
++        num_scheduled=1,
++        num_drafts=0,
++        tag=3,
++        num_real=1,
++    )
++    reqs = [_decode_row(), _padded_tail_row(), fresh]
++    batch_state, uniform_tok_count = _gather(reqs)
++    assert batch_state is not None
++    runs_as_decode = getattr(batch_state, "prefill_runs_as_decode_np", None)
++    if runs_as_decode is not None:
++        by_rid = dict(zip(batch_state.req_ids, runs_as_decode.tolist()))
++        assert by_rid["fresh"] is False
++    assert not _eligible(batch_state)
++    assert uniform_tok_count is None
++
++    arm = _run_arm(
++        reqs,
++        monkeypatch,
++        cudagraph_mode=CUDAGraphMode.NONE,
++        num_sampled={"d0": 2, "tail": 1, "fresh": 1},
++    )
++    by_rid = dict(zip(arm.batch_state.req_ids, arm.mamba_meta.is_prefilling.tolist()))
++    assert by_rid["fresh"] is True
++    assert by_rid["tail"] is (not _HAS_RUNS_AS_DECODE)
++
++    # Its state is built from scratch, not from whatever was in the slot.
++    ssm, conv = _committed(arm.state, arm.pools, fresh)
++    assert ssm.tolist() == [3, 1, 0]
++    assert conv.tolist() == [UNSET, UNSET, _tok_tag(3, 1)]
++    # The tail's committed state is still right in this mixed batch.
++    tail = next(r for r in arm.ordered if r.rid == "tail")
++    assert _committed(arm.state, arm.pools, tail)[0].tolist() == [2, 129, 0]
++
++
++# ---------------------------------------------------------------------------
++# D: cudagraph padding rows commit nothing
++# ---------------------------------------------------------------------------
++def test_cudagraph_padding_rows_commit_nothing(
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    """The FULL-path-only hazard: request padding rows must not write into any
++    live request's state, even if their block-table rows are not null."""
++    tail = _padded_tail_row()
++    victim = [_slot_id(tail.slot, c) for c in range(SPEC_SHAPE)]
++    poisoned = _run_arm(
++        [_decode_row(), tail],
++        monkeypatch,
++        cudagraph_mode=CUDAGraphMode.FULL,
++        num_reqs_padded=4,
++        num_tokens_padded=16,
++        num_sampled={"d0": 2, "tail": 1},
++        pad_table_rows=victim,
++    )
++    clean = _run_arm(
++        [_decode_row(), _padded_tail_row()],
++        monkeypatch,
++        cudagraph_mode=CUDAGraphMode.FULL,
++        num_reqs_padded=4,
++        num_tokens_padded=16,
++        num_sampled={"d0": 2, "tail": 1},
++    )
++    assert torch.equal(poisoned.pools.ssm, clean.pools.ssm)
++    assert torch.equal(poisoned.pools.conv, clean.pools.conv)
++    # And the padded rows are addressed at the null block.
++    spec_idx = poisoned.meta.spec_state_indices_tensor
++    assert spec_idx is not None
++    if spec_idx.shape[0] > 2:
++        assert (spec_idx[2:] == NULL_BLOCK_ID).all()
++
++
++# ---------------------------------------------------------------------------
++# E: where the head and merge-base predicates differ (unreachable shape)
++# ---------------------------------------------------------------------------
++def test_one_token_mid_prompt_chunk_is_decode_like(
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    """A one-token MID-prompt chunk (more prompt still to come) is decode-like
++    at the head and is not on the merge base, whose test is "one prompt token
++    remains". The scheduler never pads such a row, so this pins a predicate
++    difference, not a reachable state difference."""
++    mid = Req(
++        rid="mid",
++        slot=6,
++        prefill_len=129,
++        num_computed_prefill=64,
++        num_computed_tokens=64,
++        num_scheduled=1,
++        num_drafts=0,
++        tag=3,
++        num_real=1,
++    )
++    batch_state, uniform_tok_count = _gather([_decode_row(), mid], decode_query_len=1)
++    assert batch_state is not None
++    runs_as_decode = getattr(batch_state, "prefill_runs_as_decode_np", None)
++    assert runs_as_decode is not None
++    by_rid = dict(zip(batch_state.req_ids, runs_as_decode.tolist()))
++    assert by_rid["mid"] is True
++    assert _eligible(batch_state)
++
++
++# ---------------------------------------------------------------------------
++# F: what the invariant rests on
++# ---------------------------------------------------------------------------
++def test_commit_depends_on_placeholders_being_rejected(
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    """Nothing in the worker forces ``num_accepted == 1`` for a padded prompt
++    tail; the committed column is whatever ``postprocess_state`` records. This
++    pins the dependency: report an accepted placeholder and the committed state
++    is placeholder-derived, in both the recurrent state and the conv window.
++    """
++    arm = _run_arm(
++        [_decode_row(), _padded_tail_row(poison=True)],
++        monkeypatch,
++        cudagraph_mode=CUDAGraphMode.FULL,
++        num_reqs_padded=4,
++        num_tokens_padded=16,
++        num_sampled={"d0": 2, "tail": 2},  # one placeholder "accepted"
++    )
++    tail = next(r for r in arm.ordered if r.rid == "tail")
++    ssm, conv = _committed(arm.state, arm.pools, tail)
++    assert ssm.tolist() == [2, 130, 1]
++    assert POISON_TOK in conv.tolist()
++
++
++# ---------------------------------------------------------------------------
++# Negative control
++# ---------------------------------------------------------------------------
++def test_negative_control_committing_the_placeholders_is_detected(
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    """The test must FAIL if the placeholder-folded state is committed.
++
++    This is the failure mode mamba_hybrid.py names: routed as a prefill, the
++    padded tail's only written-back state is h(N+K+1), which folded the
++    placeholders and cannot be rolled back.
++    """
++    broken = _run_arm(
++        [_decode_row(), _padded_tail_row(poison=True)],
++        monkeypatch,
++        cudagraph_mode=CUDAGraphMode.FULL,
++        num_reqs_padded=4,
++        num_tokens_padded=16,
++        num_sampled={"d0": 2, "tail": 1},
++        tail_as_prefill_rid="tail",
++    )
++    eager = _run_arm(
++        [_decode_row(), _eager_tail_row()],
++        monkeypatch,
++        cudagraph_mode=CUDAGraphMode.NONE,
++        num_sampled={"d0": 2, "tail": 1},
++    )
++    # The very expectations cases A and B assert must now fail.
++    with pytest.raises(AssertionError):
++        _assert_tail_committed_state_is_clean(broken, eager)
++
++    tail = next(r for r in broken.ordered if r.rid == "tail")
++    ssm, conv = _committed(broken.state, broken.pools, tail)
++    assert ssm.tolist() == [2, 129 + K, 1]
++    assert ssm[2].item() == 1, "poison must be visible in the broken commit"
++    assert POISON_TOK in conv.tolist()
+-- 
+2.43.0
+
