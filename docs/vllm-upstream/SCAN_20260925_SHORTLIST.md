@@ -11,3 +11,6 @@ Overlap: #58718, #57908, #57605 appear in both lists. Codex-only: #58400, #58737
 Deferred: #58737 fused align gather (overlaps active #52297); #58624/#58681 DeepGEMM alignment (unverified whether our pinned model hits grouped-MoE path); #57266/#57278 conv_ssm_forward crash (no author/maintainer activity); #56792 (unchanged: SGLang cross-ref only).
 
 Direction signals: prefer V2 (ZJY0516); keep diffs <100 LOC (yewentao256); LucasWilkinson RFC #58638 sets hybrid KV-grouping direction for spec drafters (Qwen3.6 + DFlash named) — independent geometry PRs risk being superseded; the align-seed cluster still has no maintainer verdict and now shares our P8 oracle (Karl0007/vllm:oracle/53142-adapted-arms).
+
+
+**Correction 2026-09-26 (item N):** main @379e9a1ea8 does NOT carry idx_mapping in compute_aligned_state_indices (mamba_utils.py:1092-1096); #58434 changed one is_decode expression and #58462 a dummy-tensor dtype. Both scans misread those merges. A reduced, order-independent 4-case port of P9 is feasible as an own test-only PR (see N_P9MAIN_REPORT_agent.md).
