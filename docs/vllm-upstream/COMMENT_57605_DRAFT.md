@@ -1,0 +1,10 @@
+# #57605 review comment (funded item M) — v2 (Codex replacement verbatim; AWAITING MARK GO — on GO: push m-57605-align-lookahead @cc514ed2179a8fcfea16607ffaa74be2b1d10da5 to the fork, resolve {{BRANCH_LINK}} = https://github.com/vllm-project/vllm/compare/ef97fad96ac4bcab3321933f1855755a61d38d09...MaCoredroid:vllm:m-57605-align-lookahead, post ONE ordinary PR comment)
+> Codex M_review.md: independent sweep confirms 29 (+1) head-only failures all at :1932; restoring the checkpoint-aware bound makes the 12 no-lookahead cases pass; under-reserve/double-count/negative-estimate executed via a CPU allocate_slots probe; docstring should-fix applied on the branch.
+
+---
+
+At `ef97fad` versus `63d9ad0`, 29 existing tests regress across the manager, chunk-split and partial-hit suites (18+6+5); a broader CPU sweep adds `test_hybrid_mamba_retention_mtp_resend_of_aligned_prompt`. All 30 stop at `single_type_kv_cache_manager.py:1932`. Twelve checkpoint cases need no lookahead: the rewritten bound drops `checkpoint_block` and its speculative-block allowance. Restoring that bound alone makes those 12 pass.
+The missing-next-column probe distinguishes base/head only with `num_speculative_blocks=0`; with positive counts, the next column already holds a scratch block at base. Does that explain the MTP configuration you reported, or is its problem the block’s contents rather than allocation? These probes do not execute worker writes.
+Also, base derives null padding solely from `num_tokens_main_model`; the displacement in mechanism (b) appears to be a hazard introduced by lookahead inflation, which your new clamp handles.
+At a running boundary, admission estimates one block while allocation takes two; limiting the pool to that estimate raises `ValueError`. The inflated requirement already includes the extra page before `num_new_blocks += 1`. CPU probe/tests: {{BRANCH_LINK}}; [logs](https://github.com/MaCoredroid/Lumo_FlyWheel/tree/913f802e7c72180405749ab9247be72549a30ae4/results/upstream/57605).
+*Investigated with AI assistance; CPU-only, without reproducing the serving symptoms.*

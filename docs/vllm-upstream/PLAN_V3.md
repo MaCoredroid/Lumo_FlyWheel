@@ -1,0 +1,254 @@
+# vLLM upstream plan v3 — "close GDN and quantized-serving defects; keep trees as a record"
+
+Converged 2026-09-10 between Claude and Codex (gpt-6-astra high), rounds
+1–4, artifact red-team round 1 applied; full Codex texts in the session
+scratch (`impact_plan_codex.md`, `impact_plan_codex_r2.md`,
+`artifacts_r1_report.md`). Supersedes EXECUTION_PLAN.md (v1/v2).
+
+## Why
+benchislett asked that DDTree remain a draft in his May 27 reply on
+[#42910](https://github.com/vllm-project/vllm/pull/42910#issuecomment-4555281194).
+#42121 removed unsupported tree-attention machinery; #42449's refactor
+proposal remains open. The later #46105 tracker welcomed custom-mask kernel
+integration, including Hopper XQA through FlashInfer, and is now closed;
+that is a qualified integration signal, not approval of a complete tree
+feature. #54080 is our agreed public design home.
+Our existing evidence does not establish a general tree throughput win:
+historical results need the sampling erratum, and whole-region capture
+showed no detectable additional gain after prerequisite host work.
+Our near-term bet is to close specific GDN and quantized-serving defects
+through an owned patch, a focused review, and one controlled reproduction.
+
+## Ranked plays (cost class)
+1. **P11 — #53651 to a review decision**: zero-code audit of the residual
+   diff and existing tests; rewrite the description, then ONE status ping.
+   Any needed code/test correction is a separate new-code funding decision;
+   an additional GPU smoke requires its own run budget.
+   `PR_53651_DESCRIPTION_v2.md`.
+2. **P3 — review #53798** (zero-code; their tests run locally on the GB10:
+   56 passed at `af5357c2b`; merges clean onto main): `REVIEW_53798_DRAFT.md`.
+   #54076 only with a distinct finding (its author reports v0.29.0
+   normalization may make it a no-op for some configs).
+3. **P5 — one funded controlled GB10 reproduction of #54928**: GPU-time
+   only if existing scripts and API outputs suffice; any new harness or
+   instrumentation is new-code. `EXPERIMENT_CARD_54928.md`.
+   Next-ranked alternative: **P4′**, one bounded missing case with jschmied.
+   Choose one; neither is funded by listing it here.
+4. **P1 — #55688 question** (zero-code): `COMMENT_55688_DRAFT.md` v2, GO.
+5. **P7 — status ping** (zero-code): after P11; counts with it.
+6. **P8 — coverage/oracle investigation** (unfunded zero-code investigation;
+   any resulting test or instrumentation is new-code): upstream's
+   prefix-cache parity helpers compare outputs with tolerance; kernel-level
+   precopy tests are zero-tolerance; whether a state-level gap exists under
+   heterogeneous geometry (#53142/#54076 cluster) is an investigation, not a
+   test spec.
+7. **P2 — #54080 design addendum** (zero-code): `COMMENT_54080_ADDENDUM.md`;
+   ends with one question to benchislett. Then `SLACK_CONTRIBUTORS_POINTER.md`.
+8. P4 broad testing is not scheduled. P10 arXiv keeps its independent,
+   separately chosen editorial budget. P6's fork-anatomy note and P9's
+   custom-mask integration remain deferred.
+
+## Not filed
+New tree RFC (contingency title only: "[RFC]: Tree verification and
+accepted-state publication for GDN hybrids"); Phase-0 draft PR
+(`feat/phase0-tree-state-interfaces` stays local); fixtures port (campaign
+fixtures are bound to our endpoint/kernels); comments on #42910/#40809/
+#42449; the retired `COMMENT_54080_DRAFT.md` v8 and `COMMENT_54928_DRAFT.md`.
+
+## Rules
+- Six distinct threads in 30 days: #53651, #55688, #53798, #54080, one of
+  #54928|#55122, one reserve (#54076 or a P8 PR). Two unsolicited first
+  contacts per rolling 7 days. Two active workstreams.
+- Pre-commit eligibility: `ready`, `ready-run-all-tests`, or `verified`,
+  or at least four merged PRs. This is not the full-CI policy; one merge is
+  evidence, not an automatic unlock.
+- Every public artifact: Claude drafts → Codex red-team → Mark reviews →
+  Mark posts. Funding a run ≠ approving its report. Public numbers trace to
+  the site and its errata; never "43.57 vs ~43.7 = 0.92×"; "0.087
+  tok/event" is not public.
+
+## 30-day sequence (Sep 10 – Oct 9)
+- d1: P1, P11 (+ping), P3, P2 addendum POSTED 2026-09-10 (see file headers); Slack pointer ready. d8–14:
+  P2 + Slack; choose P5|P4′ and approve its card. d15–21: the one funded
+  run (half-day + one more only for a named uncertainty). d22–26: respond;
+  reserve-slot decision. d27–30: ledger; Mark decides next month.
+
+## Metrics (private ledger, weekly)
+#53651 review decision; external reviews the author acts on;
+reproductions that resolve a stated uncertainty; distinct maintainer
+decisions; cost (sessions, GPU time, threads, open commitments).
+
+## Phase 2 — days 2–30 (Sep 11 – Oct 9). Authored by Codex, red-teamed by Claude, converged 2026-09-11.
+
+Principle: do not wait for replies to do useful work. Convert what is posted
+into reproducible evidence and mergeable changes. Success = a merged fix, an
+author acting on a review, or a resolved maintainer question.
+
+ACT-NOW, in priority order:
+1. **#54928 matrix → evidence audit → report** (GPU-time funded; analysis
+   in-scope, no extra GO). Analyzer corrections applied (all repetitions,
+   per-token ID verification, tied margin = 0, failures reported). Draft the
+   report Sep 11 once the audit is complete; one independent (Codex) review
+   Sep 11–12; Mark GO; publish on #54928 (evidence reports are exempt from
+   the ask quota). Per outcome: reproduces → publish first-divergence
+   evidence, then fund ONE discriminator; non-reproduction → publish exact
+   scope, not equivalence; unstable → preserve within/between-launch
+   variation; unattributable → report the limit, never infer acceptance
+   failure. E = unique V ≠ A localizes a ranking discrepancy, not its cause.
+2. **#53651: own the missing re-tying regression** — DONE 2026-09-11 (38f7bcef2, ~40 min) (new-code, ≤2 h cap —
+   MARK GO). `tests/model_executor/model_loader/test_weight_tying.py` at
+   main already holds three CPU tests; add `test_excluded_lm_head_is_retied`
+   (quant_method = `UnquantizedLinearMethod()`), fail-before/pass-after with
+   the existing controls. Push to our PR (Mark GO per update). Inspect
+   #55494's composition privately; if it lands first, rebase/reconcile
+   (compatibility, not activity).
+3. **P8 investigation** (zero-code, half-day of reading — credit is Mark's
+   call). Pin main; trace scheduler boundary → stored state → cache hash →
+   resumed request across the heterogeneous-geometry cluster; inventory
+   assertions and reachability. Deliver one missing invariant with its
+   smallest upstream test location, or a documented non-gap. A test is a
+   separate bounded new-code GO. #54076 review only with a distinct finding.
+4. **P4′ prep** (zero-code reading). Inspect #55122's kernel suite for one
+   uncovered GB10 case; dense targets cannot validate MoE-finalize #54948.
+   One concrete offer only if it resolves missing evidence (Mark GO before
+   contact); a run needs a named case + ~2 h GPU GO.
+
+WAIT only at: #53651/#53798 review decisions (monitor; no status-only ping
+this week); #55688/#54080 answers (monitor; no tree port/interface/custom-
+mask project without a consumer + separate GO); P4′ execution (free GPU,
+distinct case, run GO). Answered-thread branch: within 48 h of a
+substantive reply, bring Mark the reply, a proposed response, and any new
+scope/budget decision; private triage and funded work continue; only
+unfunded implementation/GPU waits. Every public response needs Mark GO.
+
+Rules (replace Plan v3 §Rules): drop the six-thread ceiling — count
+outstanding promises; ONE new unsolicited ask per week (evidence reports and
+substantive reviews exempt); day-1 overrun acknowledged — no further
+unsolicited ask before Sep 17; one author + one independent review for
+substantive artifacts (routine factual replies: Mark's review only, to
+conserve credit); Mark GO per public item; isolation, one GPU workload,
+immutable evidence, funding ≠ publication; two active deliverables (one
+measurement, one code/review).
+
+Calendar: Sep 11 audit matrix + draft report + specify re-tying test →
+Sep 12 implement regression (if funded) → Sep 13 validate, prepare PR
+update → Sep 14 P8 inventory → Sep 15–16 resolve feedback/composition →
+Sep 17 score outcomes; choose one P4′ case or a P8 regression → Sep 18–24
+finish the selected contribution → Sep 25–Oct 1 pursue merge/review
+decisions → Oct 2–9 close commitments, record outcomes; no new speculative
+project.
+
+### Phase 2 items 3–4 — findings (2026-09-11, agents read-only; Codex independent review; Mark decides)
+- **P8 (item 3): gap confirmed.** Unit mismatch verified at main 8359e15a
+  (core.py:345–349 resets the global block size; mamba_hybrid.py:121–122
+  seeds in global units; mamba_utils.py:534–545 advances in spec units). No
+  unequal-geometry admission→preprocess→state-content test exists upstream
+  or in #54076/#53798/#55688/#53803. Agent report corrected by Codex
+  (#53803 binds the same spec size, not a third divisor; #55688's
+  mamba_block_size is FlashInfer-ReplaySSM-only; a tensor oracle cannot
+  distinguish equal divisors). Concrete test spec + ask: P8_REVIEW_codex.md.
+  Funding ask: ≤1 engineering day incl. ≤1 h exclusive GPU after #54928.
+- **P4′ (item 4): one zero-code review finding GO** (#55122 head 7cfd04a3:
+  RADIX_THRESHOLD=22016 but test_persistent_topk_path_transition still
+  brackets 16384 — exact text in P4PRIME_REVIEW_codex.md; needs Mark posting
+  GO). The GB10 low-smem fallback case is real but the agent's coverage and
+  exclusivity claims were overstated and its script is unfit; corrected
+  ≤2 h feasibility/validation ask + replacement offer text in the review.
+
+### 2026-09-11 23:18 UTC — Mark ruled on the four Phase-2 decisions: 1 GO, 2 FUND, 3 GO, 4 FUND
+- #54928 report POSTED: https://github.com/vllm-project/vllm/issues/54928#issuecomment-5641733441 (thread 5 of the month).
+- #55122 review finding POSTED (Comment): https://github.com/vllm-project/vllm/pull/55122#pullrequestreview-5184175591 (substantive review, quota-exempt).
+- P8 regression test FUNDED (≤1 day incl. ≤1 h GPU): Opus agent on branch p8-restore-fidelity off pr-53798; spec = P8_REVIEW_codex.md; no push, no PR — Codex review + Mark GO before any submission.
+- P4′ kernel check FUNDED (≤2 h): Opus agent in /home/mark/shared/p4prime-55122; protocol = P4PRIME_REVIEW_codex.md; result recorded only; offer/comment needs Codex review + Mark GO.
+
+### 2026-09-12 — funded work delivered (both under budget; Codex GO on both artifacts)
+- **P4′ (#55122 low-smem fallback on GB10): POSITIVE.** Routing window measured (n ∈ [355588, 474112] at vec_size 4), branch entry proven, 324 fallback launches + 108 cooperative controls exact and repeatable, 18 expected >64-CTA rejections. Artifacts results/upstream/55122 @a4c38b9c1. Result comment (Codex text, 137 words): COMMENT_55122_RESULT_DRAFT.md — awaiting Mark GO.
+- **P8 (align-mode restore-fidelity regression): GO as an artifact.** Commit ca1d410ae on vllm-head branch p8-restore-fidelity (off #53798 head af5357c2b), test-only +358/−1; Codex independently re-ran fail-before/pass-after. Trim pass in progress (one layer, shorter docstrings, consolidated negative hooks, framing fix). #55688 finding: its ordinary align path still seeds with cache_config.block_size — inherited defect, closed by #53798 or an equivalent spec-unit fix; not a new ReplaySSM regression. Routes (Mark decides): 1 (preferred) offer the test commit + evidence to ptorsten on #53798; 2 fallback test-only PR after the seed fix merges; 3 at most a dependency/rebase pointer on #55688.
+
+### 2026-09-12 08:45 UTC — first upstream reply: jschmied on #55122
+- Accepted our review finding ("Good catch, and it was our own doing"), fixed in a7188289e (seq_len 22015/22016/22017), verified on his GB10 (old widths exercised 1 path, new widths 2), and folded our rows-64/FilteredTopK note into the docstring. **Metric: author acted on our review.**
+- His second comment (to the other reviewer, LopezCastroRoberto, re opt-in backend #55872): the defect is unreachable in his 16k-context census; he already runs the deterministic kernel opt-in out-of-tree; on GB10 the deterministic path hard-fails at ~100k context (dynamic smem 98080 > 97120) in HIS wrapper; routing note: long rows on GB10 fall to top_k_per_row_decode only when three conditions hold (row > RADIX_THRESHOLD, cooperative oversubscription, optin < 128 KiB).
+- Relevance: our P4′ result (force_single_cta fallback exact/repeatable at 355588–474112 on GB10, pinned 7cfd04a3) speaks directly to that routing discussion. Result comment pending Mark GO; bridge sentence to be Codex-checked.
+
+### 2026-09-13 18:34 UTC — jschmied acknowledged the P4′ result on #55122
+Quoted: "the case we could argue for but not demonstrate … says more about the fallback than anything in the PR body. Publishing the harness and source hashes is what makes it checkable, and your scope note is right." PR rebased to ef5d2d953 with kernel sources byte-identical (our pinned result still applies). **Metric: evidence used / acknowledged by the author (second confirmed engagement on #55122).** No reply needed; no action.
+
+### 2026-09-17 — day-7 checkpoint
+- Upstream quiet since Sep 15 on all six threads; three of four target PRs now `needs-rebase`; scoreboard unchanged (1 review acted on + 1 evidence acknowledged on #55122; 1 reproduction on #54928; 1 test offered on #53798; 0 merges).
+- #53651 second route POSTED in Slack #pr-reviews (sanctioned 7-day ping; Codex-corrected text — format checks are gated, not green): https://vllm-dev.slack.com/archives/C07QT0LUF4K/p1789603743165569
+- Slack watch re-armed at 3-hour cadence (Mark's decision). Contribution scan running (Codex + independent Opus agent) for the next bounded play.
+
+### 2026-09-17 — contribution scan (Codex + independent Opus agent; near-zero overlap; top claims verified by Claude)
+Verified: #51508 (root-cause fix for zero-accept GDN spec rows) competes with #48475/#50021; ZJY0516 on #48475 (Jul 13): "I'm hesitant, as this is only a workaround. I'd prefer to identify the root cause"; #51508 has zero human reviews. #55291 (Qwen3.6-27B-FP8 collapses to "!" tokens) carries an explicit "Reproduction request"; we have the exact model + pinned 0.28.0 rig. Align-seed duplicate cluster: #53798, #55507 (Karl0007, Sep 14), #55601 (pondzikk, Sep 6), #55600, #53142 — unlinked. #55506 (Codex #1) is an active PP=2 thread; #56964 needs a Flash-Next MoE checkpoint we don't hold; #54146's gap is non-Blackwell.
+Shortlist for Mark: (1) adjudicating review of #51508 vs #48475/#50021 with GB10 evidence; (2) #55291 reproduction; (3) review on #55507 linking the cluster + offering the discriminating test; (4) #55506 mapping test; (5) rest deferred.
+
+### 2026-09-17 22:20 UTC — Mark: "fund all"
+Funded: (A) #55122 harness re-run on the ported head 85f61e24b (GPU ~1 h); (B) #51508 vs #48475/#50021 adjudicating review with GB10 test runs (≤1 h GPU); (C) #55291 Qwen3.6-27B-FP8 collapse reproduction (GPU half-day, soak; runs last); (D) #55507 review linking the align-seed cluster + offering our test (zero-code). GPU serialized via exp54928/gpu.lock in order A → B → C. Each deliverable → Codex review → Mark GO before posting.
+
+## Checkpoint 2026-09-18 — fund-all posted (Mark GO "go")
+
+All four Sep 17 funded items were executed by Opus agents, independently checked by Codex (each got at least one NO-GO/correction before GO), archived on this branch, and posted on Mark's GO:
+
+- A #55122 — port re-run positive on 85f61e24b + static launcher-args question, posted inline at persistent_topk.cuh:1693: https://github.com/vllm-project/vllm/pull/55122#discussion_r4043382139
+- B #51508 — adjudicating review (main OOB-read+advance; #48475 clamp+advance; #51508 kernel clamp with builder NULL fill as the real protection; #50021 masked load → untouched): https://github.com/vllm-project/vllm/pull/51508#issuecomment-5724389453. No sibling pointers on #48475/#50021.
+- C #55291 — negative result on stock 0.28.0/GB10 (298 req, 249,544 tok, 3h16m, 0 collapses). Agent's kernel-path "why" was wrong (fused CUDA GDN decode needs spec metadata + 8:1 heads); corrected in bundle F8 before posting: https://github.com/vllm-project/vllm/issues/55291#issuecomment-5724389616
+- D #53142 — align-seed cluster cross-reference + restore-fidelity test, once, no pings: https://github.com/vllm-project/vllm/issues/53142#issuecomment-5724389784
+
+Threads now used: 55688, 53651, 53798, 54080, 54928, 55122, 51508, 55291, 53142. Weekly unsolicited-ask budget: the #53651 #pr-reviews post (Sep 17) is this week's ask; all four above are evidence/review posts (exempt). Next: watch replies; no further pings; if #53798 rebases, refresh the P8 branch; if #55122's author answers the launcher-args question, follow up only with evidence.
+
+### 2026-09-18 05:54Z — jschmied acted on the #55122 inline comment
+jschmied (review 5244681149, inline reply 4044179893): "You are right on both counts, and the shared-memory one is a real bug. Fixed in `19588c89`." Kernel now takes `max_seq_len, smem_bytes`; `length` floored at 0 and clamped to `min(max_len, max_seq_len)`; `det_select_row` receives the granted `smem_bytes`. Author notes the fix is compile-only verified (sm_121a) and latent on GB10 (FilteredTopK never selected at 101,376 B). Credit line in the source comment. Persistent namespace untouched by the commit → no harness re-run needed. Scoreboard: **2 reviews acted on + 1 evidence acknowledged (all #55122)**.
+
+### 2026-09-21T21:31:05Z — #55122 scope note posted (Mark GO)
+After jschmied's 2026-09-21 reframing (performance PR with correctness side-benefit; @-mentioned MaCoredroid), posted the Codex-approved scope note: our GB10 results are correctness-only, do not validate the 21–28 % speedup, not executed on the current head b2312b2d (kernel sources byte-identical to 19588c89). https://github.com/vllm-project/vllm/pull/55122#issuecomment-5767796407. k3dani posted the equivalent scope confirmation for the speed number at 07:08Z.
+
+### 2026-09-21T22:39:19Z — item E posted: #54076 reply (Mark funded 2026-09-21, GO)
+Answered jschmied's request for a configuration where `cache_config.block_size < MambaSpec.block_size` is reachable: `extract_hidden_states` + ExampleHiddenStatesConnector on Qwen3.8-27B-FP8 with align mode + prefix caching gives 200 vs 800 on stock 0.28.0 (two stock INFO lines); main read (382970ee6c) keeps the path open, not executed; DFlash2 drafter arm did NOT diverge (832/832), contradicting the PR body's 816/1648 attribution. Startup geometry only. https://github.com/vllm-project/vllm/pull/54076#issuecomment-5768495023. Evidence results/upstream/54076 (with CORRECTIONS.md). Threads used now: +54076 (10). Related new PR #58021 (resolved geometry propagation) noted, not engaged.
+
+### 2026-09-22 15:24Z — jschmied REPRODUCED item E's configuration on #54076 and retracted his negative
+"It reproduces, and my 2026-09-20 comment here was wrong." Identical 800/200 lines on his 0.28.1rc1.dev524 build (same build as his negative). He offers a current-main run (aarch64 nightly 1ea7c63f4). Scoreboard: evidence acted on in a third thread (#55122 ×2 + #54076). Reply-2 draft v1 → Codex → Mark GO.
+
+### 2026-09-22T15:35:37Z — #54076 reply-2 posted (Mark GO): accepted jschmied's offer of a 1ea7c63f4 nightly run; scoped the 382970ee6c static claim; confirmed nested argv form. https://github.com/vllm-project/vllm/pull/54076#issuecomment-5779353800
+
+### 2026-09-22 15:52Z — our restore-fidelity fixture caught a real bug in #55507 (Karl0007 on #53142)
+Karl0007 adapted the P8 fixture to #55507's lazy binding: #53798 10/10; #55507 as written 2 FAILED (unbound-fallback divisor — the exact gap item D flagged); fixed in Karl0007/vllm@adc7d30 → 10/10. "your fixture caught a real hole in our variant". Offers to push the adapted fixture + arm patches. Scoreboard: evidence acted on in 4 threads (#55122 ×2, #54076, #53142/#55507). Reply draft v1 → Codex → Mark GO.
+
+### 2026-09-22T19:54:01Z — #53142 reply posted (Mark GO): accepted Karl0007's offer to push the adapted fixture + arm patches; scoped what the fixture checks; stated we have not run adc7d30. https://github.com/vllm-project/vllm/issues/53142#issuecomment-5783063303
+
+### 2026-09-23 04:34Z — jschmied ran item E's configuration on main (0.29.1rc1.dev533+g1ea7c63f4)
+Startup geometry persists on main: identical 800/200 lines across 0.28.0 (ours), dev524 and dev533. Runtime generates and the hidden-states producer path actually ran (closes the "runtime untested" caveat for this config). Prefix-cache cell for #54076: patch is a no-op on this config — hit counts (0 / 200 / 200 over three passes) and output hashes byte-identical patched vs unpatched; hits plateau at 200 = the hidden-state block size. His scope: one prompt shape, one model; shows the failure does not manifest here, not that the fix is unnecessary. Nothing asked of us; no reply (would be noise). Item E loop closed.
+
+### 2026-09-23T18:58:39Z — #53651 rebased onto main (Mark GO "go, rebase first")
+Branch fix/modelopt-lmhead-quant-gaps rebased from base 6d4562c59b onto origin/main 711fc55c10 (clean; patch content identical, hunk offsets only; sign-offs preserved). Tests on GB10 (vllm-head venv, Python sources from the rebased tree; compiled build 0.26.1rc1.dev1159): tests/model_executor/model_loader/test_weight_tying.py + tests/v1/sample/test_head_dtype.py → 15 passed (log tmp-scratch/rebase53651_tests_20260923T185717Z.log). Force-pushed with lease; new head e3ca45951b. Second #pr-reviews request (Codex-approved v2) to be posted after 2026-09-24T00:09:03Z on Mark's GO.
+
+### 2026-09-23T20:28:15Z — items G and I posted (Mark GO "go all"); C scheduled
+- G #58021 — static review as PR review COMMENT: MRV2 PIECEWISE profiling pre-stamp path (Codex-traced, G2-verified), reproduction-description question, CPU test attempt disclosed. https://github.com/vllm-project/vllm/pull/58021#pullrequestreview-5296407251
+- I #55506 — PR review COMMENT: FULL-cudagraph padding OOB read (sanitizer), capture-binding question, nine-case model-free test offered on MaCoredroid/vllm:p9-mamba-aligned-state-indices @9cef61298f. https://github.com/vllm-project/vllm/pull/55506#pullrequestreview-5296410826
+- C #53651 — second #pr-reviews request approved; posts after 2026-09-24T00:09:03Z (timer).
+Threads used now: 55688 53651 53798 54080 54928 55122 51508 55291 53142 54076 58021 55506 (12).
+
+### 2026-09-23 23:18Z — Karl0007 pushed the adapted fixture branch (#53142)
+Karl0007/vllm:oracle/53142-adapted-arms (based on our p8-restore-fidelity; adds oracle-53142/ with README, adapted test, arm patches A/B/C, run.sh). Re-verified on their cluster: A (#53798 as-is) 10 passed; B (#55507 as written) 2 failed; C (#55507 + adc7d30) 10 passed. Agrees with our scope caveat. Nothing asked of us; no reply (loop closed). Not run on our side.
+
+### 2026-09-23 23:18Z — Karl0007 FIXED both #55506 findings in 5f71d6f, using our test as the acceptance run
+Padded rows: mapping load clamped by a runtime `num_mapping_rows` (do_not_specialize); padded rows → slot 0. Capture-time binding: `_ensure_align_ctx` returns (ctx, temporary); `preprocess_state` asserts not temporary; `prepare_attn` releases temporary bindings in a finally. Their run (sm_80): our file 8 pass / 1 fail (C8 characterises the OLD behaviour, fails by design); updated C8 → 9 pass; branch Karl0007/vllm:test/55506-aligned-state-index-expectations. Scoreboard: evidence acted on in 5 threads (#55122 ×2, #54076, #53142/#55507, #55506). Confirmation run on GB10 at 5f71d6f requested from the item I agent.
+
+### 2026-09-24T00:10:04Z — #53651 second #pr-reviews request posted (item C; this week's unsolicited ask)
+Threaded reply under the 2026-09-17 post, after rechecking no review/reply had arrived. message_ts 1790208594.140899. PR head e3ca45951b (rebased 2026-09-23). Next allowed ping: not before 2026-10-01.
+
+### 2026-09-24/25 — three threads moved
+- #58021: QHarshil "You're right" on our pre-stamp trace; fixed (builder returns None when geometry unresolved, profiling only; real runs still abort at core.py:169; regression test added); will correct the PR body per our 16/1600 question. Head cdcfa2329d7 (rebased). dustinCodes84600 raised a follow-on: Worker.initialize_from_config treats missing hash_block_size as optional → silent None; asks for unconditional get_hash_block_size(). Not addressed to us. Scoreboard: evidence/review acted on in 6 threads.
+- #55506: tomasruizt confirmed Kimi-K3 (pruned) affected on main with EAGLE3+PP; PR restores AL (3.27→3.82 at PP4/TP2). njhill (maintainer): "thanks for the fix. But the changes look quite messy, we'll want to clean them up a bit before we merge this." First maintainer engagement on a thread we contributed to. Our GB10 confirmation comment (v2, Codex GO) still awaiting Mark GO.
+- #55122: jschmied posted same-build perf (PR never slower; e2e indistinguishable from stock; 3–4 % vs torch.topk at 30k); k3dani corrected their 21–28 % (mixed images, not isolated). Our scope note unaffected; no action.
+
+### 2026-09-25T00:44:07Z — #55506 GB10 confirmation posted (Mark GO)
+Second-architecture confirmation of Karl0007's fix 5f71d6f (updated file 9 passed; sanitizer 0 errors; real rows unchanged) plus the precision note that padded rows now use slot 0's block IDs rather than null block 0. https://github.com/vllm-project/vllm/pull/55506#issuecomment-5824722220
+
+### 2026-09-25T17:59:31Z — #58021 follow-up posted (item G3, Mark GO)
+After the author's fix (cdcfa2329d7): asks whether tests can distinguish unresolved profiling from an unstamped serving worker; notes the regression only proves the early return and that core.py:169 reads back the scheduler's own stamped config; references Dustin's comment; no reachability claim. https://github.com/vllm-project/vllm/pull/58021#issuecomment-5837051278
+
+### 2026-09-25 18:09Z — #58021 author asked reviewers to hold
+QHarshil thanked us and Dustin, said the profiling-path fix was useful, and asked to hold further review threads until a maintainer/requested reviewer weighs in and CI is triggered. RULE: no further posts on #58021 from us unless a maintainer engages or asks; no acknowledgement reply (would be noise). Thread stays watched.
+
+### 2026-09-26T19:20:59Z — our second upstream PR opened (item N, Mark GO)
+vllm-project/vllm#58854 "[Test] Cover aligned Mamba state-index kernel invariants" — test-only, +296 in tests/v1/worker/test_mamba_utils.py, four identity-order cases for compute_aligned_state_indices, GB10-verified, sanitizer clean, DCO-signed, AI-disclosed. References #55506 once, no position. CI gated (0 merges); no label/CI request. Open PRs of ours: #53651, #58854.

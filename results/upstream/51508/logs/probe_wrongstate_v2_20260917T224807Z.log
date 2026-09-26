@@ -1,0 +1,10 @@
+=== run 2026-09-17T22:48:07Z probe_wrongstate.py v2 (three-way verdict: untouched / same-as-count-1 / different)
+=== procs on GPU
+=== sha256
+c779cfd79c4fb5669b4f1ff8c3b4ad58630ad6bcae7dbbb14bd32bb2c6495a6c  probe_wrongstate.py
+variant    block5 after Z(=0) vs Z1(=1)         max|diff|
+main       DIFFERENT -> wrote from wrong state  1.57916
+pr48475    same as count-1 resume (slot 0)      0
+pr50021    UNTOUCHED (row skipped, no write)    2.17392
+pr51508    same as count-1 resume (slot 0)      0
+=== exit=0 2026-09-17T22:48:09Z
