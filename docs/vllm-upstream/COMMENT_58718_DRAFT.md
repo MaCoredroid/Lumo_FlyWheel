@@ -1,4 +1,5 @@
 # #58718 second-GB10 measurement comment (funded item L) — v2 (Codex replacement verbatim; agent draft NO-GO on '90/90' and the 2.24B-element claim; AWAITING MARK GO — one ordinary PR comment, no branch)
+> **POSTED 2026-09-26T20:05:32Z (Mark GO):** https://github.com/vllm-project/vllm/pull/58718#issuecomment-5849447649
 > Codex L_review.md: ratios recomputed from raw p50s; sm120 baseline mapping verified (batch_invariant_configs.py:492–524 main; head :719–754 selects sm121); isolated BLOCK_K 128→64 covers 2,201,511,168 elements on 12 shapes; build-scoped question, not a policy claim.
 
 ---

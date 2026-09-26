@@ -1,4 +1,5 @@
 # #57605 review comment (funded item M) — v2 (Codex replacement verbatim; AWAITING MARK GO — on GO: push m-57605-align-lookahead @cc514ed2179a8fcfea16607ffaa74be2b1d10da5 to the fork, resolve {{BRANCH_LINK}} = https://github.com/vllm-project/vllm/compare/ef97fad96ac4bcab3321933f1855755a61d38d09...MaCoredroid:vllm:m-57605-align-lookahead, post ONE ordinary PR comment)
+> **POSTED 2026-09-26T20:05:32Z (Mark GO):** https://github.com/vllm-project/vllm/pull/57605#issuecomment-5849449008; branch m-57605-align-lookahead @cc514ed217 pushed
 > Codex M_review.md: independent sweep confirms 29 (+1) head-only failures all at :1932; restoring the checkpoint-aware bound makes the 12 no-lookahead cases pass; under-reserve/double-count/negative-estimate executed via a CPU allocate_slots probe; docstring should-fix applied on the branch.
 
 ---

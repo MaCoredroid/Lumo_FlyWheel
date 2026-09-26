@@ -252,3 +252,11 @@ QHarshil thanked us and Dustin, said the profiling-path fix was useful, and aske
 
 ### 2026-09-26T19:20:59Z — our second upstream PR opened (item N, Mark GO)
 vllm-project/vllm#58854 "[Test] Cover aligned Mamba state-index kernel invariants" — test-only, +296 in tests/v1/worker/test_mamba_utils.py, four identity-order cases for compute_aligned_state_indices, GB10-verified, sanitizer clean, DCO-signed, AI-disclosed. References #55506 once, no position. CI gated (0 merges); no label/CI request. Open PRs of ours: #53651, #58854.
+
+### 2026-09-26T20:05:32Z — Sep 25 scan items posted (Mark GO); scan cycle closed
+- K #57908 (CoW aligned snapshots): 7 regressed existing tests + migration-trace question + 12-case probe branch. https://github.com/vllm-project/vllm/pull/57908#issuecomment-5849447492
+- L #58718 (GB10 matmul table): second-GB10 reproduction table; sm120-baseline comparison; BLOCK_K bitwise question. https://github.com/vllm-project/vllm/pull/58718#issuecomment-5849447649
+- M #57605 (align lookahead allocation): 29(+1) regressed tests at :1932; dropped checkpoint bound; nsb==0 scope question; under-reserve at boundary; probe branch. https://github.com/vllm-project/vllm/pull/57605#issuecomment-5849449008
+- J #58400: NO post (Codex: sampler question answered by code; align coverage exists; synthetic oracle). Internal confirmation kept. Candidate: main long_prefill_token_threshold-after-padding assert (needs CPU reproducer + duplicate check).
+- N: PR #58854 opened (test-only).
+Threads used now: 55688 53651 53798 54080 54928 55122 51508 55291 53142 54076 58021 55506 58854 57908 58718 57605 (16). Open PRs of ours: #53651, #58854.
