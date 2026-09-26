@@ -249,3 +249,6 @@ After the author's fix (cdcfa2329d7): asks whether tests can distinguish unresol
 
 ### 2026-09-25 18:09Z — #58021 author asked reviewers to hold
 QHarshil thanked us and Dustin, said the profiling-path fix was useful, and asked to hold further review threads until a maintainer/requested reviewer weighs in and CI is triggered. RULE: no further posts on #58021 from us unless a maintainer engages or asks; no acknowledgement reply (would be noise). Thread stays watched.
+
+### 2026-09-26T19:20:59Z — our second upstream PR opened (item N, Mark GO)
+vllm-project/vllm#58854 "[Test] Cover aligned Mamba state-index kernel invariants" — test-only, +296 in tests/v1/worker/test_mamba_utils.py, four identity-order cases for compute_aligned_state_indices, GB10-verified, sanitizer clean, DCO-signed, AI-disclosed. References #55506 once, no position. CI gated (0 merges); no label/CI request. Open PRs of ours: #53651, #58854.

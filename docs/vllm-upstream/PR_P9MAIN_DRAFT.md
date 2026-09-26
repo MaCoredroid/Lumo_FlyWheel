@@ -1,4 +1,5 @@
 # Own test-only PR (item N) — v1 (Codex GO for submission; AWAITING MARK GO: push p9-main-aligned-state-indices @bc414ae723 to fork, open PR)
+> **OPENED 2026-09-26T19:20:59Z (Mark GO):** https://github.com/vllm-project/vllm/pull/58854 (head bc414ae723; branch MaCoredroid/vllm:p9-main-aligned-state-indices)
 > Codex N_review.md: GO on bc414ae723; no blocking code finding; nonblocking nits left unapplied (docstring wording; 'no model weights'; replay description) — applying them would change the verified commit. NO-GO on any new #55506 comment now. CI gate: pre-commit requires verified/ready labels or ≥4 merges; maintainer pickup possible, not promised; no label/CI request.
 
 ## Title
