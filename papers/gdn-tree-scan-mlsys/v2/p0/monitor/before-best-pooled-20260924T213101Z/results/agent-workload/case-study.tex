@@ -1,0 +1,70 @@
+The latest complete single-configuration task segment recovered from the NVFP4 campaign is Cqc10, recorded on 24 August 2026 and audited for this revision. It runs ten named Astropy instances from the test split of \texttt{princeton-nlp/SWE-bench\_Verified}, using Qwen Code 0.19.4 to inspect repositories, edit files, execute tools, and produce patches. The task/evaluation worker is x86-64; model serving runs on the GB10. These are full agent attempts, not fixed-prefix generation requests. Table~\ref{tab:swe-tasks} lists every task and saved evaluator outcome in this segment.
+
+\paragraph{Deployment}
+The served model is the port's \texttt{qwen3.8-27b-nvfp4-radixark} checkpoint with ModelOpt mixed quantization and bfloat16 execution dtype. The route uses Hydra27 with 32 physical verification rows, full-vocabulary draft logits, draft-logit reuse, and a patched FA2 GQA-pair split-K4 attention kernel. Prefix caching and full/piecewise CUDA graphs are enabled. The engine permits one active sequence, with maximum context 131,072 tokens and a 4,096-token scheduler budget. Source commit \texttt{e7af6b595a8b} and the loaded extension hash are retained in the artifact. This graph/cache-enabled stochastic deployment is distinct from the Cat10 eager qualification below; passing that qualification does not prove this route's full-model equivalence.
+
+The proxy supplies temperature 0.6, top-$p$ 0.95, top-$k$ 20, minimum-$p$ 0, and presence penalty 1.0; the engine seed is zero. The per-response output cap is 24,000 tokens, with a separate 20,000-token compaction cap and a 9,000-second agent timeout. Proxy auto-continuation is disabled. The agent runs in the task's repository image on an internal network that permits the model proxy and blocks external egress; per-task records retain the verified network-policy fingerprint. Agent duration comes from the task runner's elapsed-time field: it includes the agent loop and tool work, and excludes server startup and subsequent evaluation. We do not infer a completed-task speedup from model-only counters.
+
+\begin{table}[t]
+\caption{All ten tasks in the completed Cqc10 Astropy case. IDs have prefix \texttt{astropy\_\_astropy-}. Times are agent elapsed minutes, rounded from saved runner metadata; evaluation is subsequent. This selected development segment has one attempt per listed task and no matched native arm.}
+\label{tab:swe-tasks}
+\centering\small
+\begin{tabular}{@{}lrl@{}}
+\toprule
+Task suffix & Agent time (min) & Saved evaluation \\
+\midrule
+13977 & 24.59 & Failed tests \\
+14096 & 22.99 & Resolved \\
+14182 & 7.23 & Failed tests \\
+14309 & 1.67 & Resolved \\
+14365 & 6.78 & Failed tests \\
+14369 & 27.70 & Resolved \\
+14508 & 41.24 & Resolved \\
+14539 & 18.57 & Resolved \\
+14598 & 25.79 & Failed tests \\
+14995 & 4.59 & Resolved \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Workload observations}
+All ten attempts have evaluator reports: six resolved their tasks and four failed tests. Recorded agent durations sum to 181.15 minutes, with a range of 1.67--41.24 minutes. This is an observed task ledger, not a representative SWE-bench Verified success estimate. The sum is accumulated agent time, not elapsed campaign time including startup and evaluation.
+
+Every task used tools and produced a nonempty patch. A source-bound replay of the recorded trace checks detects no degeneration in these ten runs and no malformed tool-call arguments. The degeneration heuristic jointly requires at most 200 visible characters, zero tool calls, and at least 2,000 thinking characters; none of the ten traces meets that conjunction. This screen can miss loops that continue narrating or using tools, so its zero detections establish neither universal degeneration freedom nor preserved task quality. The earlier campaign's detected degeneration remains an adverse observation in the lineage audit.
+
+\paragraph{Pooled decode comparison}
+For completed request $r$, let $n_r$ be its output-token count, $\ell_r$ its server-recorded end-to-end latency, and $f_r$ its time to first output. With $R$ completed requests and $N=\sum_r n_r$, we use
+\begin{equation}
+ D_{\mathrm{pool}} =
+ \frac{\sum_{r=1}^{R}(n_r-1)}{\sum_{r=1}^{R}(\ell_r-f_r)}
+ = \frac{N-R}{\sum_r\ell_r-\sum_r f_r}.
+ \label{eq:pooled-decode}
+\end{equation}
+Counts and durations are pooled before division. The numerator uses the conventional $n_r-1$ output intervals; outputs arriving in one batch can have zero arrival gaps. The denominator excludes first-output latency and between-request agent/tool work. It is accumulated request time, which counts overlapping requests separately, not isolated GPU time or elapsed campaign time.
+
+For the tree, $N=248{,}342$, $R=265$, $\sum_r\ell_r=10{,}667.6211$ seconds, and $\sum_r f_r=989.8239$ seconds yield 25.63 tokens/s. The 265 requests reconcile with 256 normal requests and nine successful internal compaction requests; all recorded completion reasons are stop. The ten pre/post metric brackets are contiguous. Generation-token and completed-request counters agree with their latency-histogram populations, with no counter reset or outstanding request at the selected boundaries.
+
+The SGLang EAGLE comparator serves the as-shipped Qwen3.8-27B NVFP4 checkpoint with FlashInfer, using speculative steps/top-$k$/draft-token settings of 3/1/4. It uses the same Qwen Code version, agent harness, sampling settings, output cap, and network policy, with a 262,144-token context limit and 8,192-token prefill chunk. Its two completed Astropy tasks are 12907 (resolved; 7.10 agent minutes) and 13033 (failed tests; 26.96 agent minutes). Their counters give $N=47{,}854$, $R=45$, $\sum_r\ell_r=2{,}013.6344$ seconds, and $\sum_r f_r=235.9488$ seconds, yielding 26.89 tokens/s. Both selected brackets contain streaming requests only and pass the same population and idle-boundary checks. All completed engine requests are included for both deployments, including internal agent traffic.
+
+\begin{table}[t]
+\caption{Pooled decode rate on SWE-bench Verified Astropy tasks with Qwen3.8-27B NVFP4 on GB10. Both rows use Eq.~\ref{eq:pooled-decode}. Task subsets and deployed serving configurations differ.}
+\label{tab:pooled-decode}
+\centering\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Deployment & Tasks & Requests & Tokens/s \\
+\midrule
+GDN Tree-Scan & 10 & 265 & 25.63 \\
+SGLang EAGLE & 2 & 45 & 26.89 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The tree's observed pooled decode rate is 4.69\% lower than SGLang's on these records. This is a descriptive comparison of deployed stacks on different selected task subsets, not a paired task-completion speedup or an isolated effect of tree verification. The artifact retains the original metric brackets, the common reducer, and two independent reductions.
+
+\paragraph{Selection and comparison limits}
+Cqc10 contains the ten remaining tasks of an interrupted sixteen-task development campaign. Earlier segments changed source revisions and output caps and included degeneration, incomplete output, and budget-capped attempts. Source-bound audit records of those failures, retries, and missing evaluations remain in the artifact; the original records remain at their recorded source paths. We do not relabel the completed segment as the entire campaign, combine those segments into a single-configuration benchmark score, or drop unsuccessful attempts from a claimed benchmark denominator. The tasks were selected from one repository, and this deployment has one recorded boot without a matched ten-task native run. Separate targeted native probes change other serving settings and do not supply that comparator. Consequently, these records demonstrate an implemented verifier serving real coding-agent work, but establish no native-versus-tree task-speed or quality advantage. A current, matched task campaign is the remaining experiment for that claim.
+
+
+\paragraph{Existing comparator experiments}
+Earlier SGLang EAGLE trials and native MTP controls remain in the repository. The earlier native campaign predates the NVFP4 deployment; later NVFP4 native probes cover targeted tasks with different serving settings. DSpark measurements use synthetic requests, and a later DFlash2 check establishes boot and response handling rather than agent-task performance. These records are distinguished from the pooled SWE comparison above; their superseded or non-agent rates are not additional performance results for the current verifier.

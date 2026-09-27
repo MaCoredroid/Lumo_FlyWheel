@@ -1,0 +1,366 @@
+{
+  "created_utc": "2026-09-24T21:42:57.478896+00:00",
+  "status": "PASS",
+  "scope": "Best of three recovered tree deployments on exact shared two-task IDs; all current manuscript speed results use pooled completed-request decode rate",
+  "loaded_source_sha256": {
+    "abstract.tex": "862a7dd2c33e431ca875a5aebcd8a25db75a45cdba48433578ac5d0aead46274",
+    "figures/pipeline.tikz": "8c9dbd43516be8703d4ba841a06d1f2d17caad2c434a61ec29ede40035f0762b",
+    "figures/scan-replay.tikz": "affc55cd6972d929de38dc8ebdd86c6dcea77fb0beb73c96551010bfaffadcfe",
+    "figures/state-contract.tikz": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898",
+    "main.tex": "dcd452080c116eafa7836b8c4e580ef53406f7bef499fa404638f88609c3cc69",
+    "results/agent-workload/case-study.tex": "2a841d756d0de05b03458c86d00d29ad2c4b19691d7f6722e19bf14109085c13"
+  },
+  "current_document_sha256": {
+    "README.md": "30c21d1d2d42c186f797829dd6fb8e2f5ca3dd2954570afca841e71e5868179d",
+    "FINAL-REVIEW.md": "2cd7f76eb636326f2fed4618d7e19f3b78fba578b826de9a519ce2566fdc7d0c",
+    "paper.config.yaml": "2c267c007c124ac062504e150c48df503e29fabc719ac65ff0993245ba1a3929",
+    "notes/claim-evidence-ledger.md": "8496b4955c7751ff5c9122a4de6920ab507097430f33a1768131a8c9cb67bc75",
+    "review-experiments.md": "7a0e5d5b3f495975b13701514e9ee665280a76481d0291d0457c290ccac4c605",
+    "notes/design/optimization-evidence-map.md": "cd2a3af9f85aa37d467db638364765094b4625c9cdfa17d25d6ac60ea38d13ca",
+    "notes/design/experiment-matrix.csv": "d9f2caf962354247b4075c93b1694ea5a6b2c7b38566d1ae8a2c4070b83f36e7",
+    "notes/design/baselines.csv": "172cb874fc050b370473f90c9f071d8ba0dc691e2f4ae07e87849e72d1949a20",
+    "experiments/STATUS.md": "dca60ed6d62f024d6bf344e0012e738347094d4f794bbaa480a3e52f38183510",
+    "p0/monitor/closure-ledger.md": "1e44518c25f5ae288a9bddc79f93c3bd0fee16c0757976aaeb1dafcff2f757b5",
+    "artifacts/README.md": "0a817ce55b33b79d1a8ac68c43ab6b9bb011f823fc455591d864de56c1404f9a",
+    "scripts/build_review_bundle.py": "4a1f4a053849a576a482c51a6b2515200a98daaf85d41081d06916735020781d",
+    "issues/2026-09-24-best-shared-task.csv": "5c7a59cf85b73c3b94fb66666b77f194effbcf29f7852f53f69f0bd03ec6c418"
+  },
+  "pooled_rates": {
+    "Cqc10": "25.63",
+    "Cqc15": "27.27",
+    "Cqc16": "28.28",
+    "SGLang_EAGLE": "26.89",
+    "Sr12": "29.09",
+    "Sr12_full_four_tasks": "26.21"
+  },
+  "best_relative_to_sglang_percent": 8.178367935125518,
+  "input_files": 81,
+  "audit_sha256": "dcc6f3fb69bdd01f7ff8bed0c920ea797c18c18418c06044bfa039a88a7b286a",
+  "reducer_sha256": "d007110971ed8d3d0b2829a4f1f8e617ff12faaf88ca6231263997cfff4881ca",
+  "exact_replay": "PASS",
+  "rendered_pdf_sha256": "c90cc9f5cedba96e8bd11dbbb63dce295c19b1f7d8e4797500e2d078b5c2d34c",
+  "excluded_stale_values_absent": [
+    "28.20",
+    "35.46",
+    "28.8",
+    "43.57",
+    "32.85",
+    "42.74",
+    "39.95",
+    "13.67",
+    "55.38",
+    "12.69",
+    "47.28",
+    "11.44",
+    "42.15"
+  ],
+  "claim_inventory": [
+    {
+      "path": "abstract.tex",
+      "line": 2,
+      "text": "Tree speculative decoding for long-running coding agents must preserve coherent continuation across repeated generation and tool calls. We present GDN Tree-Scan, a Gated DeltaNet verifier that connects branch-local computation to accepted-path publication across recurrent, convolution, and attention state. Its implementation combines sequential scan and replay with draft-logit reuse, shared operand preparation, and attention parallelism. On Qwen3.8-27B NVFP4 on GB10, the best recorded tree run on two shared SWE-bench Verified Astropy tasks achieves a pooled decode rate of 29.09 tokens/s, 8.18\\% higher than the tested SGLang EAGLE deployment's 26.89 tokens/s under the same rate definition. This is a comparison of recorded deployments with different serving configurations and response caps. In a separate ten-task deployment, all tree-served agent attempts terminated and produced nonempty patches, with no degeneration detected by the recorded trace checks. Separate arithmetic and continuation checks characterize the verifier's numerical and state-management boundaries."
+    },
+    {
+      "path": "main.tex",
+      "line": 25,
+      "text": "\\thanks{Working revision, September 24, 2026. Performance results are tied to named coding-agent workloads; numerical qualification is reported separately.}}"
+    },
+    {
+      "path": "main.tex",
+      "line": 46,
+      "text": "The paper develops three implementation contributions. \\textit{First}, it presents the integrated verifier architecture and its continuation interface: candidates follow their ancestors during verification, and the selected materialized path becomes the next native state. \\textit{Second}, it explains the GPU scan/replay design, including its shared update, branch-state workspace, accepted-path publication, and memory--recomputation tradeoff. \\textit{Third}, it organizes the implemented optimizations around the work they remove and the numerical and backend constraints they must preserve: draft-logit reuse, device probability arithmetic, vectorized convolution, packed operands, attention layout/grouping, and scan/acceptance batching. We distinguish implemented candidates from the components active in the NVFP4 agent deployment and in the separate FP8 qualification route. Isolated gains require an ablation on the same agent workload."
+    },
+    {
+      "path": "main.tex",
+      "line": 48,
+      "text": "The target workload is a long-running coding agent: generation alternates with repository inspection, tool execution, and tests, and a task can require many model requests. Performance therefore depends on useful completed work as well as token production. Our workload evaluation uses explicitly identified Astropy tasks from SWE-bench Verified~\\cite{jimenez2024swe}. We report the model, serving route, task cohort, and measurement definition together; a decode-rate change is not a task-completion speedup. Separate same-input arithmetic and continuation checks support the implementation, without substituting for agent-workload measurements."
+    },
+    {
+      "path": "main.tex",
+      "line": 50,
+      "text": "Tree verification and compact accepted-state reconstruction have direct prior art. Section~\\ref{sec:related} positions our implementation against those mechanisms; we do not claim the first hybrid-tree system or a new GDN recurrence. The architecture and kernel design are developed in Sections~\\ref{sec:contract}--\\ref{sec:kernel}, and Section~\\ref{sec:optimization} separates optimization mechanisms from their measured scope. Measurement provenance is documented in Appendix~\\ref{app:audit}; superseded results and local-document timing numbers are excluded from the performance evaluation."
+    },
+    {
+      "path": "main.tex",
+      "line": 55,
+      "text": "Speculative sampling constructs an exact target sample from proposal and residual distributions, conditional on the probabilities actually supplied~\\cite{leviathan2023fast,chen2023sampling}. SpecInfer supplies the tree-verification framing; Sequoia, EAGLE-2, and OPT-Tree investigate tree construction and its performance consequences~\\cite{miao2023specinfer,chen2024sequoia,li2024eagle,wang2024opt}. Our study keeps these algorithmic questions separate from whether a deployed kernel and cache return the intended probabilities."
+    },
+    {
+      "path": "main.tex",
+      "line": 57,
+      "text": "PagedAttention and SGLang address the scheduling, memory, and execution substrate~\\cite{kwon2023efficient,zheng2024sglang}. Hybrid serving additionally manages recurrent-state pools alongside KV storage, as documented by SGLang's hybrid-model integration~\\cite{pytorch2025sglang,sglang2026qwen}. Thus neither a fast isolated recurrent kernel nor low transient state memory alone determines user-visible latency. Our NVFP4 agent deployment uses a patched FlashAttention-2 path, while the separate FP8 numerical qualification uses stock \\texttt{TREE\\_ATTN}; backend-specific work partitioning remains part of the execution boundary~\\cite{dao2023flashattention,lumo2026archive}."
+    },
+    {
+      "path": "main.tex",
+      "line": 67,
+      "text": "\\textbf{TreeWY} expresses GDN tree verification as a triangular system and reconstructs the accepted state from pseudo-values. Its vLLM evaluation uses Qwen3.5-35B and 397B on B200, greedy verification, and disabled prefix caching. It explicitly permits finite-precision disagreement with the baseline and reports that wider trees improve acceptance without yet winning throughput~\\cite{ghantasala2026treewy}. Consequently, our local numerical comparisons neither establish that TreeWY is incorrect nor replace its serving comparison."
+    },
+    {
+      "path": "main.tex",
+      "line": 69,
+      "text": "\\textbf{ReplaySSM} caches recurrent inputs and changes when state is materialized; its implementation RFC includes GDN and Mamba2~\\cite{replayssm2026}. Reconstruction and replay are not claimed as new concepts here. Table~\\ref{tab:related} states the comparison boundary. Published speed ratios from different checkpoints, precision formats, workloads, and software builds are not combined into a performance ranking."
+    },
+    {
+      "path": "main.tex",
+      "line": 96,
+      "text": "A tree descriptor contains candidate token IDs, parent indices, depth/position information, attention visibility, and maps between logical nodes and physical slots. For a candidate node $i$, each target layer must consume the state obtained from the candidate's root-to-parent path. At publication, the selected materialized path, pending-token convention, and next-drafter input row must agree. Figure~\\ref{fig:contract} illustrates the three state surfaces documented by the implementation audit~\\cite{lumo2026stateless,lumo2026archive}."
+    },
+    {
+      "path": "main.tex",
+      "line": 111,
+      "text": "Figure~\\ref{fig:pipeline} shows the served path. Native multi-token prediction (MTP) supplies the principal draft chain; selected variants add runner-up candidates. The descriptor maps each candidate through the attention mask, recurrent scan, sampler, and selected-path publication. The agent deployment uses Hydra27: 27 active draft nodes excluding the root, packed into 31 physical draft slots plus the root (32 verification rows). Its five-depth MTP head contributes 15 nodes; suffix continuation contributes a six-token principal tail and four- and two-token rescue branches. The maximum draft depth is eleven; four post-root MTP forwards construct the head. Four masked physical slots are padding, not extra logical candidates. Suffix candidates come from the configured Arctic suffix predictor. The separate Cat10 descriptor used in bounded continuation qualification contains the root and nine MTP draft nodes, with maximum draft-path depth five~\\cite{lumo2026archive}."
+    },
+    {
+      "path": "main.tex",
+      "line": 142,
+      "text": "The branch-local scan evaluates nodes in a topological order. A root candidate starts from the pre-tree state; another node starts from its parent's post-state. Packed adjacency alone supplies neither relationship. The cached implementation keeps node post-states in a tile-local table while writing the candidate outputs used by later layers. A separate activation ring records the operands needed to replay the chosen path after acceptance~\\cite{lumo2026archive}."
+    },
+    {
+      "path": "main.tex",
+      "line": 169,
+      "text": "Sharing source makes the intended arithmetic common; it does not by itself guarantee identical compiled instructions. Operand shapes, launch geometry, unrolling, and compiler scheduling can change reduction or contraction order. We therefore separate the real-arithmetic recurrence from comparisons of compiled outputs and committed states. Section~\\ref{sec:e7a-pilot} evaluates these quantities independently on the same fresh operands, and Section~\\ref{sec:selected-route} checks whether the next invocation consumes the state actually published."
+    },
+    {
+      "path": "main.tex",
+      "line": 178,
+      "text": "Accepted-path replay instead carries one state tile and traverses a loop bounded by the configured path capacity, masking unused positions. Its selected-path semantics do not imply that arithmetic or latency scales only with the number of accepted nodes. Its carried-state footprint is $O(B_vd_k)$ in tree size, although recorded operands and the broader serving scratch still scale with candidates. Verification variants can similarly recompute a node's ancestry or divide the tree into paths rather than retaining every node post-state. This exchanges stored state for repeated recurrence work; the useful choice depends on topology and GPU resource pressure~\\cite{lumo2026archive}. None of these analytic footprints is a reported historical performance result."
+    },
+    {
+      "path": "main.tex",
+      "line": 183,
+      "text": "\\caption{Different state lifetimes within one verification step. The cached scan uses parent-indexed temporary states to produce candidate outputs. Accepted-path replay starts again from the pre-tree state and publishes only the chosen continuation. Compact reconstruction is a separately evaluated alternative.}"
+    },
+    {
+      "path": "main.tex",
+      "line": 187,
+      "text": "Compact triangular-solve and finite-Neumann methods choose another point in this design space: they form correction factors and reconstruct the accepted state without replaying every accepted rank-one update. Our local comparison evaluates their verifier arithmetic and state reconstruction separately. Lower state-storage requirements or less replay work alone do not establish lower complete-step latency, and numerical agreement must be assessed at the actual output and state-storage boundaries~\\cite{ghantasala2026treewy,wang2026bole}."
+    },
+    {
+      "path": "main.tex",
+      "line": 192,
+      "text": "The native-MTP drafter supplies both a principal spine token and runner-up candidates from the same logits tensor. The single-logits path selects the spine token from that existing tensor, avoiding a second vocabulary projection inside the native greedy-sampling helper. Both the reuse path and its counterfactual OFF control obtain runner-up candidates from the first logits; the redundant work is the second projection for spine selection. Runner-up leaves use these scores without advancing an independent drafter state for each leaf. The descriptor keeps this proposal policy separate from target verification, allowing a different drafter to supply the same interface~\\cite{lumo2026archive}. Reusing scores does not establish that a wider tree yields a net serving gain: its additional target rows still cost work."
+    },
+    {
+      "path": "main.tex",
+      "line": 199,
+      "text": "This vectorized convolution route and the eager packed-buffer preparation are active in the eager qualification implementation. The latter organizes recorded operands across layers and prepares shared metadata. Buffer packing and replay launch batching remain different mechanisms: the fresh greedy route follows canonical multidraft acceptance, whose unarmed replay branch still iterates over layers. The existence of stacked buffers therefore does not establish that all-layer replay was executed or that all replay launches were removed. Table~\\ref{tab:optimization-map} records this distinction; no isolated timing gain is assigned to either component."
+    },
+    {
+      "path": "main.tex",
+      "line": 204,
+      "text": "In the NVFP4 agent deployment, the FA2 GQA-pair kernel shares staged key/value tiles across a pair of query heads. Split-K partitions the context walk four ways; each partition writes a local maximum, denominator, and weighted-value sum. The combine kernel rescales those partials to the global maximum and merges them. This exposes more independent work without changing the logical tree visibility, but it changes floating-point accumulation order. It therefore requires its own numerical and serving evidence rather than inheriting the stock-attention qualification. The loaded task-run receipt confirms this attention dispatch; its workload observations are reported without an isolated attention-speedup claim~\\cite{lumo2026archive}."
+    },
+    {
+      "path": "main.tex",
+      "line": 206,
+      "text": "Table~\\ref{tab:optimization-map} separates this design inventory from the available evidence. The fixed-shape scan and acceptance candidates require compatible shape, backend, and launcher guards; they cannot be treated as interchangeable with the qualification route. Source availability and local-document timing do not establish their gains in an agent workload."
+    },
+    {
+      "path": "main.tex",
+      "line": 209,
+      "text": "\\caption{Optimization-to-evidence map. ``Implemented'' describes source availability; it does not assert a fresh isolated speedup or activation in every serving route.}"
+    },
+    {
+      "path": "main.tex",
+      "line": 235,
+      "text": "Verification outputs, committed state, and later model outputs are separate numerical boundaries. A first-order explanatory model is $e_{\\ell+1}\\approx J_\\ell e_\\ell+\\delta_\\ell$: later layers can amplify an existing residual while introducing additional error. This expression is not a fitted error bound. Small local errors, or matching current outputs, do not establish matching future logits. The fresh same-input and continuation studies below therefore evaluate verification arithmetic and state publication separately."
+    },
+    {
+      "path": "main.tex",
+      "line": 241,
+      "text": "Performance is evaluated on coding-agent workloads, with the task subset and serving configuration attached to every reported rate. The Qwen3.8-27B NVFP4 evidence uses SWE-bench Verified Astropy tasks on a single GB10/DGX Spark: a shared two-task comparison of three tree runs against SGLang EAGLE, plus a separate ten-task tree deployment~\\cite{lumo2026archive,jimenez2024swe}. The best recorded shared-task rate supplies the headline; later runs and the larger deployment remain in the evaluation. These selected subsets are not the full benchmark. Every decode-rate result uses the pooled completed-request estimator in Eq.~\\ref{eq:pooled-decode}, excluding first-output latency. Recorded agent duration includes the agent loop, model service, tools, and repository operations; server startup and subsequent evaluator time are separate."
+    },
+    {
+      "path": "main.tex",
+      "line": 243,
+      "text": "Numerical qualification is a separate experiment family on Qwen3.6-27B-FP8. It uses captured operands, internal-document prefixes, and explicitly labeled synthetic controls. The selected Cat10 route uses stock \\texttt{TREE\\_ATTN}, flat slots, accepted-path KV remapping, eager synchronous execution, and disabled prefix caching. These finite checks qualify that route only. They are not a SWE-bench run and do not automatically qualify a different NVFP4, graph, sampling, or attention-kernel configuration. Local-document throughput experiments are retained in the artifact for audit but provide no performance number in this paper."
+    },
+    {
+      "path": "main.tex",
+      "line": 256,
+      "text": "SWE & Qwen3.8 NVFP4 coding-agent records (Section~\\ref{sec:agent-workload}) & Best and later tree/SGLang pooled decode observations on shared tasks; separate ten-task deployment & Best recorded result; different revisions and caps; descriptive comparison \\\\"
+    },
+    {
+      "path": "main.tex",
+      "line": 272,
+      "text": "E7a uses the rounded operands of one GDN layer step: bfloat16 $q,k,v$, bfloat16 raw gates, fp32 $A_{\\log}$, bfloat16 gate bias, the fp32 pre-tree state, and the tree descriptor. Three references remain distinct: a float64 serial recurrence on the same rounded operands, the pinned native speculative-update kernel run per root-to-node chain, and the pinned one-token decode kernel run token by token. We report the revision's fresh pilot and confirmation captures below, with a separately labeled fresh synthetic stress test. Preliminary remeasurements on archived captures and legacy kernels remain outside the manuscript's quantitative results."
+    },
+    {
+      "path": "main.tex",
+      "line": 278,
+      "text": "A fresh synthetic tiny-gate pass (\\path{out-20260921T231030Z-e7a-tinygates-v3/}; chains of depth 11 and 5 and the caterpillar with cumulative log-decay down to $-912$, so that the path decay $P_i$ underflows to exactly zero in fp32) produced no non-finite value in any realization. With fp32 dense products, the diagnostic fp32-output-store outputs and committed fp32 states stayed within $0.9$--$5.8\\times10^{-7}$ relative to the corresponding oracle maximum. Every implementation evaluates path-decay ratios as $\\exp(\\log P_i-\\log P_j)$ with the exponent masked before exponentiation, never as a literal quotient of underflowed products. The same run shows that with vanishing gates the strict-ancestor coupling vanishes too, so even the truncated Neumann series is accurate there; the truncation control fails only when coupling is present."
+    },
+    {
+      "path": "main.tex",
+      "line": 284,
+      "text": "On the 31 provenance-passing sets, the production scan's fp32-store output is bit-identical to the native speculative-update kernel's, and the served bfloat16 output is byte-identical to the production scan's. The maximum absolute compact-commit state errors are approximately $7.81\\times10^{-7}$ against the oracle and $1.91\\times10^{-6}$ against native; replay maxima are $1.34\\times10^{-6}$ and $2.38\\times10^{-7}$, respectively (rounded). B and C's bfloat16 outputs agree with native on at least 99.9772\\% of elements (the minimum is C on p005, with 14 of 61,440 elements differing). The served output is within $4.9\\times10^{-4}$ of the oracle and within one bfloat16 unit in the last place on significant elements. Sibling reordering and repeat replay remain bitwise invariant in their tested controls."
+    },
+    {
+      "path": "main.tex",
+      "line": 286,
+      "text": "The frozen criteria are not satisfied. Native and production bfloat16 stores differ in one element on each of two sets, despite identical fp32 stores. One set exceeds the frozen absolute output tolerance by 3\\% ($9.2\\times10^{-8}$ versus $8.9\\times10^{-8}$). The frozen ordering $A\\le B=C$ for output error fails on three sets, and B/C compact-state error equality fails on p031 by $6.9\\times10^{-8}$. Padding from 16 to 32 nodes changes output and correction-factor bits for B and C on all 31 sets. The associated kernel timing diagnostics also miss their frozen stability checks; their values remain audit-only."
+    },
+    {
+      "path": "main.tex",
+      "line": 288,
+      "text": "A retrospective completeness audit found that the first checker omitted padding, compact-state ordering, and timing half-width checks. The immutable freeze also incorrectly described the pilot as padding invariant and timing compliant: the referenced fresh-pilot-v2 data already fail padding on all eight prefixes and the declared timing-stability rule. We retain the original freeze and reports and record the corrections separately in \\path{p0/monitor/2026-09-22-review-14-frozen-audit.json}. This is an audit of a flawed frozen analysis, not a corrected preregistration. These observations characterize the captured arithmetic; they do not qualify deployment, establish model-level harmlessness, or promote either compact route."
+    },
+    {
+      "path": "main.tex",
+      "line": 292,
+      "text": "We next isolated verifier substitution on one frozen pilot prefix, p072, at B1 with eager execution and the same pinned FP8 stack. Three separate boots ran the instrumented production route, a matched sham that computed B's fp32 forward-substitution result without publishing it, and a verifier-only arm that published that result at layer 62. All three passed provenance checks. Across twelve contiguous, input-aligned steps with ten candidate rows each, the production and sham captures had identical logits, hidden states, residuals, and emitted token sequences. The thirteenth capture was partial at the response boundary and was excluded from the aligned comparison. This pair's agreement is a control observation, not a universal cross-boot noise floor."
+    },
+    {
+      "path": "main.tex",
+      "line": 294,
+      "text": "Against that sham, substitution first changed layer 62 and then layer 63; layers 0--61 remained identical. The largest absolute final-logit differences were 0.15625 at step 3 and 0.125 at step 7. No argmax changed among the 120 matched candidate rows, and all 32 emitted tokens were unchanged. Across thirteen verifier invocations, the minimum local bfloat16-output equality fraction was 99.9788\\%, with a maximum absolute difference of $6.10\\times10^{-5}$. These observations demonstrate propagation in this implementation and prefix, without establishing model-level harmlessness or a defect inherent to either published mechanism. Raw captures and the independently checked reduction are retained under \\path{experiments/out-20260922T063019Z-e7b-r13-p072-batch/}."
+    },
+    {
+      "path": "main.tex",
+      "line": 298,
+      "text": "For a separate fixed-input check, we injected the compact arm's first published layer-62 state into an offline float64 recurrence using the sham's subsequent recorded operands and accepted paths, with fp32 state storage between steps. The initial maximum state difference, $2.38\\times10^{-7}$, remained at that value over ten fully API-bound continuation intervals; maximum output differences ranged from $1.79\\times10^{-9}$ to $4.85\\times10^{-9}$. The production-to-sham control stayed exactly zero. This once-injected, one-layer experiment differs from the live arm's repeated compact commits and does not exercise cross-layer feedback. No amplification was observed in its tested maximum-state-error measure and horizon. All thirteen captured steps of the production and compact boots also met the declared layer-level numerical fidelity checks, and all twelve pre-state links were bit-identical to the prior publication. None of these checks qualifies convolution history, attention KV, the sampler law, or the full serving route; those surfaces remain separate E2 requirements. The recorded environments for all six diagnostic boots omit the plain-route attention-KV remap flag, whose loaded source defaults to disabled. Their local arithmetic and matched-arm observations therefore do not establish correct branch-path attention continuation; the corrected serving route is qualified separately in Section~\\ref{sec:selected-route}."
+    },
+    {
+      "path": "main.tex",
+      "line": 306,
+      "text": "Helper tests separately checked active recurrent rows, convolution-history remainder protection, pending-token consumption, accepted-node KV copying, and four-request isolation, including multi-block KV layouts and corruption controls. Loaded-source guards and call order connect these helper contracts to the selected route; they do not substitute for live convolution/KV byte snapshots or a full-model sequential oracle."
+    },
+    {
+      "path": "main.tex",
+      "line": 314,
+      "text": "A source-controlled check evaluates the reused and recomputed vocabulary heads on identical hidden inputs. Two untimed boots use eight internal-document excerpts, with 32 returned tokens per excerpt. Each arm completes 103 proposals and 515 paired comparisons of complete logits, argmax, ordered top-two candidates, and packed candidate trees. The checks also cover input and random-state preservation and watched-tensor mutation. All eight returned streams agree across these two qualification boots. This bounds the tested head/candidate invariants; it is not full-model equivalence or agent-task quality evidence. The separate local-document timing measurements are not reported as agent performance."
+    },
+    {
+      "path": "main.tex",
+      "line": 319,
+      "text": "The mechanism results constrain the implementation choices. Branch-local recurrence and selected-path publication are separate operations, so a local verifier match cannot establish correct continuation. The fresh incompatible-slot-policy witness also shows why a numerical layout technique must respect the attention backend's address convention. The corrected synchronous flat-map route passes the bounded checks reported above; live convolution/KV byte snapshots, graph execution, cache-hit behavior, stochastic deployment, and full-model sequential equivalence remain outside that coverage."
+    },
+    {
+      "path": "main.tex",
+      "line": 321,
+      "text": "Sequential replay is a useful reference implementation, but the fresh compact-route comparison does not establish that it is universally more accurate or faster. The local realizations miss frozen numerical, padding, and timing criteria; no compact candidate is promoted. These are implementation-specific findings on the captured operands. They do not establish a defect in the published TreeWY or Bole systems, which were not benchmarked here."
+    },
+    {
+      "path": "main.tex",
+      "line": 323,
+      "text": "For long-running agents, task completion and task wall time are the relevant application outcomes. More decoded tokens can reflect additional reasoning, a longer tool loop, or degeneration rather than more completed work. The pooled decode comparison is therefore accompanied by task IDs, outcomes, agent/tool policy, and terminal budgets. It describes the recorded tree and SGLang deployments on their evaluated subsets; it does not establish a task-completion speedup or isolate the effect of tree verification."
+    },
+    {
+      "path": "main.tex",
+      "line": 330,
+      "text": "The numerical studies characterize verification arithmetic and publication on the selected qualification route; neither local compact-state candidate passes all frozen promotion criteria. On two shared SWE-bench Verified Astropy tasks with Qwen3.8-27B NVFP4 on GB10, the best recorded tree run attains 29.09 pooled tokens/s versus SGLang EAGLE's 26.89, an 8.18\\% higher observed rate. Later tree runs on the same pair attain 28.28 and 27.27; the separate ten-task deployment attains 25.63. All ten attempts in that larger deployment terminated with nonempty patches and no degeneration detected by the recorded trace checks. The common rate definition supports the descriptive comparison while preserving differences in revisions, response caps, and task coverage."
+    },
+    {
+      "path": "main.tex",
+      "line": 332,
+      "text": "The contribution is a concrete verifier design and its implementation mechanisms, supported by bounded numerical checks and workload-specific observations. Isolating an application speedup requires paired full-task comparisons with outcomes and budgets retained. The present cross-stack observations do not establish broader task-quality preservation, full-model sequential equivalence, or general superiority over SGLang or the published compact-state systems."
+    },
+    {
+      "path": "main.tex",
+      "line": 336,
+      "text": "\\caption{Validation and remaining workload scope. Numerical correctness evidence and coding-agent performance answer separate questions.}"
+    },
+    {
+      "path": "main.tex",
+      "line": 347,
+      "text": "E4 & How does memory affect service latency? & Deferred: identical arrival trace and cache-capacity controls & Serving and cache explanation \\\\"
+    },
+    {
+      "path": "main.tex",
+      "line": 349,
+      "text": "SWE & Does the tree improve agent completion time? & Required: repeated matched native/tree tasks on one NVFP4 checkpoint; retain outcomes and budgets & Workload-specific task latency and success \\\\"
+    },
+    {
+      "path": "main.tex",
+      "line": 357,
+      "text": "P0 source reconstruction found repeated target-logit constraints in earlier campaign patchers~\\cite{lumo2026levers}. Repeated filtering and differing bonus paths mean that the requested historical sampling settings do not identify a single effective sampler. Historical loaded-extension and model-file identities also remain unresolved; current hashes cannot recover them. We preserve those records as audit evidence and exclude their superseded rates. Every reported workload result must identify its own model, route, sampler, and measurement support. Numerical qualification records remain separate from task-performance evidence."
+    },
+    {
+      "path": "main.tex",
+      "line": 362,
+      "text": "For event-level timing diagnostics, let $a_e$ be accepted drafts and $c_e$ be actual emitted tokens in request verification event $e$. For ordinary nonterminal events, $c_e=a_e+1$ because of a correction/bonus token. End-of-sequence and truncation instead require the actual count. A physical GPU step can contain several request events. An event-level rate requires output counts and wall intervals from the same event population; component attribution also requires matching the timed operations to those events. These diagnostics are distinct from the completed-request pooled decode rate in Eq.~\\ref{eq:pooled-decode}."
+    },
+    {
+      "path": "main.tex",
+      "line": 364,
+      "text": "An archived instrument did not supply that matching: its numerator summarizes global request events, whereas its wall intervals retain a pure-decode subset. Its component spans also use different supports. Changing units or substituting a different global token total cannot recover the missing matched observations~\\cite{lumo2026archive}. The raw counters, retrospective audit, and reproducible accounting are preserved in the artifact; the derived rate proxies, component chart, and proxy break-even calculation are excluded here. The pooled estimator in Section~\\ref{sec:agent-workload} must not be replaced by these mixed-support proxies. TTFT, TPOT, queueing, cache misses, and full-service throughput remain separate quantities."
+    },
+    {
+      "path": "main.tex",
+      "line": 379,
+      "text": "Table~\\ref{tab:planned} separates completed mechanism qualification from the agent-workload study needed for an application-speedup claim. The original local-document timing campaigns remain immutable artifact records and are excluded from the paper's performance results. New workload experiments must freeze the same checkpoint, agent harness, task cohort, sampling, tools, network policy, and budgets across comparators before execution."
+    },
+    {
+      "path": "main.tex",
+      "line": 383,
+      "text": "E7a compares local reimplementations of published mechanisms, not the authors' systems. Identical captured operands and chosen paths isolate solver error from commit error. High-precision recurrence and each pinned native GPU path serve distinct reference roles. Its fresh synthetic stress test, the verified eight-prefix pilot, and the 32-prefix confirmation set evaluated against the record frozen from that pilot are reported in Section~\\ref{sec:e7a-pilot}, including all identified frozen-rule failures and the retrospective audit of omitted checks. Those sample counts belong to E7a. Neither compact candidate met the frozen local criteria, so neither is promoted to an integrated serving or performance claim. E7b instead reports the bounded, single-prefix verifier-only and commit-only diagnostics and the offline fixed-input continuation in Section~\\ref{sec:e7b-diagnostic}. The matched input-aligned windows are observed controls, not a general forced-path facility: the served route refuses the older forced-spine diagnostic. No combined-candidate confirmation campaign or powered task-quality study has been completed. Broader promotion would require those separate verification, commitment, combined-route, and continuation checks; the present failures remain reportable numerical findings."
+    },
+    {
+      "path": "results/agent-workload/case-study.tex",
+      "line": 1,
+      "text": "We evaluate recorded deployments on Astropy instances from the test split of \\texttt{princeton-nlp/SWE-bench\\_Verified}, using Qwen Code 0.19.4 to inspect repositories, edit files, execute tools, and produce patches. A shared two-task comparison covers three tree runs and the completed SGLang EAGLE records. A separate ten-task segment, Cqc10, recorded on 24 August 2026, supplies the latest complete single-configuration deployment case. The task/evaluation worker is x86-64; model serving runs on the GB10. These are full agent attempts. Table~\\ref{tab:swe-tasks} lists every task and saved evaluator outcome in Cqc10."
+    },
+    {
+      "path": "results/agent-workload/case-study.tex",
+      "line": 6,
+      "text": "The proxy supplies temperature 0.6, top-$p$ 0.95, top-$k$ 20, minimum-$p$ 0, and presence penalty 1.0; the engine seed is zero. The per-response output cap is 24,000 tokens, with a separate 20,000-token compaction cap and a 9,000-second agent timeout. Proxy auto-continuation is disabled. The agent runs in the task's repository image on an internal network that permits the model proxy and blocks external egress; per-task records retain the verified network-policy fingerprint. Agent duration comes from the task runner's elapsed-time field: it includes the agent loop and tool work, and excludes server startup and subsequent evaluation. We do not infer a completed-task speedup from model-only counters."
+    },
+    {
+      "path": "results/agent-workload/case-study.tex",
+      "line": 36,
+      "text": "For completed request $r$, let $n_r$ be its output-token count, $\\ell_r$ its server-recorded end-to-end latency, and $f_r$ its time to first output. With $R$ completed requests and $N=\\sum_r n_r$, we use"
+    },
+    {
+      "path": "results/agent-workload/case-study.tex",
+      "line": 43,
+      "text": "Counts and durations are pooled before division. The numerator uses the conventional $n_r-1$ output intervals; outputs arriving in one batch can have zero arrival gaps. The denominator excludes first-output latency and between-request agent/tool work. It is accumulated request time, which counts overlapping requests separately, not isolated GPU time or elapsed campaign time."
+    },
+    {
+      "path": "results/agent-workload/case-study.tex",
+      "line": 45,
+      "text": "For Cqc10, $N=248{,}342$, $R=265$, $\\sum_r\\ell_r=10{,}667.6211$ seconds, and $\\sum_r f_r=989.8239$ seconds yield 25.63 tokens/s. The 265 requests reconcile with 256 normal requests and nine successful internal compaction requests; all recorded completion reasons are stop. The ten pre/post metric brackets are contiguous. Generation-token and completed-request counters agree with their latency-histogram populations, with no counter reset or outstanding request at the selected boundaries."
+    },
+    {
+      "path": "results/agent-workload/case-study.tex",
+      "line": 47,
+      "text": "The SGLang EAGLE comparator serves the as-shipped Qwen3.8-27B NVFP4 checkpoint with FlashInfer, using speculative steps/top-$k$/draft-token settings of 3/1/4. It uses the same Qwen Code version, agent harness, requested sampling settings, and network policy, with a 24,000-token response cap, a 262,144-token context limit, and an 8,192-token prefill chunk. Its two completed Astropy tasks are 12907 (resolved; 7.10 agent minutes) and 13033 (failed tests; 26.96 agent minutes). Their counters give $N=47{,}854$, $R=45$, $\\sum_r\\ell_r=2{,}013.6344$ seconds, and $\\sum_r f_r=235.9488$ seconds, yielding 26.89 tokens/s. Both brackets contain streaming requests only. All completed engine requests are included, including internal agent traffic."
+    },
+    {
+      "path": "results/agent-workload/case-study.tex",
+      "line": 52,
+      "text": "The best shared-task observation is Sr12: $N=25{,}027$, $R=41$, $\\sum_r\\ell_r=989.2612$ seconds, and $\\sum_r f_r=130.4422$ seconds give \\textbf{29.09 tokens/s}, \\textbf{8.18\\% higher} than SGLang's 26.89 under Eq.~\\ref{eq:pooled-decode}. Later observations are 28.28 for Cqc16 and 27.27 for Cqc15; Table~\\ref{tab:pooled-decode} retains them alongside the best result. All selected task brackets pass the same population and idle-boundary checks. Every row on the shared pair has one resolved task and one failed task. All six selected tree attempts used tools and produced nonempty patches, with no detected degeneration or malformed tool-call arguments under the recorded checks. Every request finished with stop, without a recorded response-cap hit."
+    },
+    {
+      "path": "results/agent-workload/case-study.tex",
+      "line": 55,
+      "text": "\\caption{Pooled decode rates with Qwen3.8-27B NVFP4 on GB10, using Eq.~\\ref{eq:pooled-decode}. The first four rows use the same two SWE-bench Verified Astropy tasks, 12907 and 13033; serving revisions and response caps differ. Cqc10 covers a separate ten-task subset. Bold marks the best recorded shared-task tree rate.}"
+    },
+    {
+      "path": "results/agent-workload/case-study.tex",
+      "line": 60,
+      "text": "Deployment & Tasks & Requests & Tokens/s \\\\"
+    },
+    {
+      "path": "results/agent-workload/case-study.tex",
+      "line": 72,
+      "text": "The headline is the best recorded rate on the shared pair, not the latest run or Sr12's entire workload. Sr12 completed four tasks in total, two resolved and two failed; pooling all four gives 26.21 tokens/s. Cqc16's subsequent task 13236 exhibited degeneration, and Cqc15's subsequent task 13398 lacks a completed evaluation. Those adverse records remain in the artifact and outside this explicitly two-task comparison. The shared-task result describes observed decode speed; different serving configurations, response caps, and trajectories prevent attributing the difference to tree verification alone. The artifact retains the original metric brackets, source-bound configuration and behavior records, and reproducible pooled reductions."
+    },
+    {
+      "path": "results/agent-workload/case-study.tex",
+      "line": 75,
+      "text": "Cqc10 contains the ten remaining tasks of an interrupted sixteen-task development campaign. Earlier segments changed source revisions and output caps and included degeneration, incomplete output, and budget-capped attempts. Source-bound audit records of those failures, retries, and missing evaluations remain in the artifact; the original records remain at their recorded source paths. We do not relabel the completed segment as the entire campaign, combine those segments into a single-configuration benchmark score, or drop unsuccessful attempts from a claimed benchmark denominator. The tasks were selected from one repository, and this deployment has one recorded boot without a matched ten-task native run. Separate targeted native probes change other serving settings and do not supply that comparator. Consequently, these records demonstrate an implemented verifier serving real coding-agent work, but establish no native-versus-tree task-speed or quality advantage. A current, matched task campaign is the remaining experiment for that claim."
+    },
+    {
+      "path": "results/agent-workload/case-study.tex",
+      "line": 79,
+      "text": "Earlier SGLang EAGLE trials and native MTP controls remain in the repository. The earlier native campaign predates the NVFP4 deployment; later NVFP4 native probes cover targeted tasks with different serving settings. DSpark measurements use synthetic requests, and a later DFlash2 check establishes boot and response handling rather than agent-task performance. These records are distinguished from the pooled SWE comparison above; their superseded or non-agent rates are not additional performance results for the current verifier."
+    }
+  ],
+  "limits": [
+    "Best recorded, not latest; later shared-task runs and full Sr12 four-task rate retained.",
+    "Ten-task behavior and rate remain explicitly separate.",
+    "Serving revisions, caps and trajectories differ; descriptive decode comparison only.",
+    "B4 aggregate throughput and inverse-mean TPOT are not substituted for pooled request decode."
+  ],
+  "new_inference_launched": false
+}

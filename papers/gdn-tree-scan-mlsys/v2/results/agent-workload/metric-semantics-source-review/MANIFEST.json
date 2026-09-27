@@ -1,0 +1,50 @@
+{
+  "schema": "saved-engine-metric-semantics-source-review-v1",
+  "scope": "Source extraction from stopped containers only; no runtime or GPU execution. Created containers were removed immediately. These are source semantics, not retrospective proof of every historical loaded byte.",
+  "vllm": {
+    "image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+    "configured_digest": "sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "historical_identity_receipt": "../raw/cqc10/hydra27_fixed32_promoab_Cqc10/fixed32_container_identity.json",
+    "source_root": "/usr/local/lib/python3.12/dist-packages/vllm/v1/"
+  },
+  "sglang": {
+    "retained_image_id": "sha256:0076dffa60b76b7bf033c04d05e0cc69d46f2b8cd60aa2468827782afe9bc38f",
+    "repo_digest": "sha256:febfb971c7352570fc445c466ebd6ffc9d896024958e544a60f2137fd85856b1",
+    "tag": "lmsysorg/sglang:qwen38-27b",
+    "image_created": "2026-08-14T08:48:26.328641414Z",
+    "base_build_label_commit": "c4271c3fe1262fc2adbd162c33b25de5255251c5",
+    "source_root": "/sgl-workspace/sglang/python/sglang/srt/",
+    "original_paths": {
+      "tokenizer_manager.py": "managers/tokenizer_manager.py",
+      "metrics_collector.py": "observability/metrics_collector.py",
+      "req_time_stats.py": "observability/req_time_stats.py"
+    },
+    "limit": "Same retained image tag named in historical launch records; historical per-container image hash/loaded-metrics-module attestation not recovered. Runtime calibration package version qwen38.27b.g561c8f3 is not equated with the base-build OCI label."
+  },
+  "files": [
+    {
+      "path": "sglang/tokenizer_manager.py",
+      "sha256": "f945c60f9ab273aa76c77a2ed506437eedbb54dedccc6c7c028f13778d2a1b7a"
+    },
+    {
+      "path": "sglang/metrics_collector.py",
+      "sha256": "04662d1f5c6723298b76d8333f496a997b40f61a12b577d46f226648114eced6"
+    },
+    {
+      "path": "sglang/req_time_stats.py",
+      "sha256": "f4ac4d7c0f01c0fa4b147201453a88471eae5ccc4b2196de87788acfef87ebd9"
+    },
+    {
+      "path": "vllm/metrics/stats.py",
+      "sha256": "08eb6bb969ad47e4207ba5568beaec35bdb09192b6db046f046dab4892ac1bf3"
+    },
+    {
+      "path": "vllm/metrics/loggers.py",
+      "sha256": "d1998a556e7decf9d11869f4b62a0a34977be9b147b3db1352d4baae10f5551b"
+    },
+    {
+      "path": "vllm/output_processor.py",
+      "sha256": "54fcda17755aa60600efe9121af5b824cf30a28c2768d942deac22d43572e533"
+    }
+  ]
+}

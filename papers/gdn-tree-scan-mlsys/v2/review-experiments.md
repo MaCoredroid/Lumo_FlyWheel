@@ -1,140 +1,92 @@
-# V2 final recommended experiment scope
+# LumoTree integration and author-code experiments — 26 September 2026
 
-Updated 2026-09-21 after the numerical-agreement and Bole discussion. The user supports bounded additional experiments; this document finalizes the recommendation. **All new model experiments remain planned, not started.** The draft already uses the archived findings. Original IDs are preserved; E7 is split into E7a/E7b mechanism experiments and deferred E7c howexternal-system comparison.
+The user approved the LumoTree framing and requested use of available author code. This update supersedes earlier statements that no author-code runs have been launched. Existing SWE workload rates and current production implementation are unchanged.
 
-**P0 completed on 2026-09-21 without model inference.** See [the audit report](p0/P0-REPORT.md). The user authorized the bounded experiment handoff in a new interactive Claude tmux session on the Spark. E7a captured-input arithmetic can start; full-model experiments require fresh runtime qualification and memory preflight. Current handoff status is recorded separately in `p0/handoff-status.json`; authorization is not a measured experiment result.
+The [mechanism memo](notes/novelty/mechanism-comparison-and-naming-2026-09-26.md) now feeds the background, state-policy comparison table, path-tile method description, and the experiment design below.
 
-## Recommended order
-
-**P0 -> E7a -> E2/E7b -> E1**, with E3 inserted before E1 only if its optimizations are to be promoted. This is **three core experiments, one conditional optimization study, and a provenance audit**. Existing E2 fixture mapping can begin alongside P0. E7a is now central because it directly tests the numerical/cost tradeoff raised by Bole and our archived WY work. E7b and E2 share captures and one continuation harness rather than becoming separate campaigns.
-
-| ID | Final recommendation | Existing work to reuse | New question |
+| Method | Verified code status | Executed here | Next use |
 | --- | --- | --- | --- |
-| P0 | Completed; no inference | Launchers, run manifests, raw measurement files | Source reconstruction completed; historical loaded-binary gaps remain explicit |
-| E7a | Core experiment 1 | Archived WY derivation, scan/replay kernels, captured operands where available | How do sequential, triangular-solve, and finite-Neumann realizations differ on identical inputs? |
-| E2/E7b | Core experiment 2 | State/KV/conv, sampler, spine, and graph fixtures | Do discrepancies amplify, and does the next iteration preserve the correct accepted prefix? |
-| E1 | Main performance experiment | Historical MTP-5/MTP-11/tree controls and reducers | Does the final tree beat strong chains under matched conditions? |
-| E3 | Optional before E1 | B4 scan and acceptance-walk implementations | Are individual improvements repeatable and additive in the actual stack? |
-| E4 | Defer | Prefix-cache studies and service instrumentation | Does state memory affect admission, cache misses, and latency? |
-| E5 | Defer broad task-quality study; exact sampler fixtures stay in E2 | Analytic sampler suite and historical task checks | Is distribution/quality within a declared tolerance beyond the tested prefixes? |
-| E6 | Defer | NVFP4 split-K and native probes | Does the extension survive matched controls and composition? |
-| E7c | Defer full external port | SGLang calibration and direct related work | Can a fair authors-system comparison be executed? |
+| TreeWY | Author RFC; pinned `b073ed6c` | 39 selected author tests pass on GB10 | Direct same-input output/accepted-state comparison; count fused prior commit and next verify together |
+| Weaver | Author SGLang fork; pinned `aeac03f0` | 9 numerical cases and 2 verifier-timing configurations completed; script has no correctness threshold | Direct comparison of pinned fused/chunk verifier and actual replay commit; select route explicitly |
+| SpecLA | No author repository verified in the bounded search | Not run | Scheduling/state-lifetime comparison; executable arm conditional on verified code |
+| Bole | No author kernel verified in the bounded search | Not run | Finite-Neumann family comparison; author-system execution conditional on verified code |
+| FastTree | [Author artifact](https://github.com/PanZaifeng/FastTree-Artifact) verified | Not run | Attention-only comparator if the shared-context/tree-mask interface matches; not a GDN baseline |
+| OneLA | No author repository verified in the bounded search | Not run | Adjacent beam-search state-sharing background; not interchangeable with speculative acceptance |
 
-No GPU-hour estimate is asserted before a bounded pilot measures the actual cost. Historical multi-hour agent runs should not be used to price a short fixed-prefix timing cell, or vice versa.
+Exact sources, import-only adapters, raw outputs and scope: [author-code README](experiments/author-code-20260926/README.md), [receipt](experiments/author-code-20260926/RUN-RECEIPT.json). Both bounded runs are complete; no model inference was launched. A search failure means unverified availability, not a claim that code does not exist.
 
-## Evidence and decision rules for the selected scope
+## N2 — matched mechanism experiment to prepare next
 
-- Keep one FP8 checkpoint lineage and GB10 for the core. Pin the actual source/build, precision boundaries, compiler settings, and GPU graph path before measurement.
-- Freeze an eight-prefix diagnostic pilot selected from native-reference behavior before viewing candidate outputs. Include ordinary and small-margin predictions and short/long contexts. Use the pilot to determine capture cost, numerical scales, and timing variance. Then freeze a separate 32-prefix confirmation set, stratified by native margin and context, with selection seeds and IDs saved. These counts define a bounded diagnostic design, not statistical power for a task-quality or distribution-equivalence claim.
-- Reuse archived captures only when the actual files and complete provenance are available. A historical document naming a capture is not the capture itself. Otherwise collect fresh data under the pinned configuration.
-- Freeze tolerances, unacceptable decision changes, the timing precision target, and the resampling unit after the pilot and before confirmation. Report pilot and confirmation separately. Native repeat variation calibrates a reference floor; it does not automatically make every candidate error acceptable.
-- A failed numerical route produces a localized result and is not promoted to a deployment-speed claim. Small local error alone is not a pass; E2/E7b checks continuation. An isolated counterexample supports a bounded failure claim, not a universal defect of WY, TreeWY, or Bole.
-- No claimed hardware-hour estimate includes unmeasured implementation work. Record prototype engineering time separately. Use the eight-prefix pilot to price the fixed confirmation matrix before expanding it; do not launch a large task sweep by default.
+1. Bind the active two-level LumoTree path kernel and native replay source to the production receipt; do not reuse obsolete Cat10 kernels. Freeze author code and all adapters. Use current topology plus chain/branch controls, B1 and B4, the actual head dimensions, common pre-state/rounded operands, and three predefined synthetic seeds. Mark synthetic inputs separately from any newly captured task operands.
+2. First compare every valid output and the consumed accepted continuation against an independent sequential reference, including root-only and off-spine paths, padding, and repeated continuations. Record max/RMS error, finite checks and cast policy. Freeze acceptable numerical criteria before timed confirmation; do not conflate approximation with an intrinsic mathematical defect.
+3. Measure complete verify + accepted-state work, including metadata/stash writes and the final deferred flush. TreeWY fuses prior commit into next verify; Weaver's served route replays accepted operands. Excluding either would bias the comparison. Record graph/eager mode and precision, warmup, ordered repeats, CUDA events and physical wall intervals.
+4. Report source-level working tiles separately from compiler registers/spills, allocated scratch separately from written cut-state bytes, and total state traffic separately from peak resident memory. A scheduling advantage requires a matched policy ablation; SpecLA already shares the broad scheduling idea.
+5. Keep component timing in a mechanism study, never convert it to an agent tok/s headline. Only a qualified route proceeds to a predeclared same-task SWE-bench Verified comparison with equal resource/tuning opportunity, pooled decode rate and all task outcomes.
 
-## P0 — Configuration and evidence reconciliation
+N1 (layout/continuation attribution) and A1 (matched workload confirmation) below remain the other relevant experiments. No wholesale full-stack port or long task campaign was launched by these bounded code checks.
 
-**Purpose:** restore trustworthy labels before interpreting any row as a particular effective-temperature result.
+---
 
-Record source commit, image/build identity, native extension hash, model/tokenizer revision, tree descriptor, requested and effective sampling constraints, graph route, cache flags, batching, and timing denominator. The archive documents a double temperature application on an affected speculative path. Trace exact launch/binary histories instead of inferring behavior from today's source or from the requested `temperature=0.6` alone.
+# Novelty-review priorities — 24 September 2026
 
-Completed: three-arm numerical accounting was recomputed from raw JSON; source hashes and timing definitions were reconciled. Each July patcher reconstructed against the launchers' pinned image inserts a duplicate target-constraint pass. This compounds temperature scaling and repeats top-k/top-p filtering; it is not uniform temperature-0.36 sampling. H3 is retained as a relabeled historical observation. Original loaded-binary/model-file identity is unavailable and remains unknown. Current image, FA2 binary, model config/tokenizer, and all 66 weight shards are pinned for fresh work. A new run at the intended setting answers a different question.
+The completed [novelty review](notes/novelty/novelty-review-2026-09-24.md) found direct path-scheduling overlap with SpecLA and accepted-path replay overlap with Trees from Marginals, as well as established attention and drafting primitives. Merely increasing the SWE sample count cannot establish mechanism novelty.
 
-**Output:** one immutable run manifest per manuscript row and a keep/relabel/omit decision. No model inference is needed for the archive audit.
+No experiment is launched by this review. Before any new campaign, inspect existing evidence for exact applicability to the deployed build. If stronger novelty is desired, prioritize:
 
-## E2 — Current-route correctness composition
+1. **N1: current-route layout/continuation witness.** Identical logical candidates and captured operands, consistently permuted KV and mask columns, fixed query order, and next-forward state checks. Include off-spine paths, padding, tile boundaries and cache reuse. The current attention gate does not isolate this effect.
+2. **N2: closest-mechanism contrast, conditional on claiming a schedule advantage.** Compare current path groups/native replay with SpecLA-style chain decomposition and an available source-pinned compact verifier (Weaver or TreeWY), including publication and temporary state. This diagnoses tradeoffs; component timing is not a paper workload-speed headline. Author-system and faithful local-port results must remain distinct.
+3. **N3: workload confirmation only after choosing the claim.** Use A1 below with the relevant qualified comparator or one component toggle. Keep competitive per-method tuning/depths, all outcomes, complete task timing and the same pooled decode metric. A historical completed run is not a current matching ablation.
 
-This is combined operationally with E7b below. Run the baseline fixture subset before introducing a candidate; extend only the missing combinations for a numerically viable reconstruction route.
+N2 is not a prerequisite for N1 or its workload ablation. N1/N2 are conditional tests of the narrower proposed contribution, not prerequisites for honestly describing an implementation case study. Native/tree workload comparison alone cannot show that a layout or schedule caused the difference. Bole/TreeWY are no longer the only direct recurrent-verifier neighbors. Bole execution depends on obtaining its implementation. Existing DSpark/DFlash experiments remain recovered history, not automatically suitable evidence for the latest route.
 
-**Existing coverage:** `tests/test_fr10_tree_rejection_sampler.py`, `test_fr13_attn_kv_remap.py`, `test_fr13_conv_committed_path.py`, fixed32 KV/commit tests, and the spine-layout diagnostics. Do not rebuild a duplicate reference suite.
+# Current-method correction — 24 September 2026
 
-**Test only missing combinations after a coverage map:**
+Reuse the verified production evidence first. The paper now follows Hydra27/fixed32, forked FA2, fused full-vocabulary selection, and captured native replay. September Cat10 diagnostics are archived and are not a reason to repeat already completed production work. The latest current-design audits and `results/current-production/audit.json` supersede the prior qualification framing. No new experiment was launched for this correction.
 
-- A sibling wins; a sibling is rejected; a deep path wins; zero drafts and all drafts are accepted.
-- Check recurrent state, convolution history, and attention KV at the same native materialization boundary. Check the next forward too, including the correction token that was emitted but still pending.
-- Cold state, prefix-cache hit, eviction, recycled physical rows/pages, actual B1/B4, and the graph path intended for E1.
-- Check fixed-spine numerical behavior with a shared prefix and candidate set. Separate exact-byte checks from tolerance-based checks.
-- Trace the analytic sampler cases and biased negative control into the actual deployed sampler. The existence of a correct Python reference does not establish the GPU route's behavior.
+# Agent-workload experiment proposal for review
 
-The August closeout already records a B1 cumulative-sum nondeterminism limitation. Preserve that limitation and avoid asserting a universal byte-exact sampler from narrower B2-B4 fixtures.
+## Existing comparisons recovered from Git (23 September correction)
 
-**Pass condition:** all supported state paths match their declared reference/tolerance, negative controls fail as intended, and post-boot checks confirm the tested flags. A failed path is either repaired and rechecked or excluded from the claimed scope. This is a targeted validation campaign, not another 16-task quality sweep.
+SGLang EAGLE was run through the real SWE-bench Verified harness (commits `128d27b86`, `c27f30207`); DSpark had actual synthetic serving and captured-input experiments (`6530b1f17`, `c0d5550f4`); DFlash2 has a later served smoke on the upstream branch (`92fea914a`); tree/native5/native11 had a complete 48-task-run campaign (`51b7dafdf`). These must not be described as untested alternatives. See `notes/comparator-git-history-2026-09-23.md` for workload, metric, and supersession boundaries.
 
-## E1 — Matched final-stack performance
+The experiment proposal below is conditional on the desired current-system claim. Reuse audited applicable records first; the 96-attempt design is not an automatic next step or authorization to repeat completed experiments. No new inference was launched in the history audit.
 
-**Suggested core configuration:** keep the FP8 checkpoint lineage for this revision. Freeze a specific tested tree and all optimizations before final measurement. Do not mix FP8 and NVFP4 cells.
+23 September 2026. The paper targets long-running coding agents. All reported performance must come from named full tasks with outcomes and budgets. This proposal has **not been launched**. The earlier fixed-prefix plan and completed E1/E8 evidence remain audit-only in dated snapshots; superseded Cat10 numerical campaigns remain audit-only. Current component checks are bound to the production FA2 and fused-selection binaries.
 
-**Arms:** native MTP-5, the depth-matched native chain (MTP-11 for tail6), and the selected tree. The old comparison exists; the missing evidence concerns the final stack. A no-speculation arm is optional context. For a pure topology claim, additionally use the same recorded draft candidates and prefixes, because the historical tail6 suffix predictor differs from the native chain's drafting path.
+Among recorded runs producing nonempty patches on both shared SWE-bench Verified Astropy tasks (12907 and 13033), the best tree run reaches **29.09 pooled tokens/s** versus **26.89 for SGLang EAGLE**, an **8.18% higher rate**. This retrospective subset requires nonempty patches from both tasks for both methods; failed tests remain eligible. One SGLang pair with an empty patch and capped thinking-only response is excluded from the performance comparison, with its failed outcome and raw records retained. The selection ledger is `patch-producing-rate-audit.json`.
 
-**Small initial design:** three arms x two actual batch conditions (B1 and B4) x at least three paired independent boots = **18 timing cells**. Use the same frozen request/prefix set in each cell, including preselected context-length strata. Balance arm order. Keep capture/profiling separate from timing. Set a practical precision target after a pilot and before final data collection; report the pilot separately if it determines the design.
+## Comparison policy — 24 September clarification
 
-If E7a/E7b qualifies a reconstruction route for integration, add at most one such route as a fourth arm and retain the sequential tree as its ablation: **24 timing cells**, not an unbounded sweep. Select the candidate using pilot correctness and cost criteria before freezing confirmation data. Do not replace the sequential arm and lose the direct mechanism comparison.
+The main comparison is between complete speculative-decoding methods. Their serving stacks, tree topology, MTP depth and draft-token budgets are allowed to differ: these are algorithm and implementation choices whose cost is included in the measured rate. Fair competition fixes the target-model workload, hardware/resource allocation, task harness, requested sampling, quality evaluation and task budgets, and gives each method a documented, comparable opportunity to tune. Equal draft length or candidate count is useful for a separate mechanism ablation; it is not a prerequisite for comparing each method at its competitive configuration.
 
-**Report:** physical-step time, request events/step, event-normalized draft/verify/commit/host costs, committed output, per-request TPOT, and aggregate output over the explicitly defined measurement interval. Report interval construction, idle handling, and discarded/mixed steps. Do not equate pure-decode accounting with full-service throughput.
+The current recorded EAGLE comparator uses 3 steps, top-k 1 and 4 draft tokens. No completed shared-task sweep over draft settings is established by the current evidence. Future confirmation should predeclare the tuning budget on separate tasks, freeze the chosen setting for each method, and evaluate all methods on the same confirmation tasks. Predeclare performance eligibility for confirmation and apply it symmetrically; retain all failures in the outcome denominator. The current paper explicitly labels its nonempty-patch filter as retrospective. The cap check finds all 41 headline Sr12 responses at most 20,000 tokens, below either configured cap; keep the actual cap values in the setup rather than a blanket abstract caveat.
 
-**Decision:** a repeatable win permits a current acceleration claim. A loss supports the scoped cost explanation and should be published as such. A wide interval calls for justified replication, not selecting a favorable run or task.
+## A1 — Matched current native/tree SWE-bench Verified tasks
 
-## E3 — Finish and compose the existing optimizations
+**Question:** does the final tree configuration reduce agent completion time while preserving useful task outcomes on a declared workload?
 
-Hold the verified attention path fixed. Compare four B4 arms: base; single-pass scan only; batched acceptance walk only; both. The scan has a provisional approximately 8.984 ms observation; the acceptance walk has correctness work but no completed deployment timing in the closeout.
+1. Freeze one current source/build, exact Qwen3.8-27B NVFP4 weight/tokenizer identity, Qwen Code harness and prompt, evaluator/task images, tool permissions, network policy, task and response budgets, sampling and seeds. Record all active optimizations, physical topology, graph/cache settings, extension hashes, CPU/GPU contention and memory state. Verify comparator compatibility before freezing. Use the same cache policy where both implementations support it; disclose necessary backend differences and avoid claiming an isolated topology effect.
+2. Use native MTP-5 as the main comparator and the chosen production tree. Keep the sixteen declared Astropy tasks, including those with earlier incomplete/degenerate attempts; do not select only the ten that previously completed. This is a narrow known-task workload, not a representative benchmark-quality test. B1 is the primary single-agent condition. Native MTP-11 is optional only if a longer-chain claim remains in the paper.
+3. Run a small qualification pilot on two predeclared tasks, both arms, to check task/evaluator completion, accounting, reset policy, and actual duration. Choose tasks before outputs. Keep pilot results separate; do not substitute their measurements into confirmation. Freeze the final run manifest after resolving implementation defects.
+4. Recommended confirmation: two arms × sixteen tasks × three predeclared seed blocks = **96 full task attempts**, ordered in balanced paired blocks. A task/seed pair is the comparison unit; requests are nested observations, not independent task replicates. Three seeds characterize observed stochastic variation but do not automatically power a quality-equivalence claim. An initial one-seed 32-attempt tranche can establish descriptive paired results; any expansion/stopping rule must be fixed before reading confirmation outcomes.
+5. Preserve every attempt, crash, timeout, degeneration, empty patch, evaluation error and rerun. Restore the same repository image and declared serving/cache reset boundary per pair. Treat infrastructure failures separately from agent/test failures; do not silently replace unsuccessful attempts.
 
-Use **four matched blocks of the four arms (16 timing cells)** as an initial design consistent with the earlier paired validation, with independent boots and balanced ordering. Verify output/state behavior for each arm before timing. If variance is larger than the earlier campaign's, revisit replication from the pilot instead of treating four blocks as automatically conclusive.
+**Behavior and comparison headline:** keep the agent harness and task workflow fixed across decoder arms. Report detected degeneration, malformed tool calls, incomplete runs, task outcomes and relative task/service speed together. A run terminating normally is not proof of unchanged task quality. Inspect trace-based failure checks in addition to output/timeout flags; record known detector blind spots. The current abstract already reports sustained agent execution and descriptive pooled decode rates against SGLang. This proposed campaign would add a paired task-completion comparison.
 
-**Decision:** retain only improvements whose deployment effect survives pairing and composition. The composed result must be measured; adding historical best deltas is not acceptable. If promoted, freeze the composed stack before E1.
+**Primary results:** evaluator verdict per attempt, resolved/failed/incomplete counts over all intended tasks, per-task agent elapsed time, budget-censored outcomes, and paired distributions. Report resolved-pair latency with its restricted denominator and all other outcomes alongside; never call a fast failed or timed-out attempt a success-speed gain. An overall metric such as resolved tasks per allocated agent-hour must state how every failed/capped attempt contributes.
 
-## E4 — Cache capacity and full serving behavior
+**Secondary service measurements:** requests and output tokens (visible and compaction separately), model-service time, TTFT, tool/evaluator time, and physical decode timing only with matched token/interval support. Use the same pooled decode estimator in both arms: `(sum output tokens - completed request count) / (sum E2E request latency - sum TTFT)`. Verify completed-request populations, counter resets, outstanding requests at bracket boundaries, and timing semantics. Report native/tree task results jointly with service metrics; never multiply gains from different workloads.
 
-Replay the same multi-turn requests and arrival schedule for the selected tree and native control; record an offered-load range around the point where memory or admission becomes limiting. Measure physical state/KV allocation, cache hits/evictions, repeated prefill work, admitted requests, TTFT, TPOT, and total output/union wall time.
+**Before launch:** finish compatible-route qualification, freeze the manifest, and review the pilot-derived runtime estimate. No reliable GPU-hour estimate is inferred from old snippet runs. The historical nine-thousand-second task cap gives only a budget ceiling; it is not an expected duration.
 
-Use two explicitly different controls if making a causal memory claim: equal total device-memory budget for the deployment comparison, and matched available KV capacity to isolate the role of memory allocation. Do not quietly adjust memory utilization independently to produce a favorable ratio. Use identical warm-up and cache initial conditions.
+## A2 — Targeted optimization attribution, conditional
 
-The historical EXACT_SEED cache machinery was removed, so its old latency result cannot price the current stateless route. The existing SGLang calibration also differs in checkpoint/KV settings. E4 supplies a matched serving test; it is separate from E1's controlled decode timing and from a live agent deciding its own future prompts.
+Only after A1 yields an interpretable matched result, test the smallest mechanism that needs attribution (for example draft-logit reuse or attention split-K). Use the same named full tasks/harness and change one compatible component at a time. Recheck active binary/launch engagement and state/sampler qualification. Reuse A1 as a control only if the frozen design permits that reuse and the configuration is identical. No old E8 percentage or partial control run substitutes for this experiment.
 
-## E5 — Distribution and task quality, only to the extent claimed
+## Deferred unless the paper claims them
 
-**Distribution:** use fixed conditional prefixes, a declared target reference, recorded proposal laws, and negative controls. Verify the deployed sampler on small exact cases first, then measure numerical/probability discrepancies on selected model prefixes. Set the tolerance and analysis before reading the final comparison. Aggregate uncertainty by independent prefix/request, not by dependent token decisions. A nonsignificant test is not proof of equivalence.
+- B4 or concurrent agents: add matched task arrival/concurrency experiments only for a multi-agent service claim; B1 token rates cannot establish it.
+- Broader task-quality preservation: add held-out repositories/tasks and a separately justified sample-size/equivalence design; the known Astropy cohort cannot establish it.
+- Author-system comparisons: execute matched Bole/TreeWY systems only if a competitive performance claim is added. Local same-input arithmetic studies remain distinct.
 
-**Task quality:** select a held-out task mix before seeing results, with controlled network access and trace-provenance checks. Use paired tasks, declared seed/boot policy, and a practically justified non-inferiority margin. A pilot determines the sample size needed for that margin. Preserve capped, failed, and excluded runs with reasons.
-
-The existing 16 tasks are all Astropy, with eleven historically constant outcomes across heterogeneous arms. Repeating them can detect regressions but does not establish broad quality preservation. The affected gold-patch retrieval observation cannot be silently included as a successful independent solve.
-
-## E6 — NVFP4 extension
-
-Use one chosen NVFP4 checkpoint and the same tokenizer, sampler, KV precision, and native MTP control. Repeat split-K on independent paired boots and compare the complete combination with head/draft optimizations. The existing four native task probes do not replace this timing comparison. Add B4 only if claiming batching generalization. Evaluate quality against that checkpoint's own reference band.
-
-**Decision:** make NVFP4 a clearly labeled extension if the evidence is complete. Otherwise retain it as future work; it is not required for the core FP8 revision.
-
-## E7a — Same-input arithmetic and commitment experiment (core 1)
-
-**Question:** can compact reconstruction remove replay work while meeting a declared numerical reference on GB10? Separate an algebraic identity from its compiled realization.
-
-**Three local mechanisms:** (A) our sequential scan and accepted-path replay; (B) an ancestor-masked triangular-solve formulation with compact state reconstruction, representing the WY family; (C) Bole's finite-Neumann formulation with compact state reconstruction. B and C are our implementations of published mechanisms, not benchmarks of the authors' code or novel algorithms. A CPU-only implementation is an algebraic oracle, not a GPU performance result. Record any deviation from the published operand/storage precision or schedule.
-
-**References:** use high-precision serial recurrence on exactly the same rounded input operands to assess mathematical/implementation error. Separately compare against the pinned native speculative-update kernel for replacement agreement and the pinned one-token recurrent-decode path for continuation agreement. Preserve each reference's actual gate and state-storage boundaries; do not merge their tolerances. Run the existing corrected local WY form where reusable, not the known pre-fix state-write bug as the principal baseline.
-
-**Inputs:** identical captured pre-tree state, Q/K/V, raw gates, topology, and accepted-path descriptor; actual B1/B4; depths 1, 5, and 11 where supported; chains and a fixed branching topology. Include sibling reorder/padding controls. Enumerate valid accepted prefixes from each captured tree so commitment is compared under the same selected path independently of sampler outcomes. Keep all differences in state orientation and scale explicit.
-
-**Isolate the two arithmetic stages:** first compare outputs and correction factors; then feed the same reference factors into the reconstruction implementations to isolate commit arithmetic. Finally compare each method's own verifier factors plus its own commit. This prevents a solver error from being misattributed to the commit kernel and makes a verifier/reconstruction mismatch visible.
-
-**Measurements:** output/state absolute and relative error, relevant ULP counts, gate/decay range, scratch memory, and separately timed verification and commitment. For a candidate with growing errors, a higher-precision diagnostic can distinguish finite-precision sensitivity from an implementation error; it is not silently substituted into the advertised fast arm. Tiny gates also require checking how path decay ratios are evaluated rather than assuming the symbolic expression specifies a safe implementation.
-
-**Decision:** local disagreement is characterized, not dismissed as harmless and not labeled a published-method defect. Only candidates meeting the frozen local criteria proceed to E7b confirmation. A failing method may be used in a bounded teacher-forced diagnostic to locate amplification, without being promoted to serving. If neither reconstruction route qualifies, the existing sequential system still proceeds to E1.
-
-## E7b — Amplification and accepted-prefix continuation (core 2, shared with E2)
-
-**Question:** do local discrepancies remain small in the actual model, or alter logits, acceptance, or later state? This is the direct follow-up to the repository's diffuse-drift history.
-
-Use the shared pilot/confirmation prefixes with fixed teacher-forced candidate inputs. Capture layer outputs and state before allowing generated trajectories to diverge. Use substitution controls: replace only the verifier while replaying the same chosen path through the baseline committer; replace only commitment while retaining baseline verification; then test the combined candidate. Feed identical captured operands to commit-only controls. Distinguish this diagnostic forced path from a separate test of the actual device sampler and its acceptance decision.
-
-Measure per-layer residual growth, final-logit errors, the reference top-token margin, argmax changes, conditional-probability differences, accepted-token counts, and the next step's logits/state. Use the same continuation prefix for short horizons of 1, 8, and 32 tokens where context allows. Report path depth, model-layer depth, and continuation horizon separately. A later free-running divergence is not itself evidence of the stage that caused it.
-
-Run the E2 state-boundary/negative-control matrix on the baseline and any candidate considered for integration: zero/full acceptance, sibling selection, pending correction token, recurrent plus convolution plus attention KV state, warm/cold cache, eviction/reuse, B1/B4, and the actual graph route. Reuse existing tests instead of multiplying the full Cartesian product; publish the coverage map. Numerical agreement and exact small-case GPU sampler validation are separate outputs. If a candidate changes the target distribution beyond the prespecified criteria, retain the finding as a scoped numerical limitation; do not describe it as lossless.
-
-**Deliverable:** one stage-isolation table and residual-by-layer plot, with a keep/repair/exclude decision for each tested mechanism. Promotion means demonstrated agreement in the tested configuration, not a proof over all prompts or devices.
-
-## E7c — Direct external-system comparison (deferred)
-
-First establish whether the relevant implementations are accessible, support the checkpoint/hardware, and can reproduce their own intended configuration. Record source revisions and unsupported features. For a fair run, match weights, precision, KV settings, effective sampling, draft budget/source, context distribution, offered load, and instrumentation where feasible.
-
-Use each engine's own native control alongside any cross-engine measurements. An exact-byte requirement against our fork is not an appropriate correctness criterion for another algebraically equivalent implementation. Report its declared reference and numerical tolerance instead. Do not rank engines using published ratios from different settings. If a matched implementation is unavailable, retain the literature comparison and omit a superiority claim.
-
-E7a/E7b supply the selected mechanism comparison before this larger port. Their findings must retain the label "local reimplementation of the published mechanism." An authors-system superiority claim requires E7c and matched controls.
+This scope uses current production-bound component checks and makes any next experiment answer the agentic application claim directly.

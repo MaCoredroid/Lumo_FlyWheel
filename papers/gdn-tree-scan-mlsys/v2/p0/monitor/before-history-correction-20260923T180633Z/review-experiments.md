@@ -1,0 +1,35 @@
+# Agent-workload experiment proposal for review
+
+23 September 2026. The paper targets long-running coding agents. All reported performance must come from named full tasks with outcomes and budgets. This proposal has **not been launched**. The earlier fixed-prefix plan and completed E1/E8 evidence remain audit-only in dated snapshots; numerical qualification remains useful for mechanism checks.
+
+The existing completed Cqc10 NVFP4 case supports a descriptive ten-task deployment result. It does not establish current native-versus-tree agent speed, quality preservation, or a broad SWE-bench score. One matched campaign is the principal missing experiment, rather than more short prompt-rate tests.
+
+## A1 — Matched current native/tree SWE-bench Verified tasks
+
+**Question:** does the final tree configuration reduce agent completion time while preserving useful task outcomes on a declared workload?
+
+1. Freeze one current source/build, exact Qwen3.8-27B NVFP4 weight/tokenizer identity, Qwen Code harness and prompt, evaluator/task images, tool permissions, network policy, task and response budgets, sampling and seeds. Record all active optimizations, physical topology, graph/cache settings, extension hashes, CPU/GPU contention and memory state. Verify comparator compatibility before freezing. Use the same cache policy where both implementations support it; disclose necessary backend differences and avoid claiming an isolated topology effect.
+2. Use native MTP-5 as the main comparator and the chosen production tree. Keep the sixteen declared Astropy tasks, including those with earlier incomplete/degenerate attempts; do not select only the ten that previously completed. This is a narrow known-task workload, not a representative benchmark-quality test. B1 is the primary single-agent condition. Native MTP-11 is optional only if a longer-chain claim remains in the paper.
+3. Run a small qualification pilot on two predeclared tasks, both arms, to check task/evaluator completion, accounting, reset policy, and actual duration. Choose tasks before outputs. Keep pilot results separate; do not substitute their measurements into confirmation. Freeze the final run manifest after resolving implementation defects.
+4. Recommended confirmation: two arms × sixteen tasks × three predeclared seed blocks = **96 full task attempts**, ordered in balanced paired blocks. A task/seed pair is the comparison unit; requests are nested observations, not independent task replicates. Three seeds characterize observed stochastic variation but do not automatically power a quality-equivalence claim. An initial one-seed 32-attempt tranche can establish descriptive paired results; any expansion/stopping rule must be fixed before reading confirmation outcomes.
+5. Preserve every attempt, crash, timeout, degeneration, empty patch, evaluation error and rerun. Restore the same repository image and declared serving/cache reset boundary per pair. Treat infrastructure failures separately from agent/test failures; do not silently replace unsuccessful attempts.
+
+**Behavior and comparison headline:** keep the agent harness and task workflow fixed across decoder arms. Report detected degeneration, malformed tool calls, incomplete runs, task outcomes and relative task/service speed together. A run terminating normally is not proof of unchanged task quality. Inspect trace-based failure checks in addition to output/timeout flags; record known detector blind spots. The intended abstract headline is sustained agent execution plus a measured speed ratio against named mechanisms, once the matched campaign supplies it.
+
+**Primary results:** evaluator verdict per attempt, resolved/failed/incomplete counts over all intended tasks, per-task agent elapsed time, budget-censored outcomes, and paired distributions. Report resolved-pair latency with its restricted denominator and all other outcomes alongside; never call a fast failed or timed-out attempt a success-speed gain. An overall metric such as resolved tasks per allocated agent-hour must state how every failed/capped attempt contributes.
+
+**Secondary service measurements:** requests and output tokens (visible and compaction separately), model-service time, TTFT/TPOT, tool/evaluator time, and physical decode timing only with matched token/interval support. Compare request-weighted TPOT with the same estimator in both arms. Report native/tree task results jointly with service metrics; never multiply gains from different workloads.
+
+**Before launch:** finish compatible-route qualification, freeze the manifest, and review the pilot-derived runtime estimate. No reliable GPU-hour estimate is inferred from old snippet runs. The historical nine-thousand-second task cap gives only a budget ceiling; it is not an expected duration.
+
+## A2 — Targeted optimization attribution, conditional
+
+Only after A1 yields an interpretable matched result, test the smallest mechanism that needs attribution (for example draft-logit reuse or attention split-K). Use the same named full tasks/harness and change one compatible component at a time. Recheck active binary/launch engagement and state/sampler qualification. Reuse A1 as a control only if the frozen design permits that reuse and the configuration is identical. No old E8 percentage or partial control run substitutes for this experiment.
+
+## Deferred unless the paper claims them
+
+- B4 or concurrent agents: add matched task arrival/concurrency experiments only for a multi-agent service claim; B1 token rates cannot establish it.
+- Broader task-quality preservation: add held-out repositories/tasks and a separately justified sample-size/equivalence design; the known Astropy cohort cannot establish it.
+- Author-system comparisons: execute matched Bole/TreeWY systems only if a competitive performance claim is added. Local same-input arithmetic studies remain distinct.
+
+This scope keeps existing numerical checks as supporting evidence and makes the next performance experiment answer the paper's agentic application claim directly.

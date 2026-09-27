@@ -1,0 +1,30 @@
+diff --git a/astropy/coordinates/sky_coordinate.py b/astropy/coordinates/sky_coordinate.py
+index ab475f7d0..7449c2b1b 100644
+--- a/astropy/coordinates/sky_coordinate.py
++++ b/astropy/coordinates/sky_coordinate.py
+@@ -894,10 +894,21 @@ class SkyCoord(ShapedLikeNDArray):
+             if frame_cls is not None and self.frame.is_transformable_to(frame_cls):
+                 return self.transform_to(attr)
+ 
+-        # Fail
+-        raise AttributeError(
+-            f"'{self.__class__.__name__}' object has no attribute '{attr}'"
+-        )
++        # If the attribute is defined on the class (e.g., as a property) but
++        # its access raised AttributeError, re-invoke the descriptor to
++        # surface the underlying error, which names the attribute that is
++        # actually missing.  See #14096.
++        for klass in type(self).__mro__:
++            if attr in vars(klass):
++                break
++        else:
++            raise AttributeError(
++                f"'{self.__class__.__name__}' object has no attribute '{attr}'"
++            )
++        descr = vars(klass)[attr]
++        if hasattr(descr, "__get__"):
++            return descr.__get__(self, type(self))
++        return descr
+ 
+     def __setattr__(self, attr, val):
+         # This is to make anything available through __getattr__ immutable

@@ -1,0 +1,17 @@
+topic: GDN Tree-Scan v2
+paper_type: empirical
+status: agent_workload_revision_reviewed
+format: IEEEtran conference
+main_tex: main.tex
+bibliography: ref.bib
+performance_scope: named_SWE_bench_Verified_agent_tasks_only
+application_case: August_24_2026_Cqc10_NVFP4_ten_Astropy_tasks
+excluded_performance: local_document_E1_E8_and_superseded_rate_proxies
+runtime:
+  python: /Users/zhiyuanma/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3
+  experiment_execution: existing_records_audit_only_no_new_inference
+  remaining_claim_gap: matched_current_native_tree_agent_task_comparison
+  experiment_proposal: review-experiments.md
+  p0_report: p0/P0-REPORT.md
+  remote_worktree: /home/mark/lumo-paper-v2-20260921
+  handoff_status: p0/handoff-status.json

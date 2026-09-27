@@ -1,0 +1,24 @@
+topic: GDN Tree-Scan v2
+paper_type: empirical
+status: current_production_method_revision
+format: IEEEtran conference
+main_tex: main.tex
+bibliography: ref.bib
+performance_scope: named_SWE_bench_Verified_agent_tasks_only
+application_case: patch_producing_tree_and_SGLang_shared_pairs_with_Cqc10_ten_task_deployment
+performance_estimator: pooled_completed_request_decode_rate
+performance_formula: (total_output_tokens - completed_requests) / (summed_E2E_latency - summed_TTFT)
+performance_evidence: results/agent-workload/patch-producing-rate-audit.json
+excluded_performance: local_document_E1_E8_and_superseded_rate_proxies
+runtime:
+  python: /Users/zhiyuanma/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3
+  experiment_execution: existing_records_audit_only_no_new_inference
+  remaining_claim_gap: matched_current_native_tree_agent_task_comparison
+  experiment_proposal: review-experiments.md
+  p0_report: p0/P0-REPORT.md
+  remote_worktree: /home/mark/lumo-paper-v2-20260921
+  handoff_status: p0/handoff-status.json
+
+current_method: NVFP4_Hydra27_fixed32_patched_FA2_splitK4_graph_cache
+component_evidence: results/current-production/audit.json
+excluded_method_results: superseded_Cat10_E2_E7a_E7b_E8

@@ -1,0 +1,26 @@
+{
+  "schema": "lumo.current-production-inputs.v1",
+  "scope": "Current source and existing executed Hydra27 evidence; no new inference or historical performance claims",
+  "inputs": {
+    "results/fr14_nvfp4_port_20260816/fr14_fused_draft_topk_probe_result.json": "b9ea3059f6e7400e79b4ee2a2842c17a35f2b2b1424fbfb9db8c2964be5fd6fb",
+    "results/fr14_nvfp4_port_20260816/fr14_splitk_tierb_credential.json": "37ed4ff59f6c0d6f9ae482916e0c5a5939f38f70d80756fdb43a44101d6dde19",
+    "results/fr14_nvfp4_port_20260816/fr14_splitk_tierb_bounds.json": "ee49c3a712971f81509617bbd3f7cabffa5f43c74cd9db852459a9a758c1958e",
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "c382ef22a5a8d4e84209e6723f8eea21c3819543c6e942c62951385b5c1c003e",
+    "scripts/fr13_patch_fa2_tree_bias.py": "8f61b9cd6a079d0605daedb545b8a2e95225714693c775d396059bab2ce626b2",
+    "scripts/fr13_device_multidraft_kernel.py": "648ff0e33e8a7cdd0fbe8ebb3d2befaa27002a3347f94f9bdc0668365ed2e8e9",
+    "scripts/fr13_launch_forked_fa2_tree_server.sh": "55c1b67fb4ae7e3c177638cbfcae2ec03ea17f6b49568e68a8676e700416d4b3",
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "d9dd0c697b466180ab5d834a52555c1516edb534e0a3d1bd3094e0d1489c24c8",
+    "src/lumo_flywheel_serving/fr13_tree_conv_fused.py": "564c7dc7ba61ccd9579f2fb7a4af9a2cdaaa1753dfb98434f2011457d90d9a6e",
+    "csrc/fr14_dfwd_full_topk.cu": "dfdafaef6f7deca2458c8e09aa682cbb002f688896766145cea81ee2b9582e0c",
+    "results/fr14_nvfp4_port_20260816/promotion_ab_campaign.md": "d3462d1741e230e596aa6799da90be3318872fe16b3b580f0faf0d2f902d357c",
+    "results/fr14_nvfp4_port_20260816/REDTEAM_20260816.md": "902814907c5642ce917fbda8f7ca955b3d859d4caae2d22570b448c4121d2736",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/logs/fr13_fa2_qrow32_b1_production_engagement.json": "c8f3c761e9cd3ee97a1c3c421f28488154ae13df2504bb42aa026966dad1da71",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/container_env.SANITIZED.txt": "15f1e8ea4a9bbc33d8837dfbeddce3e2b9bab62f63411c090b5b8a1da48550d4",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/docker_full.log": "97a5431d2890d71d8335979a75b4d9470b4fc22c25c2a511d728459956c31a9d",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/boot_log_snapshot.txt": "328ac74d775d428cd08669dcc34a535232755018b31a1ca927465f421470a8f9",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/fixed32_final_flush.json": "4492d14ec659cb91d0476293cf4027715928975e91d45eba96d735af9f7cd001",
+    "scripts/fr13_fixed32_topology.py": "c02703b4bc777e5edfa01623b446a289cba8f1023e31d8efd7fc8126666b38bc",
+    "results/fr14_nvfp4_port_20260816/fr14_splitk_fa2_probe.py": "44101abdb31292bfd702a2729bee2d5e115b79405eebe981ba246f9696bb7fcb",
+    "results/fr14_nvfp4_port_20260816/fr14_fused_draft_topk_probe.py": "d2a68d7c19e93570c03b4ea745ccbf9ef193c0027d78d3c674d6e125dbb7c279"
+  }
+}

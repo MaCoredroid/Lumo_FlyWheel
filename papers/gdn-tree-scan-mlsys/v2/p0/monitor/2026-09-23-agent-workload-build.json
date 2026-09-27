@@ -1,0 +1,57 @@
+{
+  "created_utc": "2026-09-23T17:32:12.075478+00:00",
+  "scope": "Paper revision verification; no new inference; no matched native/tree task-speed claim",
+  "pages": 12,
+  "latex_errors": 0,
+  "undefined_references_or_citations": 0,
+  "overfull_boxes": 0,
+  "citation_keys": 23,
+  "abstract_word_count_whitespace": 195,
+  "excluded_local_document_and_old_pair_rates_absent": true,
+  "raw_cqc10_manifest_verified_files": 139,
+  "metric_replay": "Parent output equals independently saved reducer output exactly; ten contiguous brackets; 265 completed requests=256 normal+9 compaction;6resolved4failed;10868.91agent seconds",
+  "visual_qa": {
+    "all_pages_initial_render_inspected": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "final_affected_pages_reinspected": [
+      6,
+      7,
+      10,
+      11,
+      12
+    ],
+    "result": "Readable tables, equation, figures, margins and references; no overlap/clipping; appendix orphan heading repaired"
+  },
+  "final_layout_changes_since_metrics_review": "clearpage before appendices and paragraph punctuation only; original-record packaging wording narrowed per task reviewer",
+  "sha256": {
+    "main.tex": "44c07c9e018bbbc9cc7dbc93b63941089273fa0f2154c1968e265fcead0e7300",
+    "abstract.tex": "018538d3d3938a177950976e49f99662e38027cc12a34a2693d5b136abeb9c80",
+    "results/agent-workload/case-study.tex": "ad053cd02521a04e99fd29f743e99a71e102815845864168ac4561a1ab05a1b3",
+    "main.pdf": "c09f6b32a8dc5dbd090ef34ca0d71f24eaef04a1e07476d9e07041a98b3244c8",
+    "ref.bib": "88ceccadbd0376d694f6037181ebf0dacd71f0936558d6c88f856666ccc05fc8",
+    "results/agent-workload/raw/cqc10/MANIFEST.json": "01c3922b06377c85d86b213bded399af377809f22d0df63829c5358ef7a86bcf",
+    "results/agent-workload/cqc10_reduce.py": "59f6d35aad7a409e9a00b551697da3205bb5fa8706ef4a54977c62089fb4e8a3",
+    "results/agent-workload/cqc10-metric-audit.json": "d46418013862609dd494f1b2bcbe0dba82dada578cfeb2ce01816e539fabc761",
+    "FINAL-REVIEW.md": "615435d3016437ca3aac4390f5f351781cc842e39ae9cc37520b731a62597c44",
+    "README.md": "52c314fb8d41bb0c76dca62684203bb7f73bf223acf6872ee5c6b0e50db0eaf2",
+    "paper.config.yaml": "82d7ecc17a57f40c709f64f763dfc8fb3772805fa56decdebbbfa93cd95199aa",
+    "review-experiments.md": "aa0c9e0f67823d02fd1e16b3afd5e0659576c299888594e380b0c3f515bebf3d",
+    "issues/2026-09-23-agent-workload.csv": "e00909c2663f1eee3b773b2878a7f7e8b2945ad51b03b3ad1b2d0638652551b1",
+    "p0/monitor/paper-agent-workload-redteam.md": "8676789c647376cedb0e67df56098a4396eba736e2746ed99ac23ea24071affc",
+    "p0/monitor/paper-agent-metrics-redteam.md": "4fff7d7d38bd37d61e9d7b8c2db881b8438a3357ca8256f539a1ca454346e87f",
+    "results/agent-workload/EVIDENCE_MANIFEST.json": "75200c9ba4538ae8d1c9889ac798e1604dc6cbb8e98646568e2b9a741b00980c"
+  },
+  "independent_manuscript_reviews": "Both PASS; task-scope reviewer covers exact final manuscript source hashes."
+}

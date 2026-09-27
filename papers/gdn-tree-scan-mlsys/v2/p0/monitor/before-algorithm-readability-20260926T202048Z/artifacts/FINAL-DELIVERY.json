@@ -1,0 +1,241 @@
+{
+  "completed_utc": "2026-09-26T20:15:31.974304+00:00",
+  "status": "COMPLETE_ALGORITHM_FORMATTING",
+  "scope": "Compact algorithm pseudocode and consistent typography; native continuation semantics and experimental evidence preserved",
+  "paper_archive": {
+    "file": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/papers/gdn-tree-scan-mlsys/v2/artifacts/paper-algorithm-format-20260926T2016Z.tar.gz",
+    "sha256": "1c67a26799a87e5eb4def9bb7f78b3891a63d6a28e911e6b093747989c1ff970",
+    "files": 531,
+    "bytes": 3945937
+  },
+  "paper_manifest_sha256": "12cab4df3dbb2abaf790548a1f2092f3746842a723cf893be8fc8334f769c12b",
+  "paper": {
+    "main.tex": "7dfb0ad02ff2ff2fb850aaac216acda40d52ea25e4157e5143de8bb117f3349f",
+    "abstract.tex": "651ee514d7dde54bc038e0b72a16bb040fd8c40264b61f633f4b3594a6cd6edc",
+    "main.pdf": "b89e90c95507d08bcf48d4e78e2ac01196a71ba5e0ed37bf8c0811666fc18685",
+    "ref.bib": "45ff04659e08f46a5591ca42dc624ed15521eb0f043d54098a27e7e8d55eb981",
+    "main.bbl": "813bbfc3a6e14bbf39f4154bdad8efebe592a98611c7e2eb337938df7d791928",
+    "results/agent-workload/case-study.tex": "091f567a2dc1367c67a31947c11608c53457920983751a603a62df07773dab35",
+    "figures/pipeline.tikz": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c"
+  },
+  "canonical_build": {
+    "path": "p0/monitor/2026-09-26-algorithm-format-build.json",
+    "sha256": "f0c9300d1929c5fc85fdf65c96f83a60b590b54eb4a766af3f1f4124934e17a6",
+    "pages": 11
+  },
+  "extracted_rebuild": {
+    "directory": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/lumo-algorithm-extracted-ax_fq9e6",
+    "files_verified": 531,
+    "latex_build": "PASS",
+    "rendered_pdf_text_identical": "PASS",
+    "pdf_sha256": "5911f6ca7473065c4b9e46d7076e4e1ec5c7a27cd086b3f1295cf529c39feb25",
+    "numerical_replays": "Not repeated for formatting-only revision; original evidence unchanged"
+  },
+  "author_component_checks": {
+    "receipt": "experiments/author-code-20260926/RUN-RECEIPT.json",
+    "sha256": "21576802090d0fd5e1b821ea035742dab54727c1d7e66f659b7322f4473d91dd",
+    "treewy": "39 selected tests passed:16 GPU and23 reference",
+    "weaver": "9 numerical cases and2 verifier timings completed; no numerical pass/fail threshold",
+    "matched_comparison": "Not run; reviewed next protocol in review-experiments.md"
+  },
+  "reviews": [
+    {
+      "path": "notes/novelty/lumotree-integration-redteam-2026-09-26.md",
+      "sha256": "3d0d1c08c709c2eaf3f1a686caf966df62ea7a1b7510d7e0b6bafcbb4e56e89b",
+      "verdict": "PASS_AFTER_LAYER_SCOPE_CORRECTION"
+    }
+  ],
+  "novelty_review": {
+    "memo": "notes/novelty/mechanism-comparison-and-naming-2026-09-26.md",
+    "integration_map": "notes/novelty/lumotree-integration-2026-09-26.md",
+    "new_cited_entries": 4,
+    "cited_entries": 39,
+    "scope": "Primary-source mechanism comparisons, no firstness or general numerical advantage claim"
+  },
+  "comparison_experiment": {
+    "status": "BOUNDED_AUTHOR_COMPONENTS_COMPLETE_MATCHED_COMPARISON_PLANNED",
+    "plan": "review-experiments.md",
+    "sha256": "dc87728225bd01bd816b46288a8ef587af2ca5589091f91784773537b6d32dce"
+  },
+  "host_memory": {
+    "utc": "2026-09-26T19:50:43.584656+00:00",
+    "memory": {
+      "MemTotal": 126175309824,
+      "MemFree": 109543149568,
+      "MemAvailable": 109242241024,
+      "SwapTotal": 17179865088,
+      "SwapFree": 17179865088
+    },
+    "containers": [],
+    "gpu_compute_processes": [],
+    "cleanup": "Hook returned successfully; initial receipt write failed on container-owned output directory. This follow-up read records final memory without rerunning cleanup.",
+    "processes_terminated": 0
+  },
+  "new_full_model_inference_launched": false,
+  "new_gpu_component_runs": 2,
+  "gpu_jobs_remaining": 0,
+  "automation_changed": false,
+  "no_publication_or_submission": true,
+  "prior_delivery_receipt": "p0/monitor/before-algorithm-format-20260926T201102Z/artifacts/FINAL-DELIVERY.json",
+  "remote_copy": "Author component workspace /home/mark/lumotree-author-code-20260926; revised manuscript authoritative locally",
+  "limits": [
+    "Selected author component tests do not qualify full serving stacks or compare LumoTree speed against them.",
+    "Weaver characterization omits commit and has no correctness threshold.",
+    "Matched current-route outputs/consumed-state qualification must precede complete-cycle timing."
+  ],
+  "all_companions": [
+    {
+      "file": "e7a-evidence-20260922T0709Z.tar.gz",
+      "sha256": "776ddcaf5d938cc665bafca20f46e29d1e9a550a34914d798e78f70636cd180b",
+      "bytes": 268871594,
+      "manifest": "e7a-evidence-20260922T0709Z.tar.gz.manifest.json",
+      "manifest_sha256": "50dd06ea612e00caec86e84db0b49321d3fd9878e8e4f79d68bb95dfa88c0e7d"
+    },
+    {
+      "file": "e7b-diagnostics-20260922T0801Z.tar.gz",
+      "sha256": "c573b5064d944547df280e314520a97dd0c10678fb877c8d75b3a898d548ad05",
+      "bytes": 2179735658,
+      "manifest": "e7b-diagnostics-20260922T0801Z.tar.gz.manifest.json",
+      "manifest_sha256": "f36db7f4f0b16f9f43a0d70b535ca664a66f1ef447789985b82f3a78db8b4682"
+    },
+    {
+      "file": "selected-route-20260922T0930Z.tar.gz",
+      "sha256": "7f127f0c2e8198f067eb0f59737e1a58afc34991aa562dacbc11d7d147d25a30",
+      "bytes": 1735458237,
+      "manifest": "selected-route-20260922T0930Z.tar.gz.manifest.json",
+      "manifest_sha256": "d1fe338b3bae56a755725a622fa679692377156b56be0d85952fd654d9e386b8"
+    },
+    {
+      "file": "e1-timing-20260922T1225Z.tar.gz",
+      "sha256": "bf50b33386eb9614cf7874039f60cb62a484ee62bc0882e32ab32731857318d6",
+      "bytes": 12955447,
+      "manifest": "e1-timing-20260922T1225Z.tar.gz.manifest.json",
+      "manifest_sha256": "47936b8a7cb22bf389b452ce2f013e5092d9f9c34b639b640f54768b3ecd4414"
+    },
+    {
+      "file": "e8-single-logits-20260922T2255Z.tar.gz",
+      "sha256": "b4c0a5cbcd2592ce5ddfdc823243f0e99dc15ef412d238a096068d6bae11ebf4",
+      "bytes": 16237576,
+      "manifest": "e8-single-logits-20260922T2255Z.tar.gz.manifest.json",
+      "manifest_sha256": "d2512b2141628c77746d5f1ddc0de025bb3de525fba5dd375226a60427c70439"
+    }
+  ],
+  "pooled_decode": {
+    "formula": "(sum output tokens - completed requests) / (sum E2E request latency - sum TTFT)",
+    "shared_task_ids": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033"
+    ],
+    "best_eligible_tree": "Sr12",
+    "best_eligible_sglang": "SGLang_later",
+    "eligible_arm_rates": {
+      "Cqc15": 27.26800815027045,
+      "Cqc16": 28.28304686877344,
+      "SGLang_later": 26.893956024189762,
+      "Sr12": 29.093442700158857
+    },
+    "context_arm_rates": {
+      "Cqc10": 25.633622465853126,
+      "Sr12_full_four_tasks": 26.20536492791583
+    },
+    "tree_relative_to_eligible_sglang_percent": 8.178367935125518,
+    "selection_timing": "Retrospective user-requested rule after inspecting the archived outcomes.",
+    "eligibility_rule": "Each task: agent exit0, ended_at present, no timeout/budget cap, patch_bytes>0. No condition on test success or decode rate.",
+    "included_shared_task_runs": [
+      "Sr12",
+      "Cqc16",
+      "Cqc15",
+      "SGLang_later"
+    ],
+    "excluded_shared_task_runs": [
+      "SGLang_earlier"
+    ],
+    "input_bindings": 94,
+    "original_task_files": 88,
+    "projection_bindings": 5,
+    "audit_path": "results/agent-workload/patch-producing-rate-audit.json",
+    "audit_sha256": "279475d182ecd259790e2c57663d65c37205f2ee67c80aa46b0bd2e9b4e460c4",
+    "reducer_sha256": "d57459bc5706c1e2df849dfa5a04f1f7974e7731ebcd1e04945f7695d0c24e52",
+    "unfiltered_audit": {
+      "path": "competitive-rate-audit.json",
+      "sha256": "e30060ec1c4ade6f4b3765e4a0c55c25cff3ba121715e4ad26f2f2a44abecac7"
+    }
+  },
+  "workload_evidence": {
+    "raw_manifest": "results/agent-workload/raw/cqc10/MANIFEST.json",
+    "raw_manifest_sha256": "01c3922b06377c85d86b213bded399af377809f22d0df63829c5358ef7a86bcf",
+    "original_or_explicit_projection_files": 139,
+    "whole_evidence_manifest_sha256": "75200c9ba4538ae8d1c9889ac798e1604dc6cbb8e98646568e2b9a741b00980c",
+    "metric_reducer_replay": "independent and parent outputs exactly agree; extracted replay agrees"
+  },
+  "shared_task_evidence": {
+    "raw_manifest": "results/agent-workload/raw/shared-tasks-20260924/MANIFEST.json",
+    "sha256": "2e20393e2fa238d489215a11d3b3315a08e9516609f341713ecd1ae62ed4dbd2",
+    "recovered_original_files": 32,
+    "safe_audit_projections": 3,
+    "best_scope": "Maximum of three eligible tree deployments versus one eligible SGLang deployment. Retrospective nonempty-patch rule applies to both tasks in every recovered pair; failed tests remain eligible. Earlier SGLang pair is excluded from performance, failed outcome retained.",
+    "tree_response_cap": 32768,
+    "sglang_response_caps": {
+      "earlier": 32768,
+      "later": 24000
+    }
+  },
+  "current_production": {
+    "audit": "results/current-production/audit.json",
+    "audit_sha256": "2d0904d5a6c77e0fa0f56a9850dbc0cce3cad4898227a3f78770758edc93c4c2",
+    "input_bindings": 20,
+    "extracted_replay": "PASS",
+    "method": "Hydra27 fixed32; patched FA2 GQA-pair splitK4; graph/cache-enabled B1 NVFP4 agent deployment",
+    "recorded_source_commit": "e7af6b595a8b3a09b7e88d25a3653d381432b99c",
+    "fused_selection": {
+      "binary_matches_deployment": true,
+      "byte_mismatches": 0,
+      "cases": 1368,
+      "configurations": 6840,
+      "graph_mismatches": 0,
+      "graph_replays": 24,
+      "negative_controls_fire": true
+    },
+    "attention": {
+      "all_checks_pass": true,
+      "binary_and_credential_match_deployment": true,
+      "binary_sha256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+      "declared_checks": 9,
+      "determinism_cases": 16,
+      "determinism_pass": true,
+      "determinism_processes": 2,
+      "determinism_repeats": 8,
+      "engaged_layers": 16,
+      "lse_max_ulp": 4,
+      "num_splits": 4,
+      "output_max_abs_difference": 0.00390625,
+      "output_within_two_ulp_percent": 93.30657958984375
+    },
+    "source_history": {
+      "notes/latest-production-design-evidence-2026-09-24.md": "2f5abb1eaf2a50b3365247d0295bc758659ee092491e91ba71dae50eb0adbd63",
+      "notes/latest-optimization-supersession-2026-09-24.md": "3d9aa321a3894d72c9990060086955d4e1511e57ee96fb1ce2870e0887c89ed9"
+    },
+    "superseded_route_paper_results_removed": true,
+    "raw_records_preserved": true
+  },
+  "behavior_evidence": {
+    "manifest": "results/agent-workload/BEHAVIOR_MANIFEST.json",
+    "sha256": "60606fd37fa463844715cf586d824611c1b30587dd68c8811e87ccec7b6ccb59",
+    "claim": "No detected degeneration in10selectedtasktraces under explicitly limited diagnostic; prior positive retained"
+  },
+  "editorial_revision": {
+    "principle": "Describe scientific design questions and mechanism interactions; place configuration constants in experimental setup.",
+    "internal_method_labels_removed_from_main_text": true,
+    "workload_rates_and_evidence_unchanged": true,
+    "figure_1_redesigned": true,
+    "working_revision_footnote_removed": true,
+    "abstract_ten_task_behavior_sentence_removed": true,
+    "intro_novelty_disclaimer_clause_removed": true,
+    "lumotree_name_applied": true,
+    "mechanism_memo_integrated": true,
+    "author_component_appendix_added": true,
+    "algorithm_formatting": "algpseudocode, consistent inputs/outputs and assignments, local font/spacing, notation definitions",
+    "bibliography_columns": "automatically balanced"
+  },
+  "new_experiments_this_revision": 0
+}

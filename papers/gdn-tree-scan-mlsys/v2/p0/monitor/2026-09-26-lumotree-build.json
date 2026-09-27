@@ -1,0 +1,25 @@
+{
+  "completed_utc": "2026-09-26T19:51:20.553091+00:00",
+  "status": "PASS",
+  "pages": 11,
+  "cited_keys_in_main": 39,
+  "bibliography_entries": 41,
+  "missing_citations": [],
+  "overfull_boxes": 0,
+  "undefined_references": 0,
+  "visual_review": "All 11 pages rendered and inspected; changed bibliography pages re-rendered after final layout adjustment",
+  "author_code": "TreeWY39PASS; Weaver9cases/2timingconfigs completed with no tolerance assertion; no matched speed result",
+  "workload_evidence_unchanged": true,
+  "sha256": {
+    "main.tex": "1f81153f4e8ff9be3a53897bc2564116e4f7f36f1084c04a5f334e684b068df8",
+    "abstract.tex": "651ee514d7dde54bc038e0b72a16bb040fd8c40264b61f633f4b3594a6cd6edc",
+    "ref.bib": "45ff04659e08f46a5591ca42dc624ed15521eb0f043d54098a27e7e8d55eb981",
+    "main.bbl": "813bbfc3a6e14bbf39f4154bdad8efebe592a98611c7e2eb337938df7d791928",
+    "main.pdf": "e93f54ffd81ab51644c3652f0f6148fa82457c2d99ac2de1ee29a9d5d6140ed4",
+    "results/agent-workload/case-study.tex": "091f567a2dc1367c67a31947c11608c53457920983751a603a62df07773dab35",
+    "results/agent-workload/patch-producing-rate-audit.json": "279475d182ecd259790e2c57663d65c37205f2ee67c80aa46b0bd2e9b4e460c4",
+    "results/current-production/audit.json": "2d0904d5a6c77e0fa0f56a9850dbc0cce3cad4898227a3f78770758edc93c4c2",
+    "experiments/author-code-20260926/RUN-RECEIPT.json": "21576802090d0fd5e1b821ea035742dab54727c1d7e66f659b7322f4473d91dd",
+    "notes/novelty/lumotree-integration-redteam-2026-09-26.md": "3d0d1c08c709c2eaf3f1a686caf966df62ea7a1b7510d7e0b6bafcbb4e56e89b"
+  }
+}

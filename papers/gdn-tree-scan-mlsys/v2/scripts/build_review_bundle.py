@@ -21,6 +21,27 @@ CURRENT_REPORTS += ["design-reframe-redteam.md", "2026-09-22-design-reframe-buil
 STATIC += ["issues/2026-09-22-latest-design-e8.csv"]
 CURRENT_REPORTS += ["paper-latest-design-e8-redteam.md", "paper-e8-results-redteam.md", "e8-timing-final-redteam.md", "e8-artifact-final-redteam.md", "e8-artifact-final-independent-review.json", "2026-09-22-e8-artifact-checkpoint.json", "2026-09-22-latest-design-e8-build.json", "e8-postcampaign-memory.json"]
 DEFAULT_COMPANIONS += ["e8-single-logits-20260922T2255Z.tar.gz"]
+CURRENT_REPORTS += ["2026-09-23-agent-abstract-build.json"]
+CURRENT_REPORTS += ["2026-09-23-history-correction-build.json"]
+STATIC += ["issues/2026-09-23-agent-workload.csv"]
+CURRENT_REPORTS += ["paper-agent-workload-redteam.md", "paper-agent-metrics-redteam.md", "2026-09-23-agent-workload-build.json"]
+CURRENT_REPORTS += ["2026-09-23-pooled-decode-build.json", "2026-09-23-pooled-speed-claims-audit.json", "2026-09-23-pooled-speed-claims-audit.md", "paper-pooled-speed-redteam.md"]
+CURRENT_REPORTS += ["paper-best-shared-task-redteam-2026-09-24.md", "2026-09-24-best-shared-task-build.json", "2026-09-24-best-shared-task-speed-audit.json"]
+STATIC += ["issues/2026-09-24-best-shared-task.csv", "issues/2026-09-24-competitive-comparison.csv"]
+CURRENT_REPORTS += ["2026-09-24-competitive-comparison-build.json", "2026-09-24-patch-producing-build.json"]
+STATIC += ["issues/2026-09-24-patch-producing.csv"]
+CURRENT_REPORTS += ["2026-09-24-attention-correction-build.json", "2026-09-24-current-production-build.json"]
+STATIC += ["issues/2026-09-24-current-production.csv"]
+CURRENT_REPORTS += ["2026-09-24-novelty-build.json"]
+STATIC += ["issues/2026-09-24-novelty.csv", "plan/2026-09-24-novelty-review.md"]
+CURRENT_REPORTS += ["2026-09-24-figure-build.json"]
+CURRENT_REPORTS += ["2026-09-26-abstract-trim-build.json"]
+CURRENT_REPORTS += ["2026-09-26-intro-trim-build.json"]
+CURRENT_REPORTS += ["2026-09-26-lumotree-build.json", "2026-09-26-lumotree-memory-cleanup.json"]
+CURRENT_REPORTS += ["2026-09-26-algorithm-format-build.json"]
+CURRENT_REPORTS += ["2026-09-26-algorithm-readability-build.json"]
+CURRENT_REPORTS += ["2026-09-26-design-distinction-build.json"]
+STATIC += ["issues/2026-09-26-lumotree.csv", "plan/2026-09-26-lumotree-integration.md"]
 def digest(path):
  h=hashlib.sha256()
  with path.open("rb") as f:
@@ -29,15 +50,21 @@ def digest(path):
 def main():
  ap=argparse.ArgumentParser();ap.add_argument("--output",type=Path,required=True)
  ap.add_argument("--companion",type=Path,action="append",help="Explicit companion archive; repeat to replace the default list")
- ap.add_argument("--scope",default="private final bounded review checkpoint; P0, E7a, E2/E7b, 18 original E1 cells, two E8 qualification and six E8 timing boots independently reviewed; original frozen failures, seed deviation T1 and continuation divergence preserved; historical quantitative results excluded from manuscript, raw audit evidence preserved; no public release or full-model equivalence claim")
+ ap.add_argument("--scope",default="private patch-producing comparison; conditional tree29.09 vs SGLang26.89; retrospective symmetric nonempty-patch pair eligibility; excluded failed outcome retained; no all-attempt or quality-equivalence claim")
  a=ap.parse_args();assert not a.output.exists(),"Choose a new snapshot filename"
  files={PAPER/n for n in STATIC}
  files.update(PAPER/"p0/monitor"/n for n in CURRENT_REPORTS)
  files.add(PAPER/"artifacts/README.md")
- for directory in ["figures","results","notes","scripts","p0/stock-image","p0/monitor/snapshots/20260921T2308Z/experiments/e7a"]:
+ for directory in ["figures","results","notes","scripts","experiments/author-code-20260926","p0/stock-image","p0/monitor/snapshots/20260921T2308Z/experiments/e7a"]:
   files.update(f for f in (PAPER/directory).rglob("*") if f.is_file() and "__pycache__" not in f.parts)
  for r in json.loads((PAPER/"notes/evidence-sources.json").read_text()):
   f=REPO/r["path"];assert hashlib.sha256(f.read_bytes()).hexdigest()==r["sha256"],f;files.add(f)
+ for path,expected in json.loads((PAPER/"results/current-production/inputs.json").read_text())["inputs"].items():
+  f=REPO/path;assert digest(f)==expected,f;files.add(f)
+ for audit_name in ("shared-rate-audit.json", "shared-task-rate-audit.json", "competitive-rate-audit.json", "patch-producing-rate-audit.json"):
+  for path,expected in json.loads((PAPER/"results/agent-workload"/audit_name).read_text())["input_sha256"].items():
+   f=(REPO/path).resolve();assert f.is_relative_to(REPO.resolve()),path
+   assert digest(f)==expected,f;files.add(f)
  rows=[{"path":str(f.relative_to(REPO)),"size":f.stat().st_size,"sha256":hashlib.sha256(f.read_bytes()).hexdigest()} for f in sorted(files)]
  companions=[]
  for companion in a.companion or [PAPER/"artifacts"/n for n in DEFAULT_COMPANIONS]:
@@ -47,17 +74,18 @@ def main():
  manifest={"created_utc":datetime.datetime.now(datetime.timezone.utc).isoformat(),"scope":a.scope, "files":rows,"companions":companions}
  readme="""# Private LumoFlyWheel v2 review checkpoint
 
-This checkpoint contains manuscript sources/PDF, preserved historical audit evidence (excluded from manuscript results), review reports, and a SHA-256 manifest. It is NOT a public release and has not been uploaded. Read MANIFEST.json's scope and the closure ledger for current completion status and limits. The cited historical GitHub revision identifies historical evidence, not the unreleased fresh v2 experiment files.
+This checkpoint contains manuscript sources/PDF, dated task evidence plus separate historical audit records, review reports, and a SHA-256 manifest. It is NOT a public release and has not been uploaded. Read MANIFEST.json's scope and the closure ledger for current completion status and limits. The cited historical GitHub revision identifies historical evidence, not the unreleased fresh v2 experiment files.
 
 From the extracted repository root:
 
-    python3 papers/gdn-tree-scan-mlsys/v2/scripts/audit_evidence.py
+    python3 papers/gdn-tree-scan-mlsys/v2/results/agent-workload/patch_producing_rate_reduce.py
+    python3 papers/gdn-tree-scan-mlsys/v2/results/current-production/reduce.py
     cd papers/gdn-tree-scan-mlsys/v2
     latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
 
-The first command reproduces archived proxies, not matched throughput. It runs no inference. Build requires LaTeX (IEEEtran, TikZ/PGFPlots and standard packages listed in main.tex); the included class and bibliography support an offline build. PDF byte identity is not expected across TeX versions/timestamps.
+The second command checks the deployed fused-selection and FA2 numerical credentials against recorded runtime identities. The September Cat10 experiment companions are superseded method records, not current qualification. The first command reproduces the retrospective nonempty-patch selection, conditional shared-task rates and context cohorts through exact child replays. Unfiltered rates and all failed outcomes remain in earlier audit files. It binds 94 input files and five configuration/behavior projections. Its output must match results/agent-workload/patch-producing-rate-audit.json under the paper directory. The prior 48-input reducer and its immutable output remain available for the earlier comparison. It runs no inference and uses only Python's standard library. Historical proxy reproduction remains separate in scripts/audit_evidence.py and supplies no current performance claim. Build requires LaTeX (IEEEtran, TikZ/PGFPlots and standard packages listed in main.tex); the included class and bibliography support an offline build. PDF byte identity is not expected across TeX versions/timestamps.
 
-The five companions listed with archive and manifest hashes in MANIFEST.json contain raw experiment evidence. The E7a companion contains completed E7a sources, result JSON, frozen records/erratum, provenance records and captured tensors. The E7b diagnostic companion contains both stage-isolated three-boot batches and their raw operands, states, hidden activations, logits, exact source snapshots and reviewed continuation/reducer dependencies. These six diagnostic boots had KV remapping disabled; they do not qualify the corrected serving route. The selected-route companion contains the failed policy A and bounded corrected B1/B4 qualification. The E1 companion contains all 18 original timing cells, raw events/direct API IDs, preflight/qualification records, loaded sources, exact frozen reducer and independent numerical review. The E8 companion retains the first pre-container failure, both qualification arms, all six timing cells, exact generators and original dependencies, raw joins, counters and frozen aggregate. Its extracted helper verifies eight joins and the complete aggregate; E8 is a B1 component contrast with divergent continuations. Read artifacts/README.md and the closure ledger for the retained failures and limits.
+The current Cqc10 task case, safe original task records and source-bound metric reductions are included under results/agent-workload; inspect their manifests and omissions. The five older companions listed with archive and manifest hashes in MANIFEST.json contain raw qualification/audit experiment evidence. E1/E8 local-document timing results are excluded from current manuscript performance. The E7a companion contains completed E7a sources, result JSON, frozen records/erratum, provenance records and captured tensors. The E7b diagnostic companion contains both stage-isolated three-boot batches and their raw operands, states, hidden activations, logits, exact source snapshots and reviewed continuation/reducer dependencies. These six diagnostic boots had KV remapping disabled; they do not qualify the corrected serving route. The selected-route companion contains the failed policy A and bounded corrected B1/B4 qualification. The E1 companion contains all 18 original timing cells, raw events/direct API IDs, preflight/qualification records, loaded sources, exact frozen reducer and independent numerical review. The E8 companion retains the first pre-container failure, both qualification arms, all six timing cells, exact generators and original dependencies, raw joins, counters and frozen aggregate. Its extracted helper verifies eight joins and the complete aggregate; E8 is a B1 component contrast with divergent continuations. Read artifacts/README.md and the closure ledger for the retained failures and limits.
 
 Extract companions into a separate evidence directory; archive entries are relative to the original v2 directory. All original absolute provenance paths are retained unchanged and refer to the DGX, so execution requires an explicit local path mapping. This package certifies copied bytes and enables raw-result checks; it does not claim an unmodified full GPU rerun on another host. The historical tensor mapping is recorded in the E7a companion manifest. Byte-exact ladder-v3/tiny-gate core and device sources are in the paper archive under p0/monitor/snapshots/20260921T2308Z/experiments/e7a; the E7a companion contains the matching production kernel in the earlier source_snapshot. Native prefix-selection pool/scores and all eight pilot captures are included. JIT caches/model weights are excluded; recorded hashes are retained. Keep all companions private pending a separate release/provenance review.
 """

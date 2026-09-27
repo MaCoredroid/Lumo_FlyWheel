@@ -1,0 +1,28 @@
+{
+  "completed_utc": "2026-09-26T20:14:44.156098+00:00",
+  "status": "PASS",
+  "scope": "Algorithm typography and compact pseudocode; explanatory notation; balanced final bibliography columns",
+  "pages": 11,
+  "algorithm_pages": [
+    4
+  ],
+  "latex_build": "PASS",
+  "overfull_boxes": 0,
+  "undefined_references": 0,
+  "cited_keys": 39,
+  "visual_review": "All 11 pages rendered; both algorithms inspected at page scale; final bibliography re-rendered and inspected after column balancing",
+  "unchanged": [
+    "abstract.tex",
+    "ref.bib",
+    "results/agent-workload/case-study.tex"
+  ],
+  "new_experiments": false,
+  "sha256": {
+    "main.tex": "7dfb0ad02ff2ff2fb850aaac216acda40d52ea25e4157e5143de8bb117f3349f",
+    "main.pdf": "b89e90c95507d08bcf48d4e78e2ac01196a71ba5e0ed37bf8c0811666fc18685",
+    "main.bbl": "813bbfc3a6e14bbf39f4154bdad8efebe592a98611c7e2eb337938df7d791928",
+    "abstract.tex": "651ee514d7dde54bc038e0b72a16bb040fd8c40264b61f633f4b3594a6cd6edc",
+    "ref.bib": "45ff04659e08f46a5591ca42dc624ed15521eb0f043d54098a27e7e8d55eb981"
+  },
+  "prior_snapshot": "p0/monitor/before-algorithm-format-20260926T201102Z"
+}

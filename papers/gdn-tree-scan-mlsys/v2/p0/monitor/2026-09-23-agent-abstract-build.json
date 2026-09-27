@@ -1,0 +1,24 @@
+{
+  "created_utc": "2026-09-23T17:56:33.415909+00:00",
+  "scope": "Abstract centered on observed agent behavior and defined decode statistic; no comparative speed or unchanged-quality claim",
+  "pages": 12,
+  "abstract_words_whitespace": 165,
+  "latex_errors": 0,
+  "undefined_references_or_citations": 0,
+  "overfull_boxes": 0,
+  "visual_qa": "All body pages inspected after revision; last three pages re-rendered and inspected after removing page-break whitespace; PASS",
+  "independent_behavior_review": "PASS on exact abstract/case-study hashes; no new inference",
+  "source_sha256": {
+    "main.tex": "bf8f1f47a95e95e0a4732691dbcf56d86f2150b4a9da70d6b762005baf10e90c",
+    "abstract.tex": "4bedfb502db02d1f23ffe61461036d125748bf0fd6a7e959f6f9c5d21669ed1b",
+    "results/agent-workload/case-study.tex": "997bceba4787944c56327822d4655e73c92a8e8c56805ffec9bf42098c538312",
+    "main.pdf": "2af86425ddc04d68a1fe72f9691ef58fb7cd287bdf14eadaeb697815bc86a796",
+    "ref.bib": "88ceccadbd0376d694f6037181ebf0dacd71f0936558d6c88f856666ccc05fc8",
+    "review-experiments.md": "565b1721fba4c6f12016350e6b419b99ff77a56203a151f1c38c2cb366a6274b",
+    "notes/agent-behavior-abstract-evidence-2026-09-23.md": "748ba0786b0ebb8d6f2f86d377754295490b79c6b5f2d87e794673a1e53c4001",
+    "results/agent-workload/cqc10-behavior-audit.json": "5c3c6501093cbebe6da8e6114cc548a7b2b748136d168478cad86653da0224a7",
+    "results/agent-workload/BEHAVIOR_MANIFEST.json": "60606fd37fa463844715cf586d824611c1b30587dd68c8811e87ccec7b6ccb59"
+  },
+  "performance_data_changed": false,
+  "new_evidence": "Ten original traces and one earlier positive checked read-only; no detections in Cqc10 under named heuristic; blind spots disclosed."
+}

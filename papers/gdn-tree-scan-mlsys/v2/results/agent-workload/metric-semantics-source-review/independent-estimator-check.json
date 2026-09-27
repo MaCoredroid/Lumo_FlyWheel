@@ -1,0 +1,83 @@
+{
+  "formula_primary": "N / sum(E2E)",
+  "formula_adjusted": "(N - R) / (sum(E2E) - sum(TTFT))",
+  "rows": [
+    {
+      "name": "Cqc10",
+      "completed_generation_tokens": 248342.0,
+      "completed_requests": 265.0,
+      "sum_e2e_seconds": 10667.621147632599,
+      "sum_ttft_seconds": 989.8239369392395,
+      "tokens_per_summed_request_second": 23.279979347139925,
+      "first_output_adjusted_rate": 25.633622465853126,
+      "histogram_count": 265.0,
+      "generation_counter_delta": 248342.0,
+      "ttft_count": 265.0,
+      "inputs": [
+        {
+          "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/metrics_before_swe.txt",
+          "sha256": "9a4c69c4a9bf7b0c328b270dee02a73086a5706473e3c118155632054bc07676"
+        },
+        {
+          "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/metrics_after_swe.txt",
+          "sha256": "4e352116724054cc715c3b1ed14ee98125920631c91a0c0ae12e8a180d37eaed"
+        }
+      ],
+      "engine_decode_seconds": 9677.884510502685,
+      "pooled_engine_decode_rate": 25.633391236564208
+    },
+    {
+      "name": "SGLang12907",
+      "completed_generation_tokens": 8314.0,
+      "completed_requests": 18.0,
+      "sum_e2e_seconds": 403.9457656198647,
+      "sum_ttft_seconds": 111.49299156968482,
+      "tokens_per_summed_request_second": 20.58197091691743,
+      "first_output_adjusted_rate": 28.366973187187305,
+      "histogram_count": 18.0,
+      "generation_counter_delta": 8314.0,
+      "ttft_count": 18.0,
+      "inputs": [
+        {
+          "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt",
+          "sha256": "56e71021b747b98d7b667577d979632f5ee01725a1639c23f388002b5dcc678c"
+        },
+        {
+          "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt",
+          "sha256": "7e35034253ec0114076663fc9b8b76c412706ea46ae8cf14c929d2f7ae9c4909"
+        }
+      ]
+    },
+    {
+      "name": "SGLang13033",
+      "completed_generation_tokens": 39540.0,
+      "completed_requests": 27.0,
+      "sum_e2e_seconds": 1609.6886568600312,
+      "sum_ttft_seconds": 124.45576960407197,
+      "tokens_per_summed_request_second": 24.56375637083101,
+      "first_output_adjusted_rate": 26.603908611936415,
+      "histogram_count": 27.0,
+      "generation_counter_delta": 39540.0,
+      "ttft_count": 27.0,
+      "inputs": [
+        {
+          "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_pre.txt",
+          "sha256": "bfd624fdfdf2a8359641e64e7d327b8477995f8fa77c4b47d00b376d9ab34475"
+        },
+        {
+          "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_post.txt",
+          "sha256": "b32016db90b22b8c4c9e6c596ead8a23a705a1321a466905e934b90cae534d6a"
+        }
+      ]
+    },
+    {
+      "name": "SGLangPooled2",
+      "completed_generation_tokens": 47854.0,
+      "completed_requests": 45.0,
+      "sum_e2e_seconds": 2013.6344224798959,
+      "sum_ttft_seconds": 235.9487611737568,
+      "tokens_per_summed_request_second": 23.764989049534275,
+      "first_output_adjusted_rate": 26.893956024189762
+    }
+  ]
+}

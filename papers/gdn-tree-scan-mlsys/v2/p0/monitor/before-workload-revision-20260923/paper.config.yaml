@@ -1,0 +1,14 @@
+topic: GDN Tree-Scan v2
+paper_type: empirical
+status: latest_design_e8_reviewed_complete
+format: IEEEtran conference
+main_tex: main.tex
+bibliography: ref.bib
+runtime:
+  python: /Users/zhiyuanma/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3
+  experiment_execution: bounded_core_and_e8_complete
+  experiment_scope: completed_core_plus_two_E8_qualification_and_six_B1_timing_boots
+  p0_report: p0/P0-REPORT.md
+  remote_worktree: /home/mark/lumo-paper-v2-20260921
+  handoff_status: p0/handoff-status.json
+  plotting_python: /tmp/lumo-v2-plot-20260922/bin/python

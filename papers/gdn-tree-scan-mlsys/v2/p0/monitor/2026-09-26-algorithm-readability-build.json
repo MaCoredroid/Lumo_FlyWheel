@@ -1,0 +1,33 @@
+{
+  "completed_utc": "2026-09-26T20:24:32.171359+00:00",
+  "status": "PASS",
+  "scope": "Algorithm readability: full-width layouts, normal-size type, descriptive steps, explicit stages and parallel loop",
+  "pages": 11,
+  "algorithm_pages": [
+    5,
+    6
+  ],
+  "latex_build": "PASS",
+  "overfull_boxes": 0,
+  "undefined_references": 0,
+  "visual_review": "All 11 pages rendered and reviewed in contact sheets; algorithm pages 5 and 6 inspected individually at full-page scale. No clipped or overlapping text.",
+  "unchanged": [
+    "abstract.tex",
+    "ref.bib",
+    "main.bbl",
+    "results/agent-workload/case-study.tex",
+    "figures/pipeline.tikz"
+  ],
+  "new_experiments": false,
+  "sha256": {
+    "main.tex": "5ddd23b3b23c1ec35d59cd4ff71c2f43b647e23e70b0b77f950842265a1388e8",
+    "abstract.tex": "651ee514d7dde54bc038e0b72a16bb040fd8c40264b61f633f4b3594a6cd6edc",
+    "main.pdf": "8ca08ad72477f1ad8b7650ff7fc86082ab2e66d3af83604b250b2e31a01ff6fd",
+    "ref.bib": "45ff04659e08f46a5591ca42dc624ed15521eb0f043d54098a27e7e8d55eb981",
+    "main.bbl": "813bbfc3a6e14bbf39f4154bdad8efebe592a98611c7e2eb337938df7d791928",
+    "results/agent-workload/case-study.tex": "091f567a2dc1367c67a31947c11608c53457920983751a603a62df07773dab35",
+    "figures/pipeline.tikz": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c"
+  },
+  "prior_snapshot": "p0/monitor/before-algorithm-readability-20260926T202048Z",
+  "semantic_scope": "Algorithm 1 retains complete continuation publication. Algorithm 2 explicitly covers recurrent scan/replay, with per-layer operands and state."
+}

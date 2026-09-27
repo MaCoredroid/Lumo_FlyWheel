@@ -1,0 +1,2303 @@
+{
+  "created_utc": "2026-09-24T22:21:56.306781+00:00",
+  "scope": "private competitive-comparison correction; best tree29.09 vs both SGLang30.70 and26.89; full decoder systems compared; all selected outcomes retained; no common tuning sweep or overall speed-win claim",
+  "files": [
+    {
+      "path": "FR13_DIFFUSE_GDN_EXPLAINED.md",
+      "size": 3836,
+      "sha256": "b9d162e99ddbddbf45b60b34ec6c337bc9ee8b2035ec80fc0b19da6d71815ae2"
+    },
+    {
+      "path": "FR13_POSTSNAPFIX3_CLOSEOUT.md",
+      "size": 7714,
+      "sha256": "3ce92516ef36dacb525ed3694734c9de6bb0929a249b1cf43825b1d5a3c1a5a0"
+    },
+    {
+      "path": "FR13_REALIZATION_AGREEMENT.md",
+      "size": 25956,
+      "sha256": "572d0387bc20e48232289c6e8cf60d9fb7363d9de7830ad0947e86ee9b98e561"
+    },
+    {
+      "path": "FR13_REMAP_SHIP_RESULTS.md",
+      "size": 9173,
+      "sha256": "b1b5d28bdb0a0bebbd4c38780a873f237f06a35f716c0734a9726ef2d6f4e068"
+    },
+    {
+      "path": "FR13_REPLAY_CHASEDOWN_BANK.md",
+      "size": 26205,
+      "sha256": "b3f466ea2ece55648a17555be0d645f04023025a2387e5af572b8a65d4d70286"
+    },
+    {
+      "path": "FR13_SLOT_REORDER_ARTIFACTS/VERDICT_TABLE.md",
+      "size": 961,
+      "sha256": "fbea3e8dae6a3d3adf99d463ba7031cf8986709a124234164229b975d79a0b84"
+    },
+    {
+      "path": "docs/archive/wy/FR13_WY_VS_SEQUENTIAL_VERDICT.md",
+      "size": 5792,
+      "sha256": "0dd72d180cc18f482593ab060d5cf699385f2cedafb858f7d1e681063954a861"
+    },
+    {
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/deploy_speed_kvr1.json",
+      "size": 15364,
+      "sha256": "bd8b1d65054c852053bf4492754af879769339c639f6d7a43f4e99e7bb41f2d8"
+    },
+    {
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/deploy_speed_kvr1.json",
+      "size": 15366,
+      "sha256": "acd116d76f6f58ccd6d8f72b668b90f2fabd75cb2da1292a04ed6fa6e2caeafc"
+    },
+    {
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/deploy_speed_kvr1.json",
+      "size": 15341,
+      "sha256": "88deadb9f1ffac9985f263b985dae0dae16a8b2be09da30b2b076efc22cdee87"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/FINAL-REVIEW.md",
+      "size": 3913,
+      "sha256": "ab17a7b178c074b1ce61f26553f225b899125d171fa0f2d69ff606b1b16c2ec2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/IEEEtran.cls",
+      "size": 281789,
+      "sha256": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/README.md",
+      "size": 3802,
+      "sha256": "232c93e3aee773a648caa4ba72aa85286e2c9aacf659fcc3f5a6f68dcd9c40c3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/abstract.tex",
+      "size": 1012,
+      "sha256": "ec48b81b0f535167202dd976a39803c1f04c0db27544df1e9ac52740b0daaee3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/README.md",
+      "size": 10910,
+      "sha256": "fa611ab0a438a55565bdd5b4da5eb5dee9d6d182712d95e2ed3d3f5edb92e7a4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/STATUS.md",
+      "size": 156802,
+      "sha256": "fc0f29339fb7c7986e60385242c1f3413ab57cadf604434625e8fdec4bae6aa9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/e1/E1_ASEXECUTED_DEVIATIONS.md",
+      "size": 2829,
+      "sha256": "e151f745aa46ee27fa7a22e7b39c45bb9bd9948bdcddf23de1077d51c01c58df"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/figures/cost-breakdown.tikz",
+      "size": 1038,
+      "sha256": "a29baf437e9f19ee1c33111a07645daed2ace8857492b6daf29468452ee62fee"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/figures/e1-timing.json",
+      "size": 4913,
+      "sha256": "b1e2f4bb8bbb0ad269a8d7df4d3a21be4bff55e3083155698d68bf5595b15e3f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/figures/e1-timing.pdf",
+      "size": 19952,
+      "sha256": "9fc36e22047056751bb540da8ce27983f1683baf4ec69ebad787c72cd06bdf61"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/figures/e1-timing.png",
+      "size": 77172,
+      "sha256": "3bf52a3535c5028acfa1c2a670c821e442c5f00bb9b3d4565c933fa9e4043904"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/figures/pipeline.tikz",
+      "size": 1202,
+      "sha256": "8c9dbd43516be8703d4ba841a06d1f2d17caad2c434a61ec29ede40035f0762b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/figures/scan-replay.tikz",
+      "size": 1032,
+      "sha256": "affc55cd6972d929de38dc8ebdd86c6dcea77fb0beb73c96551010bfaffadcfe"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/figures/spine-layout.tikz",
+      "size": 820,
+      "sha256": "390a6d64b34627e93a2d63cae64d971abe54569be978fa5477984e3228d5579c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/figures/state-contract.tikz",
+      "size": 1056,
+      "sha256": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/issues/2026-09-21-v2.csv",
+      "size": 9598,
+      "sha256": "92d44fd2c0aaae4a8dcc27335d27ace1d890398c471ae9454306759e3dd662ac"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/issues/2026-09-22-latest-design-e8.csv",
+      "size": 2676,
+      "sha256": "90e6903b7716aa8ac0b3a2c5f21bd1c596756342c766ac82bf974292ebfc2c58"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/issues/2026-09-22-system-design-reframe.csv",
+      "size": 2226,
+      "sha256": "76c08ae03a5f7399156142a4d5bb531e384778135f94329d4f86e0640df2046b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/issues/2026-09-23-agent-workload.csv",
+      "size": 3231,
+      "sha256": "cb6ad256c685f63403cf5e6bc1fea4ddb90103be603730b45a37f3e2acae98dc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/issues/2026-09-24-best-shared-task.csv",
+      "size": 1835,
+      "sha256": "5c7a59cf85b73c3b94fb66666b77f194effbcf29f7852f53f69f0bd03ec6c418"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/issues/2026-09-24-competitive-comparison.csv",
+      "size": 2043,
+      "sha256": "76dafe862541eb0db3333dcb549bb575526a460d67d3b2766df2fcf573855910"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/main.bbl",
+      "size": 7327,
+      "sha256": "c51d05c1f3ae5deddceebe09facc7f1beaa8c766e91a21231710ef1a9153b654"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/main.pdf",
+      "size": 264071,
+      "sha256": "075f43a8b4c925a4e6af0806c5b052a88ff71523910c6ebae212c810ffb0b57b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/main.tex",
+      "size": 64126,
+      "sha256": "1d8d5f381176a5d30d2152a8cfcf870ae77ad85ed7ee376369a35fef0231dea8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/abstract-framing-2026-09-23.md",
+      "size": 1179,
+      "sha256": "d2a61a668424137671a31f76a31efa2261807d4398a058bcc64471ba3a41516d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/agent-behavior-abstract-evidence-2026-09-23.md",
+      "size": 6425,
+      "sha256": "748ba0786b0ebb8d6f2f86d377754295490b79c6b5f2d87e794673a1e53c4001"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/agentic-workload-revision-plan-2026-09-23.md",
+      "size": 2762,
+      "sha256": "2343f9822da716a793e208f3233ae2483a5b43e08f2661535329ea028cd5a52e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/arxiv-registry.sqlite3",
+      "size": 94208,
+      "sha256": "ddffff2486373bc14223a1fdf4cf570fe568d4e4dec8dd9122add848e7351503"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/best-shared-task-artifact-review-2026-09-24.md",
+      "size": 5713,
+      "sha256": "bc183aa596f9b67fa037c9e7c2d7264cdff4d0b0e8ebb0896f673892b532255a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/citation-verification.json",
+      "size": 36285,
+      "sha256": "86a1aa979ed86af88afa866f4873212787c850b09d41507bdc8f914424e90fde"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/claim-evidence-ledger.md",
+      "size": 4083,
+      "sha256": "cc0c6732d2b3189444b66e6c8db549de7c041b9235920bc45e17721411594a23"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/closest-work-reading.md",
+      "size": 1517,
+      "sha256": "f235f6df4b98df1ff838532d137d1fff6c44a83db9403526cc219ae89ae940bd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/common-rate-estimator-semantics-2026-09-23.md",
+      "size": 6015,
+      "sha256": "4224dbb6049d466c1bd1b105741cb9fd2cf06184d72e58f4c570083883376626"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/common-service-estimator-independent-review-2026-09-23.md",
+      "size": 5055,
+      "sha256": "80b83c8c60e807a4eabb8cacba830e3fd92ba74c2f2168402393cd632c7bdff0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/common-service-independent-2026-09-23.json",
+      "size": 36324,
+      "sha256": "04291fd57a373d592f032dfd3229002135e4983410d3383e295c92c6623897e2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/common-service-independent-2026-09-23.py",
+      "size": 4655,
+      "sha256": "5bc20dcb56d9eaa877b986581c3fb1f081253213cbd2e365a57543ed052fcf7a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/comparator-git-history-2026-09-23.md",
+      "size": 6747,
+      "sha256": "15a48b02c0da4d584c4e2f2e373d1cba99aff27607ca3cb4167321e86279c8e7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/competitive-comparison-redteam-2026-09-24.md",
+      "size": 8293,
+      "sha256": "4c1c7a57bb970d9f497c8c63a5a908418518fa4df15a409ff7221c44acd10e5b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/design/baselines.csv",
+      "size": 1940,
+      "sha256": "172cb874fc050b370473f90c9f071d8ba0dc691e2f4ae07e87849e72d1949a20"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/design/experiment-matrix.csv",
+      "size": 4141,
+      "sha256": "492a42c6b8798c0a4a5e3e3148fa3955511a7936ab8356c1210c771f31a50a39"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/design/method-components.csv",
+      "size": 1851,
+      "sha256": "5dfd8e136f33a792b941a902b09307000f836f3cd789b8996afc0e28b4be18a2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/design/optimization-evidence-map.md",
+      "size": 2199,
+      "sha256": "1cd1e5f9e9df6866fb89d2a45b16354c4fac48d0c76ce16cccaf0aec53f96576"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/e1-methods-for-final.tex",
+      "size": 5476,
+      "sha256": "61aa07c880f40935245cf3c663e1995578a891d460fe48cc75680b41e906f26e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/e1-protocol-deviations.md",
+      "size": 3694,
+      "sha256": "72c10d8c04e5bb966cdf658273180c8745f06a267d3744164ad320d1139996f1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/e1-results-for-final.tex",
+      "size": 3536,
+      "sha256": "2f22142b1b7296b5e4a241d05a4947fe903a19bd72d30dec280b2b3c07529827"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/e1-workload-provenance-2026-09-23.json",
+      "size": 4788,
+      "sha256": "f4cb8b4ba0627d5e05dcba07dc9947dadfd845fc67b4b990ceaca439c115ecfe"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/e8-packaging-plan.md",
+      "size": 7833,
+      "sha256": "e2a727cca4dd54fd89065dd6defea64138339c1471e497720327058e1f59562f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/evidence-sources.json",
+      "size": 3679,
+      "sha256": "c8dbf013f7ba1c8fb3344bfe4191e99b77213c53460881772a421daee52bb41b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/external-baseline-history-audit-2026-09-23.md",
+      "size": 11380,
+      "sha256": "3cd71b93c019a3bf5f7a3a34760bf47e17bc41ec5cfb8ab30926ec08b7cadf4b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/headline-response-cap-check-2026-09-24.json",
+      "size": 10514,
+      "sha256": "b517d749de3e926fceba408b1e24154517d8649cfe7047e82fee713f98c08628"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/latest-design-supersession-audit-2026-09-22.md",
+      "size": 22335,
+      "sha256": "a4591dd72084f1bacd34d60e2fd993cd7bb6fb28467dadc10f17a26f9c5f85c2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/numerical-comparison-decision.md",
+      "size": 5065,
+      "sha256": "9384ade95098643d610b06a4509c32e13151d1dd3d6022c5302fdca94df6dce7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/nvfp4-b1-stronger-history-audit-2026-09-24.md",
+      "size": 12397,
+      "sha256": "657d190e3179768b4fe5a4f8b000a019bd8d01358d55de2b62a18905b40dcbfb"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/nvfp4-workload-evidence-review-2026-09-23.md",
+      "size": 23751,
+      "sha256": "d6a31f364d412f8da4aa5ad5e65bcfcf849537db497884ab4117626ee5f88d94"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/optimization-route-audit-2026-09-22.md",
+      "size": 16314,
+      "sha256": "a667aeb25254714116ba77e1a674ab7d866f5cfc76c03679a70de7903320cc22"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/plot-runtime-requirements.txt",
+      "size": 189,
+      "sha256": "40dfd0078cacf827d429bbec4940067a6dca786997db3e4970e29e95fefea785"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/pooled-decode-paper-artifact-redteam-2026-09-23.md",
+      "size": 7081,
+      "sha256": "98fc79c0bb227a47343d29c1a95c8d9f75a649015b846e609f397cdaded3ed7a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/rate-candidates-2026-09-24/MANIFEST.json",
+      "size": 1050,
+      "sha256": "32bf88cb463dd48d3fe0d8eed7a0a3f493c7f5048e1214e433b21dae7daf0649"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/rate-candidates-2026-09-24/b4-pooled-readonly-20260924.json",
+      "size": 24672,
+      "sha256": "94bb7acd11b1306d258b3ebc72a8dc82da757e124cc31402164fb5a2b2aa53ca"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/rate-candidates-2026-09-24/lumo-b1-overlap-parent-check-20260924.json",
+      "size": 11881,
+      "sha256": "4b2973e8eed82f47712c1cd7127aed497689a3eff40679a61bbe9ddb0e1b66ec"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/rate-candidates-2026-09-24/nvfp4-b1-cohort-brackets-20260924.json",
+      "size": 152860,
+      "sha256": "5eb43689e82c402ac800c34777855c2f10e74eea90a7e91b74dcfdf2f9a9fba2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/rate-candidates-2026-09-24/nvfp4-b1-cohort-caps-20260924.json",
+      "size": 16562,
+      "sha256": "8efcf7a07982f1eda49c2eade9bd62fd1b754180cf2eb62a3dd8c35004602a2e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/rate-candidates-2026-09-24/nvfp4-b1-cohort-config-behavior-20260924.json",
+      "size": 124673,
+      "sha256": "d25ca9d36dbdcb94e701ed6dda1a879212702a49666072d84598786b31d55a77"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/rate-candidates-2026-09-24/nvfp4-b1-cohort-engagement-20260924.json",
+      "size": 75724,
+      "sha256": "cd3de566e6f14d6dcd98414f240a17ec04bb497f4b16a70858efcc6b1108fae4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/rate-candidates-2026-09-24/nvfp4-b1-cohort-rates-20260924.json",
+      "size": 34002,
+      "sha256": "4df1578b8def6361e33f18a973d2c9b3f64d07aca76fac07e4ba904e2abd3d05"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/removed-local-document-performance-sections-2026-09-23.tex",
+      "size": 14310,
+      "sha256": "d1355fbf089f8d1079acfb7db3f987a1d612f6c9f7861be23b6443ab2df71f44"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/serving-comparison-fairness-2026-09-24.md",
+      "size": 9804,
+      "sha256": "9522163c4b3267ce795866907694a8a7501ebd8b1593a1df2d1ce92f56d569e9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/sglang-swe-recovered-evidence-2026-09-23.md",
+      "size": 8157,
+      "sha256": "ec962f8821eb3b2a4f442bd583d246d420f8140ad16bd4c8fd4924b794f7f818"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/sglang16-metric-audit-2026-09-23.json",
+      "size": 19650,
+      "sha256": "6deeffa4ca83f4a864eb1a743f0272d14cb6557fbd1ad2809d9805a871ec4adb"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/shared-rate-comparison-2026-09-23.md",
+      "size": 6229,
+      "sha256": "3f236ab27a93a937949cd297c2bb12f150026e8f5532719cd3a2e6eff1c3b011"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/stronger-workload-comparison-2026-09-24.md",
+      "size": 5347,
+      "sha256": "05e09e15b43731c478e863f211981f2174637a0bb0c2d840f458f0c2b0fa8c74"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/swe-workload-comparison-review-2026-09-23.md",
+      "size": 16028,
+      "sha256": "8e82e9f4959eb330197295d021132bf8405631248280e3858f65dd30d6b65f9d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/verified-e7b-p072-r13.md",
+      "size": 3011,
+      "sha256": "c6439e913a7cb1043f42db3a3ea501308c298e9de95735a5541bf631bbbeebea"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/web-source-verification.json",
+      "size": 4535,
+      "sha256": "31f258d8cc72e202a8836f3d6f16f4111380464ce3e5f39c0ea97e41335d5998"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/P0-MEASUREMENT-ERRATUM.md",
+      "size": 2348,
+      "sha256": "83ce2026e5bb7e544b210ddd96d3a039989a1f631f8e2b5c6ffd190b98c50d8a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/P0-REPORT.md",
+      "size": 9987,
+      "sha256": "9999aecafc19d1a3de981229d8f281e15d730b924713437a9abef4aaed7d2c44"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/capture-inventory.json",
+      "size": 295145,
+      "sha256": "89317b48bde1159b2f6b9c33545cfcd273271e8cbf215e1584b9ab43ecafba90"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/fa2-load-check.json",
+      "size": 271,
+      "sha256": "f617743ed2a490c7b06ce93ffd56566cbe43935337961015e971422578bebb74"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/historical-run-manifests.json",
+      "size": 22973,
+      "sha256": "339164bc3ad8991748214b3495d8f008cdda33dfd4186add32b98d7e1440ce09"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/model-weight-hashes.json",
+      "size": 19641,
+      "sha256": "baa9c888989c486d1a3346547a99d4b20067e99d83b4fb80b1e378ffb445f1ae"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-claude-results-e1-campaign.md",
+      "size": 6157,
+      "sha256": "357c50eac5d2efbcd93188df9f31fd04ce2ce4cc913c15bdea179a75aab3b4f9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-design-reframe-build.json",
+      "size": 1941,
+      "sha256": "3731ca58450b72b01c9ef6c3ce3043308f90b99a321d3e26459b9b390f4beb9c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-e1-artifact-checkpoint.json",
+      "size": 376,
+      "sha256": "80f377984755990e3c99854881c561b4f3271117bb3d39ecedc611920a09a34b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-e7b-artifact-checkpoint.json",
+      "size": 479,
+      "sha256": "68a15ea738074e0c96426e7c569ceb4ee89f1c4e29a8ba3cb91a80e677767c9c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-e8-artifact-checkpoint.json",
+      "size": 3181,
+      "sha256": "e8af1f933d1bdd1af05bd8f5e9496b54dcfd309abe5d264a00bebe4d948506b2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-final-source-qa.json",
+      "size": 2335,
+      "sha256": "a735f5a0579da7987a087bcf6d9648b87192d18cea637694f33d97b152bb742f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-historical-removal-build.json",
+      "size": 1598,
+      "sha256": "870cfb994d00d91581f3b229eb50d051f5898b9362af0340e8f01b56e496f686"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-historical-removal-edit.json",
+      "size": 674,
+      "sha256": "bb3ede3b03d6ffaa2ef5376b0c1ced6a245879357889a92bf0c1813139525295"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-latest-design-e8-build.json",
+      "size": 4254,
+      "sha256": "0d0af39f4616f5debee6b2d733959b2b1d1fadd5685d155adac65cb3482f4cdb"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-memory-cleanup-final.json",
+      "size": 4599,
+      "sha256": "c98fe437321d51028494f0f0bbddd893f62abc46f6fbc9a87601c3eac476a64c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-paper-final-build.json",
+      "size": 1191,
+      "sha256": "88204ad2844713b0114216ab7682b546b545d00b4ccdfe7ab16a41eb1ab1f1d0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-paper-redteam2-build.json",
+      "size": 1683,
+      "sha256": "74a441d31898ada8a3d30e6c67b50147e79679690496e25c0d73ea559b4bfa04"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-paper-review18-build.json",
+      "size": 700,
+      "sha256": "e201b072aff63ca7e32feb0026d678aa4d5cf1a288eaa8d170abfee0e26a8232"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-paper-review18-kv-build.json",
+      "size": 535,
+      "sha256": "d47bb3644757a0d18ddaea90e23ed9442e76778dae163a2bb5eba79e0ae42bd3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-paper-review20-build.json",
+      "size": 544,
+      "sha256": "7bab54ae658a9712b8c8b70d687957d02fb6118ef7eb5173174162394c4c9e21"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-paper-review23-build.json",
+      "size": 613,
+      "sha256": "634889794b1cc85fdbe959964f5a8c79b06f99b09791e853117c8d4d005a0de2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-paper-review28-build.json",
+      "size": 616,
+      "sha256": "e3d0a8f0a628288a75082940dbd6daf94c6a4458b9e7315eb65a1a0857e2b266"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-review-14-frozen-audit.json",
+      "size": 22402,
+      "sha256": "63556f9ba5a70c0268af981bc8401ecf7fcd10361a1428c15ceb93408ed0d11b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-22-selected-route-artifact-checkpoint.json",
+      "size": 1201,
+      "sha256": "7ed74ce1699a4bebe6d5d2c292dd54102b174c6db19c078b8cb31ea6336f9ac6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-23-agent-abstract-build.json",
+      "size": 1708,
+      "sha256": "2d15851eeece6c6f395b100820d9af5e13c67c6d6d8cae06c8e82a9b8f687e10"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-23-agent-workload-build.json",
+      "size": 2982,
+      "sha256": "f7e6a04ed5990cd8cbf66b24b43d37f7b77a1edeaaca37600f1ce00cc90a5f39"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-23-history-correction-build.json",
+      "size": 1666,
+      "sha256": "e6397a510125e9bafe5dccb8e3e78d2b1c6783a1e2835be590536d206e9d0c3e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-23-pooled-decode-build.json",
+      "size": 1321,
+      "sha256": "ce483d826c990dca5d87246ec0abbabd35af09d1894493e32d7abe46098849d1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-23-pooled-speed-claims-audit.json",
+      "size": 50273,
+      "sha256": "5f590118a48e107d057cea2318b9dd6f901e52a1db4712481869a90d16a962f0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-23-pooled-speed-claims-audit.md",
+      "size": 2340,
+      "sha256": "a35e875fb06653fc5a7b97f7f796c4529682bf3aa8a60585c7fb596cb47eafb4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-24-best-shared-task-build.json",
+      "size": 2381,
+      "sha256": "85a0ed6390e49391b5cc89af65a9c2eac4cc7f7cd232b77cbee39e764912c26b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-24-best-shared-task-speed-audit.json",
+      "size": 44344,
+      "sha256": "67a93e5162f5c902dc7ce5aca9270ab9bb43c08b6285fe40d7deade17875dba7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/2026-09-24-competitive-comparison-build.json",
+      "size": 45374,
+      "sha256": "494de917dec40a03f1cadd9728155e28d1dddfc9fea4e54077db5d2032bc2311"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/artifact-redteam-round1.md",
+      "size": 13030,
+      "sha256": "a8b1d51d101d70742e88dc462acb85620f16be1e4fe155f4a7207d736e00e3bf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/closure-ledger.md",
+      "size": 32206,
+      "sha256": "295b574cd3b2b11943675227a75ace1a1b8600eda0b51a9b7421c586d4057517"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/design-reframe-redteam.md",
+      "size": 11289,
+      "sha256": "dfed0d850c913b0a3e1eb842c452d475f96ef9b5ef2dfffbeb0ffd545576f4b0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-artifact-final-redteam.md",
+      "size": 9875,
+      "sha256": "8a499e9d9f7c77189fac4b8eb48021c9ed7b82400d60d61fc4a5849e40c0173a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-campaign-final-redteam.md",
+      "size": 18286,
+      "sha256": "f10d099c370a78844aaa69f546da1ff24788c5896ac92a2a2aa91aecc22ffb4e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-campaign-launch-approved.md",
+      "size": 2181,
+      "sha256": "69a71ef32b2de4630e3528789fe3cbb88f64acce654e505a543f173d2c3e9939"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-campaign-launch-redteam.md",
+      "size": 18580,
+      "sha256": "a4571ea0aaa595028a36c362117b38cb3383233f98d0316987f93319bac00596"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-first-native-cell-redteam.md",
+      "size": 14884,
+      "sha256": "ce669ef61421a0d45fc7ac0ac996ea167bb5255aea4bf8b8ab57f5b29ecd1e2c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-first-tree-timing-redteam.md",
+      "size": 24240,
+      "sha256": "9995f60a61a45a9db69a2fa1fec013d10efc5b4f98bc26c811fed5908d81774e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-measurement-redteam.md",
+      "size": 41284,
+      "sha256": "8e0b192b0ec078dad406a4a2a4d3fca5aeaadd9c8e7e80645d13d2fa18dd62f3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-methods-candidate-redteam.md",
+      "size": 8925,
+      "sha256": "2bb857dc5971c153a12b47bada7bea1bd672a18a43e103826b92df18cd978e23"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-native-qualification-redteam.md",
+      "size": 24488,
+      "sha256": "7c3c4ebe5c16caa26c81419a0a61a631d4bae13b21ea3aff7522016c22d5439f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-parent-source-checkpoint1001.json",
+      "size": 4162,
+      "sha256": "ef9222223fa70a6358be7c4bd9b525a11bb1b365d65dfc09552b95fd6933e995"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-remaining-cells-redteam.json",
+      "size": 764527,
+      "sha256": "347ef2f472908b70c5e7f7cb20fe2f7e0efdb553d064a66239bb6698b6f0a8f8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-remaining-cells-redteam.md",
+      "size": 42041,
+      "sha256": "6e97dab8031d9c35270d59120132c341f8039232aadf984fe6ed554246e910ca"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-reply26-parent-stub.json",
+      "size": 5779,
+      "sha256": "3bb7456c3a64a63a46708b785c0a7334899b915451d04fb1f974d1b8567bb287"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e1-seed-scope-paper-review.md",
+      "size": 7053,
+      "sha256": "73aa0821433fecf735f3d5808ce2703be1f23a870ec324eb203ca65fc23b6e03"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e2-b4-api-inversion-redteam.md",
+      "size": 14193,
+      "sha256": "f3b37263801f0faeaf4ecd4faeaeb6382b0e014fac54501109e4367e1e0a388a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e2-b4-duplicate-path-review.md",
+      "size": 9129,
+      "sha256": "264cbfc51181c6853dec9a90b0177aec57faef16bbdc35a397376dd870defab4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e2-b4-final-redteam.md",
+      "size": 70169,
+      "sha256": "105d5eb78029e70a864cbefa3cb71a2886f94733d9a107055be59ef77d654788"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e2-closure-decision.md",
+      "size": 11420,
+      "sha256": "422b53087cc46fce0d131479a8839444b2bb473b7db6fa905c334e975c70c2af"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e2-closure-fixture-redteam.md",
+      "size": 35746,
+      "sha256": "a05ef81ca2a64d2e22fb287fc0d29613bc2625bc059850a291e2b0071f19f580"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e2-fixture-final-recheck.md",
+      "size": 11228,
+      "sha256": "3d3c7343664a777cbc5e9df886b4026ea604751e4264cdf1a4fd4bfc28397f8f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e2-minimal-qualification-review.md",
+      "size": 11987,
+      "sha256": "e21ebddeeaec7f9766642f18fb4f735c923ef95f8134326cbc67797f06e55d91"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e2-policyB-b1-redteam.md",
+      "size": 22363,
+      "sha256": "dd7de6d504fdd4daf8d091b36cc8e02b9ebe7c89aee7e61e81fa518b51e1be8f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e8-artifact-final-independent-review.json",
+      "size": 4157,
+      "sha256": "927c20fb68576748452c3e321315b2548dfb8444e3d9ddab7f32047710c0fbdf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e8-artifact-final-redteam.md",
+      "size": 4993,
+      "sha256": "ec0b8b357d211559f4cadaf82c7f5e9f4137994c4a7efc5aae4483d1bd51d898"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e8-postcampaign-memory.json",
+      "size": 1476,
+      "sha256": "b116677717520c9a13d2d37e96c24d699cdf8ba0e74972c5a3a01293f3afc904"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/e8-timing-final-redteam.md",
+      "size": 9672,
+      "sha256": "8f246e660beca4d5d601c7ba23a6e2040861b33052a6ade52fad8bc576b26364"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/historical-numbers-removal-redteam.md",
+      "size": 5908,
+      "sha256": "4128141b4a4c5fdc51378dc3319641195cdcb9ebc42f6cbb4ab514bc7db59f3c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-agent-metrics-redteam.md",
+      "size": 3780,
+      "sha256": "4fff7d7d38bd37d61e9d7b8c2db881b8438a3357ca8256f539a1ca454346e87f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-agent-workload-redteam.md",
+      "size": 6412,
+      "sha256": "8676789c647376cedb0e67df56098a4396eba736e2746ed99ac23ea24071affc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-best-shared-task-redteam-2026-09-24.md",
+      "size": 5646,
+      "sha256": "d1d174a042e680070d2eeec219ad7412e003a9533ab0a0062441865a06f1294b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-e8-results-redteam.md",
+      "size": 6431,
+      "sha256": "62893b6033f668417f990ab6ed4759d31fff11c6c2a76e4d4b0998904b3991bd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-final-e1-redteam.md",
+      "size": 9699,
+      "sha256": "c1eff492271f0354afe0fa38ff75e061a7bfdbeccbb6f5726eef3a8804acc8c2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-latest-design-e8-redteam.md",
+      "size": 10220,
+      "sha256": "2d850bcee52b40b590041357a3b1e5cb30dc36e9b4bd120788b7f842438ab7a7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-pooled-speed-redteam.md",
+      "size": 7301,
+      "sha256": "b0e71c4c475d8a227795060777000b8df1dd90627c9788910d9adbf11ec320d7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-redteam-round1.md",
+      "size": 29307,
+      "sha256": "f6c8327db427467f94de8fe6392fe94f422e0529e2bbd8e9a757dc65a360a137"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-redteam-round2.md",
+      "size": 14425,
+      "sha256": "ab9e9bb84d9835c04966d6090a96d60925c89e8d963d77afe333be4da46c25c7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-selected-route-redteam.md",
+      "size": 9338,
+      "sha256": "de0e658831b606ec9dd9c57b910b9f75ae841618449b24d6a9c0dd9a006d9a28"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/paper-whole-draft-redteam-pre-e1.md",
+      "size": 26608,
+      "sha256": "f648fe6700183963d12f9e406cd0e8625228030d105a5511ad8534d27006c385"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/e7a_capture_launch.diff",
+      "size": 1667,
+      "sha256": "4641be1d55d6c98465412f35bf68e22d8bc3a977be6eb10c4135dba5f1984bf6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/e7a_capture_launch.sh",
+      "size": 25712,
+      "sha256": "892a74b91d9855e9e40ba70163235d50e17eb130bd1f75f4e3103917ce45d1f2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/e7a_core.py",
+      "size": 28803,
+      "sha256": "868d55db26eb5b83a43dc22010d639de2fe129c055a84bcd6f32a9f0e48409b7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/e7a_device.py",
+      "size": 47687,
+      "sha256": "70e475e3998c1d8b37761afa616ffe5c97a5ca02492366531fd13eee7012d693"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/e7a_kernels.py",
+      "size": 14012,
+      "sha256": "15c3536252183281c6ff1dd5fc9fcc068e5d056bf6fa5ec8b199cc302ac21a70"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/e7a_reduce.py",
+      "size": 24347,
+      "sha256": "c64211d32289adc17d3e39ea40e14835362db062af55b620c1f8d49277054bbf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/e7a_selftest_core.py",
+      "size": 7067,
+      "sha256": "8ae7e11a32a67b3994a7c47687d487156b0b7582937e1aba350fa0a2c9a21714"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/e7a_test_core.py",
+      "size": 7782,
+      "sha256": "0447a04ebfb2ae1f88652b0ae07121b651d59543c42e10d7accfa3f4d7b0a090"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/historical_payload_manifest.json",
+      "size": 11461,
+      "sha256": "4f25602d7761b4bca476baa13c6bb102067b6501536c4bf6781e4df9ecae9dd3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/legacy_wy_8a975837.py",
+      "size": 33246,
+      "sha256": "e7c2a2a8b658f0c944b35bbb93e571de5ecff0cb99a15860c924e635b28f58c1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/prefix_pool.py",
+      "size": 9907,
+      "sha256": "8a55abe78793634fa01ae745e4c9e9e643386773efbf829df2b7130cf1862109"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/run_in_image.sh",
+      "size": 3975,
+      "sha256": "2ef28156c26aa72ea82a486541221e6aea432f7ad0e097f13140b14db6d22a0a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/serve_drivers.sh",
+      "size": 7336,
+      "sha256": "97c0c215de14ff31549a2317ba2ea9279dbb1f6ffac063ed3f3e974c729ce2de"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/telemetry/gpu_contention_20260921T220600Z.txt",
+      "size": 1718,
+      "sha256": "76c832a2e0484e55ef7d73bf2bccb934dff951ae4c6a993e8166d2b12800c0c5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/tests_out/review02_regression_20260921T222045Z.json",
+      "size": 3490,
+      "sha256": "d190a3eb78f951d1ee9ae8efb29ff5ec515691144742a99c612419f001b9a456"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/tests_out/review03_regression_20260921T223637Z.json",
+      "size": 4511,
+      "sha256": "7cae71ff13a50bcbc27fee25a60736f824d81f0e9ef0dfe5de3efad6b896770e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/tests_out/selftest_l62_20260921T222045Z.json",
+      "size": 12240,
+      "sha256": "25cf3af2bd32423db03760930c31b3342b809df9d5695da2dc9550c7de05f5a4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/snapshots/20260921T2308Z/experiments/e7a/tests_out/v3_regression_20260921T225908Z.json",
+      "size": 4561,
+      "sha256": "c006683c790f82cdcae2bdc00c55acf3e091e2883abb2b28f19c6b9c99322ed3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/validation-redteam-round18.md",
+      "size": 22450,
+      "sha256": "83b7e1669b9df258a5079efc8b60fbd7328cdf3ea0f08ae7adfdff911f3036b1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/remote-readiness.json",
+      "size": 52466,
+      "sha256": "f85203ee91f18bdc8125ef495c706abccc96b0fd9b382a1c3d91ff07798bbd61"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/stock-image/reconstructed-current.py",
+      "size": 32340,
+      "sha256": "fb4e79e1361da1c59a3256f6eec555d982ea6bc48d3b84bba2ed055d9b104173"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/stock-image/reconstructed-kvremap_tail6_kvr1.py",
+      "size": 142991,
+      "sha256": "5f0479ddfdab451079f668eccde5e999ac41e6e844b9b351c3480b452dc0450d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/stock-image/reconstructed-native11_control_kvr1.py",
+      "size": 142991,
+      "sha256": "5f0479ddfdab451079f668eccde5e999ac41e6e844b9b351c3480b452dc0450d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/stock-image/reconstructed-native5_control_kvr1.py",
+      "size": 142991,
+      "sha256": "5f0479ddfdab451079f668eccde5e999ac41e6e844b9b351c3480b452dc0450d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/stock-image/sampling-source.json",
+      "size": 66178,
+      "sha256": "9c7610ac926b2e8e65fac312c9eb6850dbe68d69480c1d0c9895795ced65ee1e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/paper.config.yaml",
+      "size": 1047,
+      "sha256": "83235c9c5a5e3ae3e112597c470705cb29d9919b8e3dec9910845572479ed898"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/plan/2026-09-22-system-design-reframe.md",
+      "size": 4347,
+      "sha256": "d22eb72d8324fb8c623cf533523ce5eccd0d78421bcf70415483dd8e57cf66b2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/ref.bib",
+      "size": 8035,
+      "sha256": "88ceccadbd0376d694f6037181ebf0dacd71f0936558d6c88f856666ccc05fc8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/BEHAVIOR_MANIFEST.json",
+      "size": 851,
+      "sha256": "60606fd37fa463844715cf586d824611c1b30587dd68c8811e87ccec7b6ccb59"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/EVIDENCE_MANIFEST.json",
+      "size": 35641,
+      "sha256": "75200c9ba4538ae8d1c9889ac798e1604dc6cbb8e98646568e2b9a741b00980c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/README.md",
+      "size": 2792,
+      "sha256": "6c7ea214fa43810f87c9af489ed5727f33e7e0bb4e9d9a0641d13973c50e59c3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/SHARED_RATE_MANIFEST.json",
+      "size": 2362,
+      "sha256": "3c68bd5e2bde06fef5f9e089d27fb2935431e557de3331761ee1bb47fe873428"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/audit/swe-lineage-and-native-review-extract.json",
+      "size": 195373,
+      "sha256": "d96f94d92610633abc9228e621f5b1e44ed55aa02b66ec19e1241093ff0039ed"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/audit/swe-lineage-config-review-extract.json",
+      "size": 219170,
+      "sha256": "1f33917a053e5a925822be221f25ef4390ec06e1240c83b5c36cee2b4ba69fe2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/case-study.tex",
+      "size": 12256,
+      "sha256": "0e553bc129a8139125b7928af5b457f60d6f7b38f0a47057b3ae4b3bd0f569d6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/competitive-rate-audit.json",
+      "size": 60790,
+      "sha256": "e30060ec1c4ade6f4b3765e4a0c55c25cff3ba121715e4ad26f2f2a44abecac7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/competitive_rate_reduce.py",
+      "size": 3625,
+      "sha256": "a2d2a669cf63061d5fabddcd39778dadd0dff9c031fec3b9d99ccd9d713c310c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/cqc10-behavior-audit.json",
+      "size": 45070,
+      "sha256": "5c3c6501093cbebe6da8e6114cc548a7b2b748136d168478cad86653da0224a7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/cqc10-metric-audit.json",
+      "size": 16643,
+      "sha256": "d46418013862609dd494f1b2bcbe0dba82dada578cfeb2ce01816e539fabc761"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/cqc10-task-audit.json",
+      "size": 6511,
+      "sha256": "7e2e11b682006687dc46ca1afd19bd5ce907ed29fcd41ca4c68936af11f17132"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/cqc10_behavior_readonly.py",
+      "size": 3063,
+      "sha256": "7a84011f97598b5eeb1576f88f5ac082cf8f1c28f049db0865215d3da1815087"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/cqc10_reduce.py",
+      "size": 7055,
+      "sha256": "59f6d35aad7a409e9a00b551697da3205bb5fa8706ef4a54977c62089fb4e8a3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/metric-semantics-source-review/MANIFEST.json",
+      "size": 2456,
+      "sha256": "c2df3702a3ddb8d4e5d0a95dea90aa05f65aa6820f29b6eb3e9e187451d96e5e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/metric-semantics-source-review/independent-estimator-check.json",
+      "size": 3418,
+      "sha256": "f47de271f30fbe22bb03c294ed883d6e831f62d7348863b4d8ff445885b81a7c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/metric-semantics-source-review/sglang/metrics_collector.py",
+      "size": 95603,
+      "sha256": "04662d1f5c6723298b76d8333f496a997b40f61a12b577d46f226648114eced6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/metric-semantics-source-review/sglang/req_time_stats.py",
+      "size": 45389,
+      "sha256": "f4ac4d7c0f01c0fa4b147201453a88471eae5ccc4b2196de87788acfef87ebd9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/metric-semantics-source-review/sglang/tokenizer_manager.py",
+      "size": 164077,
+      "sha256": "f945c60f9ab273aa76c77a2ed506437eedbb54dedccc6c7c028f13778d2a1b7a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/metric-semantics-source-review/vllm/metrics/loggers.py",
+      "size": 51893,
+      "sha256": "d1998a556e7decf9d11869f4b62a0a34977be9b147b3db1352d4baae10f5551b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/metric-semantics-source-review/vllm/metrics/stats.py",
+      "size": 18538,
+      "sha256": "08eb6bb969ad47e4207ba5568beaec35bdb09192b6db046f046dab4892ac1bf3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/metric-semantics-source-review/vllm/output_processor.py",
+      "size": 31327,
+      "sha256": "54fcda17755aa60600efe9121af5b824cf30a28c2768d942deac22d43572e533"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/MANIFEST.json",
+      "size": 65854,
+      "sha256": "01c3922b06377c85d86b213bded399af377809f22d0df63829c5358ef7a86bcf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/arm_env.txt",
+      "size": 595,
+      "sha256": "c3b8842d1fdcca40c717fa3fb75c6c0cfecfb6dc8902af6fa542aedd9d9f07ef"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/arm_meta.txt",
+      "size": 504,
+      "sha256": "74d1711fc64145c1bcce45a54eccd54a19cef50641a76dab223f06fd19ed0540"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/closure.json",
+      "size": 2740,
+      "sha256": "3de7909f166ca1e22cc73423d4f8a1029b3686de6b86b9ba0e3a0e22966ca7d5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/arm_ended_at.txt",
+      "size": 21,
+      "sha256": "52265aef35738503e3506624742cc8ec75fbc078ba82fcd035f68048ce833003"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/arm_started_at.txt",
+      "size": 21,
+      "sha256": "63f249d370ca11caef11268df9bdbe2bb27f3d064e7afd7961a75ef92182a4f6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/boot_log_snapshot.txt",
+      "size": 42872,
+      "sha256": "328ac74d775d428cd08669dcc34a535232755018b31a1ca927465f421470a8f9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/container_env.SANITIZED.txt",
+      "size": 28939,
+      "sha256": "15f1e8ea4a9bbc33d8837dfbeddce3e2b9bab62f63411c090b5b8a1da48550d4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/deploy_speed_promoab_C.json",
+      "size": 19848,
+      "sha256": "84ccbe95dfa033eb070ffe643f030137819dd9bcadc359efeb1d26693d84cdfb"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/docker_full.log",
+      "size": 1315838,
+      "sha256": "97a5431d2890d71d8335979a75b4d9470b4fc22c25c2a511d728459956c31a9d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/eval_offload_preflight.txt",
+      "size": 45,
+      "sha256": "e5f517429f003146b333578c5834ee62fcb146b07fbbbffc384332bc38dc434a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/fixed32_chat_traffic_audit.json",
+      "size": 48251,
+      "sha256": "9c3fd8f5c317d85d2858404455626f5d1063bbcc613d8ef09b74218bd0111ad9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/fixed32_container_identity.json",
+      "size": 331,
+      "sha256": "41f195a0bed538fecac89d94510e9239e659dd501f360f360c899a4e87cf35b4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/fixed32_final_flush.json",
+      "size": 498,
+      "sha256": "4492d14ec659cb91d0476293cf4027715928975e91d45eba96d735af9f7cd001"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/fixed32_process_identity.SANITIZED.json",
+      "size": 38784,
+      "sha256": "e8af05d0c49caa9aaab404cbbe92d9188b44acfae82ceac12d6713694e7fa627"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/git_head.txt",
+      "size": 41,
+      "sha256": "f9d39bb93856f526f8b5c501e3f6b6490c67f207e34766773eeee51c837c967e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/health.json",
+      "size": 1879,
+      "sha256": "697f35a0c2e186c6dcf7dc9f64f162faf0353041bdfd5b2dcbb798e1acba6481"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/launch.log",
+      "size": 1340,
+      "sha256": "1c0bd5fae01af2d7b1a5a711a633cad22791e1b1f7abd11a6471e6629eb3a403"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/logs/fr13_fa2_qrow32_b1_production_engagement.json",
+      "size": 3706,
+      "sha256": "c8f3c761e9cd3ee97a1c3c421f28488154ae13df2504bb42aa026966dad1da71"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/logs/fr13_fixed32_runtime_attestation.json",
+      "size": 11845,
+      "sha256": "cbd3e3dcf1e6edd489667422e64afa9423e211980aac3f8fad4fcf32f53195de"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/metrics_after_swe.txt",
+      "size": 68643,
+      "sha256": "4e352116724054cc715c3b1ed14ee98125920631c91a0c0ae12e8a180d37eaed"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/metrics_before_swe.txt",
+      "size": 66565,
+      "sha256": "9a4c69c4a9bf7b0c328b270dee02a73086a5706473e3c118155632054bc07676"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/offload_proxy_env.txt",
+      "size": 1859,
+      "sha256": "1399925a100db708a750d7c7daf7396e358364e557bba5a62aa3493e304bc813"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/pretask_identity.json",
+      "size": 366,
+      "sha256": "787db8868b73f4b8da7b8a7d8073ac1e24edf847cec3ac2b363cd068a0486d4f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/campaign_summary.json",
+      "size": 809,
+      "sha256": "73968721c797f9515e3dcb673a7f3878be5f472076674b7316ee5d7bacf8854d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/eval/eval_report.json",
+      "size": 505,
+      "sha256": "1f5b14164712012d82b80c7cbef93f7d9810d8ec0ae72b80f1b83a8e34732fec"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/eval/normalized_eval.json",
+      "size": 354,
+      "sha256": "892e2c6f28fbf8c5f1e59ca184211bf9662a7ed2c2adcbf7ee674af35d627b71"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/eval/predictions.jsonl",
+      "size": 1305,
+      "sha256": "1d083960f3a85d5a7f6e9bf7bd2ab522a2bcf81bc0389ebce860df1bd348b984"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/fixed32_task_boundary.json",
+      "size": 2074,
+      "sha256": "dd05dd7b4c1087b3a207df19a245aafbb08277a529d6b72ca6933ed2358a3238"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/patch.diff",
+      "size": 1141,
+      "sha256": "b0fd2e607947c0c923075c3bafaca8ce39bdbef38edf4f69bd1a0e3bdefd1dd5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/prompt.md",
+      "size": 5153,
+      "sha256": "b82e78ac4ffc59b630b90b937d0eb58bff05a6de2db6b8b0f008487717e1ba48"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/runner_metadata.json",
+      "size": 31582,
+      "sha256": "3f74dd8d66138e6c6eeac65d5d62f732b91b6138dbd18b2b3d28622b1ba024f6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/vllm_metrics_post.txt",
+      "size": 69096,
+      "sha256": "c142af7ef3e626b719ac643d3a9592c2b9fdc1ff1418811b577be7b7adea1003"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/vllm_metrics_pre.txt",
+      "size": 67165,
+      "sha256": "8cb4d76bc0abd1f53b5afaeab052f7bec1ff54be6ccb8eb4525125e5b6feeb8e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/vllm_per_turn.json",
+      "size": 551,
+      "sha256": "0b20046e0947c2039e1b4b37b1af5d350461cc984bc22f04a87331b5f2e52c46"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/vllm_request_metrics.jsonl",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/eval/eval_report.json",
+      "size": 506,
+      "sha256": "320e69da98b54de8f8e2f42f67e920f39bc9987e2a0a333b612aa267a19b3ee0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/eval/normalized_eval.json",
+      "size": 356,
+      "sha256": "d196238498e5c993fd8c5cd4787bdbca353cb177732f6e0cc781ab923abe3fa2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/eval/predictions.jsonl",
+      "size": 1495,
+      "sha256": "c51de71d4123f8ab9d9561c5613e469208a88e02ca19b88a3e804926b6e4d2a6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/fixed32_task_boundary.json",
+      "size": 2084,
+      "sha256": "44b467020c951d59a0c3842bd9b5449bac986485a2dae6608efe0432f8a19bae"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/patch.diff",
+      "size": 1321,
+      "sha256": "acd05ca3e5ef92ca01fdd388aca29f5e573bf949bf1e7d641ff50d6cd6fc5ea6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/prompt.md",
+      "size": 2434,
+      "sha256": "a2f5810d59ce4a462ab13e8a83f4312cc5ca57834923aadb39911873beadd603"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/runner_metadata.json",
+      "size": 31590,
+      "sha256": "6738eb0a670320a0e9f3a4d0252cf10e9501849e2375e233c74a533f6277d90c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/vllm_metrics_post.txt",
+      "size": 69149,
+      "sha256": "b301283cbd88d4688b1958911288b303561bd639c2456105f2a8f5b7a08e7b8f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/vllm_metrics_pre.txt",
+      "size": 69096,
+      "sha256": "df9cbb21fef7f22d18e4867347959e159b5b21d1d063156cf319a6459a620c7c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/vllm_per_turn.json",
+      "size": 551,
+      "sha256": "e3218cf3db2ac07cfdd128bd1650aac133280ded65c9025e411c08e0a58b4002"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/vllm_request_metrics.jsonl",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/eval/eval_report.json",
+      "size": 505,
+      "sha256": "068635a51846ec266c2ace07980d62b1a933e72a5e87c4ab66fbf2c543ac0831"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/eval/normalized_eval.json",
+      "size": 354,
+      "sha256": "1d6069a41d7049e08075198f87ac36b11b2542317a056655c57564455c7d28b5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/eval/predictions.jsonl",
+      "size": 902,
+      "sha256": "c7d0185482b0670bf8d12292fcca1443421ad8450882054c9ee912a3b7327e9f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/fixed32_task_boundary.json",
+      "size": 2088,
+      "sha256": "dee028f24e5555a0388fdb7382723fa2330bc8c396c8dffb571c6f7b35aaa4a6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/patch.diff",
+      "size": 745,
+      "sha256": "5e5d3f473f32e65bf50569ec509bedf90618b01c601e4d087ac0389e31f52745"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/prompt.md",
+      "size": 3303,
+      "sha256": "a8fd15291d350b4b2c0334fdb3e78a472b0638dece622be376b8aed06a2bc3a3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/runner_metadata.json",
+      "size": 31582,
+      "sha256": "c12a2d42470557f126adaba4fd59634f59e80218e39264675600a7c6143a9f03"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/vllm_metrics_post.txt",
+      "size": 69132,
+      "sha256": "ad9941d6895b8fb5707ee007a23627a6d7d3dc31b7bcbfe6fdfa989215075668"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/vllm_metrics_pre.txt",
+      "size": 69149,
+      "sha256": "34f3b4c3849c631ae278714569f98a307e506195f5c4061300ac39796746b83b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/vllm_per_turn.json",
+      "size": 551,
+      "sha256": "98a85b7fae2d0d19012d0d549f769fe80aa9ed845b698c6cb149b1937e6f5343"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/vllm_request_metrics.jsonl",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/eval/eval_report.json",
+      "size": 506,
+      "sha256": "eb501a85e75d643c3899f4de6726fb5c3832821cca6b38b8b7f8c48be6716963"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/eval/normalized_eval.json",
+      "size": 356,
+      "sha256": "b95d9a29c3722120459e387a3fcd0de554d2a10331a7100b2a51341e8b996998"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/eval/predictions.jsonl",
+      "size": 739,
+      "sha256": "ba1d93cd4704c1e5a844f5aa053f219839849dcea19df30c2f5c76189248fdef"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/fixed32_task_boundary.json",
+      "size": 2087,
+      "sha256": "7a109ef8b795085a0063851d153ae07da169bfa819f68a0648c852e8410a311c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/patch.diff",
+      "size": 574,
+      "sha256": "6a1c48a99a547e05b04a9523a0e8678d0dd860ffa85de79c2f91d1b888368fa0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/prompt.md",
+      "size": 6296,
+      "sha256": "7fac15e7fed9dcbbf68eee8864ec4b3f8758ea9da91f772fceeff7aa9e58ac24"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/runner_metadata.json",
+      "size": 31561,
+      "sha256": "7b8df4b131ec2cf435f88215afaf7645f0d961ddc3339e8fcfe969763eb037d7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/vllm_metrics_post.txt",
+      "size": 69252,
+      "sha256": "770d770d1100a2bcf078ca725a55699d4e1c59aa2689cc6e4524ac122acb7adf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/vllm_metrics_pre.txt",
+      "size": 69132,
+      "sha256": "87b09ae10b5302a0f447b29dedb2c970bbd4994c2091f1d19d98edf9b661759b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/vllm_per_turn.json",
+      "size": 551,
+      "sha256": "d92c0fd03f04c83144482c980208bcf9897091d726e1d4dcf259796dd1ac33b8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/vllm_request_metrics.jsonl",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/eval/eval_report.json",
+      "size": 505,
+      "sha256": "153bc034b43438d866d3eb8050dfd927144bd432125cb71637b033ab4b2c7c68"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/eval/normalized_eval.json",
+      "size": 354,
+      "sha256": "5c833a657cdf2178d809d24bfd31d8396f5e1213b1e51ebcdac105d44949d88b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/eval/predictions.jsonl",
+      "size": 780,
+      "sha256": "e4edd172be96ee9e0e141c2f613a292699ed73755b7e4b17cf25774e8bd3fe18"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/fixed32_task_boundary.json",
+      "size": 2091,
+      "sha256": "895219cb48984de9a42bd8bec759e913904f95ed6c4438c90ea3f60e59865be5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/patch.diff",
+      "size": 617,
+      "sha256": "d2f7c021982b4fdb23d0c7be7ae0d5572aa14fbe29fb26113efad57e2176ef64"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/prompt.md",
+      "size": 2783,
+      "sha256": "01e959f5c71f2164853231776f44d2444e82330685314e9a144075982df3c748"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/runner_metadata.json",
+      "size": 31573,
+      "sha256": "08e8750f868c7a61d0e3bd2229a2882eeed288090e215eb3e3d13f99afedb557"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/vllm_metrics_post.txt",
+      "size": 69300,
+      "sha256": "b0d4c9dec37017a2b973b6025b4f9847edbb2d08d3b74736023c60982c1d08d4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/vllm_metrics_pre.txt",
+      "size": 69252,
+      "sha256": "15a6a814d8edd65f7f6ea0bdba9c67689d9a9349e83160102019d66364b9fa2f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/vllm_per_turn.json",
+      "size": 551,
+      "sha256": "6b8a9b7ab0ba230aa590c28c053192b16554bac8e3101ca2ba05f62d129e8ec5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/vllm_request_metrics.jsonl",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/eval/eval_report.json",
+      "size": 506,
+      "sha256": "676871871a54a99ad05798ba9e0e3c692ad387bc20bf8a702f04ff6fb073b6f2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/eval/normalized_eval.json",
+      "size": 356,
+      "sha256": "93e584d030bae508a6831d4e8fc208f944f738c86a65b53ed960dd8060d9e5b6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/eval/predictions.jsonl",
+      "size": 12665,
+      "sha256": "a04d391ed13c027f64ebb1e1b3385e0000b71357efa6a5d4c4275ce946d21ee5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/fixed32_task_boundary.json",
+      "size": 2094,
+      "sha256": "c2b0871859819e6d18d97a8cbdd5d227b732b22dc16cfa61af24a7ad864eaf55"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/patch.diff",
+      "size": 12307,
+      "sha256": "afcef9c60ba16f662b7c78cd2ec55ba2237678111ba70cafa2e15fd9b0957fde"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/prompt.md",
+      "size": 4019,
+      "sha256": "04bb64219926a1781d702da00f42cffc79e9c8fb71a01370e46535cedb49c0a1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/runner_metadata.json",
+      "size": 31608,
+      "sha256": "fcd0f6c46a02ebfd0d744c1dcfa44161a3addb565accecba8d7bed1eababf8d9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/vllm_metrics_post.txt",
+      "size": 69300,
+      "sha256": "20362878f3dbe76c7c0bfd79dd1b49749f6bdcd9195c057b652ee4f710ab7be5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/vllm_metrics_pre.txt",
+      "size": 69287,
+      "sha256": "8c50f5d863ff1743bd3afce48a2e7e1f451ca540aa2ab5d71f1448c1acc1706a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/vllm_per_turn.json",
+      "size": 551,
+      "sha256": "ebc9c414740838d82b35a7b34bd549a96bb7f8b78c9867f37a93cad06e08b7f0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/vllm_request_metrics.jsonl",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/eval/eval_report.json",
+      "size": 506,
+      "sha256": "3e7df6127233c0d0e033ca510dda93f73e5e11144f2f06fc80a6508d1f7866a1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/eval/normalized_eval.json",
+      "size": 356,
+      "sha256": "537be42b7e0f5a561bab7599ba9259e2763587f684a899d28a5d7eb56cbad5e1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/eval/predictions.jsonl",
+      "size": 1316,
+      "sha256": "4d4f8cfae25bddf9ed46535f485a362e5f6b731af76f60f40e6e91c0c4b6254f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/fixed32_task_boundary.json",
+      "size": 2095,
+      "sha256": "3f4e91031434c27dbc46ba3298100601891c355bd4c1a4c6809d04dd4dda35a4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/patch.diff",
+      "size": 1124,
+      "sha256": "879685f512004de093f219e43aed44e7d9c10ddbd307f35381df5a784fadffbb"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/prompt.md",
+      "size": 4064,
+      "sha256": "d950e74499863d5289ae1a781d013908f39810ad5f4fe3fbc7e5e393591beeae"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/runner_metadata.json",
+      "size": 31605,
+      "sha256": "a2d03eef3fc7369b114469241895861eb12c904c42fc83276a1ab112b0ec2552"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/vllm_metrics_post.txt",
+      "size": 69323,
+      "sha256": "e2bc098ca5540de6bb4889c247d202efb58a15a4255563e2f5d9807eed122038"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/vllm_metrics_pre.txt",
+      "size": 69300,
+      "sha256": "5fd7219d3cda5a379b5a77abd96b57e3998bc041eabd27fc34ff13bb39be5355"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/vllm_per_turn.json",
+      "size": 551,
+      "sha256": "7db0fb03566919f8240a32cf5f05cf73899938a4db53000788e382c5263b1673"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/vllm_request_metrics.jsonl",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/eval/eval_report.json",
+      "size": 506,
+      "sha256": "b7645fc557bc487f9ac9a6e39ca178eaa64d7793106cde6071ebe1ae520e0c6d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/eval/normalized_eval.json",
+      "size": 356,
+      "sha256": "d6dd7d4b39ed3239ca555bd4ee29036673566f698e602450e1408f11cf733dbf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/eval/predictions.jsonl",
+      "size": 821,
+      "sha256": "c96f964092bb320753b1fdec9dfa1b2e564c4e947cfbc55cd843b5b52ac14782"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/fixed32_task_boundary.json",
+      "size": 2094,
+      "sha256": "2289cdf86673922ca1a0ceaa97bdbb44251075a3507d4e7a03748c32bd68ca88"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/patch.diff",
+      "size": 662,
+      "sha256": "2e829b87b408aaf27fc01121ebc12329a82b2891e1e7dd44480840506615d3b5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/prompt.md",
+      "size": 2909,
+      "sha256": "c2a8f5c8d5f76db892f50177cdf8dcb47b85539a532d3c1aa1ece454a9aaa69f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/runner_metadata.json",
+      "size": 31602,
+      "sha256": "9fa5a88686cb8a061128fca0f36606006b3adba0828bd488227e16bea28ad205"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/vllm_metrics_post.txt",
+      "size": 69334,
+      "sha256": "b55f55099c1518adda38a4f2f4fb6bad673374219eca90cceed5f9c9c152cc6c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/vllm_metrics_pre.txt",
+      "size": 69311,
+      "sha256": "0330669c3a8ac42853e4903845c14cf0f81d687edfbbca1cb7177a5c08c7b7c8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/vllm_per_turn.json",
+      "size": 551,
+      "sha256": "847f4a08bae8391cb02aa9fdf2d2758e8ac6f781553e65524e3e1962d14fadea"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/vllm_request_metrics.jsonl",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/eval/eval_report.json",
+      "size": 505,
+      "sha256": "5e5becfd0fb1333919015978d284ca8b34274d1eb6aa054a66852582ce7f3bd0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/eval/normalized_eval.json",
+      "size": 354,
+      "sha256": "ce6f13af3b83f5b7ff7c680897e72b57036ed72204d60cc272869c0677cbdeff"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/eval/predictions.jsonl",
+      "size": 973,
+      "sha256": "e3edf9b511275c71b3505ef2c1370cbcbb843c75c01afef68770f2022ce3543f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/fixed32_task_boundary.json",
+      "size": 2094,
+      "sha256": "c4e36eec84b7277007b6074eb6c54f2fe2d449e82d012137cfc709ac813e7e62"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/patch.diff",
+      "size": 808,
+      "sha256": "09ccbac7bf565acee5b152b04a6e4e4d575d6e0953d71b0e272040bebae001d1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/prompt.md",
+      "size": 4030,
+      "sha256": "1cba02fce4ea9f648bcffb44cb81084944650f0a0668c1a497302cd1734b1cf1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/runner_metadata.json",
+      "size": 31605,
+      "sha256": "478a10876a87366358e7da9747cba6e410df464fada1e5d36a7993a15619c30d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/vllm_metrics_post.txt",
+      "size": 69348,
+      "sha256": "7f5ac4212fbe54980150675ca675022454241b383c4ce15a2156f2658cc65795"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/vllm_metrics_pre.txt",
+      "size": 69334,
+      "sha256": "e52049b3985a9607d714db6afa1f6942065c6e4482e61546c4a658a48746e530"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/vllm_per_turn.json",
+      "size": 551,
+      "sha256": "78c7002e5b226cd346f27a59b5579a9ffb2df037877b23dbe14186f6b7ab3e42"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/vllm_request_metrics.jsonl",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/eval/eval_report.json",
+      "size": 506,
+      "sha256": "1df319b952b53681daa2ad80c7652274f895f455457f06bfee7fd08647fbda6d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/eval/normalized_eval.json",
+      "size": 356,
+      "sha256": "f8e32cfec7d3dbe45c1903fb42ef4cc64f27dd9b3d44036bfe948e0e74104be1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/eval/predictions.jsonl",
+      "size": 796,
+      "sha256": "28f53a65897fb567c7c0e8d2db131c7f2f876b132c574da9f4382303e3d43f3f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/fixed32_task_boundary.json",
+      "size": 2094,
+      "sha256": "234f2880c3e790b16c8a90ead0802b005411ef3872f79914d4f374e23d9a30fd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/patch.diff",
+      "size": 645,
+      "sha256": "9d9f5dad8a26566282d791b93ad15e1623b66494e76d28499bd8a81a5d6a9ecf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/prompt.md",
+      "size": 3881,
+      "sha256": "33da3b24aa927ed419cad448e6e69ccc4350833abe9a8bc2ea0ca3f71bd90b08"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/runner_metadata.json",
+      "size": 31580,
+      "sha256": "356acf8134a4fd9a081bad4b473fe13e2d116d17fbc793c57aa6f733291588e4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/vllm_metrics_post.txt",
+      "size": 69332,
+      "sha256": "964bb69b2b02403ec1b21111edd997806e831439ce785aebd034142cf3bfd9a1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/vllm_metrics_pre.txt",
+      "size": 69348,
+      "sha256": "5348c2d09ca142855918854c258a4d432ee2d6cb9723f8700147fdb6ff77c390"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/vllm_per_turn.json",
+      "size": 551,
+      "sha256": "aa3fd9493fd76409f177ad151fc6dc5e3f3543383f93a4292f3e52cc81f500ea"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/vllm_request_metrics.jsonl",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/warmup_probe_disposition.json",
+      "size": 164,
+      "sha256": "4a1b308dceb6c5d220d6329c10b0cec5c0218cef0ee55e0ef6da90740c675731"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10.runlog",
+      "size": 9806,
+      "sha256": "2905f72ff44d78e7a28823f80625110d8e68c661d0d94bb4c38a8c02c9cd28e0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/source-config/config/fr13_fixed32/qwen_system_settings.json",
+      "size": 98,
+      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/source-config/config/fr13_fixed32/subset_b4_sixteen.json",
+      "size": 1073,
+      "sha256": "47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/source-config/config/fr13_fixed32/subset_b4_sixteen_qc_remainder_10.json",
+      "size": 1067,
+      "sha256": "716503a46a991e3b187e14777f96f074c1a3359d9f8b7928f4453a6b9da1ee9b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-12907/eval/eval_report.json",
+      "size": 529,
+      "sha256": "2d6ff6a782da8c459cfd0e66ad1b2b0521ffab64d46e38d90f592e5513cf5dd3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-12907/runner_metadata.json",
+      "size": 2123,
+      "sha256": "5a1d8c0257a20769b74295a89f497a8cf5e51da48fb3d05f94ec75bbdb3040cf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-12907/vllm_metrics_post.txt",
+      "size": 81110,
+      "sha256": "d09f7e711cb5247b160d8f17d6d8ce5d9903d769ba6d66e5b614af2ecb0a49f3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-12907/vllm_metrics_pre.txt",
+      "size": 63928,
+      "sha256": "6a65f7c595b6b90a590ff8ba45c3ae255721472019c98d4cd5d5065f892193ba"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-13033/eval/eval_report.json",
+      "size": 889,
+      "sha256": "f76de9ad0b01b9df9291ebfe9b2c01c03e52b835a09b2ac7e4873f03c4099f4b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-13033/runner_metadata.json",
+      "size": 2664,
+      "sha256": "ffdd5969ccbab6993f9ec88297b2c8b4eb968e265eb9caab39fd460e2dc2ba02"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-13033/vllm_metrics_post.txt",
+      "size": 81119,
+      "sha256": "e01786f4ae6cb978bf4521a1321d0d67f1aa316496ef0f69b5fccb4645ef0d5b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-13033/vllm_metrics_pre.txt",
+      "size": 81109,
+      "sha256": "46fafd463e8943ed25122150734c3c96c8c205e710705bc4bff637f958982a3f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/launch-and-contemporaneous-notes/ablation_a_step2.json",
+      "size": 8566,
+      "sha256": "cd24f73dd4eb7d7499fe1e8d6bcb5cb30498c398ea574524386a52aa6aa7e5e2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/launch-and-contemporaneous-notes/ablation_a_step2.md",
+      "size": 7566,
+      "sha256": "94f5910257d03f6b290a2a9d9ccc2563b2e93c87fbaf7cfdeb4858bdd9254445"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/launch-and-contemporaneous-notes/ablation_a_step2_sglang_boot.sh",
+      "size": 2841,
+      "sha256": "68c20121f4fdd6aeca68fb10dcea628e8edb50af24018166beaa5bba1f68be30"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/launch-and-contemporaneous-notes/ablation_a_step2_sglang_cmdline.txt",
+      "size": 459,
+      "sha256": "eb17eb2b7bf3afeeb7fdb8992160c7935b7b9112e937b20e0ad482b5b3da2aad"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/manifest.json",
+      "size": 4641,
+      "sha256": "a524f1e25270a9ca87f737b6f99ff5ae3e814ac265b3c0781d7824caffe5d02e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json",
+      "size": 505,
+      "sha256": "947c341b179d2bdd1c3f7c594125d5b7df0cbe8ea5b1668b42b2a83342ff5306"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json",
+      "size": 30951,
+      "sha256": "193c989c10fd94143d5b0765dc9b690ba0a594ea1f068eccd4f6b50ec312fc8b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt",
+      "size": 69076,
+      "sha256": "4e6f8b17407f164da706a8d145378d95e1cec91ba32a560fcf33d607aaa1be4f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt",
+      "size": 67186,
+      "sha256": "347091d929fad00a217f669679af2826a8647d8abd166d99035ab077a9f64a95"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json",
+      "size": 505,
+      "sha256": "3e7c8e9bd6ba49174aeeac629cc783a36a0e9e113889f9e2825c1eb746b90dac"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json",
+      "size": 30974,
+      "sha256": "333b2328235d562351607e833b8b44094d30baffb8d2b1cf81cff900f2102c38"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_post.txt",
+      "size": 69133,
+      "sha256": "0ecaf5807db8ef6e07fe289ef7f12269732cf1c0ed36ef58f7196b02ae572be5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_pre.txt",
+      "size": 69076,
+      "sha256": "1150d98626e164a9b63d2999c8df15caafe172c2e5ec338cb27fe44cef316571"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json",
+      "size": 505,
+      "sha256": "a62f6b555de22602c3e4d3cfc89e9402b75cc0e7ccf29b696428711c6af51a34"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json",
+      "size": 30937,
+      "sha256": "bbb23507db18bd5bd70fa7cdd8f4dc544efc1075c1f3f5161db22e80f4419554"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt",
+      "size": 69015,
+      "sha256": "39dfcfb6e709796e64a9001a801ced623152fe275e4111294a89242f2d8192b4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt",
+      "size": 67154,
+      "sha256": "90b2894bcd720be3f3b696f76ca86e6a23c7493c259ddd375faf7cc4bc2afb32"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json",
+      "size": 505,
+      "sha256": "5860883b91d7a8b250acf753d530b6dcc397b0af5af52ea9b6472a5d9a7282af"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json",
+      "size": 30952,
+      "sha256": "a2cbc8e1d1245139918005f1f275eaa6378270535c3a31f6e02bb56c4ebe511d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_post.txt",
+      "size": 69070,
+      "sha256": "074cced4c01cad462d97222e6feeb85353ec77ead89deeee46b8789e7129ade4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_pre.txt",
+      "size": 69015,
+      "sha256": "dd7766089fd6c2bbb1726a64654504f2015c373541f31a5ea007566913a488f1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/MANIFEST.json",
+      "size": 24806,
+      "sha256": "2e20393e2fa238d489215a11d3b3315a08e9516609f341713ecd1ae62ed4dbd2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json",
+      "size": 506,
+      "sha256": "5abc55c85ef8bffa60ad4b9c4108b55a69239c3bb3e40dba631e3eeb90b28fcf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json",
+      "size": 30932,
+      "sha256": "fe7e5a21b8016b3336717a8c2d73118b1f63d5fe5f21d037ddcd0c506f664e99"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt",
+      "size": 69024,
+      "sha256": "36398c25f6d4f5e437eace1f951c7177faf7a146ed7e04333159485052803385"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt",
+      "size": 67177,
+      "sha256": "892f7b5642fae6de347fb4e9a4c140769af47827221d86124714ac1b0e622ca4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json",
+      "size": 505,
+      "sha256": "d8d2c13a8184bfafc1a0e4098d06dfb0d142857f5aee4c2934e0b79a28a03b08"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json",
+      "size": 30949,
+      "sha256": "7640209c38cb66497f19a7bc84fe5c99833a56bf789ddf6bbb6077517984ac0c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_post.txt",
+      "size": 69091,
+      "sha256": "bce39cabd02df1638e43ecdb6ce535e5063b399a3f6525703a47e7bb6653ff99"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_pre.txt",
+      "size": 69037,
+      "sha256": "4294d7cfbc7806c34d3e64cb14bf17ac5e8242278aa3c65425dcc1f6eb995bdd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13236/eval/eval_report.json",
+      "size": 506,
+      "sha256": "8ca4e80a89bd7e1e8b2bbb0a9928a28637669fa8079aae09afe42ad8c0d73efa"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13236/runner_metadata.json",
+      "size": 30945,
+      "sha256": "5fd1c2f2787fcdf4bf332c9f19605189bf211ebf1159795106c7146190caf685"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13236/vllm_metrics_post.txt",
+      "size": 69088,
+      "sha256": "df186d0065ca484c0c6588f9167d981d28b9a91b941545fbe536aa331a647cc9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13236/vllm_metrics_pre.txt",
+      "size": 69078,
+      "sha256": "828d601710697e676b6c9f0e186b6d7f82d83bc32ca60cf34a57b0f8012a9d71"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13398/eval/eval_report.json",
+      "size": 505,
+      "sha256": "5fbccd3d3a24fc93bf8f774b1225d159737fac0e748ef58f990d5aa08dcfa8ec"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13398/runner_metadata.json",
+      "size": 30974,
+      "sha256": "29c401f46d5bdb409ee9db4409edb9ac6ff5f0586a77212fe849f0ace67e3986"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13398/vllm_metrics_post.txt",
+      "size": 69292,
+      "sha256": "ffc5b26a25cc8f66f5650d90250b4572a6eeb332f1cea57fe7d00fd65ffa30bd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13398/vllm_metrics_pre.txt",
+      "size": 69088,
+      "sha256": "0f98868408cde65b70cc2195ea754e13afb6e5641531ef48a5a4eb723f162db9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/audit-projections/nvfp4-b1-cohort-caps-20260924.json",
+      "size": 16562,
+      "sha256": "8efcf7a07982f1eda49c2eade9bd62fd1b754180cf2eb62a3dd8c35004602a2e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/audit-projections/nvfp4-b1-cohort-config-behavior-20260924.json",
+      "size": 124673,
+      "sha256": "d25ca9d36dbdcb94e701ed6dda1a879212702a49666072d84598786b31d55a77"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/audit-projections/nvfp4-b1-cohort-engagement-20260924.json",
+      "size": 75724,
+      "sha256": "cd3de566e6f14d6dcd98414f240a17ec04bb497f4b16a70858efcc6b1108fae4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/sglang-settings-projection.json",
+      "size": 8641,
+      "sha256": "6f9db90fabc5c7310e5e53968255f5c1ebaa9e4fc202ce34fd507b81f860e95d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/sglang-step2-behavior-projection.json",
+      "size": 21656,
+      "sha256": "8ffb89b13304bf4a3005725085234f0af3bb53b8a79059b929c4b55488866115"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/sglang-step2-config-projection.json",
+      "size": 1513,
+      "sha256": "5ebbd60c77b000efc5890a6e97bd33c249f30583a7162b6258e05b6ba13055dc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/sglang-step2-rate-audit.json",
+      "size": 6540,
+      "sha256": "c1e01be7b5a1bc11cce67666a112fe5c4c6478ae10b3a3315d95eeb8c5e39787"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/sglang_step2_reduce.py",
+      "size": 3043,
+      "sha256": "9315e2fb93252234c316fde3e684839cf7ba58c047b1d89f1e36546cdc5a237f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/shared-rate-audit.json",
+      "size": 29849,
+      "sha256": "91e38415989781a3d2460729f86ed90aa246167c3850d480b03354c84342e9b8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/shared-task-rate-audit.json",
+      "size": 53366,
+      "sha256": "dcc6f3fb69bdd01f7ff8bed0c920ea797c18c18418c06044bfa039a88a7b286a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/shared_rate_reduce.py",
+      "size": 9824,
+      "sha256": "c201221bff80ff85b104009e9336346c6605f508234f5a68952ad393745cc57f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/shared_task_reduce.py",
+      "size": 4352,
+      "sha256": "d007110971ed8d3d0b2829a4f1f8e617ff12faaf88ca6231263997cfff4881ca"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/derived-accounting.json",
+      "size": 273,
+      "sha256": "0ae3f4c186da6ff19c4bbf07caad40ff88f18f87fc02537b460f4f9c01d41d95"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/e1/aggregate.json",
+      "size": 19544,
+      "sha256": "dbd4542ee9899da3eb592fdf8a0b935010f5c8035de9d5cb75e581343c7deb1d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/e1/api-stream-diagnostic.json",
+      "size": 482706,
+      "sha256": "4f7b8346f065e224ee8cb59a26636a24b9f427f26cce25dd539b7b0bace2131b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/e1/cells.csv",
+      "size": 2147,
+      "sha256": "35cd67f1682ea62c8700e7dcfe8f77a9879cf7753a6c689c845b81c70a617094"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/e1/contrasts.csv",
+      "size": 826,
+      "sha256": "c464e06fb7528a35aaf967a4f9f94447cbcd81ab9ab5282f1fc0941ee561d359"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/e1/independent-aggregate-review.json",
+      "size": 5821,
+      "sha256": "04ecfdddc27229956d831c77df6fc85975479fd9aeb67759ba900561621a550d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/e1/support-exclusions.json",
+      "size": 89093,
+      "sha256": "dfddf42002e234da24057645416a69196ee851376db2f195f741360e0471de95"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/e1/tables-source.json",
+      "size": 566,
+      "sha256": "ce2aba9ffb7c1c34d8daf46d5766fdfd85e9fddd1807722d626fae9cbb8121bf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/e2-policyA-first-forward-audit.json",
+      "size": 24945,
+      "sha256": "ec12ccf0ca25d0c7315dd8509a3290dfc1762f8258c65b46202ab6f4c870db1e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/e7b-r16/fixture_commit_only_vs_none.json",
+      "size": 14837,
+      "sha256": "3bdae2f840dbed8375a79c8e472792e71ac623adce4cde9cd65a125ced8dae70"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/e7b-r16/fixture_commit_only_vs_sham.json",
+      "size": 14849,
+      "sha256": "1c98df584a14f36626bd4d16c5a0ddd4b37b17bad70cf518cb286b48cdccdc08"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/e7b-r16/fixture_none_fidelity.json",
+      "size": 13626,
+      "sha256": "fe0d0d566702b04bbf16ea32f9d209bc5334f38eae9bfa9ccc2c6aa4d27795c4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/e7b-route-environments.json",
+      "size": 2930,
+      "sha256": "e5ff2667734a9c187ad18ca349e94114f29d7115ed3912254475b20eccd5bcdf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/e8/aggregate.json",
+      "size": 154268,
+      "sha256": "74b0988b191bb68fad43d41f76f520d49d529e86753ac0f18535721f6c3757fb"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/e8/blocks.csv",
+      "size": 284,
+      "sha256": "8fa6a03ae43173c9dcf38685d8f4429f2eab3393a43b2a2af85ba2cd9f99849c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/e8/cells.csv",
+      "size": 636,
+      "sha256": "2245308540e18438e8a4dc2a76e5154f45c74a2508dd0f81196b417081179665"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/e8/paired-rates.tex",
+      "size": 300,
+      "sha256": "c5af31c6e91fa80e61becefb370693c47f8c8e87559098f5b2b0bdcba2d17d89"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/e8/summary.json",
+      "size": 1176,
+      "sha256": "4b8f8aca86891c932779b812ca5ef8bd3f301ce39dc5e4d393cf5a3581fdde8d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/historical-macros.tex",
+      "size": 715,
+      "sha256": "228e73de3c30abb84d728c7a86f814bb31f93f6f3b2970394956c7ab881b6c09"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/historical-metrics.csv",
+      "size": 685,
+      "sha256": "ab8bd3bdc07bf5a8eba168dcbb9844bcacf53121136e68d6656cfdff81016e94"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/historical-supports.json",
+      "size": 1950,
+      "sha256": "2a85237b412479febae72886597e4f64aa0a6e18f8ac3dd3b66a1799837794e7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/review-experiments.md",
+      "size": 8805,
+      "sha256": "f8e62499198aeaf6bb79a36f2c984aa27dbbfe0bd69058ad2bd49ca590815afe"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/scripts/audit_evidence.py",
+      "size": 7200,
+      "sha256": "e801bce52db5ecf761514b1aae6a346c4b50ed5ee368c459a2a3156693050433"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/scripts/audit_p0.py",
+      "size": 9164,
+      "sha256": "c34047dd91c192ad7f5847dbb95f6ccda32c56d4741886fba0319b226d40a932"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/scripts/build_review_bundle.py",
+      "size": 11040,
+      "sha256": "bc73e819235b30a75c7834e7f208121cb8d8924603ce14cf1ebbac487a4eb58c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/scripts/export_completed_e7a.py",
+      "size": 3715,
+      "sha256": "19aaf436e88ac81e025566b5ba33a9bdecc66744c653f7cfac2b89d046c37810"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/scripts/export_e1.py",
+      "size": 4242,
+      "sha256": "ab416b39d74a9c3b88847e562fa08ffe06a9369caae6215727b0da99920a2b12"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/scripts/export_e7b_diagnostics.py",
+      "size": 2980,
+      "sha256": "fd639c07d98c5ac20656b0e8766afa8335c24b21585d38846c1b6724884d6981"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/scripts/export_e8.py",
+      "size": 20020,
+      "sha256": "e50c3ce4438a7e148180616e0b3bad5227ba840f5ef817deb60db7d37cda291f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/scripts/export_e8_paper_results.py",
+      "size": 4662,
+      "sha256": "2e10f80044ed42a4222254374a15af2afabad50908c7253567f5186f30d9146b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/scripts/export_selected_route.py",
+      "size": 4284,
+      "sha256": "f85c577f1cb48d1eb092d7b090dad4d2b47b07c7c1cf309c25988fe0baaa3154"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/scripts/plot_e1_results.py",
+      "size": 5024,
+      "sha256": "9d833763e6f2c8178744c08c4eb444633bea3c73ebf9e9fb025d7776de988588"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/scripts/tabulate_e1.py",
+      "size": 3378,
+      "sha256": "870b6cda6775fcf4c968f3375a919512f3fc3787cd38e4baafa440d419d0f5e8"
+    },
+    {
+      "path": "results/fr13_b4_exact16_qc_20260814/fr13_b4_exact16_qc.json",
+      "size": 250838,
+      "sha256": "36e1643e82f87e66b9385f5246c78edb6ba7fab74293634c5dcbf7322df282fb"
+    },
+    {
+      "path": "results/fr13_series_closeout_20260815/README.md",
+      "size": 4208,
+      "sha256": "2ddc816ae913f1dc914a2af0da6d391da0bab4717d07218a6a8ac3ddcb817998"
+    },
+    {
+      "path": "results/fr14_nvfp4_port_20260816/REDTEAM_20260816.md",
+      "size": 495622,
+      "sha256": "902814907c5642ce917fbda8f7ca955b3d859d4caae2d22570b448c4121d2736"
+    },
+    {
+      "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json",
+      "size": 532,
+      "sha256": "edbfc46aef05608155c175a271ff8ae6a78e0f08c46717c6c6d2c6f2abbbf99b"
+    },
+    {
+      "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json",
+      "size": 3087,
+      "sha256": "a8197a47470987fc87076b2163a02dcfac7f30a3652a56f1a4031a3ee9f89ff1"
+    },
+    {
+      "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_post.txt",
+      "size": 81148,
+      "sha256": "b32016db90b22b8c4c9e6c596ead8a23a705a1321a466905e934b90cae534d6a"
+    },
+    {
+      "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_pre.txt",
+      "size": 63929,
+      "sha256": "bfd624fdfdf2a8359641e64e7d327b8477995f8fa77c4b47d00b376d9ab34475"
+    },
+    {
+      "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json",
+      "size": 533,
+      "sha256": "0c9aefa2d1f712a8108155687c4f3b003b40762aaf1f468658fe2e4060603cfa"
+    },
+    {
+      "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json",
+      "size": 3086,
+      "sha256": "78679842646c92cc927c0cc102836580b965ced7a7ab8d5d4a1f0d0a77d97f71"
+    },
+    {
+      "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt",
+      "size": 81120,
+      "sha256": "7e35034253ec0114076663fc9b8b76c412706ea46ae8cf14c929d2f7ae9c4909"
+    },
+    {
+      "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt",
+      "size": 63943,
+      "sha256": "56e71021b747b98d7b667577d979632f5ee01725a1639c23f388002b5dcc678c"
+    },
+    {
+      "path": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+      "size": 732084,
+      "sha256": "d9dd0c697b466180ab5d834a52555c1516edb534e0a3d1bd3094e0d1489c24c8"
+    }
+  ],
+  "companions": [
+    {
+      "file": "e7a-evidence-20260922T0709Z.tar.gz",
+      "sha256": "776ddcaf5d938cc665bafca20f46e29d1e9a550a34914d798e78f70636cd180b",
+      "bytes": 268871594,
+      "manifest": "e7a-evidence-20260922T0709Z.tar.gz.manifest.json",
+      "manifest_sha256": "50dd06ea612e00caec86e84db0b49321d3fd9878e8e4f79d68bb95dfa88c0e7d"
+    },
+    {
+      "file": "e7b-diagnostics-20260922T0801Z.tar.gz",
+      "sha256": "c573b5064d944547df280e314520a97dd0c10678fb877c8d75b3a898d548ad05",
+      "bytes": 2179735658,
+      "manifest": "e7b-diagnostics-20260922T0801Z.tar.gz.manifest.json",
+      "manifest_sha256": "f36db7f4f0b16f9f43a0d70b535ca664a66f1ef447789985b82f3a78db8b4682"
+    },
+    {
+      "file": "selected-route-20260922T0930Z.tar.gz",
+      "sha256": "7f127f0c2e8198f067eb0f59737e1a58afc34991aa562dacbc11d7d147d25a30",
+      "bytes": 1735458237,
+      "manifest": "selected-route-20260922T0930Z.tar.gz.manifest.json",
+      "manifest_sha256": "d1fe338b3bae56a755725a622fa679692377156b56be0d85952fd654d9e386b8"
+    },
+    {
+      "file": "e1-timing-20260922T1225Z.tar.gz",
+      "sha256": "bf50b33386eb9614cf7874039f60cb62a484ee62bc0882e32ab32731857318d6",
+      "bytes": 12955447,
+      "manifest": "e1-timing-20260922T1225Z.tar.gz.manifest.json",
+      "manifest_sha256": "47936b8a7cb22bf389b452ce2f013e5092d9f9c34b639b640f54768b3ecd4414"
+    },
+    {
+      "file": "e8-single-logits-20260922T2255Z.tar.gz",
+      "sha256": "b4c0a5cbcd2592ce5ddfdc823243f0e99dc15ef412d238a096068d6bae11ebf4",
+      "bytes": 16237576,
+      "manifest": "e8-single-logits-20260922T2255Z.tar.gz.manifest.json",
+      "manifest_sha256": "d2512b2141628c77746d5f1ddc0de025bb3de525fba5dd375226a60427c70439"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "created_utc": "2026-09-24T21:26:20.224851+00:00",
+  "scope": "Read-only stronger-rate candidate audit; manuscript unchanged; no new inference",
+  "files": {
+    "nvfp4-b1-cohort-brackets-20260924.json": "5eb43689e82c402ac800c34777855c2f10e74eea90a7e91b74dcfdf2f9a9fba2",
+    "nvfp4-b1-cohort-rates-20260924.json": "4df1578b8def6361e33f18a973d2c9b3f64d07aca76fac07e4ba904e2abd3d05",
+    "nvfp4-b1-cohort-config-behavior-20260924.json": "d25ca9d36dbdcb94e701ed6dda1a879212702a49666072d84598786b31d55a77",
+    "nvfp4-b1-cohort-engagement-20260924.json": "cd3de566e6f14d6dcd98414f240a17ec04bb497f4b16a70858efcc6b1108fae4",
+    "nvfp4-b1-cohort-caps-20260924.json": "8efcf7a07982f1eda49c2eade9bd62fd1b754180cf2eb62a3dd8c35004602a2e",
+    "lumo-b1-overlap-parent-check-20260924.json": "4b2973e8eed82f47712c1cd7127aed497689a3eff40679a61bbe9ddb0e1b66ec",
+    "b4-pooled-readonly-20260924.json": "94bb7acd11b1306d258b3ebc72a8dc82da757e124cc31402164fb5a2b2aa53ca"
+  },
+  "note_sha256": "05e09e15b43731c478e863f211981f2174637a0bb0c2d840f458f0c2b0fa8c74"
+}

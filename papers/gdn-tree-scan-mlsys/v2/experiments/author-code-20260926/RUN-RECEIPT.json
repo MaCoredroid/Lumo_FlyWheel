@@ -1,0 +1,57 @@
+{
+  "completed_utc": "2026-09-26T19:47:39.718334+00:00",
+  "status": "TWO_AUTHOR_COMPONENT_RUNS_COMPLETE",
+  "host": "100.103.10.122",
+  "gpu": "GB10",
+  "docker_image_id": "sha256:3e3c5ccc9fa038dab00d5d5192e54cf12c30650e866a643aaef4d450148ead21",
+  "treewy": {
+    "commit": "b073ed6cacfa1cf5ae23111854729e662a72a6d1",
+    "cases": 39,
+    "failures": 0,
+    "errors": 0,
+    "gpu_cases": 16,
+    "reference_cases": 23,
+    "scope": "Selected unchanged author tests through import-only adapter; excludes installed vLLM layer/model tests"
+  },
+  "weaver": {
+    "commit": "aeac03f0d4c8789559411be95c5c127bdff24d1c",
+    "numerical_cases": 9,
+    "timing_configurations": 2,
+    "assertion_status": "Script reports differences; no pass/fail tolerance",
+    "shape": {
+      "batch": 1,
+      "tokens": 65,
+      "key_heads": 16,
+      "value_heads": 48,
+      "key_dim": 128,
+      "value_dim": 128
+    },
+    "scope": "Unchanged author BF16 benchmark, --tokens 65 --repetitions 1000; verify-only timing, no LumoTree comparison or commit cost"
+  },
+  "matched_lumotree_comparison": "NOT_RUN",
+  "full_model_inference": false,
+  "files": {
+    "SOURCE_MANIFEST.json": "49e48f5060dc04b557d9f7d8c6533783dd2b56643914b35b2cd4657abbf90ff2",
+    "output/environment.json": "0b190e3d1c641b95f07182bdabec9d0510a24eb72854a3fa7fc957fcdc42122c",
+    "output/treewy-author.xml": "4475acc12b690ce828c6b17b4e5e52788125ee444881de9bf76af1b0befe5b23",
+    "output/weaver-author-benchmark.json": "e7a9c55b2160faf1dbd3aab3919efc5253874cb679faaaeccf9c2e99efb4047d",
+    "run_treewy_tests.py": "b1750151b93116c33978b605aec7e822e928e99921be528450d8bd6e88545029",
+    "run_weaver_bench.py": "85358f2407f2c796adc335e77b50a4d1daeb256e73afdfc7b5c1700cb434d7b3",
+    "treewy/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "treewy/test_tree_wy_chain_capture.py": "2c52bf1d1535dea614caa7c89fc92b16797d88a09fae8bb4ff97ad5a5b1deaba",
+    "treewy/test_tree_wy_ref.py": "45f345cf65f920ab828560a5f6b4da4356029ea6121f04952d5ae42024b60154",
+    "treewy/test_treewy_tree_capture.py": "516a19c6460d4fc8fdf5777edec936c61c96f69b5e6510ef692d7af8b24aff0b",
+    "treewy/tree_spec.py": "441c4338e7a5032f10c963b430ebe9246bd189910d81b44d637898f6dbbbe7a9",
+    "treewy/tree_wy_ref.py": "aa5f0f07824065044ee3b1c98a5a05ff542feace826239e0d38e9cc6292f01eb",
+    "treewy/tree_wy_triton.py": "c3dc8849249b3eef336a77aff50f2b7963d9cc2567a6e8e926257aac04a1f4f7",
+    "treewy-test.log": "77c080353fff2026e5d25790c20854b577c9966c68fdecbe8888cdb5bee782b9",
+    "weaver/GDN_TREE_BF16.md": "9bdf2b5d74c79a89b930826a49b82535c885733f95a2ce699fe684c651e6a82f",
+    "weaver/LICENSE": "1495e1e757ef4d0925a2350563cf5754bb23c51701a8ec4fb3c5cdcbedae6747",
+    "weaver/bench_gdn_tree_bf16.py": "2507127ee260624a92456af1af91f805b5d10888265bcce8d9e9ca52fc3d1a51",
+    "weaver/chunk_tree_verify.py": "1e141a8d52af973abb06f8ce99380e7636528bb9e917646f6e060923f1392eec",
+    "weaver/gdn_backend.py": "3fd3f730764653b85a6c45362f38e108fa150ca53c9bc87c9d3d67b01e12d5d7",
+    "weaver/gdn_tree_fused.py": "87b54b2edbf051b37d5b61540509aff5d88b2130d10e1400372ee4a36511fc2e",
+    "weaver/gdn_tree_triton.py": "b151d4b2ade0451a896e99f83e1656bcddd3d8ad279eab399e994c604e28a1ff",
+    "weaver-test.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

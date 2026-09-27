@@ -1,0 +1,505 @@
+{
+  "schema": "independent-common-service-estimator-v1",
+  "cohorts": [
+    {
+      "cohort": "sglang",
+      "tasks": [
+        {
+          "task": "astropy__astropy-12907",
+          "tokens": 8314.0,
+          "requests": 18.0,
+          "e2e_seconds": 403.9457656198647,
+          "ttft_seconds": 111.49299156968482,
+          "count_alignment": {
+            "generation_tokens_histogram_count": 18.0,
+            "e2e_request_latency_seconds_count": 18.0,
+            "time_to_first_token_seconds_count": 18.0,
+            "num_requests_total": 18.0
+          },
+          "idle_boundaries": {
+            "pre": {
+              "sglang:num_running_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_grammar_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_prefill_bootstrap_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_prefill_inflight_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_decode_prealloc_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_decode_transfer_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0
+            },
+            "post": {
+              "sglang:num_running_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_grammar_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_prefill_bootstrap_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_prefill_inflight_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_decode_prealloc_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_decode_transfer_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0
+            }
+          },
+          "tokens_per_summed_e2e_s": 20.58197091691743,
+          "post_first_token_pooled_rate": 28.366973187187305,
+          "trace_reconciliation": {
+            "result_output_tokens": 8314,
+            "visible_nonzero_usage_messages": 18,
+            "visible_output_tokens": 8314,
+            "additional_engine_requests": 0.0,
+            "additional_output_tokens": 0.0,
+            "note": "Additional requests are included in server counters and final trace usage; their class is not explicitly bound by this older metadata."
+          }
+        },
+        {
+          "task": "astropy__astropy-13033",
+          "tokens": 39540.0,
+          "requests": 27.0,
+          "e2e_seconds": 1609.6886568600312,
+          "ttft_seconds": 124.45576960407197,
+          "count_alignment": {
+            "generation_tokens_histogram_count": 27.0,
+            "e2e_request_latency_seconds_count": 27.0,
+            "time_to_first_token_seconds_count": 27.0,
+            "num_requests_total": 27.0
+          },
+          "idle_boundaries": {
+            "pre": {
+              "sglang:num_running_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_grammar_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_prefill_bootstrap_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_prefill_inflight_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_decode_prealloc_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_decode_transfer_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0
+            },
+            "post": {
+              "sglang:num_running_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_grammar_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_prefill_bootstrap_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_prefill_inflight_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_decode_prealloc_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0,
+              "sglang:num_decode_transfer_queue_reqs{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\",moe_ep_rank=\"0\",pp_rank=\"0\",tp_rank=\"0\"}": 0.0
+            }
+          },
+          "tokens_per_summed_e2e_s": 24.56375637083101,
+          "post_first_token_pooled_rate": 26.603908611936415,
+          "trace_reconciliation": {
+            "result_output_tokens": 39540,
+            "visible_nonzero_usage_messages": 23,
+            "visible_output_tokens": 32361,
+            "additional_engine_requests": 4.0,
+            "additional_output_tokens": 7179.0,
+            "note": "Additional requests are included in server counters and final trace usage; their class is not explicitly bound by this older metadata."
+          }
+        }
+      ],
+      "total": {
+        "tokens": 47854.0,
+        "requests": 45.0,
+        "e2e_seconds": 2013.6344224798959,
+        "ttft_seconds": 235.9487611737568,
+        "tokens_per_summed_e2e_s": 23.764989049534275,
+        "post_first_token_pooled_rate": 26.893956024189762
+      }
+    },
+    {
+      "cohort": "cqc10",
+      "tasks": [
+        {
+          "task": "astropy__astropy-13977",
+          "tokens": 32483.0,
+          "requests": 32.0,
+          "e2e_seconds": 1449.6826243400574,
+          "ttft_seconds": 149.17930150032043,
+          "count_alignment": {
+            "request_generation_tokens_count": 32.0,
+            "e2e_request_latency_seconds_count": 32.0,
+            "time_to_first_token_seconds_count": 32.0,
+            "request_success_total": 32.0
+          },
+          "idle_boundaries": {
+            "pre": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            },
+            "post": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            }
+          },
+          "tokens_per_summed_e2e_s": 22.406973398599792,
+          "post_first_token_pooled_rate": 24.95264674075653,
+          "compaction": {
+            "normal": 31,
+            "successful_internal": 1,
+            "failed_internal": 0
+          }
+        },
+        {
+          "task": "astropy__astropy-14096",
+          "tokens": 34026.0,
+          "requests": 26.0,
+          "e2e_seconds": 1363.644028186798,
+          "ttft_seconds": 98.73359394073486,
+          "count_alignment": {
+            "request_generation_tokens_count": 26.0,
+            "e2e_request_latency_seconds_count": 26.0,
+            "time_to_first_token_seconds_count": 26.0,
+            "request_success_total": 26.0
+          },
+          "idle_boundaries": {
+            "pre": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            },
+            "post": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            }
+          },
+          "tokens_per_summed_e2e_s": 24.952259751574232,
+          "post_first_token_pooled_rate": 26.879373495140268,
+          "compaction": {
+            "normal": 25,
+            "successful_internal": 1,
+            "failed_internal": 0
+          }
+        },
+        {
+          "task": "astropy__astropy-14182",
+          "tokens": 9823.0,
+          "requests": 35.0,
+          "e2e_seconds": 411.82551097869873,
+          "ttft_seconds": 66.44119668006897,
+          "count_alignment": {
+            "request_generation_tokens_count": 35.0,
+            "e2e_request_latency_seconds_count": 35.0,
+            "time_to_first_token_seconds_count": 35.0,
+            "request_success_total": 35.0
+          },
+          "idle_boundaries": {
+            "pre": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            },
+            "post": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            }
+          },
+          "tokens_per_summed_e2e_s": 23.85233488002176,
+          "post_first_token_pooled_rate": 28.339445640073272,
+          "compaction": {
+            "normal": 35,
+            "successful_internal": 0,
+            "failed_internal": 0
+          }
+        },
+        {
+          "task": "astropy__astropy-14309",
+          "tokens": 2325.0,
+          "requests": 7.0,
+          "e2e_seconds": 91.03285813331604,
+          "ttft_seconds": 15.455929040908813,
+          "count_alignment": {
+            "request_generation_tokens_count": 7.0,
+            "e2e_request_latency_seconds_count": 7.0,
+            "time_to_first_token_seconds_count": 7.0,
+            "request_success_total": 7.0
+          },
+          "idle_boundaries": {
+            "pre": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            },
+            "post": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            }
+          },
+          "tokens_per_summed_e2e_s": 25.54022852490337,
+          "post_first_token_pooled_rate": 30.670735472273588,
+          "compaction": {
+            "normal": 7,
+            "successful_internal": 0,
+            "failed_internal": 0
+          }
+        },
+        {
+          "task": "astropy__astropy-14365",
+          "tokens": 8860.0,
+          "requests": 18.0,
+          "e2e_seconds": 391.26038575172424,
+          "ttft_seconds": 40.888270139694214,
+          "count_alignment": {
+            "request_generation_tokens_count": 18.0,
+            "e2e_request_latency_seconds_count": 18.0,
+            "time_to_first_token_seconds_count": 18.0,
+            "request_success_total": 18.0
+          },
+          "idle_boundaries": {
+            "pre": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            },
+            "post": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            }
+          },
+          "tokens_per_summed_e2e_s": 22.644766305633983,
+          "post_first_token_pooled_rate": 25.236026515850995,
+          "compaction": {
+            "normal": 18,
+            "successful_internal": 0,
+            "failed_internal": 0
+          }
+        },
+        {
+          "task": "astropy__astropy-14369",
+          "tokens": 36275.0,
+          "requests": 37.0,
+          "e2e_seconds": 1624.6662163734436,
+          "ttft_seconds": 153.11313438415527,
+          "count_alignment": {
+            "request_generation_tokens_count": 37.0,
+            "e2e_request_latency_seconds_count": 37.0,
+            "time_to_first_token_seconds_count": 37.0,
+            "request_success_total": 37.0
+          },
+          "idle_boundaries": {
+            "pre": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            },
+            "post": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            }
+          },
+          "tokens_per_summed_e2e_s": 22.327663143616373,
+          "post_first_token_pooled_rate": 24.625683193848783,
+          "compaction": {
+            "normal": 35,
+            "successful_internal": 2,
+            "failed_internal": 0
+          }
+        },
+        {
+          "task": "astropy__astropy-14508",
+          "tokens": 61099.0,
+          "requests": 28.0,
+          "e2e_seconds": 2451.0306737422943,
+          "ttft_seconds": 152.17892909049988,
+          "count_alignment": {
+            "request_generation_tokens_count": 28.0,
+            "e2e_request_latency_seconds_count": 28.0,
+            "time_to_first_token_seconds_count": 28.0,
+            "request_success_total": 28.0
+          },
+          "idle_boundaries": {
+            "pre": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            },
+            "post": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            }
+          },
+          "tokens_per_summed_e2e_s": 24.927880607349778,
+          "post_first_token_pooled_rate": 26.565871480002894,
+          "compaction": {
+            "normal": 26,
+            "successful_internal": 2,
+            "failed_internal": 0
+          }
+        },
+        {
+          "task": "astropy__astropy-14539",
+          "tokens": 24746.0,
+          "requests": 34.0,
+          "e2e_seconds": 1102.0689833164215,
+          "ttft_seconds": 114.10900497436523,
+          "count_alignment": {
+            "request_generation_tokens_count": 34.0,
+            "e2e_request_latency_seconds_count": 34.0,
+            "time_to_first_token_seconds_count": 34.0,
+            "request_success_total": 34.0
+          },
+          "idle_boundaries": {
+            "pre": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            },
+            "post": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            }
+          },
+          "tokens_per_summed_e2e_s": 22.45412980005357,
+          "post_first_token_pooled_rate": 25.01315897580225,
+          "compaction": {
+            "normal": 33,
+            "successful_internal": 1,
+            "failed_internal": 0
+          }
+        },
+        {
+          "task": "astropy__astropy-14598",
+          "tokens": 31954.0,
+          "requests": 37.0,
+          "e2e_seconds": 1520.708048582077,
+          "ttft_seconds": 161.07961773872375,
+          "count_alignment": {
+            "request_generation_tokens_count": 37.0,
+            "e2e_request_latency_seconds_count": 37.0,
+            "time_to_first_token_seconds_count": 37.0,
+            "request_success_total": 37.0
+          },
+          "idle_boundaries": {
+            "pre": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            },
+            "post": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            }
+          },
+          "tokens_per_summed_e2e_s": 21.012580310727113,
+          "post_first_token_pooled_rate": 23.47479596333717,
+          "compaction": {
+            "normal": 35,
+            "successful_internal": 2,
+            "failed_internal": 0
+          }
+        },
+        {
+          "task": "astropy__astropy-14995",
+          "tokens": 6751.0,
+          "requests": 11.0,
+          "e2e_seconds": 261.70181822776794,
+          "ttft_seconds": 38.644959449768066,
+          "count_alignment": {
+            "request_generation_tokens_count": 11.0,
+            "e2e_request_latency_seconds_count": 11.0,
+            "time_to_first_token_seconds_count": 11.0,
+            "request_success_total": 11.0
+          },
+          "idle_boundaries": {
+            "pre": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            },
+            "post": {
+              "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"capacity\"}": 0.0,
+              "vllm:num_requests_waiting_by_reason{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\",reason=\"deferred\"}": 0.0
+            }
+          },
+          "tokens_per_summed_e2e_s": 25.79653456639104,
+          "post_first_token_pooled_rate": 30.216510879443835,
+          "compaction": {
+            "normal": 11,
+            "successful_internal": 0,
+            "failed_internal": 0
+          }
+        }
+      ],
+      "total": {
+        "tokens": 248342.0,
+        "requests": 265.0,
+        "e2e_seconds": 10667.621147632599,
+        "ttft_seconds": 989.8239369392395,
+        "tokens_per_summed_e2e_s": 23.279979347139925,
+        "post_first_token_pooled_rate": 25.633622465853126
+      }
+    }
+  ],
+  "file_sha256": {
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt": "56e71021b747b98d7b667577d979632f5ee01725a1639c23f388002b5dcc678c",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt": "7e35034253ec0114076663fc9b8b76c412706ea46ae8cf14c929d2f7ae9c4909",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/qwen_trace.jsonl": "7f346cf3aea00a6be351ebd416b78b35ff695912710b662547eaad5f0ecd6187",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_pre.txt": "bfd624fdfdf2a8359641e64e7d327b8477995f8fa77c4b47d00b376d9ab34475",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_post.txt": "b32016db90b22b8c4c9e6c596ead8a23a705a1321a466905e934b90cae534d6a",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/qwen_trace.jsonl": "b8a473e65a0db4284a9f0c0057fead31088f27898998ab970a357635f640d9c1",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/vllm_metrics_pre.txt": "8cb4d76bc0abd1f53b5afaeab052f7bec1ff54be6ccb8eb4525125e5b6feeb8e",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/vllm_metrics_post.txt": "c142af7ef3e626b719ac643d3a9592c2b9fdc1ff1418811b577be7b7adea1003",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/runner_metadata.json": "3f74dd8d66138e6c6eeac65d5d62f732b91b6138dbd18b2b3d28622b1ba024f6",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/fixed32_task_boundary.json": "dd05dd7b4c1087b3a207df19a245aafbb08277a529d6b72ca6933ed2358a3238",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/vllm_metrics_pre.txt": "df9cbb21fef7f22d18e4867347959e159b5b21d1d063156cf319a6459a620c7c",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/vllm_metrics_post.txt": "b301283cbd88d4688b1958911288b303561bd639c2456105f2a8f5b7a08e7b8f",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/runner_metadata.json": "6738eb0a670320a0e9f3a4d0252cf10e9501849e2375e233c74a533f6277d90c",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/fixed32_task_boundary.json": "44b467020c951d59a0c3842bd9b5449bac986485a2dae6608efe0432f8a19bae",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/vllm_metrics_pre.txt": "34f3b4c3849c631ae278714569f98a307e506195f5c4061300ac39796746b83b",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/vllm_metrics_post.txt": "ad9941d6895b8fb5707ee007a23627a6d7d3dc31b7bcbfe6fdfa989215075668",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/runner_metadata.json": "c12a2d42470557f126adaba4fd59634f59e80218e39264675600a7c6143a9f03",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/fixed32_task_boundary.json": "dee028f24e5555a0388fdb7382723fa2330bc8c396c8dffb571c6f7b35aaa4a6",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/vllm_metrics_pre.txt": "87b09ae10b5302a0f447b29dedb2c970bbd4994c2091f1d19d98edf9b661759b",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/vllm_metrics_post.txt": "770d770d1100a2bcf078ca725a55699d4e1c59aa2689cc6e4524ac122acb7adf",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/runner_metadata.json": "7b8df4b131ec2cf435f88215afaf7645f0d961ddc3339e8fcfe969763eb037d7",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/fixed32_task_boundary.json": "7a109ef8b795085a0063851d153ae07da169bfa819f68a0648c852e8410a311c",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/vllm_metrics_pre.txt": "15a6a814d8edd65f7f6ea0bdba9c67689d9a9349e83160102019d66364b9fa2f",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/vllm_metrics_post.txt": "b0d4c9dec37017a2b973b6025b4f9847edbb2d08d3b74736023c60982c1d08d4",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/runner_metadata.json": "08e8750f868c7a61d0e3bd2229a2882eeed288090e215eb3e3d13f99afedb557",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/fixed32_task_boundary.json": "895219cb48984de9a42bd8bec759e913904f95ed6c4438c90ea3f60e59865be5",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/vllm_metrics_pre.txt": "8c50f5d863ff1743bd3afce48a2e7e1f451ca540aa2ab5d71f1448c1acc1706a",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/vllm_metrics_post.txt": "20362878f3dbe76c7c0bfd79dd1b49749f6bdcd9195c057b652ee4f710ab7be5",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/runner_metadata.json": "fcd0f6c46a02ebfd0d744c1dcfa44161a3addb565accecba8d7bed1eababf8d9",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/fixed32_task_boundary.json": "c2b0871859819e6d18d97a8cbdd5d227b732b22dc16cfa61af24a7ad864eaf55",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/vllm_metrics_pre.txt": "5fd7219d3cda5a379b5a77abd96b57e3998bc041eabd27fc34ff13bb39be5355",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/vllm_metrics_post.txt": "e2bc098ca5540de6bb4889c247d202efb58a15a4255563e2f5d9807eed122038",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/runner_metadata.json": "a2d03eef3fc7369b114469241895861eb12c904c42fc83276a1ab112b0ec2552",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/fixed32_task_boundary.json": "3f4e91031434c27dbc46ba3298100601891c355bd4c1a4c6809d04dd4dda35a4",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/vllm_metrics_pre.txt": "0330669c3a8ac42853e4903845c14cf0f81d687edfbbca1cb7177a5c08c7b7c8",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/vllm_metrics_post.txt": "b55f55099c1518adda38a4f2f4fb6bad673374219eca90cceed5f9c9c152cc6c",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/runner_metadata.json": "9fa5a88686cb8a061128fca0f36606006b3adba0828bd488227e16bea28ad205",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/fixed32_task_boundary.json": "2289cdf86673922ca1a0ceaa97bdbb44251075a3507d4e7a03748c32bd68ca88",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/vllm_metrics_pre.txt": "e52049b3985a9607d714db6afa1f6942065c6e4482e61546c4a658a48746e530",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/vllm_metrics_post.txt": "7f5ac4212fbe54980150675ca675022454241b383c4ce15a2156f2658cc65795",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/runner_metadata.json": "478a10876a87366358e7da9747cba6e410df464fada1e5d36a7993a15619c30d",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/fixed32_task_boundary.json": "c4e36eec84b7277007b6074eb6c54f2fe2d449e82d012137cfc709ac813e7e62",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/vllm_metrics_pre.txt": "5348c2d09ca142855918854c258a4d432ee2d6cb9723f8700147fdb6ff77c390",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/vllm_metrics_post.txt": "964bb69b2b02403ec1b21111edd997806e831439ce785aebd034142cf3bfd9a1",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/runner_metadata.json": "356acf8134a4fd9a081bad4b473fe13e2d116d17fbc793c57aa6f733291588e4",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/fixed32_task_boundary.json": "234f2880c3e790b16c8a90ead0802b005411ef3872f79914d4f374e23d9a30fd"
+  }
+}

@@ -1,0 +1,260 @@
+{
+  "completed_utc": "2026-09-25T00:58:52.872072+00:00",
+  "status": "COMPLETE_FIGURE_REDESIGN_AND_FOOTNOTE_REMOVAL",
+  "scope": "Private paper with redesigned conceptual Figure1 and revision footnote removed; novelty review integrated into claims and comparisons; unchanged workload and component evidence; no inference or public upload",
+  "paper_archive": {
+    "file": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/papers/gdn-tree-scan-mlsys/v2/artifacts/paper-figure-redesign-20260925T005823Z.tar.gz",
+    "sha256": "099fa1dc8091c03208206c28c40d8e5a6b35df10f1539488530a98c9aa620878",
+    "files": 495,
+    "bytes": 3785117
+  },
+  "paper_manifest_sha256": "9fc6d1401bfbc9d1386db8c8a1207348971a23d3ce035d92d7e06f0d723c0efd",
+  "paper": {
+    "main.tex": "7fd3e3966a92e462122fc3700e39100c5abb766a663da1fcfd61253e0066eaf5",
+    "abstract.tex": "5bd67fda58efeb062a2f3fb13abb266b7d960c321f14312bc214de57f971f101",
+    "results/agent-workload/case-study.tex": "091f567a2dc1367c67a31947c11608c53457920983751a603a62df07773dab35",
+    "main.pdf": "ca84861a88c49ef51581259756665d48ed7c7b54c3d2f890c45a7250e4035987",
+    "ref.bib": "2ad620c7496f093482d9beb43b123c5996a50784c72e48464cbcd8cb297ece8e",
+    "figures/pipeline.tikz": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c",
+    "figures/pipeline-preview.png": "1cb62f14b0e5d192c3f2cc8c90de10ed3459184a0a44887ff0532c05252db2bc"
+  },
+  "all_companions": [
+    {
+      "file": "e7a-evidence-20260922T0709Z.tar.gz",
+      "sha256": "776ddcaf5d938cc665bafca20f46e29d1e9a550a34914d798e78f70636cd180b",
+      "bytes": 268871594,
+      "manifest": "e7a-evidence-20260922T0709Z.tar.gz.manifest.json",
+      "manifest_sha256": "50dd06ea612e00caec86e84db0b49321d3fd9878e8e4f79d68bb95dfa88c0e7d"
+    },
+    {
+      "file": "e7b-diagnostics-20260922T0801Z.tar.gz",
+      "sha256": "c573b5064d944547df280e314520a97dd0c10678fb877c8d75b3a898d548ad05",
+      "bytes": 2179735658,
+      "manifest": "e7b-diagnostics-20260922T0801Z.tar.gz.manifest.json",
+      "manifest_sha256": "f36db7f4f0b16f9f43a0d70b535ca664a66f1ef447789985b82f3a78db8b4682"
+    },
+    {
+      "file": "selected-route-20260922T0930Z.tar.gz",
+      "sha256": "7f127f0c2e8198f067eb0f59737e1a58afc34991aa562dacbc11d7d147d25a30",
+      "bytes": 1735458237,
+      "manifest": "selected-route-20260922T0930Z.tar.gz.manifest.json",
+      "manifest_sha256": "d1fe338b3bae56a755725a622fa679692377156b56be0d85952fd654d9e386b8"
+    },
+    {
+      "file": "e1-timing-20260922T1225Z.tar.gz",
+      "sha256": "bf50b33386eb9614cf7874039f60cb62a484ee62bc0882e32ab32731857318d6",
+      "bytes": 12955447,
+      "manifest": "e1-timing-20260922T1225Z.tar.gz.manifest.json",
+      "manifest_sha256": "47936b8a7cb22bf389b452ce2f013e5092d9f9c34b639b640f54768b3ecd4414"
+    },
+    {
+      "file": "e8-single-logits-20260922T2255Z.tar.gz",
+      "sha256": "b4c0a5cbcd2592ce5ddfdc823243f0e99dc15ef412d238a096068d6bae11ebf4",
+      "bytes": 16237576,
+      "manifest": "e8-single-logits-20260922T2255Z.tar.gz.manifest.json",
+      "manifest_sha256": "d2512b2141628c77746d5f1ddc0de025bb3de525fba5dd375226a60427c70439"
+    }
+  ],
+  "canonical_build": {
+    "path": "p0/monitor/2026-09-24-figure-build.json",
+    "sha256": "5b64fe4df465ff19050d9c2874129596d2857d0999c58bbe6ae7111570dd41ce",
+    "pages": 10
+  },
+  "extracted_rebuild": {
+    "directory": "/private/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/lumo-figure-extracted-pvjvzlos",
+    "files_verified": 495,
+    "input_bindings_verified": 94,
+    "configuration_behavior_projection_bindings": 5,
+    "production_input_bindings_verified": 20,
+    "conditional_and_all_child_replays_byte_identical": "PASS",
+    "current_production_component_replay": "PASS",
+    "latex_build": "PASS",
+    "rendered_pdf_text_identical": "PASS",
+    "pdf_sha256": "3e14f46218fd53be4ff90b587b7e428340e0d2e65dc68e8d5acdb66ca576bc39"
+  },
+  "reviews": [
+    {
+      "path": "notes/novelty/recurrent-prior-art-review-2026-09-24.md",
+      "sha256": "486e49a6f4e3e87e92507759e90904e10a32bf549f1de4263f1fa888f9837d8e",
+      "verdict": "SCOPED_NOVELTY_REVIEW_COMPLETE"
+    },
+    {
+      "path": "notes/novelty/serving-prior-art-review-2026-09-24.md",
+      "sha256": "9bbc9d9516b495690a59fbe30845a9fc33308fa9587a9e17ab1a65d0355f5e95",
+      "verdict": "SCOPED_NOVELTY_REVIEW_COMPLETE"
+    },
+    {
+      "path": "notes/novelty/final-serving-review-2026-09-24.md",
+      "sha256": "3e6feab597d890df65350337b473d16784d7973e9ec5caca1ac6989a9a8aad86",
+      "verdict": "PASS_AFTER_WORDING_CORRECTION"
+    },
+    {
+      "path": "notes/novelty/figure-and-novelty-integration-review-2026-09-24.md",
+      "sha256": "551d272f2733d074b53845f7f80e3184aed854136fdb05f9a8ccc6ecc4e9e37a",
+      "verdict": "PASS_AFTER_WORDING_CORRECTION"
+    }
+  ],
+  "workload_evidence": {
+    "raw_manifest": "results/agent-workload/raw/cqc10/MANIFEST.json",
+    "raw_manifest_sha256": "01c3922b06377c85d86b213bded399af377809f22d0df63829c5358ef7a86bcf",
+    "original_or_explicit_projection_files": 139,
+    "whole_evidence_manifest_sha256": "75200c9ba4538ae8d1c9889ac798e1604dc6cbb8e98646568e2b9a741b00980c",
+    "metric_reducer_replay": "independent and parent outputs exactly agree; extracted replay agrees"
+  },
+  "new_inference_launched": false,
+  "automation_changed": false,
+  "no_publication_or_submission": true,
+  "comparison_experiment": {
+    "status": "RECORDED_SYSTEM_COMPARISON_COMPLETE_TUNING_AND_REPEAT_CAMPAIGN_CONDITIONAL_NOT_LAUNCHED",
+    "plan": "review-experiments.md",
+    "sha256": "14c4eee5d97fc88917c599cb13497e3412a58528b29518d4ffd380318af5850b",
+    "existing_tests": "SGLang SWE, native MTP, DSpark serving/fusion, DFlash2 capture and later serving smoke; applicability in recovered inventory"
+  },
+  "limits": [
+    "Conditional comparison among completed run-pairs producing nonempty patches on both shared tasks; not an all-attempt performance or broad quality-equivalence estimate.",
+    "Complete decoding systems are the intended comparison; method-specific draft depth and candidate budgets may differ. No common tuning sweep is established.",
+    "Eligibility selected retrospectively and applied symmetrically; failed-test patches remain eligible. All original and unfiltered records retained.",
+    "All41 Sr12 and45 eligible SGLang requests<=20000tokens, below both configured caps.",
+    "Pooled request exposure excludesTTFT and tool work; it is not aggregate machine-wall throughput or task-completion speed.",
+    "Current Hydra27 fixed32 route uses patched FA2, device acceptance and captured native recurrent replay. Superseded Cat10/E2/E7/E8 results remain archived and supply no current paper qualification.",
+    "Full model/runtime dependencies are not bundled; exact evidence and explicitly safe projections are included.",
+    "Novelty search is scoped to current claims and accessible primary sources; no external system replication or forensic public-priority proof.",
+    "Novelty search is scoped to current claims and accessible primary sources; no external system replication or forensic public-priority proof."
+  ],
+  "prior_delivery_receipt": "p0/monitor/before-figure-redesign-20260925T005324Z/artifacts/FINAL-DELIVERY.json",
+  "remote_copy": "No remote paper sync performed in this revision; local PDF/archive is authoritative.",
+  "behavior_evidence": {
+    "manifest": "results/agent-workload/BEHAVIOR_MANIFEST.json",
+    "sha256": "60606fd37fa463844715cf586d824611c1b30587dd68c8811e87ccec7b6ccb59",
+    "claim": "No detected degeneration in10selectedtasktraces under explicitly limited diagnostic; prior positive retained"
+  },
+  "history_audit": {
+    "notes/comparator-git-history-2026-09-23.md": "15a48b02c0da4d584c4e2f2e373d1cba99aff27607ca3cb4167321e86279c8e7",
+    "notes/sglang-swe-recovered-evidence-2026-09-23.md": "ec962f8821eb3b2a4f442bd583d246d420f8140ad16bd4c8fd4924b794f7f818",
+    "notes/sglang16-metric-audit-2026-09-23.json": "6deeffa4ca83f4a864eb1a743f0272d14cb6557fbd1ad2809d9805a871ec4adb",
+    "notes/external-baseline-history-audit-2026-09-23.md": "3cd71b93c019a3bf5f7a3a34760bf47e17bc41ec5cfb8ab30926ec08b7cadf4b",
+    "notes/nvfp4-b1-stronger-history-audit-2026-09-24.md": "657d190e3179768b4fe5a4f8b000a019bd8d01358d55de2b62a18905b40dcbfb",
+    "notes/stronger-workload-comparison-2026-09-24.md": "05e09e15b43731c478e863f211981f2174637a0bb0c2d840f458f0c2b0fa8c74",
+    "notes/serving-comparison-fairness-2026-09-24.md": "9522163c4b3267ce795866907694a8a7501ebd8b1593a1df2d1ce92f56d569e9",
+    "notes/headline-response-cap-check-2026-09-24.json": "b517d749de3e926fceba408b1e24154517d8649cfe7047e82fee713f98c08628"
+  },
+  "pooled_decode": {
+    "formula": "(sum output tokens - completed requests) / (sum E2E request latency - sum TTFT)",
+    "shared_task_ids": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033"
+    ],
+    "best_eligible_tree": "Sr12",
+    "best_eligible_sglang": "SGLang_later",
+    "eligible_arm_rates": {
+      "Cqc15": 27.26800815027045,
+      "Cqc16": 28.28304686877344,
+      "SGLang_later": 26.893956024189762,
+      "Sr12": 29.093442700158857
+    },
+    "context_arm_rates": {
+      "Cqc10": 25.633622465853126,
+      "Sr12_full_four_tasks": 26.20536492791583
+    },
+    "tree_relative_to_eligible_sglang_percent": 8.178367935125518,
+    "selection_timing": "Retrospective user-requested rule after inspecting the archived outcomes.",
+    "eligibility_rule": "Each task: agent exit0, ended_at present, no timeout/budget cap, patch_bytes>0. No condition on test success or decode rate.",
+    "included_shared_task_runs": [
+      "Sr12",
+      "Cqc16",
+      "Cqc15",
+      "SGLang_later"
+    ],
+    "excluded_shared_task_runs": [
+      "SGLang_earlier"
+    ],
+    "input_bindings": 94,
+    "original_task_files": 88,
+    "projection_bindings": 5,
+    "audit_path": "results/agent-workload/patch-producing-rate-audit.json",
+    "audit_sha256": "279475d182ecd259790e2c57663d65c37205f2ee67c80aa46b0bd2e9b4e460c4",
+    "reducer_sha256": "d57459bc5706c1e2df849dfa5a04f1f7974e7731ebcd1e04945f7695d0c24e52",
+    "unfiltered_audit": {
+      "path": "competitive-rate-audit.json",
+      "sha256": "e30060ec1c4ade6f4b3765e4a0c55c25cff3ba121715e4ad26f2f2a44abecac7"
+    }
+  },
+  "shared_task_evidence": {
+    "raw_manifest": "results/agent-workload/raw/shared-tasks-20260924/MANIFEST.json",
+    "sha256": "2e20393e2fa238d489215a11d3b3315a08e9516609f341713ecd1ae62ed4dbd2",
+    "recovered_original_files": 32,
+    "safe_audit_projections": 3,
+    "best_scope": "Maximum of three eligible tree deployments versus one eligible SGLang deployment. Retrospective nonempty-patch rule applies to both tasks in every recovered pair; failed tests remain eligible. Earlier SGLang pair is excluded from performance, failed outcome retained.",
+    "tree_response_cap": 32768,
+    "sglang_response_caps": {
+      "earlier": 32768,
+      "later": 24000
+    }
+  },
+  "new_comparator_evidence": {
+    "raw_manifest": "results/agent-workload/raw/sglang-step2-20260924/manifest.json",
+    "sha256": "a524f1e25270a9ca87f737b6f99ff5ae3e814ac265b3c0781d7824caffe5d02e",
+    "original_payloads": 12,
+    "safe_projections": {
+      "sglang-step2-config-projection.json": "5ebbd60c77b000efc5890a6e97bd33c249f30583a7162b6258e05b6ba13055dc",
+      "sglang-step2-behavior-projection.json": "8ffb89b13304bf4a3005725085234f0af3bb53b8a79059b929c4b55488866115"
+    },
+    "failure_retained": "Task13033 empty patch; synthetic failed outcome; test harness not invoked; final response32768thinking-only tokens at cap with null stop_reason.",
+    "concurrency": "One agent task at a time; occasional overlapping auxiliary requests, included in pooled request-time denominator."
+  },
+  "current_production": {
+    "audit": "results/current-production/audit.json",
+    "audit_sha256": "2d0904d5a6c77e0fa0f56a9850dbc0cce3cad4898227a3f78770758edc93c4c2",
+    "input_bindings": 20,
+    "extracted_replay": "PASS",
+    "method": "Hydra27 fixed32; patched FA2 GQA-pair splitK4; graph/cache-enabled B1 NVFP4 agent deployment",
+    "recorded_source_commit": "e7af6b595a8b3a09b7e88d25a3653d381432b99c",
+    "fused_selection": {
+      "binary_matches_deployment": true,
+      "byte_mismatches": 0,
+      "cases": 1368,
+      "configurations": 6840,
+      "graph_mismatches": 0,
+      "graph_replays": 24,
+      "negative_controls_fire": true
+    },
+    "attention": {
+      "all_checks_pass": true,
+      "binary_and_credential_match_deployment": true,
+      "binary_sha256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+      "declared_checks": 9,
+      "determinism_cases": 16,
+      "determinism_pass": true,
+      "determinism_processes": 2,
+      "determinism_repeats": 8,
+      "engaged_layers": 16,
+      "lse_max_ulp": 4,
+      "num_splits": 4,
+      "output_max_abs_difference": 0.00390625,
+      "output_within_two_ulp_percent": 93.30657958984375
+    },
+    "source_history": {
+      "notes/latest-production-design-evidence-2026-09-24.md": "2f5abb1eaf2a50b3365247d0295bc758659ee092491e91ba71dae50eb0adbd63",
+      "notes/latest-optimization-supersession-2026-09-24.md": "3d9aa321a3894d72c9990060086955d4e1511e57ee96fb1ce2870e0887c89ed9"
+    },
+    "superseded_route_paper_results_removed": true,
+    "raw_records_preserved": true
+  },
+  "novelty_review": {
+    "report": "notes/novelty/novelty-review-2026-09-24.md",
+    "report_sha256": "eaf464309d8ff89efffb2550a375178500dcdc030213aba143b91a141bcc68a8",
+    "source_register": "notes/novelty/source-register.json",
+    "claim_matrix": "notes/novelty/claim-matrix.csv",
+    "verdict": "Systems design and bounded evaluation supported; new general replay, chain-scheduling or split-K algorithm not established. Spine-layout contribution remains a specific empirical question. Public priority not verified.",
+    "new_bibliography_entries": 13,
+    "all_cited_entries_resolve": 35,
+    "new_experiments_launched": false
+  },
+  "editorial_revision": {
+    "principle": "Describe scientific design questions and mechanism interactions; place configuration constants in experimental setup.",
+    "internal_method_labels_removed_from_main_text": true,
+    "workload_rates_and_evidence_unchanged": true,
+    "figure_1_redesigned": true,
+    "working_revision_footnote_removed": true
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "schema": "sglang-step2-safe-config-projection-v1",
+  "source_path": "results/fr14_nvfp4_port_20260816/ablation_a_step2_proxy_env.txt",
+  "source_sha256": "a9d603bc940ddd0323a5aa2629ca49aea4a1db47eeae8eb3fc70fdf4c138adca",
+  "scope": "Only explicit allowlisted sampling/cap/continuation settings from the recorded live proxy environment. No credential/path endpoint values copied.",
+  "proxy_settings": {
+    "LUMO_PROXY_AUTO_CONTINUE": "0",
+    "LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES": "3",
+    "LUMO_PROXY_FORCE_MIN_P": "0",
+    "LUMO_PROXY_FORCE_PRESENCE_PENALTY": "1.0",
+    "LUMO_PROXY_FORCE_TEMPERATURE": "0.6",
+    "LUMO_PROXY_FORCE_TOP_K": "20",
+    "LUMO_PROXY_FORCE_TOP_P": "0.95",
+    "LUMO_PROXY_MAX_OUTPUT_TOKENS": "32768",
+    "LUMO_PROXY_NONSTREAM_BYPASS": "1",
+    "LUMO_PROXY_QWEN_SAMPLING": "1",
+    "LUMO_PROXY_THINK_BUDGET": "",
+    "LUMO_PROXY_THINK_CUTOFF": ""
+  },
+  "source_files": {
+    "results/fr14_nvfp4_port_20260816/ablation_a_step2_run_swe.sh": "10f2e2121e234562b18c90953e39fa3cfbdb20a529609948f73777fbca4e9e95",
+    "results/fr14_nvfp4_port_20260816/ablation_a_step2_sglang_boot.sh": "68c20121f4fdd6aeca68fb10dcea628e8edb50af24018166beaa5bba1f68be30",
+    "results/fr14_nvfp4_port_20260816/ablation_a_step2_sglang_cmdline.txt": "eb17eb2b7bf3afeeb7fdb8992160c7935b7b9112e937b20e0ad482b5b3da2aad"
+  },
+  "agent_task_concurrency": 1,
+  "physical_request_concurrency": "Not fixed at1: contemporaneous decode telemetry reports running_req_max3; auxiliary subrequests can overlap."
+}

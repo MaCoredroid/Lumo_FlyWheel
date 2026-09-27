@@ -1,0 +1,124 @@
+{
+  "checked_utc": "2026-09-23T17:11:00.799934+00:00",
+  "workload_name": "Local-document continuation microbenchmark",
+  "not_a_swe_bench_run": true,
+  "source_roots": [
+    "/work/docs",
+    "/work/research"
+  ],
+  "candidate_prefixes": 96,
+  "pilot_prefixes": [
+    {
+      "id": "p072",
+      "tokens": 256,
+      "source": "/work/docs/reports/auto_research/l0-ffn-gemm-phase-a-result-20260503.md",
+      "source_sha256": "dc3596b99e14bbfabb2035fed5431b99494fac066e7dfbf42662cadd00760153",
+      "token_start": 583,
+      "prefix_sha256": "4022f519838d33bcad42a55b3c34dbfeddd575bd56488a4f3509a1382f417f03",
+      "stratum": [
+        "short",
+        "small"
+      ],
+      "native_margin_nats": 0.3750000596046448
+    },
+    {
+      "id": "p017",
+      "tokens": 256,
+      "source": "/work/docs/reports/auto_research/track-b-round4b-dpoint-remeasure-results-20260517.md",
+      "source_sha256": "8805fef5b00fced07d3bd1141df0adf1c013fc98f4043e9c9ab565a9e86904ea",
+      "token_start": 461,
+      "prefix_sha256": "d75829a949cf8cdac82b379b2c138a00126296fd08dc31c6665eef866695458c",
+      "stratum": [
+        "short",
+        "small"
+      ],
+      "native_margin_nats": 0.0
+    },
+    {
+      "id": "p015",
+      "tokens": 256,
+      "source": "/work/docs/reports/auto_research/track-b-v4a-v2-preserve-thinking-smoke-20260513.md",
+      "source_sha256": "2bee8205be764335e53cfce8021f2f5b4882702e9fc174f2054956f5eae38b6d",
+      "token_start": 1531,
+      "prefix_sha256": "90e85b57382a783b11c251d6957446be7c4bc572ab6d8f2365e73385623e41aa",
+      "stratum": [
+        "short",
+        "large"
+      ],
+      "native_margin_nats": 6.750000038184226
+    },
+    {
+      "id": "p021",
+      "tokens": 256,
+      "source": "/work/research/fr13_workflows/apc_flag_cleanup_plan.md",
+      "source_sha256": "d5e5e0ec55c14a392adb5db0fd777a3c0b27bea6a6ed8d35f2048116a40e253e",
+      "token_start": 1094,
+      "prefix_sha256": "2328278565840fde5fa9b34d4b09897bd7974d8985aae4c4110b949455a097af",
+      "stratum": [
+        "short",
+        "large"
+      ],
+      "native_margin_nats": 3.6249999701976776
+    },
+    {
+      "id": "p085",
+      "tokens": 4096,
+      "source": "/work/docs/LLD-13-Codex-Long-Scenario-Framework-v0_6.md",
+      "source_sha256": "f24f1843650b8085a8bdf0bb398b8dd80c19c784eb6834e213a5adcf059421c0",
+      "token_start": 11447,
+      "prefix_sha256": "3b2eb67c915e1bf1455cab6c3ccfe9ea025ac027995ecccba2494d45715d3173",
+      "stratum": [
+        "long",
+        "small"
+      ],
+      "native_margin_nats": 0.125
+    },
+    {
+      "id": "p095",
+      "tokens": 4096,
+      "source": "/work/research/fr13_workflows/FR13_LEAK_ARCHAEOLOGY.md",
+      "source_sha256": "93fd47596bb8db31477c0aedd633016f013205f3ad6f43c6d72e18706d877be8",
+      "token_start": 4585,
+      "prefix_sha256": "0ec0f7292581e55182011e4642735ae009cfd3a31894ce7b27093e8953f02609",
+      "stratum": [
+        "long",
+        "small"
+      ],
+      "native_margin_nats": 0.125
+    },
+    {
+      "id": "p058",
+      "tokens": 4096,
+      "source": "/work/docs/reports/auto_research/track-b-e2e-swe-style-prompt-shape-spec-20260510.md",
+      "source_sha256": "7b9a0d95c2fbed27515a52faa194f45564b173c700f8668405d0401a38265102",
+      "token_start": 2823,
+      "prefix_sha256": "a1be6d26630b9ed90f7114eb363af083ea02be92be7f251895c0e6a1022148ce",
+      "stratum": [
+        "long",
+        "large"
+      ],
+      "native_margin_nats": 2.8749998956918716
+    },
+    {
+      "id": "p083",
+      "tokens": 4096,
+      "source": "/work/docs/HLD-Serving-Backend-AutoResearch-v0_1.md",
+      "source_sha256": "2de362f8c7fc3e3726a8574dc0a1d0151d1d2f0b6c33343b9585a203c0c9f102",
+      "token_start": 38860,
+      "prefix_sha256": "6dcdc6e0dd72cf77d04a3425f869a0b4c84ffd6eac86d96fcff85868a677ff4a",
+      "stratum": [
+        "long",
+        "large"
+      ],
+      "native_margin_nats": 3.124999925494194
+    }
+  ],
+  "selection": "Two prefixes per short/long x low/high native-logit-margin cell, frozen before E1; E1 and E8 reuse the eight E7a pilot prefixes",
+  "requests": "Raw /v1/completions, one continuation per prefix,128maxnewtokens,EOSenabled,temp0; no issue-solving/tool loop, patch or evaluator",
+  "measurement": "API-bound tokens on retained pure-decode intervals; not request latency or end-to-end SWE task latency",
+  "pins": {
+    "experiments/out-20260922T100028Z-e1-18cells/campaign_snapshot/frozen_prefixes.json": "8329672628828d35b4768732ed93b855335bc7576801890b0195957a2459973e",
+    "experiments/out-20260922T100028Z-e1-18cells/campaign_snapshot/prefix_pool.json": "05e731fd02b937970d05695ef2ee836a76efc463481a3a0ce4eeaa237f877d09",
+    "experiments/out-20260922T100028Z-e1-18cells/campaign_snapshot/e1_workload.py": "bcc5af170fd16599223ad7286f0367c82f978faf640ac4acebe0e9c36d001594"
+  }
+}

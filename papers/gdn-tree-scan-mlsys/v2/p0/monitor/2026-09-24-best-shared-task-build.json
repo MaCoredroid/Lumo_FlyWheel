@@ -1,0 +1,41 @@
+{
+  "created_utc": "2026-09-24T21:42:57.483778+00:00",
+  "status": "PASS",
+  "command": "latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex",
+  "pages": 13,
+  "latex_errors": 0,
+  "overfull_boxes": 0,
+  "latex_warnings": 0,
+  "underfull_boxes": 9,
+  "citation_keys": 23,
+  "abstract_words_whitespace_upper_bound": 145,
+  "sources": {
+    "abstract.tex": "862a7dd2c33e431ca875a5aebcd8a25db75a45cdba48433578ac5d0aead46274",
+    "figures/pipeline.tikz": "8c9dbd43516be8703d4ba841a06d1f2d17caad2c434a61ec29ede40035f0762b",
+    "figures/scan-replay.tikz": "affc55cd6972d929de38dc8ebdd86c6dcea77fb0beb73c96551010bfaffadcfe",
+    "figures/state-contract.tikz": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898",
+    "main.tex": "dcd452080c116eafa7836b8c4e580ef53406f7bef499fa404638f88609c3cc69",
+    "results/agent-workload/case-study.tex": "2a841d756d0de05b03458c86d00d29ad2c4b19691d7f6722e19bf14109085c13",
+    "ref.bib": "88ceccadbd0376d694f6037181ebf0dacd71f0936558d6c88f856666ccc05fc8",
+    "main.bbl": "c51d05c1f3ae5deddceebe09facc7f1beaa8c766e91a21231710ef1a9153b654",
+    "main.pdf": "c90cc9f5cedba96e8bd11dbbb63dce295c19b1f7d8e4797500e2d078b5c2d34c"
+  },
+  "citation_preservation": "PASS against pre-edit snapshot; all loaded citation keys resolve to ref.bib",
+  "citation_policy_audit": {
+    "cached_registry_copy_only": true,
+    "bib": "No BibTeX entries require formal-version replacement.",
+    "tex": "- W_BEST: no citations found for section path 'Abstract'",
+    "limit": "No new references added; this is a cached policy check, not new literature verification."
+  },
+  "issues_validation": "PASS; all dependencies satisfied",
+  "visual_qa": "All 13 pages inspected as contact sheets; pages 1, 7, 8 and 11 inspected individually at 125dpi. No clipping, overlap or table overflow. Final page contains appendix continuation and references.",
+  "speed_audit": {
+    "path": "p0/monitor/2026-09-24-best-shared-task-speed-audit.json",
+    "sha256": "67a93e5162f5c902dc7ce5aca9270ab9bb43c08b6285fe40d7deade17875dba7"
+  },
+  "independent_reviews": {
+    "p0/monitor/paper-best-shared-task-redteam-2026-09-24.md": "d1d174a042e680070d2eeec219ad7412e003a9533ab0a0062441865a06f1294b",
+    "notes/best-shared-task-artifact-review-2026-09-24.md": "bc183aa596f9b67fa037c9e7c2d7264cdff4d0b0e8ebb0896f673892b532255a"
+  },
+  "new_inference_launched": false
+}

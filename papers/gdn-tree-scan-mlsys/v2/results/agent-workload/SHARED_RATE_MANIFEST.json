@@ -1,0 +1,23 @@
+{
+  "created_utc": "2026-09-23T21:04:41.274460+00:00",
+  "independent_arithmetic": "PASS: both implementations agree on all pooled counts, sums and rates",
+  "new_inference_launched": false,
+  "manuscript_changed_in_this_calculation": false,
+  "files": {
+    "notes/common-rate-estimator-semantics-2026-09-23.md": "4224dbb6049d466c1bd1b105741cb9fd2cf06184d72e58f4c570083883376626",
+    "notes/common-service-estimator-independent-review-2026-09-23.md": "80b83c8c60e807a4eabb8cacba830e3fd92ba74c2f2168402393cd632c7bdff0",
+    "notes/common-service-independent-2026-09-23.json": "04291fd57a373d592f032dfd3229002135e4983410d3383e295c92c6623897e2",
+    "notes/common-service-independent-2026-09-23.py": "5bc20dcb56d9eaa877b986581c3fb1f081253213cbd2e365a57543ed052fcf7a",
+    "notes/shared-rate-comparison-2026-09-23.md": "3f236ab27a93a937949cd297c2bb12f150026e8f5532719cd3a2e6eff1c3b011",
+    "results/agent-workload/metric-semantics-source-review/MANIFEST.json": "c2df3702a3ddb8d4e5d0a95dea90aa05f65aa6820f29b6eb3e9e187451d96e5e",
+    "results/agent-workload/metric-semantics-source-review/independent-estimator-check.json": "f47de271f30fbe22bb03c294ed883d6e831f62d7348863b4d8ff445885b81a7c",
+    "results/agent-workload/metric-semantics-source-review/sglang/metrics_collector.py": "04662d1f5c6723298b76d8333f496a997b40f61a12b577d46f226648114eced6",
+    "results/agent-workload/metric-semantics-source-review/sglang/req_time_stats.py": "f4ac4d7c0f01c0fa4b147201453a88471eae5ccc4b2196de87788acfef87ebd9",
+    "results/agent-workload/metric-semantics-source-review/sglang/tokenizer_manager.py": "f945c60f9ab273aa76c77a2ed506437eedbb54dedccc6c7c028f13778d2a1b7a",
+    "results/agent-workload/metric-semantics-source-review/vllm/metrics/loggers.py": "d1998a556e7decf9d11869f4b62a0a34977be9b147b3db1352d4baae10f5551b",
+    "results/agent-workload/metric-semantics-source-review/vllm/metrics/stats.py": "08eb6bb969ad47e4207ba5568beaec35bdb09192b6db046f046dab4892ac1bf3",
+    "results/agent-workload/metric-semantics-source-review/vllm/output_processor.py": "54fcda17755aa60600efe9121af5b824cf30a28c2768d942deac22d43572e533",
+    "results/agent-workload/shared-rate-audit.json": "91e38415989781a3d2460729f86ed90aa246167c3850d480b03354c84342e9b8",
+    "results/agent-workload/shared_rate_reduce.py": "c201221bff80ff85b104009e9336346c6605f508234f5a68952ad393745cc57f"
+  }
+}

@@ -1,0 +1,140 @@
+{
+  "completed_utc": "2026-09-23T21:42:07.108248+00:00",
+  "status": "COMPLETE_POOLED_DECODE_REVISION",
+  "scope": "Abstract and all current speed claims use common pooled decode for tree and SGLang EAGLE on SWE Verified Astropy; descriptive different-subset deployment comparison; no new inference",
+  "paper_archive": {
+    "file": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/papers/gdn-tree-scan-mlsys/v2/artifacts/paper-pooled-decode-20260923T214059Z.tar.gz",
+    "sha256": "f8d9e939fdcfb5cf8508308de91f293f8be00e2863ebd3e5c5a2f84642411f78",
+    "files": 375,
+    "bytes": 2357101
+  },
+  "paper_manifest_sha256": "e350e5ca385f7169624b72ad2ffbe8b33445ab8fc5b8f95a6eb7ff4ee7cc3636",
+  "paper": {
+    "main.tex": "2ee3791b9f60bd839ae73a5d81cd106d6725f7192b04de5d85ffc77e70231342",
+    "abstract.tex": "40fbbff240d41c1948a2c669fb1f18d524793dc4f7f97bdd9458ef8086a12798",
+    "results/agent-workload/case-study.tex": "a689968b51b2ff2701c5d9867535f2f054329d1b21e4dd63fbe2d987002b4007",
+    "main.pdf": "af1064ccc70f89814e6774168205d6a2a2be23abf04835a2c4cdfd917f612016",
+    "ref.bib": "88ceccadbd0376d694f6037181ebf0dacd71f0936558d6c88f856666ccc05fc8"
+  },
+  "all_companions": [
+    {
+      "file": "e7a-evidence-20260922T0709Z.tar.gz",
+      "sha256": "776ddcaf5d938cc665bafca20f46e29d1e9a550a34914d798e78f70636cd180b",
+      "bytes": 268871594,
+      "manifest": "e7a-evidence-20260922T0709Z.tar.gz.manifest.json",
+      "manifest_sha256": "50dd06ea612e00caec86e84db0b49321d3fd9878e8e4f79d68bb95dfa88c0e7d"
+    },
+    {
+      "file": "e7b-diagnostics-20260922T0801Z.tar.gz",
+      "sha256": "c573b5064d944547df280e314520a97dd0c10678fb877c8d75b3a898d548ad05",
+      "bytes": 2179735658,
+      "manifest": "e7b-diagnostics-20260922T0801Z.tar.gz.manifest.json",
+      "manifest_sha256": "f36db7f4f0b16f9f43a0d70b535ca664a66f1ef447789985b82f3a78db8b4682"
+    },
+    {
+      "file": "selected-route-20260922T0930Z.tar.gz",
+      "sha256": "7f127f0c2e8198f067eb0f59737e1a58afc34991aa562dacbc11d7d147d25a30",
+      "bytes": 1735458237,
+      "manifest": "selected-route-20260922T0930Z.tar.gz.manifest.json",
+      "manifest_sha256": "d1fe338b3bae56a755725a622fa679692377156b56be0d85952fd654d9e386b8"
+    },
+    {
+      "file": "e1-timing-20260922T1225Z.tar.gz",
+      "sha256": "bf50b33386eb9614cf7874039f60cb62a484ee62bc0882e32ab32731857318d6",
+      "bytes": 12955447,
+      "manifest": "e1-timing-20260922T1225Z.tar.gz.manifest.json",
+      "manifest_sha256": "47936b8a7cb22bf389b452ce2f013e5092d9f9c34b639b640f54768b3ecd4414"
+    },
+    {
+      "file": "e8-single-logits-20260922T2255Z.tar.gz",
+      "sha256": "b4c0a5cbcd2592ce5ddfdc823243f0e99dc15ef412d238a096068d6bae11ebf4",
+      "bytes": 16237576,
+      "manifest": "e8-single-logits-20260922T2255Z.tar.gz.manifest.json",
+      "manifest_sha256": "d2512b2141628c77746d5f1ddc0de025bb3de525fba5dd375226a60427c70439"
+    }
+  ],
+  "canonical_build": {
+    "path": "p0/monitor/2026-09-23-pooled-decode-build.json",
+    "sha256": "ce483d826c990dca5d87246ec0abbabd35af09d1894493e32d7abe46098849d1",
+    "pages": 13
+  },
+  "extracted_rebuild": {
+    "directory": "/private/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/lumo-pooled-extracted-5iet3qth",
+    "files_verified": 375,
+    "input_files_verified": 48,
+    "pooled_reducer_byte_identical": "PASS",
+    "latex_build": "PASS",
+    "rendered_pdf_text_identical": "PASS",
+    "pdf_sha256": "a29aa7b1eda77656c098c97c22b5efeeca01a2a6faad96d4b1de46e73e6120db"
+  },
+  "reviews": [
+    {
+      "path": "p0/monitor/paper-pooled-speed-redteam.md",
+      "sha256": "b0e71c4c475d8a227795060777000b8df1dd90627c9788910d9adbf11ec320d7",
+      "verdict": "PASS"
+    },
+    {
+      "path": "notes/pooled-decode-paper-artifact-redteam-2026-09-23.md",
+      "sha256": "98fc79c0bb227a47343d29c1a95c8d9f75a649015b846e609f397cdaded3ed7a",
+      "verdict": "PASS"
+    },
+    {
+      "path": "notes/agent-behavior-abstract-evidence-2026-09-23.md",
+      "sha256": "748ba0786b0ebb8d6f2f86d377754295490b79c6b5f2d87e794673a1e53c4001",
+      "verdict": "PASS"
+    }
+  ],
+  "workload_evidence": {
+    "raw_manifest": "results/agent-workload/raw/cqc10/MANIFEST.json",
+    "raw_manifest_sha256": "01c3922b06377c85d86b213bded399af377809f22d0df63829c5358ef7a86bcf",
+    "original_or_explicit_projection_files": 139,
+    "whole_evidence_manifest_sha256": "75200c9ba4538ae8d1c9889ac798e1604dc6cbb8e98646568e2b9a741b00980c",
+    "metric_reducer_replay": "independent and parent outputs exactly agree; extracted replay agrees"
+  },
+  "new_inference_launched": false,
+  "automation_changed": false,
+  "no_publication_or_submission": true,
+  "comparison_experiment": {
+    "status": "DESCRIPTIVE_COMPARISON_COMPLETE_PAIRED_CAMPAIGN_CONDITIONAL_NOT_LAUNCHED",
+    "plan": "review-experiments.md",
+    "sha256": "c8adff151e2656c046d0b974d3d0ffd9dbc595e908e903575493f325583be0d9",
+    "existing_tests": "SGLang SWE, native MTP, DSpark serving/fusion, DFlash2 capture and later serving smoke; applicability in recovered inventory"
+  },
+  "limits": [
+    "Different selected SWE-bench Verified Astropy subsets and deployed serving configurations; descriptive comparison only.",
+    "Cqc10 is an August24 selected remainder of a resumed development campaign; two SGLang completed tasks come from interrupted trials; not full-benchmark scores or new September inference.",
+    "Pooled request time excludes TTFT and between-request tools; it is not machine-wall throughput or task-completion speed.",
+    "All completed engine traffic is counted; no isolated tree-verification causal effect or task speedup claimed.",
+    "FP8 Cat10 qualification does not universally qualify the NVFP4 graph/cache/stochastic route.",
+    "Full model/runtime/evaluator dependencies are not bundled; configuration settings are explicit sanitized projections."
+  ],
+  "prior_delivery_receipt": "p0/monitor/before-pooled-rate-20260923T212510Z/artifacts/FINAL-DELIVERY.json",
+  "remote_copy": "No remote paper sync performed in this revision; local PDF/archive is authoritative.",
+  "behavior_evidence": {
+    "manifest": "results/agent-workload/BEHAVIOR_MANIFEST.json",
+    "sha256": "60606fd37fa463844715cf586d824611c1b30587dd68c8811e87ccec7b6ccb59",
+    "claim": "No detected degeneration in10selectedtasktraces under explicitly limited diagnostic; prior positive retained"
+  },
+  "history_audit": {
+    "notes/comparator-git-history-2026-09-23.md": "15a48b02c0da4d584c4e2f2e373d1cba99aff27607ca3cb4167321e86279c8e7",
+    "notes/sglang-swe-recovered-evidence-2026-09-23.md": "ec962f8821eb3b2a4f442bd583d246d420f8140ad16bd4c8fd4924b794f7f818",
+    "notes/sglang16-metric-audit-2026-09-23.json": "6deeffa4ca83f4a864eb1a743f0272d14cb6557fbd1ad2809d9805a871ec4adb",
+    "notes/external-baseline-history-audit-2026-09-23.md": "3cd71b93c019a3bf5f7a3a34760bf47e17bc41ec5cfb8ab30926ec08b7cadf4b"
+  },
+  "pooled_decode": {
+    "formula": "(sum output tokens - completed requests) / (sum E2E request latency - sum TTFT)",
+    "tree_tokens_per_s": 25.633622465853126,
+    "sglang_tokens_per_s": 26.893956024189762,
+    "tree_relative_percent": -4.6863077979417795,
+    "tree_tasks": 10,
+    "sglang_tasks": 2,
+    "tree_requests": 265,
+    "sglang_requests": 45,
+    "input_files": 48,
+    "audit_path": "results/agent-workload/shared-rate-audit.json",
+    "audit_sha256": "91e38415989781a3d2460729f86ed90aa246167c3850d480b03354c84342e9b8",
+    "reducer_sha256": "c201221bff80ff85b104009e9336346c6605f508234f5a68952ad393745cc57f",
+    "settings_projection_sha256": "6f9db90fabc5c7310e5e53968255f5c1ebaa9e4fc202ce34fd507b81f860e95d",
+    "speed_claims_audit_sha256": "5f590118a48e107d057cea2318b9dd6f901e52a1db4712481869a90d16a962f0"
+  }
+}

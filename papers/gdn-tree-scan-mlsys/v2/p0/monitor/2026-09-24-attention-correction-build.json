@@ -1,0 +1,55 @@
+{
+  "created_utc": "2026-09-24T22:43:58.589086+00:00",
+  "status": "PASS",
+  "scope": "Correct attention provenance without changing experiments or numerical claims; preserve retrospective symmetric patch-producing workload comparison",
+  "pages": 13,
+  "latex_errors": 0,
+  "overfull_boxes": 0,
+  "latex_warnings": 0,
+  "underfull_boxes": 10,
+  "sources": {
+    "abstract.tex": "f160cd35a25f331d625bed688d7875372ca27234178727fb77a6bf23aeeb4b3b",
+    "figures/pipeline.tikz": "8c9dbd43516be8703d4ba841a06d1f2d17caad2c434a61ec29ede40035f0762b",
+    "figures/scan-replay.tikz": "affc55cd6972d929de38dc8ebdd86c6dcea77fb0beb73c96551010bfaffadcfe",
+    "figures/state-contract.tikz": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898",
+    "main.tex": "6aab2a64f703b166e81a843b1bb6a408f3c66ebce97fa741e59cdceeb22fb8a6",
+    "results/agent-workload/case-study.tex": "73b37d657faa261fba11eaed22bb914ec1fc61229a0b22280b204a5d07ac4b64",
+    "ref.bib": "88ceccadbd0376d694f6037181ebf0dacd71f0936558d6c88f856666ccc05fc8",
+    "main.bbl": "c51d05c1f3ae5deddceebe09facc7f1beaa8c766e91a21231710ef1a9153b654",
+    "main.pdf": "721fe62075d34009193e0868550994fc52aeec841a7e12cd39d1d5f2d91287c6"
+  },
+  "current_documents": {
+    "README.md": "15e84d30ce8ea3193d9ce20df495f259088ba65a22996eba2278fe4e59a66b38",
+    "FINAL-REVIEW.md": "1c4c3c3803f84544a5ffa1cfa8149164180dd23095f3b99f3eaaf35a56754978",
+    "paper.config.yaml": "c3390776dde729fd79d00327b33da597216251cd6b7573a4897c4ae5489f2b59",
+    "notes/claim-evidence-ledger.md": "e200679919569d830f6eeff1dc6cfba9206495d298101c15e37e310a4437ed39",
+    "notes/design/optimization-evidence-map.md": "241b99d4827a365f196d157607414402bfac56da2ab85dbabdc114eaa73f5080",
+    "notes/design/experiment-matrix.csv": "cf5f66a61a3cc3b7e77f4ecc44ccc1b542f8f77e55691d5d35577ed451910b32",
+    "notes/design/baselines.csv": "75eae46782cc678a750af590ddd0c97db1d454d32413c1808183c087b41c7fe8",
+    "review-experiments.md": "11cba10d42473efe840b092cff0dc6145ca09fd7ee7e6694106481002d1d6401",
+    "experiments/STATUS.md": "d7c1b0c5382fda195f2e30a0ebb580a386e20c3b77a691e7127ad8579023b727",
+    "p0/monitor/closure-ledger.md": "35b7bccaf3c6e3024c9f1b9975da033c5ce2b8c53769427fb1f2c13577d44803",
+    "artifacts/README.md": "4efc5b679010fabdab6248e39de6b8c785f3c59a1988347fa882110fb6081837",
+    "scripts/build_review_bundle.py": "66d82b6e75ec9e90071ec35d3d4cc2bc216b16a133658231f9aeb4dd6a86adbf",
+    "issues/2026-09-24-patch-producing.csv": "fe3042431bc08d5b8ec05c0368f15d66eb0c2caa9147a8be3441ece1f6034589"
+  },
+  "citation_keys": 23,
+  "citation_preservation": "PASS",
+  "rate_audit_sha256": "279475d182ecd259790e2c57663d65c37205f2ee67c80aa46b0bd2e9b4e460c4",
+  "exact_replay": "PASS",
+  "input_bindings": 94,
+  "projection_bindings": 5,
+  "attention": {
+    "qualification": "patched Triton unified attention selected as TREE_ATTN",
+    "agent_deployment": "patched forked FA2",
+    "precision_is_not_backend_identity": true,
+    "raw_records_changed": false
+  },
+  "reviews": {
+    "notes/attention-backend-provenance-correction-2026-09-24.md": "ffff898c6e0f0a7cdfb8aa7b46b8f49d64ea5c59e2c657c37a2691144c875179",
+    "notes/attention-correction-redteam-2026-09-24.md": "1e7994041fb9d56c8c08754d4b66d0e69ab39a452dea4ed57383e2108a351763",
+    "notes/patch-producing-comparison-redteam-2026-09-24.md": "1a96349eba91242632ff293da387ed65173b68681a17f3799da76b91fd1a7795"
+  },
+  "visual_qa": "All13 rendered pages inspected in contact sheets; changed pages2/5/6/9 inspected individually. No clipping, overlap or table overflow.",
+  "new_inference_launched": false
+}

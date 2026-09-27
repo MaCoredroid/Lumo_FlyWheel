@@ -1,0 +1,58 @@
+{
+  "created_utc": "2026-09-24T23:01:51.831520+00:00",
+  "status": "PASS",
+  "scope": "Current deployed Hydra27 method, bounded binary-matched component gates, and existing pooled SWE comparison; superseded route results excluded",
+  "pages": 9,
+  "latex_errors": 0,
+  "overfull_boxes": 0,
+  "latex_warnings": 0,
+  "underfull_boxes": 2,
+  "sources": {
+    "abstract.tex": "7f8b9ef1febfd72f2706ef0085b7932570fd1822809b232a05be456fc001b633",
+    "figures/pipeline.tikz": "aaf26c57b55eda1f2842501172043dc6e89f592d369edd4e076fe4297cbc8e84",
+    "figures/scan-replay.tikz": "19c984883a8b70cc5209c33fa4f62e98aba708ad2b025568d1b2d600a3e4ecd0",
+    "figures/state-contract.tikz": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898",
+    "main.tex": "4793cefe3803d70e817031cb02b743d66c5c5d0e177ccd2c6356708f5d154894",
+    "results/agent-workload/case-study.tex": "cb2b80e88be09e2fe12924d0b3f276d33924502a7c14a033bca79f06a1201f2b",
+    "ref.bib": "88ceccadbd0376d694f6037181ebf0dacd71f0936558d6c88f856666ccc05fc8",
+    "main.bbl": "279813cbada2472a1d214885cc8f7df9dfff4ca40991114cea50cb5373e0ff66",
+    "main.pdf": "fbe79173f4e3e87e3f5f9982afae20f14b6d864f0a54f93f51aad8704b2a0d7a"
+  },
+  "current_documents": {
+    "README.md": "4813717c5f2e2118676fc80a42fa5871a3a9cfc71a904f2a131f5982c55df5fa",
+    "FINAL-REVIEW.md": "5dee981d3cdb2a22809d3d3cc19a5f0faea7e69b978707f8470ec382182ab1b5",
+    "paper.config.yaml": "5f50655f49be5d8e04fd82d47cadcf1b62f573e30fcbb5af0e8d6beaab8ca00f",
+    "notes/claim-evidence-ledger.md": "9565615cc121eddd6d7a9043c5733f3f2fed55160ce7da76f00569bbaa70e308",
+    "notes/design/optimization-evidence-map.md": "9122e401af2717c60bafc9e7c78e61eb89615e84d95a654296b3688d1b224b91",
+    "notes/design/experiment-matrix.csv": "1685cd1e54924cb3b7b40672d660aaeb5e27e353662fbeb22d420a6b344b8fc2",
+    "notes/design/baselines.csv": "146f18673dbc891b5b8a01f96874d6aa944a8ec1b2fb198dc28635c019d2dacb",
+    "review-experiments.md": "b5875c23bfca7c03dabdf2d1e05ec068208163686134de929beb96f78400f20a",
+    "experiments/STATUS.md": "873dcd1ef007b2384b0952b69aaa2edc76f31eb3f1d1d4540ebb652f28033c75",
+    "p0/monitor/closure-ledger.md": "05eddf664ebcd0efcc4fd12a5bcdbc14390bd5635f8ba33cf518a529f65a3437",
+    "artifacts/README.md": "17dac04e625fd532e2a724a0a9c0c00f48f21ccc1dc0dd6f07413343ec74a920",
+    "scripts/build_review_bundle.py": "a7b30c1b280bd542c66dfb476ee94788e2d432b40e4606db77b1e070e2d17722",
+    "issues/2026-09-24-current-production.csv": "12c102d82312c42c9f32dca566c3ac115334bfcd5666cf69e6cac5cd74b7def7"
+  },
+  "citation_keys": 22,
+  "citation_keys_resolve": "PASS",
+  "issues_validation": "Empirical issues CSV validation passed\n  Total issues: 4",
+  "audits": {
+    "results/agent-workload/patch-producing-rate-audit.json": "279475d182ecd259790e2c57663d65c37205f2ee67c80aa46b0bd2e9b4e460c4",
+    "results/current-production/audit.json": "2d0904d5a6c77e0fa0f56a9850dbc0cce3cad4898227a3f78770758edc93c4c2",
+    "results/current-production/inputs.json": "8086b8aa2d682cf566f05daac044bc16280174d05b5fa4536a1830ca2ee43832"
+  },
+  "exact_replays": "PASS",
+  "workload_input_bindings": 94,
+  "projection_bindings": 5,
+  "production_input_bindings": 20,
+  "reviews": {
+    "notes/latest-production-design-evidence-2026-09-24.md": "2f5abb1eaf2a50b3365247d0295bc758659ee092491e91ba71dae50eb0adbd63",
+    "notes/latest-optimization-supersession-2026-09-24.md": "3d9aa321a3894d72c9990060086955d4e1511e57ee96fb1ce2870e0887c89ed9",
+    "notes/latest-production-paper-redteam-2026-09-24.md": "8eb5e10e2b8e1d8791be3db223f5d7bc6f12fabc96c1d31aa4f887beb5006856",
+    "notes/latest-production-method-review-2026-09-24.md": "5e7fe8fb621ba724d376f598aae69ef381b41d4420a064ab79d6df96213e8d13"
+  },
+  "visual_qa": "All9pages inspected as contact sheets; redesigned pages4/5 and current-validation page8 inspected individually. No clipping, overlap or table overflow. Whitespace-only cleanup does not alter rendered content.",
+  "superseded_route_results_removed": true,
+  "old_evidence_preserved": true,
+  "new_inference_launched": false
+}

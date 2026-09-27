@@ -1,0 +1,88 @@
+{
+  "schema": "sglang-step2-shared-task-raw-v1",
+  "retrieved_utc": "2026-09-24T22:13:54.425891+00:00",
+  "scope": "Original bytes for the two shared completed tasks only. No trace, environment or inference. Prior task13236 excluded from this pooled calculation because its metrics mix streaming and nonstreaming requests;13398 unfinished. Task13033 failed with an empty patch; not excluded.",
+  "secret_scan": "PASS: selected metric/metadata/eval/launch/note payloads checked for credential assignments, bearer tokens and private keys before writing.",
+  "files": [
+    {
+      "path": "astropy__astropy-12907/vllm_metrics_pre.txt",
+      "source_host": "mark@100.103.10.122",
+      "source_path": "/home/mark/shared/tmp-scratch/fr14_ablation_a/step2/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt",
+      "sha256": "6a65f7c595b6b90a590ff8ba45c3ae255721472019c98d4cd5d5065f892193ba",
+      "bytes": 63928
+    },
+    {
+      "path": "astropy__astropy-12907/vllm_metrics_post.txt",
+      "source_host": "mark@100.103.10.122",
+      "source_path": "/home/mark/shared/tmp-scratch/fr14_ablation_a/step2/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt",
+      "sha256": "d09f7e711cb5247b160d8f17d6d8ce5d9903d769ba6d66e5b614af2ecb0a49f3",
+      "bytes": 81110
+    },
+    {
+      "path": "astropy__astropy-12907/runner_metadata.json",
+      "source_host": "mark@100.103.10.122",
+      "source_path": "/home/mark/shared/tmp-scratch/fr14_ablation_a/step2/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json",
+      "sha256": "5a1d8c0257a20769b74295a89f497a8cf5e51da48fb3d05f94ec75bbdb3040cf",
+      "bytes": 2123
+    },
+    {
+      "path": "astropy__astropy-12907/eval/eval_report.json",
+      "source_host": "mark@100.103.10.122",
+      "source_path": "/home/mark/shared/tmp-scratch/fr14_ablation_a/step2/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json",
+      "sha256": "2d6ff6a782da8c459cfd0e66ad1b2b0521ffab64d46e38d90f592e5513cf5dd3",
+      "bytes": 529
+    },
+    {
+      "path": "astropy__astropy-13033/vllm_metrics_pre.txt",
+      "source_host": "mark@100.103.10.122",
+      "source_path": "/home/mark/shared/tmp-scratch/fr14_ablation_a/step2/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_pre.txt",
+      "sha256": "46fafd463e8943ed25122150734c3c96c8c205e710705bc4bff637f958982a3f",
+      "bytes": 81109
+    },
+    {
+      "path": "astropy__astropy-13033/vllm_metrics_post.txt",
+      "source_host": "mark@100.103.10.122",
+      "source_path": "/home/mark/shared/tmp-scratch/fr14_ablation_a/step2/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_post.txt",
+      "sha256": "e01786f4ae6cb978bf4521a1321d0d67f1aa316496ef0f69b5fccb4645ef0d5b",
+      "bytes": 81119
+    },
+    {
+      "path": "astropy__astropy-13033/runner_metadata.json",
+      "source_host": "mark@100.103.10.122",
+      "source_path": "/home/mark/shared/tmp-scratch/fr14_ablation_a/step2/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json",
+      "sha256": "ffdd5969ccbab6993f9ec88297b2c8b4eb968e265eb9caab39fd460e2dc2ba02",
+      "bytes": 2664
+    },
+    {
+      "path": "astropy__astropy-13033/eval/eval_report.json",
+      "source_host": "mark@100.103.10.122",
+      "source_path": "/home/mark/shared/tmp-scratch/fr14_ablation_a/step2/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json",
+      "sha256": "f76de9ad0b01b9df9291ebfe9b2c01c03e52b835a09b2ac7e4873f03c4099f4b",
+      "bytes": 889
+    },
+    {
+      "path": "launch-and-contemporaneous-notes/ablation_a_step2.md",
+      "source_path": "results/fr14_nvfp4_port_20260816/ablation_a_step2.md",
+      "sha256": "94f5910257d03f6b290a2a9d9ccc2563b2e93c87fbaf7cfdeb4858bdd9254445",
+      "bytes": 7566
+    },
+    {
+      "path": "launch-and-contemporaneous-notes/ablation_a_step2.json",
+      "source_path": "results/fr14_nvfp4_port_20260816/ablation_a_step2.json",
+      "sha256": "cd24f73dd4eb7d7499fe1e8d6bcb5cb30498c398ea574524386a52aa6aa7e5e2",
+      "bytes": 8566
+    },
+    {
+      "path": "launch-and-contemporaneous-notes/ablation_a_step2_sglang_cmdline.txt",
+      "source_path": "results/fr14_nvfp4_port_20260816/ablation_a_step2_sglang_cmdline.txt",
+      "sha256": "eb17eb2b7bf3afeeb7fdb8992160c7935b7b9112e937b20e0ad482b5b3da2aad",
+      "bytes": 459
+    },
+    {
+      "path": "launch-and-contemporaneous-notes/ablation_a_step2_sglang_boot.sh",
+      "source_path": "results/fr14_nvfp4_port_20260816/ablation_a_step2_sglang_boot.sh",
+      "sha256": "68c20121f4fdd6aeca68fb10dcea628e8edb50af24018166beaa5bba1f68be30",
+      "bytes": 2841
+    }
+  ]
+}

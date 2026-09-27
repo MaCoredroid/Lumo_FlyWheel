@@ -1,0 +1,16 @@
+\begin{tikzpicture}[font=\scriptsize,
+ box/.style={draw=inkblue,fill=inkblue!7,rounded corners,align=center,text width=3.05cm,minimum height=0.7cm},
+ arr/.style={-{Latex[length=1.6mm]},thick,draw=inkblue}]
+\node[box] (prior) at (0,0) {Pre-tree state $R_0$};
+\node[box] (scan) at (0,-1.2) {Scan all candidates\\parent-indexed temporary $H[i]$};
+\node[box] (out) at (0,-2.4) {Candidate outputs\\complete forward and acceptance};
+\node[box,draw=mutedamber,fill=mutedamber!8] (ring) at (3.55,0) {Recorded node operands};
+\node[box,draw=mutedgreen,fill=mutedgreen!8] (replay) at (3.55,-1.2) {Replay selected path from $R_0$\\one carried state tile};
+\node[box,draw=mutedgreen,fill=mutedgreen!8] (publish) at (3.55,-2.4) {Publish accepted state\\to native running rows};
+\draw[arr] (prior)--(scan);
+\draw[arr] (scan)--(out);
+\draw[arr] (ring)--(replay);
+\draw[arr] (prior.east)--(replay.north west);
+\draw[arr] (out.east)--node[above,sloped,font=\tiny]{selected path}(replay.south west);
+\draw[arr] (replay)--(publish);
+\end{tikzpicture}

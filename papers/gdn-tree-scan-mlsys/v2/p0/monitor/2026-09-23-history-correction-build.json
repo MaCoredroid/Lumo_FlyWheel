@@ -1,0 +1,23 @@
+{
+  "created_utc": "2026-09-23T18:09:49.013525+00:00",
+  "scope": "Git history correction: executed SGLang, DSpark/DFlash-family, native-MTP comparisons acknowledged; no superseded performance values restored",
+  "pages": 12,
+  "latex_errors": 0,
+  "undefined_references_or_citations": 0,
+  "overfull_boxes": 0,
+  "visual_qa": "PASS: abstract, evaluation/comparator pages, and last page inspected; no clipping or overflow",
+  "new_inference_launched": false,
+  "source_sha256": {
+    "main.tex": "bf8f1f47a95e95e0a4732691dbcf56d86f2150b4a9da70d6b762005baf10e90c",
+    "abstract.tex": "df87d7169f48c42173a78720460595950da93b1e48a61b76d74933977332f220",
+    "results/agent-workload/case-study.tex": "f3a344ae2dc51e4cdd3a1137f866e7429876bfbca11270da4a2a7cb4e36a9d35",
+    "main.pdf": "398ae707f9b6ba6e1241d0dd52f8217f83f3fd4e49b3b734449784658822e443",
+    "ref.bib": "88ceccadbd0376d694f6037181ebf0dacd71f0936558d6c88f856666ccc05fc8",
+    "review-experiments.md": "e505c9b64e90fda83ca23be1fd86f3f259796b7bb0ab802a1dca3e24193c55e9",
+    "notes/comparator-git-history-2026-09-23.md": "15a48b02c0da4d584c4e2f2e373d1cba99aff27607ca3cb4167321e86279c8e7",
+    "notes/external-baseline-history-audit-2026-09-23.md": "3cd71b93c019a3bf5f7a3a34760bf47e17bc41ec5cfb8ab30926ec08b7cadf4b",
+    "notes/sglang-swe-recovered-evidence-2026-09-23.md": "ec962f8821eb3b2a4f442bd583d246d420f8140ad16bd4c8fd4924b794f7f818",
+    "notes/sglang16-metric-audit-2026-09-23.json": "6deeffa4ca83f4a864eb1a743f0272d14cb6557fbd1ad2809d9805a871ec4adb"
+  },
+  "independent_reviews": "SGLang/native comparator wording PASS; DFlash/DSpark independent history audit agrees; original evidence unchanged"
+}

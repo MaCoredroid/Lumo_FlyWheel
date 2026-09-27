@@ -1,0 +1,36 @@
+{
+  "completed_utc": "2026-09-27T06:53:15.508349+00:00",
+  "status": "PASS_WITH_MINOR_BALANCING_WARNING",
+  "scope": "Section V rewritten around specific implementation changes and nontrivial constraints; Section IV closing comparison distinguishes overlap from different execution and commit policies",
+  "pages": 11,
+  "section_v_pages": [
+    5,
+    6,
+    7
+  ],
+  "table_ii_page": 6,
+  "latex_build": "PASS",
+  "undefined_references": 0,
+  "overfull_hboxes": 0,
+  "layout_warning": "One 0.97395pt overfull vbox in last-page bibliography balancing; full-page render inspected, no visible clipping or overlap.",
+  "visual_review": "All 11 rendered pages reviewed in contact sheets; revised Section V, Table II and final bibliography also inspected at page scale.",
+  "unchanged": [
+    "abstract.tex",
+    "ref.bib",
+    "main.bbl",
+    "results/agent-workload/case-study.tex",
+    "figures/pipeline.tikz"
+  ],
+  "evaluation_and_results_source_unchanged": true,
+  "new_experiments": false,
+  "sha256": {
+    "main.tex": "15aa71f4ae51f637b585aed1ad3ca1a42886c30db38bf3bc3f9314606482392d",
+    "abstract.tex": "651ee514d7dde54bc038e0b72a16bb040fd8c40264b61f633f4b3594a6cd6edc",
+    "main.pdf": "4978a794ec02f57a9be7e9963ff603f34727880871253ecf0417e814735ea6ab",
+    "ref.bib": "45ff04659e08f46a5591ca42dc624ed15521eb0f043d54098a27e7e8d55eb981",
+    "main.bbl": "813bbfc3a6e14bbf39f4154bdad8efebe592a98611c7e2eb337938df7d791928",
+    "results/agent-workload/case-study.tex": "091f567a2dc1367c67a31947c11608c53457920983751a603a62df07773dab35",
+    "figures/pipeline.tikz": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c"
+  },
+  "prior_snapshot": "p0/monitor/before-design-distinction-20260927T064750Z"
+}

@@ -1,0 +1,213 @@
+{
+  "cqc10_comparison_sources": {
+    "network_policy_task_metadata": {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/runner_metadata.json",
+      "sha256": "3f74dd8d66138e6c6eeac65d5d62f732b91b6138dbd18b2b3d28622b1ba024f6"
+    },
+    "proxy_environment": {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/offload_proxy_env.txt",
+      "sha256": "1399925a100db708a750d7c7daf7396e358364e557bba5a62aa3493e304bc813"
+    }
+  },
+  "cqc10_network_policy_record": {
+    "bridge": "fr14agent0",
+    "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4",
+    "gateway": "172.31.99.1",
+    "net": "fr14-agent-isolated",
+    "proxy_port": "8023",
+    "rules": "9"
+  },
+  "cqc10_proxy_env_allowlist": {
+    "LUMO_PROXY_AUTO_CONTINUE": "0",
+    "LUMO_PROXY_FORCE_MIN_P": "0",
+    "LUMO_PROXY_FORCE_PRESENCE_PENALTY": "1.0",
+    "LUMO_PROXY_FORCE_TEMPERATURE": "0.6",
+    "LUMO_PROXY_FORCE_TOP_K": "20",
+    "LUMO_PROXY_FORCE_TOP_P": "0.95",
+    "LUMO_PROXY_MAX_OUTPUT_TOKENS": "24000"
+  },
+  "env_whitelist": [
+    "LUMO_PROXY_FORCE_TEMPERATURE",
+    "LUMO_PROXY_FORCE_TOP_P",
+    "LUMO_PROXY_FORCE_TOP_K",
+    "LUMO_PROXY_FORCE_MIN_P",
+    "LUMO_PROXY_FORCE_PRESENCE_PENALTY",
+    "LUMO_PROXY_MAX_OUTPUT_TOKENS",
+    "LUMO_PROXY_AUTO_CONTINUE"
+  ],
+  "harness_launcher": {
+    "agent": "qwen_code",
+    "agent_wall_s": 9000,
+    "concurrency": 1,
+    "declared_qwen_code_version": "0.19.4",
+    "driver": "scripts/run_swe_bench_q36_a.py",
+    "source": {
+      "path": "results/fr14_nvfp4_port_20260816/sglang16_fire.sh",
+      "sha256": "0e38df4823a7b117f5c6581db1430e22462c28914f86c748b087f9e4e9ebde9a"
+    }
+  },
+  "no_inference": true,
+  "no_raw_environment_or_trace_body_in_projection": true,
+  "runs": [
+    {
+      "launcher_argv_settings": {
+        "attention-backend": "flashinfer",
+        "chunked-prefill-size": "8192",
+        "enable-metrics": true,
+        "host": "0.0.0.0",
+        "mem-fraction-static": "0.70",
+        "model-path": "/models/qwen3.8-27b-nvfp4-radixark-asshipped",
+        "port": "9950",
+        "reasoning-parser": "qwen3",
+        "served-model-name": "qwen3.8-27b-nvfp4-radixark",
+        "speculative-algorithm": "EAGLE",
+        "speculative-eagle-topk": "1",
+        "speculative-num-draft-tokens": "4",
+        "speculative-num-steps": "3",
+        "tool-call-parser": "qwen3_coder",
+        "trust-remote-code": true
+      },
+      "model_endpoint_record": {
+        "id": "qwen3.8-27b-nvfp4-radixark",
+        "max_model_len": 262144,
+        "owned_by": "sglang",
+        "root": "qwen3.8-27b-nvfp4-radixark"
+      },
+      "network_policy_record": {
+        "bridge": "fr14agent0",
+        "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4",
+        "gateway": "172.31.99.1",
+        "net": "fr14-agent-isolated",
+        "proxy_port": "8023",
+        "rules": "9"
+      },
+      "projection_only": true,
+      "proxy_env_allowlist": {
+        "LUMO_PROXY_AUTO_CONTINUE": "0",
+        "LUMO_PROXY_FORCE_MIN_P": "0",
+        "LUMO_PROXY_FORCE_PRESENCE_PENALTY": "1.0",
+        "LUMO_PROXY_FORCE_TEMPERATURE": "0.6",
+        "LUMO_PROXY_FORCE_TOP_K": "20",
+        "LUMO_PROXY_FORCE_TOP_P": "0.95",
+        "LUMO_PROXY_MAX_OUTPUT_TOKENS": "24000"
+      },
+      "qwen_trace_init": {
+        "qwen_code_version": "0.19.4",
+        "subtype": "init",
+        "type": "system"
+      },
+      "run": "run1",
+      "sources": {
+        "launcher_command": {
+          "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/sglang_cmdline.txt",
+          "sha256": "eb17eb2b7bf3afeeb7fdb8992160c7935b7b9112e937b20e0ad482b5b3da2aad"
+        },
+        "models_endpoint": {
+          "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/models.json",
+          "sha256": "028aed8817729e45c7fa06f809dca14073d78758469d8b933d45fc5cdb99b7c2"
+        },
+        "original_trace": {
+          "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/qwen_trace.jsonl",
+          "sha256": "7f346cf3aea00a6be351ebd416b78b35ff695912710b662547eaad5f0ecd6187"
+        },
+        "proxy_environment": {
+          "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/offload_proxy_env.txt",
+          "sha256": "79e7667a089531010c947fc94edeab8f474f7cd1aab049327bf3f603d97510ba"
+        },
+        "task_metadata": {
+          "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json",
+          "sha256": "78679842646c92cc927c0cc102836580b965ced7a7ab8d5d4a1f0d0a77d97f71"
+        }
+      },
+      "task": "astropy__astropy-12907",
+      "verified_checks": {
+        "flashinfer_eagle_3_1_4_chunk_8192": true,
+        "model_context_262144": true,
+        "network_policy_equals_cqc10": true,
+        "proxy_allowlist_equals_cqc10": true,
+        "trace_init_qwen_code_0_19_4": true
+      }
+    },
+    {
+      "launcher_argv_settings": {
+        "attention-backend": "flashinfer",
+        "chunked-prefill-size": "8192",
+        "enable-metrics": true,
+        "host": "0.0.0.0",
+        "mem-fraction-static": "0.70",
+        "model-path": "/models/qwen3.8-27b-nvfp4-radixark-asshipped",
+        "port": "9950",
+        "reasoning-parser": "qwen3",
+        "served-model-name": "qwen3.8-27b-nvfp4-radixark",
+        "speculative-algorithm": "EAGLE",
+        "speculative-eagle-topk": "1",
+        "speculative-num-draft-tokens": "4",
+        "speculative-num-steps": "3",
+        "tool-call-parser": "qwen3_coder",
+        "trust-remote-code": true
+      },
+      "model_endpoint_record": {
+        "id": "qwen3.8-27b-nvfp4-radixark",
+        "max_model_len": 262144,
+        "owned_by": "sglang",
+        "root": "qwen3.8-27b-nvfp4-radixark"
+      },
+      "network_policy_record": {
+        "bridge": "fr14agent0",
+        "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4",
+        "gateway": "172.31.99.1",
+        "net": "fr14-agent-isolated",
+        "proxy_port": "8023",
+        "rules": "9"
+      },
+      "projection_only": true,
+      "proxy_env_allowlist": {
+        "LUMO_PROXY_AUTO_CONTINUE": "0",
+        "LUMO_PROXY_FORCE_MIN_P": "0",
+        "LUMO_PROXY_FORCE_PRESENCE_PENALTY": "1.0",
+        "LUMO_PROXY_FORCE_TEMPERATURE": "0.6",
+        "LUMO_PROXY_FORCE_TOP_K": "20",
+        "LUMO_PROXY_FORCE_TOP_P": "0.95",
+        "LUMO_PROXY_MAX_OUTPUT_TOKENS": "24000"
+      },
+      "qwen_trace_init": {
+        "qwen_code_version": "0.19.4",
+        "subtype": "init",
+        "type": "system"
+      },
+      "run": "r1",
+      "sources": {
+        "launcher_command": {
+          "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/sglang_cmdline.txt",
+          "sha256": "eb17eb2b7bf3afeeb7fdb8992160c7935b7b9112e937b20e0ad482b5b3da2aad"
+        },
+        "models_endpoint": {
+          "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/models.json",
+          "sha256": "d8c9c6075ed9994510d9ebb1a4bd001e85ce0e71093ac02eff3bfabc7d62f5ea"
+        },
+        "original_trace": {
+          "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/qwen_trace.jsonl",
+          "sha256": "b8a473e65a0db4284a9f0c0057fead31088f27898998ab970a357635f640d9c1"
+        },
+        "proxy_environment": {
+          "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/offload_proxy_env.txt",
+          "sha256": "79e7667a089531010c947fc94edeab8f474f7cd1aab049327bf3f603d97510ba"
+        },
+        "task_metadata": {
+          "path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json",
+          "sha256": "a8197a47470987fc87076b2163a02dcfac7f30a3652a56f1a4031a3ee9f89ff1"
+        }
+      },
+      "task": "astropy__astropy-13033",
+      "verified_checks": {
+        "flashinfer_eagle_3_1_4_chunk_8192": true,
+        "model_context_262144": true,
+        "network_policy_equals_cqc10": true,
+        "proxy_allowlist_equals_cqc10": true,
+        "trace_init_qwen_code_0_19_4": true
+      }
+    }
+  ],
+  "schema": "sglang-settings-allowlist-projection-v1",
+  "scope": "Nonsecret source-bound projection for the two completed SGLang tasks. Original environment/trace bodies are intentionally omitted; hashes identify them. Observed requested settings do not prove identical effective sampling kernels or matched task cohorts."
+}

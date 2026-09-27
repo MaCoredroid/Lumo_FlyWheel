@@ -1,0 +1,626 @@
+[
+  {
+    "arm": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_00/hydra27_fixed32_pool0",
+    "D": 11.592196974969818,
+    "counts_align": true,
+    "delta": {
+      "vllm:generation_tokens_total": 128956.0,
+      "vllm:request_success_total": 384.0,
+      "vllm:request_generation_tokens_count": 384.0,
+      "vllm:request_generation_tokens_sum": 128956.0,
+      "vllm:e2e_request_latency_seconds_count": 384.0,
+      "vllm:e2e_request_latency_seconds_sum": 13368.867973566055,
+      "vllm:time_to_first_token_seconds_count": 384.0,
+      "vllm:time_to_first_token_seconds_sum": 2277.6140656471252
+    },
+    "gauges": {
+      "vllm:num_requests_running": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting_by_reason": [
+        0.0,
+        0.0
+      ]
+    },
+    "files": [
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_00/hydra27_fixed32_pool0/metrics_before_swe.txt",
+        "sha256": "310617ed0f36cc97899b1350adbccba8bc7608bc560c190a60b7c894ebb00ddb"
+      },
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_00/hydra27_fixed32_pool0/metrics_after_swe.txt",
+        "sha256": "6f2abbfa6f47e688bbfffa663041fba7beaf8216b0b468eed67d81bca8327ad5"
+      }
+    ]
+  },
+  {
+    "arm": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_00/tail6_fixed32_pool0",
+    "D": 11.484269638005705,
+    "counts_align": true,
+    "delta": {
+      "vllm:generation_tokens_total": 169600.0,
+      "vllm:request_success_total": 507.0,
+      "vllm:request_generation_tokens_count": 507.0,
+      "vllm:request_generation_tokens_sum": 169600.0,
+      "vllm:e2e_request_latency_seconds_count": 507.0,
+      "vllm:e2e_request_latency_seconds_sum": 17473.56366300583,
+      "vllm:time_to_first_token_seconds_count": 507.0,
+      "vllm:time_to_first_token_seconds_sum": 2749.684362888336
+    },
+    "gauges": {
+      "vllm:num_requests_running": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting_by_reason": [
+        0.0,
+        0.0
+      ]
+    },
+    "files": [
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_00/tail6_fixed32_pool0/metrics_before_swe.txt",
+        "sha256": "720bb655422db91f1ba72ab04ef1927d8ca0c0765db5ba8bc2edd1f408bfc758"
+      },
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_00/tail6_fixed32_pool0/metrics_after_swe.txt",
+        "sha256": "63d76d3506618d2205b8511ea017202eba6e8e5a714a45304255b635e85d0a11"
+      }
+    ]
+  },
+  {
+    "arm": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_01/hydra27_fixed32_pool1",
+    "D": 11.689541425914916,
+    "counts_align": true,
+    "delta": {
+      "vllm:generation_tokens_total": 132948.0,
+      "vllm:request_success_total": 421.0,
+      "vllm:request_generation_tokens_count": 421.0,
+      "vllm:request_generation_tokens_sum": 132948.0,
+      "vllm:e2e_request_latency_seconds_count": 421.0,
+      "vllm:e2e_request_latency_seconds_sum": 13848.242134094238,
+      "vllm:time_to_first_token_seconds_count": 421.0,
+      "vllm:time_to_first_token_seconds_sum": 2511.0138227939606
+    },
+    "gauges": {
+      "vllm:num_requests_running": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting_by_reason": [
+        0.0,
+        0.0
+      ]
+    },
+    "files": [
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_01/hydra27_fixed32_pool1/metrics_before_swe.txt",
+        "sha256": "e73ea56effe0463704f9b2bdd35a0a208886d11d42ccb3984d872ae04d7cf72b"
+      },
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_01/hydra27_fixed32_pool1/metrics_after_swe.txt",
+        "sha256": "2eb5b41e94f4ba6bc1ceb47b78f928f5d077fa72dc4e3e590873a5c43d468fd0"
+      }
+    ]
+  },
+  {
+    "arm": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_01/tail6_fixed32_pool1",
+    "D": 13.157364799894836,
+    "counts_align": true,
+    "delta": {
+      "vllm:generation_tokens_total": 170957.0,
+      "vllm:request_success_total": 399.0,
+      "vllm:request_generation_tokens_count": 399.0,
+      "vllm:request_generation_tokens_sum": 170957.0,
+      "vllm:e2e_request_latency_seconds_count": 399.0,
+      "vllm:e2e_request_latency_seconds_sum": 15546.633167743683,
+      "vllm:time_to_first_token_seconds_count": 399.0,
+      "vllm:time_to_first_token_seconds_sum": 2583.70308303833
+    },
+    "gauges": {
+      "vllm:num_requests_running": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting_by_reason": [
+        0.0,
+        0.0
+      ]
+    },
+    "files": [
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_01/tail6_fixed32_pool1/metrics_before_swe.txt",
+        "sha256": "c8a1738f7f5a49a32741a11429e7925a74e34e45291b839f6a569ae921950e7d"
+      },
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_01/tail6_fixed32_pool1/metrics_after_swe.txt",
+        "sha256": "33512f9944bbba8f5031d0ba10a0c128907eebebe760c8d1ef059f6d79319e95"
+      }
+    ]
+  },
+  {
+    "arm": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_02/hydra27_fixed32_pool2",
+    "D": 11.946727491490204,
+    "counts_align": true,
+    "delta": {
+      "vllm:generation_tokens_total": 156163.0,
+      "vllm:request_success_total": 447.0,
+      "vllm:request_generation_tokens_count": 447.0,
+      "vllm:request_generation_tokens_sum": 156163.0,
+      "vllm:e2e_request_latency_seconds_count": 447.0,
+      "vllm:e2e_request_latency_seconds_sum": 15603.054978847504,
+      "vllm:time_to_first_token_seconds_count": 447.0,
+      "vllm:time_to_first_token_seconds_sum": 2568.8579478263855
+    },
+    "gauges": {
+      "vllm:num_requests_running": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting_by_reason": [
+        0.0,
+        0.0
+      ]
+    },
+    "files": [
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_02/hydra27_fixed32_pool2/metrics_before_swe.txt",
+        "sha256": "16ef36e05b33b20ce0fa30cd08067260390d294c5428e0feec99753a8598b7cc"
+      },
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_02/hydra27_fixed32_pool2/metrics_after_swe.txt",
+        "sha256": "460726e06134e076e5932e71f1b1ef4739ccd0d82c69ba12605060e0e47dec1b"
+      }
+    ]
+  },
+  {
+    "arm": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_02/tail6_fixed32_pool2",
+    "D": 12.246249148502557,
+    "counts_align": true,
+    "delta": {
+      "vllm:generation_tokens_total": 174725.0,
+      "vllm:request_success_total": 480.0,
+      "vllm:request_generation_tokens_count": 480.0,
+      "vllm:request_generation_tokens_sum": 174725.0,
+      "vllm:e2e_request_latency_seconds_count": 480.0,
+      "vllm:e2e_request_latency_seconds_sum": 16972.273817539215,
+      "vllm:time_to_first_token_seconds_count": 480.0,
+      "vllm:time_to_first_token_seconds_sum": 2743.8355515003204
+    },
+    "gauges": {
+      "vllm:num_requests_running": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting_by_reason": [
+        0.0,
+        0.0
+      ]
+    },
+    "files": [
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_02/tail6_fixed32_pool2/metrics_before_swe.txt",
+        "sha256": "3bbcce18397d714ad161aadf07c123b2e70f5425ee203198702507af9a4c83ef"
+      },
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_02/tail6_fixed32_pool2/metrics_after_swe.txt",
+        "sha256": "30e5db9a89e58ba616edf6cb98be1ae12ff4ef527f58a6406a5c074edac4a496"
+      }
+    ]
+  },
+  {
+    "arm": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_03/hydra27_fixed32_pool3",
+    "D": 13.099117105760158,
+    "counts_align": true,
+    "delta": {
+      "vllm:generation_tokens_total": 247195.0,
+      "vllm:request_success_total": 516.0,
+      "vllm:request_generation_tokens_count": 516.0,
+      "vllm:request_generation_tokens_sum": 247195.0,
+      "vllm:e2e_request_latency_seconds_count": 516.0,
+      "vllm:e2e_request_latency_seconds_sum": 21733.73242211342,
+      "vllm:time_to_first_token_seconds_count": 516.0,
+      "vllm:time_to_first_token_seconds_sum": 2902.005214214325
+    },
+    "gauges": {
+      "vllm:num_requests_running": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting_by_reason": [
+        0.0,
+        0.0
+      ]
+    },
+    "files": [
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_03/hydra27_fixed32_pool3/metrics_before_swe.txt",
+        "sha256": "1437002410d34df1ceee3c7c26ea71bb5f2243cdcdb4de02828d51fb949fd15b"
+      },
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_03/hydra27_fixed32_pool3/metrics_after_swe.txt",
+        "sha256": "7dc6f1ec6b62eba02d68ffaedfb7f09f46e180f45566aace34fb7652f52ec765"
+      }
+    ]
+  },
+  {
+    "arm": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_03/tail6_fixed32_pool3",
+    "D": 13.143900579815222,
+    "counts_align": true,
+    "delta": {
+      "vllm:generation_tokens_total": 187858.0,
+      "vllm:request_success_total": 416.0,
+      "vllm:request_generation_tokens_count": 416.0,
+      "vllm:request_generation_tokens_sum": 187858.0,
+      "vllm:e2e_request_latency_seconds_count": 416.0,
+      "vllm:e2e_request_latency_seconds_sum": 16662.232573747635,
+      "vllm:time_to_first_token_seconds_count": 416.0,
+      "vllm:time_to_first_token_seconds_sum": 2401.4734587669373
+    },
+    "gauges": {
+      "vllm:num_requests_running": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting_by_reason": [
+        0.0,
+        0.0
+      ]
+    },
+    "files": [
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_03/tail6_fixed32_pool3/metrics_before_swe.txt",
+        "sha256": "6160f3f33dd4b38aacd6d04b66edbae264bc06413c2caaeafc1641966afbadaf"
+      },
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_03/tail6_fixed32_pool3/metrics_after_swe.txt",
+        "sha256": "699b575f0d806a123f5bd071b1262fb6627a59cd673daf311830a6414b3d3812"
+      }
+    ]
+  },
+  {
+    "arm": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_00/hydra27_fixed32_gqa_w4_gqa_pair_b4_seal0",
+    "D": 12.054741180404864,
+    "counts_align": true,
+    "delta": {
+      "vllm:generation_tokens_total": 150893.0,
+      "vllm:request_success_total": 486.0,
+      "vllm:request_generation_tokens_count": 486.0,
+      "vllm:request_generation_tokens_sum": 150893.0,
+      "vllm:e2e_request_latency_seconds_count": 486.0,
+      "vllm:e2e_request_latency_seconds_sum": 15238.26801109314,
+      "vllm:time_to_first_token_seconds_count": 486.0,
+      "vllm:time_to_first_token_seconds_sum": 2761.2684845924377
+    },
+    "gauges": {
+      "vllm:num_requests_running": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting_by_reason": [
+        0.0,
+        0.0
+      ]
+    },
+    "files": [
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_00/hydra27_fixed32_gqa_w4_gqa_pair_b4_seal0/metrics_before_swe.txt",
+        "sha256": "df94e44561e2ed7da392ff86871909b7740bbe89b2c9759e45aa572aa0cd1406"
+      },
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_00/hydra27_fixed32_gqa_w4_gqa_pair_b4_seal0/metrics_after_swe.txt",
+        "sha256": "e862065adf32082d2e2468fb5043ee244b1cf1f3d132582ca5ff83bbbe61879c"
+      }
+    ]
+  },
+  {
+    "arm": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_00/hydra27_fixed32_gqa_w4_stock_dispatch_b4_seal0",
+    "D": 12.433401345705791,
+    "counts_align": true,
+    "delta": {
+      "vllm:generation_tokens_total": 113499.0,
+      "vllm:request_success_total": 376.0,
+      "vllm:request_generation_tokens_count": 376.0,
+      "vllm:request_generation_tokens_sum": 113499.0,
+      "vllm:e2e_request_latency_seconds_count": 376.0,
+      "vllm:e2e_request_latency_seconds_sum": 11239.996036529541,
+      "vllm:time_to_first_token_seconds_count": 376.0,
+      "vllm:time_to_first_token_seconds_sum": 2141.6811945438385
+    },
+    "gauges": {
+      "vllm:num_requests_running": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting_by_reason": [
+        0.0,
+        0.0
+      ]
+    },
+    "files": [
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_00/hydra27_fixed32_gqa_w4_stock_dispatch_b4_seal0/metrics_before_swe.txt",
+        "sha256": "2b42b57fd75a62d2ca0134068c0cd92f7ac1c5a718bdb005406d014ab3ad8e53"
+      },
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_00/hydra27_fixed32_gqa_w4_stock_dispatch_b4_seal0/metrics_after_swe.txt",
+        "sha256": "bc6a5d80ca27e11809c66d89646c73a8e9eda9ed27fdea29a0de6f60e1bf36ec"
+      }
+    ]
+  },
+  {
+    "arm": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_01/hydra27_fixed32_gqa_w4_gqa_pair_b4_seal1",
+    "D": 13.558630669356358,
+    "counts_align": true,
+    "delta": {
+      "vllm:generation_tokens_total": 182444.0,
+      "vllm:request_success_total": 471.0,
+      "vllm:request_generation_tokens_count": 471.0,
+      "vllm:request_generation_tokens_sum": 182444.0,
+      "vllm:e2e_request_latency_seconds_count": 471.0,
+      "vllm:e2e_request_latency_seconds_sum": 16033.834592103958,
+      "vllm:time_to_first_token_seconds_count": 471.0,
+      "vllm:time_to_first_token_seconds_sum": 2612.641520500183
+    },
+    "gauges": {
+      "vllm:num_requests_running": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting_by_reason": [
+        0.0,
+        0.0
+      ]
+    },
+    "files": [
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_01/hydra27_fixed32_gqa_w4_gqa_pair_b4_seal1/metrics_before_swe.txt",
+        "sha256": "845922ad8a4f895181d473491d7bcf5ed6595fe25d51491f53eade2c6f933e98"
+      },
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_01/hydra27_fixed32_gqa_w4_gqa_pair_b4_seal1/metrics_after_swe.txt",
+        "sha256": "3a51811ba192bee2e5f2dc1322caa2042c1c82b2f07001c117cb335e8ab18891"
+      }
+    ]
+  },
+  {
+    "arm": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_01/hydra27_fixed32_gqa_w4_stock_dispatch_b4_seal1",
+    "D": 11.366185200917517,
+    "counts_align": true,
+    "delta": {
+      "vllm:generation_tokens_total": 163790.0,
+      "vllm:request_success_total": 442.0,
+      "vllm:request_generation_tokens_count": 442.0,
+      "vllm:request_generation_tokens_sum": 163790.0,
+      "vllm:e2e_request_latency_seconds_count": 442.0,
+      "vllm:e2e_request_latency_seconds_sum": 17096.270832538605,
+      "vllm:time_to_first_token_seconds_count": 442.0,
+      "vllm:time_to_first_token_seconds_sum": 2724.8703043460846
+    },
+    "gauges": {
+      "vllm:num_requests_running": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting_by_reason": [
+        0.0,
+        0.0
+      ]
+    },
+    "files": [
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_01/hydra27_fixed32_gqa_w4_stock_dispatch_b4_seal1/metrics_before_swe.txt",
+        "sha256": "e00da4f824f9c20615996124ff624884e36b9a550e52a1c057ad0b825625e1e8"
+      },
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_01/hydra27_fixed32_gqa_w4_stock_dispatch_b4_seal1/metrics_after_swe.txt",
+        "sha256": "ecf8f382566c4225d86bf7400d692a813e8af315eb2d2a87e9486ec8f2fce145"
+      }
+    ]
+  },
+  {
+    "arm": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_02/hydra27_fixed32_gqa_w4_gqa_pair_b4_seal2",
+    "D": 12.557807302593703,
+    "counts_align": true,
+    "delta": {
+      "vllm:generation_tokens_total": 187307.0,
+      "vllm:request_success_total": 510.0,
+      "vllm:request_generation_tokens_count": 510.0,
+      "vllm:request_generation_tokens_sum": 187307.0,
+      "vllm:e2e_request_latency_seconds_count": 510.0,
+      "vllm:e2e_request_latency_seconds_sum": 17671.94016933441,
+      "vllm:time_to_first_token_seconds_count": 510.0,
+      "vllm:time_to_first_token_seconds_sum": 2796.9707181453705
+    },
+    "gauges": {
+      "vllm:num_requests_running": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting_by_reason": [
+        0.0,
+        0.0
+      ]
+    },
+    "files": [
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_02/hydra27_fixed32_gqa_w4_gqa_pair_b4_seal2/metrics_before_swe.txt",
+        "sha256": "f6bacdbacbc149cd81bb1ad64724bf48b489078da84024eaafcebd1a5051ba76"
+      },
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_02/hydra27_fixed32_gqa_w4_gqa_pair_b4_seal2/metrics_after_swe.txt",
+        "sha256": "188f9a2cb69fd1219075a7a288a00341d0f5176d524203a3806c7918a11f145b"
+      }
+    ]
+  },
+  {
+    "arm": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_02/hydra27_fixed32_gqa_w4_stock_dispatch_b4_seal2",
+    "D": 12.069848698059126,
+    "counts_align": true,
+    "delta": {
+      "vllm:generation_tokens_total": 153179.0,
+      "vllm:request_success_total": 452.0,
+      "vllm:request_generation_tokens_count": 452.0,
+      "vllm:request_generation_tokens_sum": 153179.0,
+      "vllm:e2e_request_latency_seconds_count": 452.0,
+      "vllm:e2e_request_latency_seconds_sum": 15064.90463423729,
+      "vllm:time_to_first_token_seconds_count": 452.0,
+      "vllm:time_to_first_token_seconds_sum": 2411.3077399730682
+    },
+    "gauges": {
+      "vllm:num_requests_running": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting_by_reason": [
+        0.0,
+        0.0
+      ]
+    },
+    "files": [
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_02/hydra27_fixed32_gqa_w4_stock_dispatch_b4_seal2/metrics_before_swe.txt",
+        "sha256": "40450fa8cc7184ff0b5635c2a5ad98c53b543eab8346e92aded1955c8524989d"
+      },
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_02/hydra27_fixed32_gqa_w4_stock_dispatch_b4_seal2/metrics_after_swe.txt",
+        "sha256": "38d57807e28d43b86170234d41ceb474944bd3ac9e87df056173f0ca064b3c0c"
+      }
+    ]
+  },
+  {
+    "arm": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_03/hydra27_fixed32_gqa_w4_gqa_pair_b4_seal3",
+    "D": 13.363211276252395,
+    "counts_align": true,
+    "delta": {
+      "vllm:generation_tokens_total": 194541.0,
+      "vllm:request_success_total": 464.0,
+      "vllm:request_generation_tokens_count": 464.0,
+      "vllm:request_generation_tokens_sum": 194541.0,
+      "vllm:e2e_request_latency_seconds_count": 464.0,
+      "vllm:e2e_request_latency_seconds_sum": 17230.316143512726,
+      "vllm:time_to_first_token_seconds_count": 464.0,
+      "vllm:time_to_first_token_seconds_sum": 2707.085462808609
+    },
+    "gauges": {
+      "vllm:num_requests_running": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting_by_reason": [
+        0.0,
+        0.0
+      ]
+    },
+    "files": [
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_03/hydra27_fixed32_gqa_w4_gqa_pair_b4_seal3/metrics_before_swe.txt",
+        "sha256": "00efe127843297bc36a098671c8df9715d814c4637341fa7fd091aff0a6f2704"
+      },
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_03/hydra27_fixed32_gqa_w4_gqa_pair_b4_seal3/metrics_after_swe.txt",
+        "sha256": "3b7861d1b24d7c711e15e5860bc182f8960f41c4aa5bc5fd26b50a3b5ce14175"
+      }
+    ]
+  },
+  {
+    "arm": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_03/hydra27_fixed32_gqa_w4_stock_dispatch_b4_seal3",
+    "D": 11.984003725463126,
+    "counts_align": true,
+    "delta": {
+      "vllm:generation_tokens_total": 164635.0,
+      "vllm:request_success_total": 444.0,
+      "vllm:request_generation_tokens_count": 444.0,
+      "vllm:request_generation_tokens_sum": 164635.0,
+      "vllm:e2e_request_latency_seconds_count": 444.0,
+      "vllm:e2e_request_latency_seconds_sum": 16301.803494930267,
+      "vllm:time_to_first_token_seconds_count": 444.0,
+      "vllm:time_to_first_token_seconds_sum": 2600.9566192626953
+    },
+    "gauges": {
+      "vllm:num_requests_running": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting": [
+        0.0,
+        0.0
+      ],
+      "vllm:num_requests_waiting_by_reason": [
+        0.0,
+        0.0
+      ]
+    },
+    "files": [
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_03/hydra27_fixed32_gqa_w4_stock_dispatch_b4_seal3/metrics_before_swe.txt",
+        "sha256": "b59c6553fc10fcde8eb683722d9c04151f58c270efa51965c3c2c49ec0732761"
+      },
+      {
+        "path": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/pass_03/hydra27_fixed32_gqa_w4_stock_dispatch_b4_seal3/metrics_after_swe.txt",
+        "sha256": "6c73c70b38939998741e4d37cbb00bc0f534692ab5d5b7518ba47113d1a04529"
+      }
+    ]
+  }
+]

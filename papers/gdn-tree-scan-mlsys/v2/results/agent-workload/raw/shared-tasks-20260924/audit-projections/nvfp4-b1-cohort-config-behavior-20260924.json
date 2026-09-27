@@ -1,0 +1,2286 @@
+{
+  "eyeball_source": {
+    "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/results/fr14_nvfp4_port_20260816/promotion_ab_eyeball.py",
+    "sha256": "f4cc87ade9f4e6866dafcdf8f2429085ede0dce5aceb96db380e0cc808aa2ea0"
+  },
+  "runs": [
+    {
+      "tag": "Sr12",
+      "config": {
+        "arm_env.txt": {
+          "FR13_DFWD_SPLIT": "1",
+          "FR13_FA2_QROW32_B1_TIER_B_ARM": "gqa_pair_splitk",
+          "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_splitk_tierb_credential_r12.json",
+          "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256": "6b0e016131436666dc4c0d0bed98e4a2a4019f46271677fc122cf52ca417f41b",
+          "FR13_FA2_QROW32_B1_SO_SHA256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+          "FR13_FA2_QROW32_B1_SO_SIZE": "300123792",
+          "FR13_FA2_QROW32_B1_FA2_HEAD": "29210221863736a08f71a866459e368ad1ac4a95",
+          "FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256": "4ed00909cef7ea83849f897018ea4f6a14119b8d160927af426938920c170878",
+          "FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST": "3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e",
+          "FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST": "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470",
+          "FR13_FA2_QROW32_B1_SOURCE_COMMIT": "bdca0bd50cbf5643205c87e4e3e2fe668895c364",
+          "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256": "e80ed4ea84f3259cbcde270d35898aa5c7a9f84b6b0da6343ac830b160f0e18b",
+          "FR13_FA2_QROW32_B1_EXACT4_TASK_IDS": "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398",
+          "FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+        },
+        "container_env.txt": {
+          "FR13_B1_DIAGNOSTIC_TASK_PROFILE": "astropy12907",
+          "FR13_DFWD_SPLIT": "1",
+          "FR13_DFWD_SPLIT_JSON": "/logs/fr13_dfwd_split.json",
+          "FR13_DFWD_SPLIT_NEEDLE": "0",
+          "FR13_DRAFTER_SINGLE_LOGITS": "1",
+          "FR13_DRAFT_HEAD_M1_R64_U8_FA2_SHA256": "",
+          "FR13_DRAFT_HEAD_M4_R64_U8_FA2_SHA256": "",
+          "FR13_FA2_MAB": "0",
+          "FR13_FA2_MAB_DUMP": "/logs/fr13_fa2_mab.jsonl",
+          "FR13_FA2_MAB_LAYER": "*",
+          "FR13_FA2_MAB_LIMIT": "1",
+          "FR13_FA2_MAB_SKIP": "0",
+          "FR13_FA2_PREFILL_NATIVE": "1",
+          "FR13_FA2_QROW16_LIVE_PAGED_AB": "0",
+          "FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID": "",
+          "FR13_FA2_QROW16_LIVE_PAGED_AB_JSON": "/logs/fr13_fa2_qrow16_live_paged_ab.json",
+          "FR13_FA2_QROW16_LIVE_PASS_JSON": "",
+          "FR13_FA2_QROW16_LIVE_PASS_SHA256": "",
+          "FR13_FA2_QROW16_PRODUCTION": "0",
+          "FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR": "",
+          "FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256": "",
+          "FR13_FA2_QROW16_SO_SHA256": "",
+          "FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+          "FR13_FA2_QROW32_B1_EXACT4_TASK_IDS": "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398",
+          "FR13_FA2_QROW32_B1_FA2_HEAD": "29210221863736a08f71a866459e368ad1ac4a95",
+          "FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON": "",
+          "FR13_FA2_QROW32_B1_GQA_PAIR_GATE_SHA256": "5f54a1b2847505e36565c1d39e01650cb0b6612057b726b6fb6923e9b69a4e22",
+          "FR13_FA2_QROW32_B1_GQA_PAIR_LIVE_RESULT_JSON": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_gate_20260819T042359Z/hydra27_fixed32_fa2_qrow32_gqa_pair_k0_b1_gate_promoab/logs/fr13_fa2_qrow32_b1_gqa_pair_live_paged_ab.json",
+          "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "",
+          "FR13_FA2_QROW32_B1_LIVE_AB_INSTANCE_ID": "",
+          "FR13_FA2_QROW32_B1_LIVE_AB_JSON": "/logs/fr13_fa2_qrow32_b1_live_paged_ab.json",
+          "FR13_FA2_QROW32_B1_LIVE_PASS_JSON": "",
+          "FR13_FA2_QROW32_B1_LIVE_PASS_SHA256": "",
+          "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256": "e80ed4ea84f3259cbcde270d35898aa5c7a9f84b6b0da6343ac830b160f0e18b",
+          "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "",
+          "FR13_FA2_QROW32_B1_PRODUCTION_ARM_DEFAULT": "gqa_pair",
+          "FR13_FA2_QROW32_B1_PRODUCTION_ENGAGEMENT_JSON": "/logs/fr13_fa2_qrow32_b1_production_engagement.json",
+          "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR": "",
+          "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256": "",
+          "FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE": "full_vocab",
+          "FR13_FA2_QROW32_B1_SO_SHA256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+          "FR13_FA2_QROW32_B1_SO_SIZE": "300123792",
+          "FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256": "4ed00909cef7ea83849f897018ea4f6a14119b8d160927af426938920c170878",
+          "FR13_FA2_QROW32_B1_SOURCE_COMMIT": "bdca0bd50cbf5643205c87e4e3e2fe668895c364",
+          "FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST": "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470",
+          "FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST": "3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e",
+          "FR13_FA2_QROW32_B1_TIER_B_ARM": "gqa_pair_splitk",
+          "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_splitk_tierb_credential_r12.json",
+          "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL": "/logs/fr13_fa2_qrow32_b1_tier_b_credential.json",
+          "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256": "6b0e016131436666dc4c0d0bed98e4a2a4019f46271677fc122cf52ca417f41b",
+          "FR13_FA2_QROW32_B1_TIMING_ARM": "",
+          "FR13_FA2_QROW32_B4_DUAL_GATE_JSON": "",
+          "FR13_FA2_QROW32_B4_DUAL_GATE_SHA256": "",
+          "FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256": "",
+          "FR13_FA2_QROW32_B4_EXACT4_TASK_IDS": "",
+          "FR13_FA2_QROW32_B4_PATCH_SOURCE_SHA256": "",
+          "FR13_FA2_QROW32_B4_PRODUCTION_ARM": "",
+          "FR13_FA2_QROW32_B4_PRODUCTION_ARM_DEFAULT": "gqa_pair",
+          "FR13_FA2_QROW32_B4_PRODUCTION_ENGAGEMENT_JSON": "/logs/fr13_fa2_qrow32_b4_production_engagement.json",
+          "FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR": "",
+          "FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR_SHA256": "",
+          "FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE": "k64_root",
+          "FR13_FA2_QROW32_B4_TIMING_ARM": "",
+          "FR13_FA2_QROW32_FA2_HEAD": "",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB": "0",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB_ARM": "",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB_B3": "0",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB_JSON": "/logs/fr13_fa2_qrow32_live_paged_ab.json",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB_SUBSET_SHA256": "",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB_TASK_IDS": "",
+          "FR13_FA2_QROW32_SO_SHA256": "",
+          "FR13_FA2_QROW32_SO_SIZE": "",
+          "FR13_FA2_QROW32_SOURCE_CLOSURE_SHA256": "",
+          "FR13_FA2_QROW32_SOURCE_COMMIT": "",
+          "FR13_FA2_TREE_BIAS": "1",
+          "FR13_FIXED32_CUTLASS_WAVE_DIAGNOSTIC_TASK_PROFILE": "astropy12907",
+          "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE": "full_vocab",
+          "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION": "0",
+          "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH": "",
+          "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_PASS_PATH": "/logs/fr13_fixed32_gdn_gqa_group3.production_credential.json",
+          "FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE": "k64_root",
+          "FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE": "k64_root",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH": "",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION": "0",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_BATCH": "",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_DEFAULT": "0",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_PASS_PATH": "/logs/fr13_fixed32_gdn_single_launch.production_credential.json",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE": "k64_root",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_TIMING_CONTROL": "0",
+          "FR13_FIXED32_NVTX_PROFILE": "0",
+          "FR13_PROFILER_FLAGS": "",
+          "MAX_NUM_SEQS": "1"
+        },
+        "offload_proxy_env.txt": {
+          "LUMO_PROXY_AUTO_CONTINUE": "0",
+          "LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES": "3",
+          "LUMO_PROXY_AUTO_CONTINUE_MESSAGE": "Your previous turn STOPPED without editing the source -- that is a FAILED turn, not a completed one. Do NOT read, grep, or run more inspection commands; you already have enough context. Your VERY NEXT action MUST be an apply_patch that edits the source files to implement the fix. Every response you produce must call a tool -- never end your turn with an analysis-only or summary message. Do not stop until the source files are edited. Do not spend time on environment/pip/conda setup.",
+          "LUMO_PROXY_FORCE_MIN_P": "0",
+          "LUMO_PROXY_FORCE_PRESENCE_PENALTY": "1.0",
+          "LUMO_PROXY_FORCE_TEMPERATURE": "0.6",
+          "LUMO_PROXY_FORCE_TOP_K": "20",
+          "LUMO_PROXY_FORCE_TOP_P": "0.95",
+          "LUMO_PROXY_MAX_OUTPUT_TOKENS": "32768"
+        }
+      },
+      "tasks": [
+        {
+          "task": "astropy__astropy-12907",
+          "trace": {
+            "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/swe_out/verified/per_task/astropy__astropy-12907/qwen_trace.jsonl",
+            "sha256": "284547a8e5a416c1dd21077ed8ddaa25888cdcf2737a8ef487922f6d97f9b9c8"
+          },
+          "assistant_records": 50,
+          "visible_chars": 2452,
+          "thinking_chars": 16724,
+          "tool_calls": 19,
+          "malformed_tool_calls": 0,
+          "degeneration_flag": "",
+          "network": {
+            "net": "fr14-agent-isolated",
+            "bridge": "fr14agent0",
+            "gateway": "172.31.99.1",
+            "proxy_port": "8023",
+            "rules": "9",
+            "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+          },
+          "agent_completed": true,
+          "patch_bytes": 504
+        },
+        {
+          "task": "astropy__astropy-13033",
+          "trace": {
+            "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/swe_out/verified/per_task/astropy__astropy-13033/qwen_trace.jsonl",
+            "sha256": "6a0cc53aa3201174a9bed7b6289a132ff7c392ec777bc2048c32cb58dffbaa5e"
+          },
+          "assistant_records": 71,
+          "visible_chars": 3517,
+          "thinking_chars": 57801,
+          "tool_calls": 25,
+          "malformed_tool_calls": 0,
+          "degeneration_flag": "",
+          "network": {
+            "net": "fr14-agent-isolated",
+            "bridge": "fr14agent0",
+            "gateway": "172.31.99.1",
+            "proxy_port": "8023",
+            "rules": "9",
+            "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+          },
+          "agent_completed": true,
+          "patch_bytes": 1017
+        },
+        {
+          "task": "astropy__astropy-13236",
+          "trace": {
+            "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/swe_out/verified/per_task/astropy__astropy-13236/qwen_trace.jsonl",
+            "sha256": "5ccb79230eed28ce8544c7b828eb73ed154ee729a54896a4478a4f775e9dfbe1"
+          },
+          "assistant_records": 74,
+          "visible_chars": 964,
+          "thinking_chars": 11210,
+          "tool_calls": 24,
+          "malformed_tool_calls": 0,
+          "degeneration_flag": "",
+          "network": {
+            "net": "fr14-agent-isolated",
+            "bridge": "fr14agent0",
+            "gateway": "172.31.99.1",
+            "proxy_port": "8023",
+            "rules": "9",
+            "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+          },
+          "agent_completed": true,
+          "patch_bytes": 819
+        },
+        {
+          "task": "astropy__astropy-13398",
+          "trace": {
+            "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/swe_out/verified/per_task/astropy__astropy-13398/qwen_trace.jsonl",
+            "sha256": "8c3a21cc8415dc7664b86f70879172bae9981f0fb54acdb211e279b5f424bf0d"
+          },
+          "assistant_records": 164,
+          "visible_chars": 6994,
+          "thinking_chars": 162381,
+          "tool_calls": 62,
+          "malformed_tool_calls": 0,
+          "degeneration_flag": "",
+          "network": {
+            "net": "fr14-agent-isolated",
+            "bridge": "fr14agent0",
+            "gateway": "172.31.99.1",
+            "proxy_port": "8023",
+            "rules": "9",
+            "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+          },
+          "agent_completed": true,
+          "patch_bytes": 3942
+        }
+      ],
+      "source_bindings": {
+        "arm_env.txt": {
+          "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/arm_env.txt",
+          "sha256": "92debd1be64687ffcecc1310abc2001eb86c9cd91c5aa0e3b4bc8ceaef698a81"
+        },
+        "container_env.txt": {
+          "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/container_env.txt",
+          "sha256": "b4382b820c2061827a13a74ebbdef5797ec2f3ceac3544d41578e56316a663ad"
+        },
+        "offload_proxy_env.txt": {
+          "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/offload_proxy_env.txt",
+          "sha256": "fdbe525821f0b2cff06094a5f7cf21d158da36605aace30954ddc3449a963a93"
+        }
+      },
+      "git_head": {
+        "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/git_head.txt",
+        "sha256": "b8a1e9f35f700e0f7bf18bbe2b503cc540527226aa96d8bafd7a15a667f2ba42",
+        "value": "bdca0bd50cbf5643205c87e4e3e2fe668895c364"
+      },
+      "runtime_attestation": {
+        "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/logs/fr13_fixed32_runtime_attestation.json",
+        "sha256": "cbd3e3dcf1e6edd489667422e64afa9423e211980aac3f8fad4fcf32f53195de",
+        "data": {
+          "arctic": {
+            "cache_class_module": "arctic_inference.suffix_decoding.cache",
+            "cache_class_qualname": "SuffixDecodingCache",
+            "canonical_sha256": "cff44ef62667e23b37caa81540453f398c4017b74b593081c89b40a9e7840535",
+            "files": [
+              {
+                "path": "arctic_inference-0.1.2.dist-info/INSTALLER",
+                "sha256": "ceebae7b8927a3227e5303cf5e0f1f7b34bb542ad7250ac03fbcde36ec2f1508",
+                "size": 4
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/METADATA",
+                "sha256": "f9b02d5ad30fa2aa79fb6cc25d1e8d040b1701216a1f9ab1583dcc32ab5f433d",
+                "size": 1063
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/RECORD",
+                "sha256": "33aa2e2df2586d7c1761f965f64c43a489971dcb30c984773ee481055ff0f947",
+                "size": 10425
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/REQUESTED",
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "size": 0
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/WHEEL",
+                "sha256": "bf1edac492fed1140b75ac92d9e33324aaf5b0f691fb3b8b1bdd1f7d19951bab",
+                "size": 105
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/direct_url.json",
+                "sha256": "713fa3e7b7d9af4089aeda2befe197c30a1a91a7e905410abc24b2657bb4110b",
+                "size": 338
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/entry_points.txt",
+                "sha256": "ea394c93778f233eb69d15e5b5dd8897d76980ba852b40a3cec2b9234631e027",
+                "size": 95
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/licenses/LICENSE",
+                "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+                "size": 11357
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/top_level.txt",
+                "sha256": "8cdb33683bcc1459e76cd1c375bd920185e9058c749573e3af338fb9ef1375c9",
+                "size": 17
+              },
+              {
+                "path": "arctic_inference/__init__.py",
+                "sha256": "061df7164491227e3d9816ec4a90fa2bc25c65ecb6471f249f1831f4240125c3",
+                "size": 613
+              },
+              {
+                "path": "arctic_inference/common/__init__.py",
+                "sha256": "061df7164491227e3d9816ec4a90fa2bc25c65ecb6471f249f1831f4240125c3",
+                "size": 613
+              },
+              {
+                "path": "arctic_inference/common/swiftkv/__init__.py",
+                "sha256": "4218e25763a4aeca334c5faacc0141d792b2f74f9f1a63742215354787c5da87",
+                "size": 687
+              },
+              {
+                "path": "arctic_inference/common/swiftkv/configs.py",
+                "sha256": "d1f78b8dc9a2b76af2fc93b3102ce3284d18fe15d1e5f757bf15004388e45b67",
+                "size": 1191
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/CMakeLists.txt",
+                "sha256": "7c60f27f977816daaecc869eb5b756dcdee87650f2d87bfa74e87f12083dd796",
+                "size": 888
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/attention_generic.cuh",
+                "sha256": "9cfa0bf1971788d7afd10c90bb2f98384e6f83f0f0893cbeddabcf9d55f3f3e6",
+                "size": 1731
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/custom_ops.h",
+                "sha256": "f4077f1510455431a55fda4ad97547f9ddf413ff1dc02377a5f3c83b27c944c4",
+                "size": 1801
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/dispatch_utils.h",
+                "sha256": "27652d8b90b0b89c6d2762915e66d7f6f2049a6a7ff64c13ca2de1bd4c30216d",
+                "size": 3691
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/dtype_common.cuh",
+                "sha256": "aefcc4a974ed455912adf48821bbcea339f6b2fb813c7381dc535e663d2e1a87",
+                "size": 1895
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/dtype_fp8.cuh",
+                "sha256": "48d96c171edc835d6fbfdabd4deedc9c2709156555bc35201c59657ce4176e1c",
+                "size": 594
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/quant_utils.cuh",
+                "sha256": "2bf006408836cc978cec47eb66ce6aa197f6b2e8b62ecfdefe8b6fe7d0df9b9e",
+                "size": 19216
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/reshape_and_cache_flash_bulk.cu",
+                "sha256": "609535c45e103493aa8caca5a96e44efa51f524ca5ed70488910512bdf470655",
+                "size": 5951
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/reshape_and_cache_flash_fp4.cu",
+                "sha256": "76e5fa555271f1ac32538dd37854db7fc5f283c2c3d5cb525070882be51f102b",
+                "size": 12756
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/speculator_ln.cu",
+                "sha256": "4b3f117c4ac218ba853c117f4c34b93b011d0efe1edd4c221a00a24e7ba507e3",
+                "size": 8419
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/sum_lstm.cu",
+                "sha256": "9b17ae6ff62274853dd49e9fb00c09ae949648caf98ebba0b9ae38c5e240e286",
+                "size": 17665
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/torch_bindings.cpp",
+                "sha256": "24204b085df80df516b8295822d62909f448e759995139361fc279f26c1f0ce6",
+                "size": 2414
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/vectorization.cuh",
+                "sha256": "36bc050e7e3923e9f8270d6773058c61dbf802850e5a7f6826f51f992c136baa",
+                "size": 877
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/vectorization_utils.cuh",
+                "sha256": "2b4557657134be17d74937b85aa1de904637c4fb8cae6eb67fd8b948f9b31b79",
+                "size": 5981
+              },
+              {
+                "path": "arctic_inference/csrc/suffix_decoding/CMakeLists.txt",
+                "sha256": "d0ba0a52b33dc97466f3fe17a2f0207c7e6e3e2cf8b42409e99c3d12ecf13ff2",
+                "size": 1451
+              },
+              {
+                "path": "arctic_inference/csrc/suffix_decoding/bindings.cc",
+                "sha256": "4fbc28596b4cdfa898e3341468fc6debed5a33bb4d9df37566907071ae60f41d",
+                "size": 3447
+              },
+              {
+                "path": "arctic_inference/csrc/suffix_decoding/int32_map.h",
+                "sha256": "49fd3c8ffb900630f145958211d2e121a3347583ef4cf42910572ad2166e54ef",
+                "size": 13285
+              },
+              {
+                "path": "arctic_inference/csrc/suffix_decoding/suffix_tree.cc",
+                "sha256": "cbd8b63b13fbf0beaab4e8736a54d52891b1aac959c5d292d083d88ed37dfc7c",
+                "size": 38874
+              },
+              {
+                "path": "arctic_inference/csrc/suffix_decoding/suffix_tree.h",
+                "sha256": "d3c9a51fc57a974d680510bee8cfb1ba0a6f5ce6c582ed472cb5ef975b2f5aec",
+                "size": 5867
+              },
+              {
+                "path": "arctic_inference/dynasor/__init__.py",
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "size": 0
+              },
+              {
+                "path": "arctic_inference/dynasor/cot.py",
+                "sha256": "ef268f5a26e4167d2b04424dca5b5dc87ba7dd738e559b46b728b221556d6e85",
+                "size": 6607
+              },
+              {
+                "path": "arctic_inference/dynasor/entropy.py",
+                "sha256": "40247961530771dbe82d33099cf30c0a26fe062f0472056147a55280f67fab68",
+                "size": 7115
+              },
+              {
+                "path": "arctic_inference/dynasor/evaluator.py",
+                "sha256": "8ad33ac6cb9afeba1282b90ae9ca905f9493cf4768397dd6e3861c63bddfa37b",
+                "size": 22845
+              },
+              {
+                "path": "arctic_inference/dynasor/openai_server.py",
+                "sha256": "3b0b78435ed710f13e909b32c00601337e5430da82a9bd9317806200b1a18d3b",
+                "size": 15680
+              },
+              {
+                "path": "arctic_inference/dynasor/util.py",
+                "sha256": "d487fba0b071140d0e54ceccb184a80e0edcf3bda109a2a76fe5f09801e7599f",
+                "size": 2865
+              },
+              {
+                "path": "arctic_inference/dynasor/vllm_server.py",
+                "sha256": "70c9872e567cced5917ea456ba7e5bb67905b8490af6cebd60d1d7d0df742a1a",
+                "size": 3853
+              },
+              {
+                "path": "arctic_inference/embedding/client.py",
+                "sha256": "387e664a67dca923cc8f0bbb6cca77906f0b46fc6db5fd662b83e4b3d4f70d2d",
+                "size": 10012
+              },
+              {
+                "path": "arctic_inference/embedding/generate_proto.py",
+                "sha256": "ef4514875437ea080ace08d4425b476b0db6b46ff6ec50476c0f71f386e4411e",
+                "size": 2403
+              },
+              {
+                "path": "arctic_inference/embedding/proto/inference.proto",
+                "sha256": "833d9be1a931be0e9443fa55f85c199e38f562f25d27ff57b456dce76b7fbb1e",
+                "size": 2049
+              },
+              {
+                "path": "arctic_inference/embedding/proto/python/inference_pb2.py",
+                "sha256": "30a353a2991fbd878b39ec7f4b0923dc02c0e89ef6a1d1f1d796c8e9b8a66b92",
+                "size": 4131
+              },
+              {
+                "path": "arctic_inference/embedding/proto/python/inference_pb2_grpc.py",
+                "sha256": "2b57a56128b149f518b2ef1c4077900569ed332a5bc1e8057dcd5bd30a8f41f7",
+                "size": 8578
+              },
+              {
+                "path": "arctic_inference/embedding/replica.py",
+                "sha256": "7b1827abc6d963f5d5b59932b79f214b7c5e0a7195bb1846a40bae2eb7018129",
+                "size": 17594
+              },
+              {
+                "path": "arctic_inference/embedding/replica_manager.py",
+                "sha256": "333f0f2685b38d94f8fcb939fc9f9d0bd41e0774b5d45c46357c9fede6d01698",
+                "size": 18236
+              },
+              {
+                "path": "arctic_inference/envs.py",
+                "sha256": "6b5fc9c428432415017c56f9184a2a7ddc7589c6f6c2afacc23101ee8b104c78",
+                "size": 1534
+              },
+              {
+                "path": "arctic_inference/op_builder/__init__.py",
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "size": 0
+              },
+              {
+                "path": "arctic_inference/op_builder/builder.py",
+                "sha256": "b565541e618ca4b70225e0d5b08543bbc88faf7eca7def4259f29a4b3a89e121",
+                "size": 22641
+              },
+              {
+                "path": "arctic_inference/op_builder/swiftkv_ops_builder.py",
+                "sha256": "c99047af2584c8ec0f6680fbb1ece8c233d55a2ac32f65630de8dd97f8c40980",
+                "size": 939
+              },
+              {
+                "path": "arctic_inference/patching.py",
+                "sha256": "89c16caf99911c7bde8a53cd44a7be22634d5e2743d92f36aa72c5e54285dd91",
+                "size": 5106
+              },
+              {
+                "path": "arctic_inference/py_custom_ops.py",
+                "sha256": "2f4850cc5893eefc9e7702c9b39ec3788803257e7ca1b4ab767fbd9dbcf752fc",
+                "size": 3716
+              },
+              {
+                "path": "arctic_inference/suffix_decoding/_C.cpython-312-aarch64-linux-gnu.so",
+                "sha256": "3f35375aa20610e33bd839a051f9d15f0dd75065874554af90584c999e87864e",
+                "size": 176808
+              },
+              {
+                "path": "arctic_inference/suffix_decoding/__init__.py",
+                "sha256": "e2736d5f6d3472e74f2f25795de8f754ddb3279e9cf497b13f54e8fa164dd5bd",
+                "size": 731
+              },
+              {
+                "path": "arctic_inference/suffix_decoding/cache.py",
+                "sha256": "91c48e6cb335edbd202c8f440e5766df54315ea2d8e40decf8f7a130f3a5e126",
+                "size": 14502
+              },
+              {
+                "path": "arctic_inference/suffix_decoding/simulator.py",
+                "sha256": "ed576d5e1c8b85a2a3ac82031332337f34ee0c894ed2d3fee54d72922591e485",
+                "size": 20311
+              },
+              {
+                "path": "arctic_inference/utils.py",
+                "sha256": "9b2634a1afaf7b2d94fe12eeac4e0b1dc554f85e431eaf43306d513fda514ea0",
+                "size": 1075
+              },
+              {
+                "path": "arctic_inference/vllm/__init__.py",
+                "sha256": "061df7164491227e3d9816ec4a90fa2bc25c65ecb6471f249f1831f4240125c3",
+                "size": 613
+              },
+              {
+                "path": "arctic_inference/vllm/args.py",
+                "sha256": "a98ea757578ce2f01060a0dc164b07d799a08fb36e66f627a0b9f2bd40f19ccd",
+                "size": 5960
+              },
+              {
+                "path": "arctic_inference/vllm/config.py",
+                "sha256": "a16007c84a9a83b10229462623df8a8fac465c4bc9c48e688f9f6cb0319c7101",
+                "size": 4945
+              },
+              {
+                "path": "arctic_inference/vllm/model_runner.py",
+                "sha256": "2bdb619a86b47a50e04a7615759e48c0ea2b9dccaab09cc9d886c1cb909ee9c9",
+                "size": 50378
+              },
+              {
+                "path": "arctic_inference/vllm/patches.py",
+                "sha256": "da60eff50d262c16c4372a79a55b2dbfe66e15d2da0f06becf586a80134c8a21",
+                "size": 4369
+              },
+              {
+                "path": "arctic_inference/vllm/plugin.py",
+                "sha256": "d821c578234c8fc5e14938f683b16f88aed651919c89339d8e5328b1adb95c72",
+                "size": 1622
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/__init__.py",
+                "sha256": "ffafc758a2a63f95d78247b26c5a3169d1395da79b44dc1b6a5a68011f0c79b3",
+                "size": 611
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/arctic_proposer.py",
+                "sha256": "efa1237c7a59e648bd84669e30bd11922c04c68c1962af8d7c88403d0af000e4",
+                "size": 6653
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/arctic_speculator.py",
+                "sha256": "551566c5c476137a3bf1984511bb3ebdcef23ed89e38cb91fad7c2c540796ecc",
+                "size": 38524
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/fp8.py",
+                "sha256": "653f168f0c51d0c6fa8c8ad8f9a0b802dab1696e992611a884d27a20cb665c66",
+                "size": 15349
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/logits_processor_opt.py",
+                "sha256": "21560d3d2f2f0c49d75d526f98a133f680094c4acf833ff66237dacf1d2e99fb",
+                "size": 3893
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/vocab_parallel_embedding.py",
+                "sha256": "a2a41adf975515c43194793bc3037c0b6af98e5ebed3800dbb3806f3f19cc9b9",
+                "size": 22887
+              },
+              {
+                "path": "arctic_inference/vllm/stats.py",
+                "sha256": "b60ebfe97f525b7cb77152c2c79faa4edfcf68636bb1e6973508950950a1ab8a",
+                "size": 2487
+              },
+              {
+                "path": "arctic_inference/vllm/structured_output.py",
+                "sha256": "cbb5ac6fd3fe18cdf0200dff0ff334a639bdcb965141f024b9d4f2e7ff1cb290",
+                "size": 1445
+              },
+              {
+                "path": "arctic_inference/vllm/swiftkv/__init__.py",
+                "sha256": "8b19cf03ced93cd5b0e1015dc6f5975f508055b48c0f9cdff1616b2e7cb19ea6",
+                "size": 703
+              },
+              {
+                "path": "arctic_inference/vllm/swiftkv/llama_swiftkv.py",
+                "sha256": "20897ab43fa39660684d04ec1f30757708bcf61d86c4c7e395522b3ad7c4b8c9",
+                "size": 38039
+              },
+              {
+                "path": "arctic_inference/vllm/ulysses.py",
+                "sha256": "cb84203e23c1eaa75ac9977b2a7dd3879d1e9b9ec5c88c1107ba5430b5038415",
+                "size": 21148
+              }
+            ],
+            "name": "arctic_inference",
+            "pinned_source_sha256": "e4f4d5a4f25c5ba2b0d1641d9a66f0d38cab5859ff3571eb4c59898bce0dca50",
+            "pinned_source_url": "https://files.pythonhosted.org/packages/a9/c9/9ade0a7ec01f98b5340f1d0e3699f0fb2a686fe1c8594f1e7055607b3d0e/arctic_inference-0.1.2.tar.gz",
+            "version": "0.1.2"
+          },
+          "canonical_format": "utf8-json-sort-keys-compact-v1",
+          "forked_fa2": {
+            "byte_identical": true,
+            "destination": {
+              "path": "/usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so",
+              "sha256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+              "size": 300123792
+            },
+            "source": {
+              "path": "/tmp/fr13_fork_fa2.so",
+              "sha256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+              "size": 300123792
+            }
+          },
+          "overall_canonical_sha256": "1289c82bd59f6f44a2d80a200e6d96c0b50d5c83d51bfecd339a0489d7d603b9",
+          "python": {
+            "implementation": "CPython",
+            "version": "3.12.13"
+          },
+          "schema": "fr13-fixed32-runtime-attestation-v1",
+          "vllm": {
+            "module_path": "/usr/local/lib/python3.12/dist-packages/vllm/__init__.py",
+            "version": "0.19.2rc1.dev134+gfe9c3d6c5"
+          }
+        }
+      },
+      "boot_excerpt": {
+        "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/docker_full.log",
+        "first280_selected_lines": [
+          {
+            "line": 2,
+            "text": "{\"arm\": \"gqa_pair_splitk\", \"bounds\": {\"bounds\": [{\"bound\": true, \"id\": \"B1\", \"kind\": \"hard\", \"measured\": {\"all_cases_bitwise_identical\": true, \"cross_process_digests_identical\": true}, \"name\": \"determinism_bitwise\", \"passed\": true, \"statement\": \"Every determinism case must be bitwise identical across all repeats within a process, AND the per-case output/LSE digests must be identical across independent processes.\"}, {\"bound\": 0.9, \"id\": \"B2\", \"kind\": \"threshold\", \"measured\": 0.9330657958984375, \"name\": \"output_ulp_concentration\", \"passed\": true, \"statement\": \"At least 90% of characterized output elements must agree with the incumbent within 2 ULP.\"}, {\"bound\": 4.0, \"id\": \"B3\", \"kind\": \"threshold\", \"measured\": 1.3837837837837839, \"name\": \"output_max_abs_delta\", \"passed\": true, \"statement\": \"The largest output disagreement with the incumbent must be at most 4 bf16 steps at the scale of the tensor's own maximum. Expressed scale-free as max_abs_delta <= 4 * 2^-8 * reference_max_abs, evaluated per case and taken at its worst.\"}, {\"bound\": 8, \"id\": \"B4\", \"kind\": \"threshold\", \"measured\": 4, \"name\": \"lse_max_ulp\", \"passed\": true, \"statement\": \"The fp32 log-sum-exp must agree with the incumbent within 8 ULP everywhere. LSE feeds the acceptance/rejection arithmetic, so it is held tighter than the bf16 output in relative terms.\"}, {\"bound\": 0.0001, \"id\": \"B5\", \"kind\": \"threshold\", \"measure"
+          },
+          {
+            "line": 3,
+            "text": "FR13_APC env sidecar written (worker-env bridge): /logs/fr13_apc_env.flag keys=FR13_APC_CONV_FIX,FR13_APC_CONV_SNAPSHOT,FR13_APC_BLOCK_ALIGN_45477"
+          },
+          {
+            "line": 4,
+            "text": "[FR13_DECODE_GDN bake] patch-time path=''"
+          },
+          {
+            "line": 5,
+            "text": "[FR13_TEMP_FIX] rejection_sampler constraints: stock_apply=True legacy_double=False -> injected_extra_apply=False"
+          },
+          {
+            "line": 15,
+            "text": "{'tree_bias_tile_earlyout': False, 'fixed32_query_tile16': False, 'fixed32_query_tile16_static_strides': False, 'fixed32_tree_visibility_mask': False, 'fixed32_query_tile32': False, 'fixed32_query_gqa_pair32': False, 'fixed32_query_tile32_b1': False, 'fixed32_query_gqa_pair32_b1': False, 'fixed32_query_gqa_pair32_splitk_b1': False, 'fixed32_query_tile16_live_ab': False, 'fixed32_query_tile32_live_ab': False, 'fixed32_query_tile32_b1_live_ab': False, 'fixed32_query_tile32_b1_production': False, 'fixed32_query_tile32_b1_tier_b_serve': True, 'fixed32_query_tile32_b4_production': False, 'fixed32_query_tile16_production': False, 'dfwd_unified_bm8_production': False, 'python': {'flash_attn_interface.py': True, 'tree_attn.py': True, 'flash_attn.py': True, 'batch_invariant.py': True, 'cuda_graph.py': True}}"
+          },
+          {
+            "line": 21,
+            "text": "[FR13-PRELAUNCH] installing hash-pinned Arctic for fixed32"
+          },
+          {
+            "line": 22,
+            "text": "[FR13-PRELAUNCH] fixed32 Arctic pinned OK version=0.1.2 cache=arctic_inference.suffix_decoding.cache.SuffixDecodingCache"
+          },
+          {
+            "line": 42,
+            "text": "(APIServer pid=1) WARNING 08-19 04:35:30 [modelopt.py:377] Detected ModelOpt fp8 checkpoint (quant_algo=FP8). Please note that the format is experimental and could change."
+          },
+          {
+            "line": 43,
+            "text": "(APIServer pid=1) WARNING 08-19 04:35:30 [modelopt.py:1013] Detected ModelOpt NVFP4 checkpoint. Please note that the format is experimental and could change in future."
+          },
+          {
+            "line": 47,
+            "text": "(APIServer pid=1) FR13_APC_ENV_BRIDGE_LOADED worker pid=1 SNAP_FIX=ABSENT ZEROACCEPT=ABSENT HIT_SUFFIX_CAP=ABSENT CONV_FIX=1 HIT_RECURRENT_SUFFIX=0"
+          },
+          {
+            "line": 51,
+            "text": "(EngineCore pid=156) INFO 08-19 04:35:40 [core.py:107] Initializing a V1 LLM engine (v0.19.2rc1.dev134+gfe9c3d6c5) with config: model='/models/qwen3.8-27b-nvfp4-radixark', speculative_config=SpeculativeConfig(method='mtp', model='/models/qwen3.8-27b-nvfp4-radixark', num_spec_tokens=31), tokenizer='/models/qwen3.8-27b-nvfp4-radixark', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=131072, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=modelopt_mixed, quantization_config=None, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='qwen3', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details"
+          },
+          {
+            "line": 52,
+            "text": "(EngineCore pid=156) FR13_APC_ENV_BRIDGE_LOADED worker pid=156 SNAP_FIX=ABSENT ZEROACCEPT=ABSENT HIT_SUFFIX_CAP=ABSENT CONV_FIX=1 HIT_RECURRENT_SUFFIX=0"
+          },
+          {
+            "line": 56,
+            "text": "(EngineCore pid=156) INFO 08-19 04:35:41 [eagle.py:120] FR13_DFWD_SPLIT ENGAGED (worker pid=156)"
+          },
+          {
+            "line": 62,
+            "text": "(EngineCore pid=156) INFO 08-19 04:35:45 [__init__.py:420] Selected FlashInferFP8ScaledMMLinearKernel for ModelOptFp8LinearMethod"
+          },
+          {
+            "line": 67,
+            "text": "(EngineCore pid=156) INFO 08-19 04:35:47 [qwen3_5.py:513] FR14_LMHEAD_QUANT_ROUTE lm_head quant_method=ModelOptNvFp4LinearMethod"
+          },
+          {
+            "line": 84,
+            "text": "(EngineCore pid=156) INFO 08-19 04:37:49 [qwen3_5_mtp.py:389] FR14_LMHEAD_QUANT_ROUTE lm_head quant_method=ModelOptNvFp4LinearMethod"
+          },
+          {
+            "line": 114,
+            "text": "(EngineCore pid=156) [FR13_SUBTREE_PARALLEL] preseeded: n=32 schedule=fixed32 levels=[1, 11] lens=[5, 7] critical=12 (monolith 32) single_launch=0 route_armed=1 selfcheck_armed=0"
+          },
+          {
+            "line": 115,
+            "text": "(EngineCore pid=156) [FR13_CONV_WB_BATCHED] preseeded 16 stagings: rows_cap=67 c=10240 dtype=torch.bfloat16"
+          },
+          {
+            "line": 116,
+            "text": "(EngineCore pid=156) INFO 08-19 04:39:02 [gdn_attn.py:1037] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=1 owner=language_model.model.layers.0.linear_attn b_max=32 path_cols=32"
+          },
+          {
+            "line": 117,
+            "text": "(EngineCore pid=156) INFO 08-19 04:39:02 [gdn_attn.py:631] FR13_EAGER_PACK stacked rings rebuilt at metadata-builder init: union 32 layers (group adds 16)"
+          },
+          {
+            "line": 118,
+            "text": "(EngineCore pid=156) [FR13_CONV_WB_BATCHED] preseeded 16 stagings: rows_cap=67 c=10240 dtype=torch.bfloat16"
+          },
+          {
+            "line": 119,
+            "text": "(EngineCore pid=156) INFO 08-19 04:39:02 [gdn_attn.py:1037] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=2 owner=language_model.model.layers.1.linear_attn b_max=32 path_cols=32"
+          },
+          {
+            "line": 120,
+            "text": "(EngineCore pid=156) INFO 08-19 04:39:02 [gdn_attn.py:631] FR13_EAGER_PACK stacked rings rebuilt at metadata-builder init: union 48 layers (group adds 16)"
+          },
+          {
+            "line": 121,
+            "text": "(EngineCore pid=156) [FR13_CONV_WB_BATCHED] preseeded 16 stagings: rows_cap=67 c=10240 dtype=torch.bfloat16"
+          },
+          {
+            "line": 122,
+            "text": "(EngineCore pid=156) INFO 08-19 04:39:02 [gdn_attn.py:1037] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=3 owner=language_model.model.layers.2.linear_attn b_max=32 path_cols=32"
+          },
+          {
+            "line": 124,
+            "text": "(EngineCore pid=156) INFO 08-19 04:39:03 [gpu_model_runner.py:3618] FR13_SLOT_REORDER ENGAGED (runner): tree_n=32 pi=[0, 1, 4, 9, 14, 19, 24, 26, 28, 29, 30, 31, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18, 20, 21, 22, 23, 25, 27]"
+          },
+          {
+            "line": 125,
+            "text": "(EngineCore pid=156) INFO 08-19 04:39:03 [tree_attn.py:993] FR13_SLOT_REORDER ENGAGED (tree_attn bias): tree_n=32 pi=[0, 1, 4, 9, 14, 19, 24, 26, 28, 29, 30, 31, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18, 20, 21, 22, 23, 25, 27]"
+          },
+          {
+            "line": 126,
+            "text": "(EngineCore pid=156) INFO 08-19 04:39:03 [tree_attn.py:1036] FR13_SLOT_REORDER/TREE_CAUSAL_OFF: decode tree causal=False"
+          },
+          {
+            "line": 127,
+            "text": "(EngineCore pid=156) INFO 08-19 04:39:04 [gdn_linear_attn.py:8305] FR13_TREE_CONV_FUSED conv emulation engaged: fused=1 tree_n=32 width=4 state_len=34 prepared_rows=1 static_tables=0 zero_row_cached=0"
+          },
+          {
+            "line": 128,
+            "text": "(EngineCore pid=156) [FR13_SUBTREE_PARALLEL ENGAGED] n_actual=32 schedule=fixed32 critical=12"
+          },
+          {
+            "line": 135,
+            "text": "(EngineCore pid=156) INFO 08-19 04:39:05 [gdn_attn.py:631] FR13_EAGER_PACK stacked rings rebuilt at metadata-builder init: union 48 layers (group adds 0)"
+          },
+          {
+            "line": 136,
+            "text": "(EngineCore pid=156) [FR13_CONV_WB_BATCHED] preseeded 16 stagings: rows_cap=67 c=10240 dtype=torch.bfloat16"
+          },
+          {
+            "line": 137,
+            "text": "(EngineCore pid=156) INFO 08-19 04:39:05 [gdn_attn.py:1037] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=3 owner=language_model.model.layers.0.linear_attn b_max=32 path_cols=32"
+          },
+          {
+            "line": 138,
+            "text": "(EngineCore pid=156) INFO 08-19 04:39:05 [gdn_attn.py:631] FR13_EAGER_PACK stacked rings rebuilt at metadata-builder init: union 48 layers (group adds 0)"
+          },
+          {
+            "line": 139,
+            "text": "(EngineCore pid=156) [FR13_CONV_WB_BATCHED] preseeded 16 stagings: rows_cap=67 c=10240 dtype=torch.bfloat16"
+          },
+          {
+            "line": 140,
+            "text": "(EngineCore pid=156) INFO 08-19 04:39:05 [gdn_attn.py:1037] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=3 owner=language_model.model.layers.1.linear_attn b_max=32 path_cols=32"
+          },
+          {
+            "line": 141,
+            "text": "(EngineCore pid=156) INFO 08-19 04:39:05 [gdn_attn.py:631] FR13_EAGER_PACK stacked rings rebuilt at metadata-builder init: union 48 layers (group adds 0)"
+          },
+          {
+            "line": 142,
+            "text": "(EngineCore pid=156) [FR13_CONV_WB_BATCHED] preseeded 16 stagings: rows_cap=67 c=10240 dtype=torch.bfloat16"
+          },
+          {
+            "line": 143,
+            "text": "(EngineCore pid=156) INFO 08-19 04:39:05 [gdn_attn.py:1037] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=3 owner=language_model.model.layers.2.linear_attn b_max=32 path_cols=32"
+          },
+          {
+            "line": 185,
+            "text": "(EngineCore pid=156) [FR13_FIXED32_COMMIT_DEVICE_FILL] preseeded: mode=hydra27_fixed32 B=1 path_cap=16 neutralizations=5 gathers=4 fused_calls=48 layer_batch=0 bv64_warp4=0 replays=1"
+          },
+          {
+            "line": 186,
+            "text": "(EngineCore pid=156) [FR13_FIXED32_COMMIT_DEVICE_FILL] all-B ready: batches=[1] graphs_ready=1"
+          },
+          {
+            "line": 187,
+            "text": "(EngineCore pid=156) [FR13_FIXED32_CONV_PREGATHER] preseeded: layers=48 pointer_entries=48 batches=[1]"
+          },
+          {
+            "line": 195,
+            "text": "(EngineCore pid=156) FR13_APC_ZERO_MAMBA boot needle: single_type_kv_cache_manager mamba fresh-alloc recording ACTIVE (flag ON at patch time)"
+          },
+          {
+            "line": 272,
+            "text": "(EngineCore pid=156) FR13_APC_ZERO_MAMBA record engaged: events=1 cumulative_block_ids=2 last_batch=2"
+          },
+          {
+            "line": 273,
+            "text": "(EngineCore pid=156) FR13_APC_ZERO_MAMBA boot needle: gpu_model_runner registered 96 mamba state tensors for on-alloc zeroing (flag ON)"
+          },
+          {
+            "line": 274,
+            "text": "(EngineCore pid=156) FR13_APC_ZERO_MAMBA zero engaged: calls=1 cumulative_block_rows=7 last_batch=7"
+          },
+          {
+            "line": 278,
+            "text": "(EngineCore pid=156) INFO 08-19 04:40:46 [eagle.py:618] FR13_TREE_SAMPLE_ROW drafter sample-row fix: tsr=1 (armed)"
+          },
+          {
+            "line": 279,
+            "text": "(EngineCore pid=156) INFO 08-19 04:40:46 [eagle.py:1308] FR13_RESHAPE_WIDE engaged: depth=11 spine_steps=10 widths={0: 3, 1: 3, 2: 3, 3: 3, 4: 3, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1} nodes=31 tree=[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"
+          },
+          {
+            "line": 280,
+            "text": "(EngineCore pid=156) INFO 08-19 04:40:46 [eagle.py:1405] FR13_DRAFTER_SINGLE_LOGITS drafter path engaged: single_logits=True (env=1, use_local_argmax_reduction=False)"
+          }
+        ]
+      }
+    },
+    {
+      "tag": "Cqc16",
+      "config": {
+        "arm_env.txt": {
+          "FR13_DFWD_SPLIT": "1",
+          "FR13_FA2_QROW32_B1_TIERB_WORKLOAD": "exact16",
+          "FR13_FA2_QROW32_B1_TIERB_TASK_IDS": "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398,astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995",
+          "FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256": "47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c"
+        },
+        "container_env.txt": {
+          "FR13_B1_DIAGNOSTIC_TASK_PROFILE": "astropy12907",
+          "FR13_DFWD_SPLIT": "1",
+          "FR13_DFWD_SPLIT_JSON": "/logs/fr13_dfwd_split.json",
+          "FR13_DFWD_SPLIT_NEEDLE": "0",
+          "FR13_DRAFTER_SINGLE_LOGITS": "1",
+          "FR13_DRAFT_HEAD_M1_R64_U8_FA2_SHA256": "",
+          "FR13_DRAFT_HEAD_M4_R64_U8_FA2_SHA256": "",
+          "FR13_FA2_MAB": "0",
+          "FR13_FA2_MAB_DUMP": "/logs/fr13_fa2_mab.jsonl",
+          "FR13_FA2_MAB_LAYER": "*",
+          "FR13_FA2_MAB_LIMIT": "1",
+          "FR13_FA2_MAB_SKIP": "0",
+          "FR13_FA2_PREFILL_NATIVE": "1",
+          "FR13_FA2_QROW16_LIVE_PAGED_AB": "0",
+          "FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID": "",
+          "FR13_FA2_QROW16_LIVE_PAGED_AB_JSON": "/logs/fr13_fa2_qrow16_live_paged_ab.json",
+          "FR13_FA2_QROW16_LIVE_PASS_JSON": "",
+          "FR13_FA2_QROW16_LIVE_PASS_SHA256": "",
+          "FR13_FA2_QROW16_PRODUCTION": "0",
+          "FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR": "",
+          "FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256": "",
+          "FR13_FA2_QROW16_SO_SHA256": "",
+          "FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256": "",
+          "FR13_FA2_QROW32_B1_EXACT4_TASK_IDS": "",
+          "FR13_FA2_QROW32_B1_FA2_HEAD": "29210221863736a08f71a866459e368ad1ac4a95",
+          "FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON": "",
+          "FR13_FA2_QROW32_B1_GQA_PAIR_GATE_SHA256": "",
+          "FR13_FA2_QROW32_B1_GQA_PAIR_LIVE_RESULT_JSON": "",
+          "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "",
+          "FR13_FA2_QROW32_B1_LIVE_AB_INSTANCE_ID": "",
+          "FR13_FA2_QROW32_B1_LIVE_AB_JSON": "/logs/fr13_fa2_qrow32_b1_live_paged_ab.json",
+          "FR13_FA2_QROW32_B1_LIVE_PASS_JSON": "",
+          "FR13_FA2_QROW32_B1_LIVE_PASS_SHA256": "",
+          "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256": "78206cc447e112686c068fb3a73916ac7f755e82ec58e5507504d4ca17788d6f",
+          "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "",
+          "FR13_FA2_QROW32_B1_PRODUCTION_ARM_DEFAULT": "gqa_pair",
+          "FR13_FA2_QROW32_B1_PRODUCTION_ENGAGEMENT_JSON": "/logs/fr13_fa2_qrow32_b1_production_engagement.json",
+          "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR": "",
+          "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256": "",
+          "FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE": "full_vocab",
+          "FR13_FA2_QROW32_B1_SO_SHA256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+          "FR13_FA2_QROW32_B1_SO_SIZE": "300123792",
+          "FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256": "4ed00909cef7ea83849f897018ea4f6a14119b8d160927af426938920c170878",
+          "FR13_FA2_QROW32_B1_SOURCE_COMMIT": "78a29d3391d02166abf571030a90645ce2375ba0",
+          "FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST": "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470",
+          "FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST": "3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e",
+          "FR13_FA2_QROW32_B1_TIER_B_ARM": "gqa_pair_splitk",
+          "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/results/fr14_nvfp4_port_20260816/fr14_splitk_tierb_credential.json",
+          "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL": "/logs/fr13_fa2_qrow32_b1_tier_b_credential.json",
+          "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256": "981aa760fabf5d80217dbe015c55cfe7f603ed5200180efdacf8f2fdbc857209",
+          "FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256": "47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c",
+          "FR13_FA2_QROW32_B1_TIERB_TASK_IDS": "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398,astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995",
+          "FR13_FA2_QROW32_B1_TIERB_WORKLOAD": "exact16",
+          "FR13_FA2_QROW32_B1_TIMING_ARM": "",
+          "FR13_FA2_QROW32_B4_DUAL_GATE_JSON": "",
+          "FR13_FA2_QROW32_B4_DUAL_GATE_SHA256": "",
+          "FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256": "",
+          "FR13_FA2_QROW32_B4_EXACT4_TASK_IDS": "",
+          "FR13_FA2_QROW32_B4_PATCH_SOURCE_SHA256": "",
+          "FR13_FA2_QROW32_B4_PRODUCTION_ARM": "",
+          "FR13_FA2_QROW32_B4_PRODUCTION_ARM_DEFAULT": "gqa_pair",
+          "FR13_FA2_QROW32_B4_PRODUCTION_ENGAGEMENT_JSON": "/logs/fr13_fa2_qrow32_b4_production_engagement.json",
+          "FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR": "",
+          "FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR_SHA256": "",
+          "FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE": "k64_root",
+          "FR13_FA2_QROW32_B4_TIMING_ARM": "",
+          "FR13_FA2_QROW32_FA2_HEAD": "",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB": "0",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB_ARM": "",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB_B3": "0",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB_JSON": "/logs/fr13_fa2_qrow32_live_paged_ab.json",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB_SUBSET_SHA256": "",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB_TASK_IDS": "",
+          "FR13_FA2_QROW32_SO_SHA256": "",
+          "FR13_FA2_QROW32_SO_SIZE": "",
+          "FR13_FA2_QROW32_SOURCE_CLOSURE_SHA256": "",
+          "FR13_FA2_QROW32_SOURCE_COMMIT": "",
+          "FR13_FA2_TREE_BIAS": "1",
+          "FR13_FIXED32_CUTLASS_WAVE_DIAGNOSTIC_TASK_PROFILE": "astropy12907",
+          "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE": "full_vocab",
+          "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION": "0",
+          "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH": "",
+          "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_PASS_PATH": "/logs/fr13_fixed32_gdn_gqa_group3.production_credential.json",
+          "FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE": "k64_root",
+          "FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE": "k64_root",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH": "",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION": "0",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_BATCH": "",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_DEFAULT": "0",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_PASS_PATH": "/logs/fr13_fixed32_gdn_single_launch.production_credential.json",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE": "k64_root",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_TIMING_CONTROL": "0",
+          "FR13_FIXED32_NVTX_PROFILE": "0",
+          "FR13_PROFILER_FLAGS": "",
+          "MAX_NUM_SEQS": "1"
+        },
+        "offload_proxy_env.txt": {
+          "LUMO_PROXY_AUTO_CONTINUE": "0",
+          "LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES": "3",
+          "LUMO_PROXY_AUTO_CONTINUE_MESSAGE": "Your previous turn STOPPED without editing the source -- that is a FAILED turn, not a completed one. Do NOT read, grep, or run more inspection commands; you already have enough context. Your VERY NEXT action MUST be an apply_patch that edits the source files to implement the fix. Every response you produce must call a tool -- never end your turn with an analysis-only or summary message. Do not stop until the source files are edited. Do not spend time on environment/pip/conda setup.",
+          "LUMO_PROXY_FORCE_MIN_P": "0",
+          "LUMO_PROXY_FORCE_PRESENCE_PENALTY": "1.0",
+          "LUMO_PROXY_FORCE_TEMPERATURE": "0.6",
+          "LUMO_PROXY_FORCE_TOP_K": "20",
+          "LUMO_PROXY_FORCE_TOP_P": "0.95",
+          "LUMO_PROXY_MAX_OUTPUT_TOKENS": "32768"
+        }
+      },
+      "tasks": [
+        {
+          "task": "astropy__astropy-12907",
+          "trace": {
+            "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-12907/qwen_trace.jsonl",
+            "sha256": "2cd9c5719f58546447fcb7d03fc5c3dbe5fd38219f873a3144037cb41bc4382f"
+          },
+          "assistant_records": 44,
+          "visible_chars": 2342,
+          "thinking_chars": 11672,
+          "tool_calls": 16,
+          "malformed_tool_calls": 0,
+          "degeneration_flag": "",
+          "network": {
+            "net": "fr14-agent-isolated",
+            "bridge": "fr14agent0",
+            "gateway": "172.31.99.1",
+            "proxy_port": "8023",
+            "rules": "9",
+            "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+          },
+          "agent_completed": true,
+          "patch_bytes": 504
+        },
+        {
+          "task": "astropy__astropy-13033",
+          "trace": {
+            "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-13033/qwen_trace.jsonl",
+            "sha256": "c6fac93986ffb1e7a8976b80b3e2b95ad4f05ff75c6a700348a5101d6230be70"
+          },
+          "assistant_records": 59,
+          "visible_chars": 3204,
+          "thinking_chars": 70084,
+          "tool_calls": 24,
+          "malformed_tool_calls": 0,
+          "degeneration_flag": "",
+          "network": {
+            "net": "fr14-agent-isolated",
+            "bridge": "fr14agent0",
+            "gateway": "172.31.99.1",
+            "proxy_port": "8023",
+            "rules": "9",
+            "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+          },
+          "agent_completed": true,
+          "patch_bytes": 1092
+        },
+        {
+          "task": "astropy__astropy-13236",
+          "trace": {
+            "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-13236/qwen_trace.jsonl",
+            "sha256": "676bf2a7b79328052a9d4f7d1c40e60dbdd91173d5b0892634fca0bf53bb057a"
+          },
+          "assistant_records": 1,
+          "visible_chars": 0,
+          "thinking_chars": 70755,
+          "tool_calls": 0,
+          "malformed_tool_calls": 0,
+          "degeneration_flag": "   <<< DEGENERATION SUSPECTED (no visible output, no tools, 70755 thinking chars) -- confirm with c5",
+          "network": null,
+          "agent_completed": false,
+          "patch_bytes": null
+        }
+      ],
+      "source_bindings": {
+        "arm_env.txt": {
+          "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/arm_env.txt",
+          "sha256": "1e3611fad3c21c9bb143161eca724a7f5bedffe3d5e8369158d574095f7117e0"
+        },
+        "container_env.txt": {
+          "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/container_env.txt",
+          "sha256": "9a15be3489699b91d868aa02a69e5539a65725c58f1b88692873a9173fecbd69"
+        },
+        "offload_proxy_env.txt": {
+          "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/offload_proxy_env.txt",
+          "sha256": "17a812fefe74c7d82850b52e2d92a1f0a1acd8af3e5733afdcdf48f57ff2ef92"
+        }
+      },
+      "git_head": {
+        "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/git_head.txt",
+        "sha256": "56b3ab588edb4565cc52d5339c6f62c77ee01e4154c1bfa173ad0a8876a9a115",
+        "value": "78a29d3391d02166abf571030a90645ce2375ba0"
+      },
+      "runtime_attestation": {
+        "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/logs/fr13_fixed32_runtime_attestation.json",
+        "sha256": "cbd3e3dcf1e6edd489667422e64afa9423e211980aac3f8fad4fcf32f53195de",
+        "data": {
+          "arctic": {
+            "cache_class_module": "arctic_inference.suffix_decoding.cache",
+            "cache_class_qualname": "SuffixDecodingCache",
+            "canonical_sha256": "cff44ef62667e23b37caa81540453f398c4017b74b593081c89b40a9e7840535",
+            "files": [
+              {
+                "path": "arctic_inference-0.1.2.dist-info/INSTALLER",
+                "sha256": "ceebae7b8927a3227e5303cf5e0f1f7b34bb542ad7250ac03fbcde36ec2f1508",
+                "size": 4
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/METADATA",
+                "sha256": "f9b02d5ad30fa2aa79fb6cc25d1e8d040b1701216a1f9ab1583dcc32ab5f433d",
+                "size": 1063
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/RECORD",
+                "sha256": "33aa2e2df2586d7c1761f965f64c43a489971dcb30c984773ee481055ff0f947",
+                "size": 10425
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/REQUESTED",
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "size": 0
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/WHEEL",
+                "sha256": "bf1edac492fed1140b75ac92d9e33324aaf5b0f691fb3b8b1bdd1f7d19951bab",
+                "size": 105
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/direct_url.json",
+                "sha256": "713fa3e7b7d9af4089aeda2befe197c30a1a91a7e905410abc24b2657bb4110b",
+                "size": 338
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/entry_points.txt",
+                "sha256": "ea394c93778f233eb69d15e5b5dd8897d76980ba852b40a3cec2b9234631e027",
+                "size": 95
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/licenses/LICENSE",
+                "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+                "size": 11357
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/top_level.txt",
+                "sha256": "8cdb33683bcc1459e76cd1c375bd920185e9058c749573e3af338fb9ef1375c9",
+                "size": 17
+              },
+              {
+                "path": "arctic_inference/__init__.py",
+                "sha256": "061df7164491227e3d9816ec4a90fa2bc25c65ecb6471f249f1831f4240125c3",
+                "size": 613
+              },
+              {
+                "path": "arctic_inference/common/__init__.py",
+                "sha256": "061df7164491227e3d9816ec4a90fa2bc25c65ecb6471f249f1831f4240125c3",
+                "size": 613
+              },
+              {
+                "path": "arctic_inference/common/swiftkv/__init__.py",
+                "sha256": "4218e25763a4aeca334c5faacc0141d792b2f74f9f1a63742215354787c5da87",
+                "size": 687
+              },
+              {
+                "path": "arctic_inference/common/swiftkv/configs.py",
+                "sha256": "d1f78b8dc9a2b76af2fc93b3102ce3284d18fe15d1e5f757bf15004388e45b67",
+                "size": 1191
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/CMakeLists.txt",
+                "sha256": "7c60f27f977816daaecc869eb5b756dcdee87650f2d87bfa74e87f12083dd796",
+                "size": 888
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/attention_generic.cuh",
+                "sha256": "9cfa0bf1971788d7afd10c90bb2f98384e6f83f0f0893cbeddabcf9d55f3f3e6",
+                "size": 1731
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/custom_ops.h",
+                "sha256": "f4077f1510455431a55fda4ad97547f9ddf413ff1dc02377a5f3c83b27c944c4",
+                "size": 1801
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/dispatch_utils.h",
+                "sha256": "27652d8b90b0b89c6d2762915e66d7f6f2049a6a7ff64c13ca2de1bd4c30216d",
+                "size": 3691
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/dtype_common.cuh",
+                "sha256": "aefcc4a974ed455912adf48821bbcea339f6b2fb813c7381dc535e663d2e1a87",
+                "size": 1895
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/dtype_fp8.cuh",
+                "sha256": "48d96c171edc835d6fbfdabd4deedc9c2709156555bc35201c59657ce4176e1c",
+                "size": 594
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/quant_utils.cuh",
+                "sha256": "2bf006408836cc978cec47eb66ce6aa197f6b2e8b62ecfdefe8b6fe7d0df9b9e",
+                "size": 19216
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/reshape_and_cache_flash_bulk.cu",
+                "sha256": "609535c45e103493aa8caca5a96e44efa51f524ca5ed70488910512bdf470655",
+                "size": 5951
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/reshape_and_cache_flash_fp4.cu",
+                "sha256": "76e5fa555271f1ac32538dd37854db7fc5f283c2c3d5cb525070882be51f102b",
+                "size": 12756
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/speculator_ln.cu",
+                "sha256": "4b3f117c4ac218ba853c117f4c34b93b011d0efe1edd4c221a00a24e7ba507e3",
+                "size": 8419
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/sum_lstm.cu",
+                "sha256": "9b17ae6ff62274853dd49e9fb00c09ae949648caf98ebba0b9ae38c5e240e286",
+                "size": 17665
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/torch_bindings.cpp",
+                "sha256": "24204b085df80df516b8295822d62909f448e759995139361fc279f26c1f0ce6",
+                "size": 2414
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/vectorization.cuh",
+                "sha256": "36bc050e7e3923e9f8270d6773058c61dbf802850e5a7f6826f51f992c136baa",
+                "size": 877
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/vectorization_utils.cuh",
+                "sha256": "2b4557657134be17d74937b85aa1de904637c4fb8cae6eb67fd8b948f9b31b79",
+                "size": 5981
+              },
+              {
+                "path": "arctic_inference/csrc/suffix_decoding/CMakeLists.txt",
+                "sha256": "d0ba0a52b33dc97466f3fe17a2f0207c7e6e3e2cf8b42409e99c3d12ecf13ff2",
+                "size": 1451
+              },
+              {
+                "path": "arctic_inference/csrc/suffix_decoding/bindings.cc",
+                "sha256": "4fbc28596b4cdfa898e3341468fc6debed5a33bb4d9df37566907071ae60f41d",
+                "size": 3447
+              },
+              {
+                "path": "arctic_inference/csrc/suffix_decoding/int32_map.h",
+                "sha256": "49fd3c8ffb900630f145958211d2e121a3347583ef4cf42910572ad2166e54ef",
+                "size": 13285
+              },
+              {
+                "path": "arctic_inference/csrc/suffix_decoding/suffix_tree.cc",
+                "sha256": "cbd8b63b13fbf0beaab4e8736a54d52891b1aac959c5d292d083d88ed37dfc7c",
+                "size": 38874
+              },
+              {
+                "path": "arctic_inference/csrc/suffix_decoding/suffix_tree.h",
+                "sha256": "d3c9a51fc57a974d680510bee8cfb1ba0a6f5ce6c582ed472cb5ef975b2f5aec",
+                "size": 5867
+              },
+              {
+                "path": "arctic_inference/dynasor/__init__.py",
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "size": 0
+              },
+              {
+                "path": "arctic_inference/dynasor/cot.py",
+                "sha256": "ef268f5a26e4167d2b04424dca5b5dc87ba7dd738e559b46b728b221556d6e85",
+                "size": 6607
+              },
+              {
+                "path": "arctic_inference/dynasor/entropy.py",
+                "sha256": "40247961530771dbe82d33099cf30c0a26fe062f0472056147a55280f67fab68",
+                "size": 7115
+              },
+              {
+                "path": "arctic_inference/dynasor/evaluator.py",
+                "sha256": "8ad33ac6cb9afeba1282b90ae9ca905f9493cf4768397dd6e3861c63bddfa37b",
+                "size": 22845
+              },
+              {
+                "path": "arctic_inference/dynasor/openai_server.py",
+                "sha256": "3b0b78435ed710f13e909b32c00601337e5430da82a9bd9317806200b1a18d3b",
+                "size": 15680
+              },
+              {
+                "path": "arctic_inference/dynasor/util.py",
+                "sha256": "d487fba0b071140d0e54ceccb184a80e0edcf3bda109a2a76fe5f09801e7599f",
+                "size": 2865
+              },
+              {
+                "path": "arctic_inference/dynasor/vllm_server.py",
+                "sha256": "70c9872e567cced5917ea456ba7e5bb67905b8490af6cebd60d1d7d0df742a1a",
+                "size": 3853
+              },
+              {
+                "path": "arctic_inference/embedding/client.py",
+                "sha256": "387e664a67dca923cc8f0bbb6cca77906f0b46fc6db5fd662b83e4b3d4f70d2d",
+                "size": 10012
+              },
+              {
+                "path": "arctic_inference/embedding/generate_proto.py",
+                "sha256": "ef4514875437ea080ace08d4425b476b0db6b46ff6ec50476c0f71f386e4411e",
+                "size": 2403
+              },
+              {
+                "path": "arctic_inference/embedding/proto/inference.proto",
+                "sha256": "833d9be1a931be0e9443fa55f85c199e38f562f25d27ff57b456dce76b7fbb1e",
+                "size": 2049
+              },
+              {
+                "path": "arctic_inference/embedding/proto/python/inference_pb2.py",
+                "sha256": "30a353a2991fbd878b39ec7f4b0923dc02c0e89ef6a1d1f1d796c8e9b8a66b92",
+                "size": 4131
+              },
+              {
+                "path": "arctic_inference/embedding/proto/python/inference_pb2_grpc.py",
+                "sha256": "2b57a56128b149f518b2ef1c4077900569ed332a5bc1e8057dcd5bd30a8f41f7",
+                "size": 8578
+              },
+              {
+                "path": "arctic_inference/embedding/replica.py",
+                "sha256": "7b1827abc6d963f5d5b59932b79f214b7c5e0a7195bb1846a40bae2eb7018129",
+                "size": 17594
+              },
+              {
+                "path": "arctic_inference/embedding/replica_manager.py",
+                "sha256": "333f0f2685b38d94f8fcb939fc9f9d0bd41e0774b5d45c46357c9fede6d01698",
+                "size": 18236
+              },
+              {
+                "path": "arctic_inference/envs.py",
+                "sha256": "6b5fc9c428432415017c56f9184a2a7ddc7589c6f6c2afacc23101ee8b104c78",
+                "size": 1534
+              },
+              {
+                "path": "arctic_inference/op_builder/__init__.py",
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "size": 0
+              },
+              {
+                "path": "arctic_inference/op_builder/builder.py",
+                "sha256": "b565541e618ca4b70225e0d5b08543bbc88faf7eca7def4259f29a4b3a89e121",
+                "size": 22641
+              },
+              {
+                "path": "arctic_inference/op_builder/swiftkv_ops_builder.py",
+                "sha256": "c99047af2584c8ec0f6680fbb1ece8c233d55a2ac32f65630de8dd97f8c40980",
+                "size": 939
+              },
+              {
+                "path": "arctic_inference/patching.py",
+                "sha256": "89c16caf99911c7bde8a53cd44a7be22634d5e2743d92f36aa72c5e54285dd91",
+                "size": 5106
+              },
+              {
+                "path": "arctic_inference/py_custom_ops.py",
+                "sha256": "2f4850cc5893eefc9e7702c9b39ec3788803257e7ca1b4ab767fbd9dbcf752fc",
+                "size": 3716
+              },
+              {
+                "path": "arctic_inference/suffix_decoding/_C.cpython-312-aarch64-linux-gnu.so",
+                "sha256": "3f35375aa20610e33bd839a051f9d15f0dd75065874554af90584c999e87864e",
+                "size": 176808
+              },
+              {
+                "path": "arctic_inference/suffix_decoding/__init__.py",
+                "sha256": "e2736d5f6d3472e74f2f25795de8f754ddb3279e9cf497b13f54e8fa164dd5bd",
+                "size": 731
+              },
+              {
+                "path": "arctic_inference/suffix_decoding/cache.py",
+                "sha256": "91c48e6cb335edbd202c8f440e5766df54315ea2d8e40decf8f7a130f3a5e126",
+                "size": 14502
+              },
+              {
+                "path": "arctic_inference/suffix_decoding/simulator.py",
+                "sha256": "ed576d5e1c8b85a2a3ac82031332337f34ee0c894ed2d3fee54d72922591e485",
+                "size": 20311
+              },
+              {
+                "path": "arctic_inference/utils.py",
+                "sha256": "9b2634a1afaf7b2d94fe12eeac4e0b1dc554f85e431eaf43306d513fda514ea0",
+                "size": 1075
+              },
+              {
+                "path": "arctic_inference/vllm/__init__.py",
+                "sha256": "061df7164491227e3d9816ec4a90fa2bc25c65ecb6471f249f1831f4240125c3",
+                "size": 613
+              },
+              {
+                "path": "arctic_inference/vllm/args.py",
+                "sha256": "a98ea757578ce2f01060a0dc164b07d799a08fb36e66f627a0b9f2bd40f19ccd",
+                "size": 5960
+              },
+              {
+                "path": "arctic_inference/vllm/config.py",
+                "sha256": "a16007c84a9a83b10229462623df8a8fac465c4bc9c48e688f9f6cb0319c7101",
+                "size": 4945
+              },
+              {
+                "path": "arctic_inference/vllm/model_runner.py",
+                "sha256": "2bdb619a86b47a50e04a7615759e48c0ea2b9dccaab09cc9d886c1cb909ee9c9",
+                "size": 50378
+              },
+              {
+                "path": "arctic_inference/vllm/patches.py",
+                "sha256": "da60eff50d262c16c4372a79a55b2dbfe66e15d2da0f06becf586a80134c8a21",
+                "size": 4369
+              },
+              {
+                "path": "arctic_inference/vllm/plugin.py",
+                "sha256": "d821c578234c8fc5e14938f683b16f88aed651919c89339d8e5328b1adb95c72",
+                "size": 1622
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/__init__.py",
+                "sha256": "ffafc758a2a63f95d78247b26c5a3169d1395da79b44dc1b6a5a68011f0c79b3",
+                "size": 611
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/arctic_proposer.py",
+                "sha256": "efa1237c7a59e648bd84669e30bd11922c04c68c1962af8d7c88403d0af000e4",
+                "size": 6653
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/arctic_speculator.py",
+                "sha256": "551566c5c476137a3bf1984511bb3ebdcef23ed89e38cb91fad7c2c540796ecc",
+                "size": 38524
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/fp8.py",
+                "sha256": "653f168f0c51d0c6fa8c8ad8f9a0b802dab1696e992611a884d27a20cb665c66",
+                "size": 15349
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/logits_processor_opt.py",
+                "sha256": "21560d3d2f2f0c49d75d526f98a133f680094c4acf833ff66237dacf1d2e99fb",
+                "size": 3893
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/vocab_parallel_embedding.py",
+                "sha256": "a2a41adf975515c43194793bc3037c0b6af98e5ebed3800dbb3806f3f19cc9b9",
+                "size": 22887
+              },
+              {
+                "path": "arctic_inference/vllm/stats.py",
+                "sha256": "b60ebfe97f525b7cb77152c2c79faa4edfcf68636bb1e6973508950950a1ab8a",
+                "size": 2487
+              },
+              {
+                "path": "arctic_inference/vllm/structured_output.py",
+                "sha256": "cbb5ac6fd3fe18cdf0200dff0ff334a639bdcb965141f024b9d4f2e7ff1cb290",
+                "size": 1445
+              },
+              {
+                "path": "arctic_inference/vllm/swiftkv/__init__.py",
+                "sha256": "8b19cf03ced93cd5b0e1015dc6f5975f508055b48c0f9cdff1616b2e7cb19ea6",
+                "size": 703
+              },
+              {
+                "path": "arctic_inference/vllm/swiftkv/llama_swiftkv.py",
+                "sha256": "20897ab43fa39660684d04ec1f30757708bcf61d86c4c7e395522b3ad7c4b8c9",
+                "size": 38039
+              },
+              {
+                "path": "arctic_inference/vllm/ulysses.py",
+                "sha256": "cb84203e23c1eaa75ac9977b2a7dd3879d1e9b9ec5c88c1107ba5430b5038415",
+                "size": 21148
+              }
+            ],
+            "name": "arctic_inference",
+            "pinned_source_sha256": "e4f4d5a4f25c5ba2b0d1641d9a66f0d38cab5859ff3571eb4c59898bce0dca50",
+            "pinned_source_url": "https://files.pythonhosted.org/packages/a9/c9/9ade0a7ec01f98b5340f1d0e3699f0fb2a686fe1c8594f1e7055607b3d0e/arctic_inference-0.1.2.tar.gz",
+            "version": "0.1.2"
+          },
+          "canonical_format": "utf8-json-sort-keys-compact-v1",
+          "forked_fa2": {
+            "byte_identical": true,
+            "destination": {
+              "path": "/usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so",
+              "sha256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+              "size": 300123792
+            },
+            "source": {
+              "path": "/tmp/fr13_fork_fa2.so",
+              "sha256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+              "size": 300123792
+            }
+          },
+          "overall_canonical_sha256": "1289c82bd59f6f44a2d80a200e6d96c0b50d5c83d51bfecd339a0489d7d603b9",
+          "python": {
+            "implementation": "CPython",
+            "version": "3.12.13"
+          },
+          "schema": "fr13-fixed32-runtime-attestation-v1",
+          "vllm": {
+            "module_path": "/usr/local/lib/python3.12/dist-packages/vllm/__init__.py",
+            "version": "0.19.2rc1.dev134+gfe9c3d6c5"
+          }
+        }
+      },
+      "boot_excerpt": {
+        "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/docker_full.log",
+        "first280_selected_lines": [
+          {
+            "line": 2,
+            "text": "{\"arm\": \"gqa_pair_splitk\", \"bounds\": {\"bounds\": [{\"bound\": true, \"id\": \"B1\", \"kind\": \"hard\", \"measured\": {\"all_cases_bitwise_identical\": true, \"cross_process_digests_identical\": true}, \"name\": \"determinism_bitwise\", \"passed\": true, \"statement\": \"Every determinism case must be bitwise identical across all repeats within a process, AND the per-case output/LSE digests must be identical across independent processes.\"}, {\"bound\": 0.9, \"id\": \"B2\", \"kind\": \"threshold\", \"measured\": 0.9330657958984375, \"name\": \"output_ulp_concentration\", \"passed\": true, \"statement\": \"At least 90% of characterized output elements must agree with the incumbent within 2 ULP.\"}, {\"bound\": 4.0, \"id\": \"B3\", \"kind\": \"threshold\", \"measured\": 1.3837837837837839, \"name\": \"output_max_abs_delta\", \"passed\": true, \"statement\": \"The largest output disagreement with the incumbent must be at most 4 bf16 steps at the scale of the tensor's own maximum. Expressed scale-free as max_abs_delta <= 4 * 2^-8 * reference_max_abs, evaluated per case and taken at its worst.\"}, {\"bound\": 8, \"id\": \"B4\", \"kind\": \"threshold\", \"measured\": 4, \"name\": \"lse_max_ulp\", \"passed\": true, \"statement\": \"The fp32 log-sum-exp must agree with the incumbent within 8 ULP everywhere. LSE feeds the acceptance/rejection arithmetic, so it is held tighter than the bf16 output in relative terms.\"}, {\"bound\": 0.0001, \"id\": \"B5\", \"kind\": \"threshold\", \"measure"
+          },
+          {
+            "line": 3,
+            "text": "FR13_APC env sidecar written (worker-env bridge): /logs/fr13_apc_env.flag keys=FR13_APC_CONV_FIX,FR13_APC_CONV_SNAPSHOT,FR13_APC_BLOCK_ALIGN_45477"
+          },
+          {
+            "line": 4,
+            "text": "[FR13_DECODE_GDN bake] patch-time path=''"
+          },
+          {
+            "line": 5,
+            "text": "[FR13_TEMP_FIX] rejection_sampler constraints: stock_apply=True legacy_double=False -> injected_extra_apply=False"
+          },
+          {
+            "line": 15,
+            "text": "{'tree_bias_tile_earlyout': False, 'fixed32_query_tile16': False, 'fixed32_query_tile16_static_strides': False, 'fixed32_tree_visibility_mask': False, 'fixed32_query_tile32': False, 'fixed32_query_gqa_pair32': False, 'fixed32_query_tile32_b1': False, 'fixed32_query_gqa_pair32_b1': False, 'fixed32_query_gqa_pair32_splitk_b1': False, 'fixed32_query_tile16_live_ab': False, 'fixed32_query_tile32_live_ab': False, 'fixed32_query_tile32_b1_live_ab': False, 'fixed32_query_tile32_b1_production': False, 'fixed32_query_tile32_b1_tier_b_serve': True, 'fixed32_query_tile32_b4_production': False, 'fixed32_query_tile16_production': False, 'dfwd_unified_bm8_production': False, 'python': {'flash_attn_interface.py': True, 'tree_attn.py': True, 'flash_attn.py': True, 'batch_invariant.py': True, 'cuda_graph.py': True}}"
+          },
+          {
+            "line": 21,
+            "text": "[FR13-PRELAUNCH] installing hash-pinned Arctic for fixed32"
+          },
+          {
+            "line": 22,
+            "text": "[FR13-PRELAUNCH] fixed32 Arctic pinned OK version=0.1.2 cache=arctic_inference.suffix_decoding.cache.SuffixDecodingCache"
+          },
+          {
+            "line": 42,
+            "text": "(APIServer pid=1) WARNING 08-19 22:25:02 [modelopt.py:377] Detected ModelOpt fp8 checkpoint (quant_algo=FP8). Please note that the format is experimental and could change."
+          },
+          {
+            "line": 43,
+            "text": "(APIServer pid=1) WARNING 08-19 22:25:02 [modelopt.py:1013] Detected ModelOpt NVFP4 checkpoint. Please note that the format is experimental and could change in future."
+          },
+          {
+            "line": 47,
+            "text": "(APIServer pid=1) FR13_APC_ENV_BRIDGE_LOADED worker pid=1 SNAP_FIX=ABSENT ZEROACCEPT=ABSENT HIT_SUFFIX_CAP=ABSENT CONV_FIX=1 HIT_RECURRENT_SUFFIX=0"
+          },
+          {
+            "line": 51,
+            "text": "(EngineCore pid=156) INFO 08-19 22:25:12 [core.py:107] Initializing a V1 LLM engine (v0.19.2rc1.dev134+gfe9c3d6c5) with config: model='/models/qwen3.8-27b-nvfp4-radixark', speculative_config=SpeculativeConfig(method='mtp', model='/models/qwen3.8-27b-nvfp4-radixark', num_spec_tokens=31), tokenizer='/models/qwen3.8-27b-nvfp4-radixark', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=131072, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=modelopt_mixed, quantization_config=None, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='qwen3', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details"
+          },
+          {
+            "line": 52,
+            "text": "(EngineCore pid=156) FR13_APC_ENV_BRIDGE_LOADED worker pid=156 SNAP_FIX=ABSENT ZEROACCEPT=ABSENT HIT_SUFFIX_CAP=ABSENT CONV_FIX=1 HIT_RECURRENT_SUFFIX=0"
+          },
+          {
+            "line": 56,
+            "text": "(EngineCore pid=156) INFO 08-19 22:25:13 [eagle.py:120] FR13_DFWD_SPLIT ENGAGED (worker pid=156)"
+          },
+          {
+            "line": 62,
+            "text": "(EngineCore pid=156) INFO 08-19 22:25:16 [__init__.py:420] Selected FlashInferFP8ScaledMMLinearKernel for ModelOptFp8LinearMethod"
+          },
+          {
+            "line": 67,
+            "text": "(EngineCore pid=156) INFO 08-19 22:25:18 [qwen3_5.py:513] FR14_LMHEAD_QUANT_ROUTE lm_head quant_method=ModelOptNvFp4LinearMethod"
+          },
+          {
+            "line": 84,
+            "text": "(EngineCore pid=156) INFO 08-19 22:27:20 [qwen3_5_mtp.py:389] FR14_LMHEAD_QUANT_ROUTE lm_head quant_method=ModelOptNvFp4LinearMethod"
+          },
+          {
+            "line": 114,
+            "text": "(EngineCore pid=156) [FR13_SUBTREE_PARALLEL] preseeded: n=32 schedule=fixed32 levels=[1, 11] lens=[5, 7] critical=12 (monolith 32) single_launch=0 route_armed=1 selfcheck_armed=0"
+          },
+          {
+            "line": 115,
+            "text": "(EngineCore pid=156) [FR13_CONV_WB_BATCHED] preseeded 16 stagings: rows_cap=67 c=10240 dtype=torch.bfloat16"
+          },
+          {
+            "line": 116,
+            "text": "(EngineCore pid=156) INFO 08-19 22:28:33 [gdn_attn.py:1037] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=1 owner=language_model.model.layers.0.linear_attn b_max=32 path_cols=32"
+          },
+          {
+            "line": 117,
+            "text": "(EngineCore pid=156) INFO 08-19 22:28:33 [gdn_attn.py:631] FR13_EAGER_PACK stacked rings rebuilt at metadata-builder init: union 32 layers (group adds 16)"
+          },
+          {
+            "line": 118,
+            "text": "(EngineCore pid=156) [FR13_CONV_WB_BATCHED] preseeded 16 stagings: rows_cap=67 c=10240 dtype=torch.bfloat16"
+          },
+          {
+            "line": 119,
+            "text": "(EngineCore pid=156) INFO 08-19 22:28:33 [gdn_attn.py:1037] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=2 owner=language_model.model.layers.1.linear_attn b_max=32 path_cols=32"
+          },
+          {
+            "line": 120,
+            "text": "(EngineCore pid=156) INFO 08-19 22:28:33 [gdn_attn.py:631] FR13_EAGER_PACK stacked rings rebuilt at metadata-builder init: union 48 layers (group adds 16)"
+          },
+          {
+            "line": 121,
+            "text": "(EngineCore pid=156) [FR13_CONV_WB_BATCHED] preseeded 16 stagings: rows_cap=67 c=10240 dtype=torch.bfloat16"
+          },
+          {
+            "line": 122,
+            "text": "(EngineCore pid=156) INFO 08-19 22:28:33 [gdn_attn.py:1037] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=3 owner=language_model.model.layers.2.linear_attn b_max=32 path_cols=32"
+          },
+          {
+            "line": 124,
+            "text": "(EngineCore pid=156) INFO 08-19 22:28:34 [gpu_model_runner.py:3618] FR13_SLOT_REORDER ENGAGED (runner): tree_n=32 pi=[0, 1, 4, 9, 14, 19, 24, 26, 28, 29, 30, 31, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18, 20, 21, 22, 23, 25, 27]"
+          },
+          {
+            "line": 125,
+            "text": "(EngineCore pid=156) INFO 08-19 22:28:35 [tree_attn.py:993] FR13_SLOT_REORDER ENGAGED (tree_attn bias): tree_n=32 pi=[0, 1, 4, 9, 14, 19, 24, 26, 28, 29, 30, 31, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18, 20, 21, 22, 23, 25, 27]"
+          },
+          {
+            "line": 126,
+            "text": "(EngineCore pid=156) INFO 08-19 22:28:35 [tree_attn.py:1036] FR13_SLOT_REORDER/TREE_CAUSAL_OFF: decode tree causal=False"
+          },
+          {
+            "line": 127,
+            "text": "(EngineCore pid=156) INFO 08-19 22:28:35 [gdn_linear_attn.py:8306] FR13_TREE_CONV_FUSED conv emulation engaged: fused=1 tree_n=32 width=4 state_len=34 prepared_rows=1 static_tables=0 zero_row_cached=0"
+          },
+          {
+            "line": 128,
+            "text": "(EngineCore pid=156) [FR13_SUBTREE_PARALLEL ENGAGED] n_actual=32 schedule=fixed32 critical=12"
+          },
+          {
+            "line": 135,
+            "text": "(EngineCore pid=156) INFO 08-19 22:28:37 [gdn_attn.py:631] FR13_EAGER_PACK stacked rings rebuilt at metadata-builder init: union 48 layers (group adds 0)"
+          },
+          {
+            "line": 136,
+            "text": "(EngineCore pid=156) [FR13_CONV_WB_BATCHED] preseeded 16 stagings: rows_cap=67 c=10240 dtype=torch.bfloat16"
+          },
+          {
+            "line": 137,
+            "text": "(EngineCore pid=156) INFO 08-19 22:28:37 [gdn_attn.py:1037] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=3 owner=language_model.model.layers.0.linear_attn b_max=32 path_cols=32"
+          },
+          {
+            "line": 138,
+            "text": "(EngineCore pid=156) INFO 08-19 22:28:37 [gdn_attn.py:631] FR13_EAGER_PACK stacked rings rebuilt at metadata-builder init: union 48 layers (group adds 0)"
+          },
+          {
+            "line": 139,
+            "text": "(EngineCore pid=156) [FR13_CONV_WB_BATCHED] preseeded 16 stagings: rows_cap=67 c=10240 dtype=torch.bfloat16"
+          },
+          {
+            "line": 140,
+            "text": "(EngineCore pid=156) INFO 08-19 22:28:37 [gdn_attn.py:1037] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=3 owner=language_model.model.layers.1.linear_attn b_max=32 path_cols=32"
+          },
+          {
+            "line": 141,
+            "text": "(EngineCore pid=156) INFO 08-19 22:28:37 [gdn_attn.py:631] FR13_EAGER_PACK stacked rings rebuilt at metadata-builder init: union 48 layers (group adds 0)"
+          },
+          {
+            "line": 142,
+            "text": "(EngineCore pid=156) [FR13_CONV_WB_BATCHED] preseeded 16 stagings: rows_cap=67 c=10240 dtype=torch.bfloat16"
+          },
+          {
+            "line": 143,
+            "text": "(EngineCore pid=156) INFO 08-19 22:28:37 [gdn_attn.py:1037] FR13_TREE_CONV_FUSED prep buffers rebuilt at metadata-builder init: groups=3 owner=language_model.model.layers.2.linear_attn b_max=32 path_cols=32"
+          },
+          {
+            "line": 186,
+            "text": "(EngineCore pid=156) [FR13_FIXED32_COMMIT_DEVICE_FILL] preseeded: mode=hydra27_fixed32 B=1 path_cap=16 neutralizations=5 gathers=4 fused_calls=48 layer_batch=0 bv64_warp4=0 replays=1"
+          },
+          {
+            "line": 187,
+            "text": "(EngineCore pid=156) [FR13_FIXED32_COMMIT_DEVICE_FILL] all-B ready: batches=[1] graphs_ready=1"
+          },
+          {
+            "line": 188,
+            "text": "(EngineCore pid=156) [FR13_FIXED32_CONV_PREGATHER] preseeded: layers=48 pointer_entries=48 batches=[1]"
+          },
+          {
+            "line": 196,
+            "text": "(EngineCore pid=156) FR13_APC_ZERO_MAMBA boot needle: single_type_kv_cache_manager mamba fresh-alloc recording ACTIVE (flag ON at patch time)"
+          },
+          {
+            "line": 273,
+            "text": "(EngineCore pid=156) FR13_APC_ZERO_MAMBA record engaged: events=1 cumulative_block_ids=2 last_batch=2"
+          },
+          {
+            "line": 274,
+            "text": "(EngineCore pid=156) FR13_APC_ZERO_MAMBA boot needle: gpu_model_runner registered 96 mamba state tensors for on-alloc zeroing (flag ON)"
+          },
+          {
+            "line": 275,
+            "text": "(EngineCore pid=156) FR13_APC_ZERO_MAMBA zero engaged: calls=1 cumulative_block_rows=7 last_batch=7"
+          },
+          {
+            "line": 279,
+            "text": "(EngineCore pid=156) INFO 08-19 22:30:19 [eagle.py:618] FR13_TREE_SAMPLE_ROW drafter sample-row fix: tsr=1 (armed)"
+          },
+          {
+            "line": 280,
+            "text": "(EngineCore pid=156) INFO 08-19 22:30:19 [eagle.py:1308] FR13_RESHAPE_WIDE engaged: depth=11 spine_steps=10 widths={0: 3, 1: 3, 2: 3, 3: 3, 4: 3, 5: 1, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1} nodes=31 tree=[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"
+          }
+        ]
+      }
+    },
+    {
+      "tag": "Cqc15",
+      "config": {
+        "arm_env.txt": {
+          "FR13_DFWD_SPLIT": "1",
+          "FR13_FA2_QROW32_B1_TIERB_WORKLOAD": "exact16_minus_13236",
+          "FR13_FA2_QROW32_B1_TIERB_TASK_IDS": "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13398,astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995",
+          "FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256": "24a8cf7c27646b13b76ebafa5a54d79bd5433f01ba34e55503227fdcc96e729a"
+        },
+        "container_env.txt": {
+          "FR13_B1_DIAGNOSTIC_TASK_PROFILE": "astropy12907",
+          "FR13_DFWD_SPLIT": "1",
+          "FR13_DFWD_SPLIT_JSON": "/logs/fr13_dfwd_split.json",
+          "FR13_DFWD_SPLIT_NEEDLE": "0",
+          "FR13_DRAFTER_SINGLE_LOGITS": "1",
+          "FR13_DRAFT_HEAD_M1_R64_U8_FA2_SHA256": "",
+          "FR13_DRAFT_HEAD_M4_R64_U8_FA2_SHA256": "",
+          "FR13_FA2_MAB": "0",
+          "FR13_FA2_MAB_DUMP": "/logs/fr13_fa2_mab.jsonl",
+          "FR13_FA2_MAB_LAYER": "*",
+          "FR13_FA2_MAB_LIMIT": "1",
+          "FR13_FA2_MAB_SKIP": "0",
+          "FR13_FA2_PREFILL_NATIVE": "1",
+          "FR13_FA2_QROW16_LIVE_PAGED_AB": "0",
+          "FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID": "",
+          "FR13_FA2_QROW16_LIVE_PAGED_AB_JSON": "/logs/fr13_fa2_qrow16_live_paged_ab.json",
+          "FR13_FA2_QROW16_LIVE_PASS_JSON": "",
+          "FR13_FA2_QROW16_LIVE_PASS_SHA256": "",
+          "FR13_FA2_QROW16_PRODUCTION": "0",
+          "FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR": "",
+          "FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256": "",
+          "FR13_FA2_QROW16_SO_SHA256": "",
+          "FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256": "",
+          "FR13_FA2_QROW32_B1_EXACT4_TASK_IDS": "",
+          "FR13_FA2_QROW32_B1_FA2_HEAD": "29210221863736a08f71a866459e368ad1ac4a95",
+          "FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON": "",
+          "FR13_FA2_QROW32_B1_GQA_PAIR_GATE_SHA256": "",
+          "FR13_FA2_QROW32_B1_GQA_PAIR_LIVE_RESULT_JSON": "",
+          "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "",
+          "FR13_FA2_QROW32_B1_LIVE_AB_INSTANCE_ID": "",
+          "FR13_FA2_QROW32_B1_LIVE_AB_JSON": "/logs/fr13_fa2_qrow32_b1_live_paged_ab.json",
+          "FR13_FA2_QROW32_B1_LIVE_PASS_JSON": "",
+          "FR13_FA2_QROW32_B1_LIVE_PASS_SHA256": "",
+          "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256": "dd424b0524b3520958d1ca323f6285bf80a710fa3e148b33310b7db08e19b93e",
+          "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "",
+          "FR13_FA2_QROW32_B1_PRODUCTION_ARM_DEFAULT": "gqa_pair",
+          "FR13_FA2_QROW32_B1_PRODUCTION_ENGAGEMENT_JSON": "/logs/fr13_fa2_qrow32_b1_production_engagement.json",
+          "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR": "",
+          "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256": "",
+          "FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE": "full_vocab",
+          "FR13_FA2_QROW32_B1_SO_SHA256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+          "FR13_FA2_QROW32_B1_SO_SIZE": "300123792",
+          "FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256": "4ed00909cef7ea83849f897018ea4f6a14119b8d160927af426938920c170878",
+          "FR13_FA2_QROW32_B1_SOURCE_COMMIT": "a450f6c3600d088bd259df65e3940a64dc8de199",
+          "FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST": "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470",
+          "FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST": "3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e",
+          "FR13_FA2_QROW32_B1_TIER_B_ARM": "gqa_pair_splitk",
+          "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/results/fr14_nvfp4_port_20260816/fr14_splitk_tierb_credential.json",
+          "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL": "/logs/fr13_fa2_qrow32_b1_tier_b_credential.json",
+          "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256": "8534f49e0b79cefb27f65b950ff516075eea6780d438d65c17331707d69f2197",
+          "FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256": "24a8cf7c27646b13b76ebafa5a54d79bd5433f01ba34e55503227fdcc96e729a",
+          "FR13_FA2_QROW32_B1_TIERB_TASK_IDS": "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13398,astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995",
+          "FR13_FA2_QROW32_B1_TIERB_WORKLOAD": "exact16_minus_13236",
+          "FR13_FA2_QROW32_B1_TIMING_ARM": "",
+          "FR13_FA2_QROW32_B4_DUAL_GATE_JSON": "",
+          "FR13_FA2_QROW32_B4_DUAL_GATE_SHA256": "",
+          "FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256": "",
+          "FR13_FA2_QROW32_B4_EXACT4_TASK_IDS": "",
+          "FR13_FA2_QROW32_B4_PATCH_SOURCE_SHA256": "",
+          "FR13_FA2_QROW32_B4_PRODUCTION_ARM": "",
+          "FR13_FA2_QROW32_B4_PRODUCTION_ARM_DEFAULT": "gqa_pair",
+          "FR13_FA2_QROW32_B4_PRODUCTION_ENGAGEMENT_JSON": "/logs/fr13_fa2_qrow32_b4_production_engagement.json",
+          "FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR": "",
+          "FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR_SHA256": "",
+          "FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE": "k64_root",
+          "FR13_FA2_QROW32_B4_TIMING_ARM": "",
+          "FR13_FA2_QROW32_FA2_HEAD": "",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB": "0",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB_ARM": "",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB_B3": "0",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB_JSON": "/logs/fr13_fa2_qrow32_live_paged_ab.json",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB_SUBSET_SHA256": "",
+          "FR13_FA2_QROW32_LIVE_PAGED_AB_TASK_IDS": "",
+          "FR13_FA2_QROW32_SO_SHA256": "",
+          "FR13_FA2_QROW32_SO_SIZE": "",
+          "FR13_FA2_QROW32_SOURCE_CLOSURE_SHA256": "",
+          "FR13_FA2_QROW32_SOURCE_COMMIT": "",
+          "FR13_FA2_TREE_BIAS": "1",
+          "FR13_FIXED32_CUTLASS_WAVE_DIAGNOSTIC_TASK_PROFILE": "astropy12907",
+          "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE": "full_vocab",
+          "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION": "0",
+          "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH": "",
+          "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_PASS_PATH": "/logs/fr13_fixed32_gdn_gqa_group3.production_credential.json",
+          "FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE": "k64_root",
+          "FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE": "k64_root",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH": "",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION": "0",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_BATCH": "",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_DEFAULT": "0",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_PASS_PATH": "/logs/fr13_fixed32_gdn_single_launch.production_credential.json",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE": "k64_root",
+          "FR13_FIXED32_GDN_SINGLE_LAUNCH_TIMING_CONTROL": "0",
+          "FR13_FIXED32_NVTX_PROFILE": "0",
+          "FR13_PROFILER_FLAGS": "",
+          "MAX_NUM_SEQS": "1"
+        },
+        "offload_proxy_env.txt": {
+          "LUMO_PROXY_AUTO_CONTINUE": "0",
+          "LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES": "3",
+          "LUMO_PROXY_AUTO_CONTINUE_MESSAGE": "Your previous turn STOPPED without editing the source -- that is a FAILED turn, not a completed one. Do NOT read, grep, or run more inspection commands; you already have enough context. Your VERY NEXT action MUST be an apply_patch that edits the source files to implement the fix. Every response you produce must call a tool -- never end your turn with an analysis-only or summary message. Do not stop until the source files are edited. Do not spend time on environment/pip/conda setup.",
+          "LUMO_PROXY_FORCE_MIN_P": "0",
+          "LUMO_PROXY_FORCE_PRESENCE_PENALTY": "1.0",
+          "LUMO_PROXY_FORCE_TEMPERATURE": "0.6",
+          "LUMO_PROXY_FORCE_TOP_K": "20",
+          "LUMO_PROXY_FORCE_TOP_P": "0.95",
+          "LUMO_PROXY_MAX_OUTPUT_TOKENS": "32768"
+        }
+      },
+      "tasks": [
+        {
+          "task": "astropy__astropy-12907",
+          "trace": {
+            "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-12907/qwen_trace.jsonl",
+            "sha256": "9c9aab70562081b63baf5cde2390026c639846381393b11631fcd6f533dff065"
+          },
+          "assistant_records": 74,
+          "visible_chars": 4316,
+          "thinking_chars": 35214,
+          "tool_calls": 27,
+          "malformed_tool_calls": 0,
+          "degeneration_flag": "",
+          "network": {
+            "net": "fr14-agent-isolated",
+            "bridge": "fr14agent0",
+            "gateway": "172.31.99.1",
+            "proxy_port": "8023",
+            "rules": "9",
+            "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+          },
+          "agent_completed": true,
+          "patch_bytes": 504
+        },
+        {
+          "task": "astropy__astropy-13033",
+          "trace": {
+            "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-13033/qwen_trace.jsonl",
+            "sha256": "cb925258be72656ad73ff5d762e4a803428558dce865b96716130a765de1ae8d"
+          },
+          "assistant_records": 77,
+          "visible_chars": 5187,
+          "thinking_chars": 153101,
+          "tool_calls": 29,
+          "malformed_tool_calls": 0,
+          "degeneration_flag": "",
+          "network": {
+            "net": "fr14-agent-isolated",
+            "bridge": "fr14agent0",
+            "gateway": "172.31.99.1",
+            "proxy_port": "8023",
+            "rules": "9",
+            "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+          },
+          "agent_completed": true,
+          "patch_bytes": 1450
+        },
+        {
+          "task": "astropy__astropy-13398",
+          "trace": {
+            "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-13398/qwen_trace.jsonl",
+            "sha256": "d71b02c39e4150685e084ea7842c46bc5940fda0f80d66b61d392cd28ec10d8e"
+          },
+          "assistant_records": 417,
+          "visible_chars": 6861,
+          "thinking_chars": 340679,
+          "tool_calls": 147,
+          "malformed_tool_calls": 0,
+          "degeneration_flag": "",
+          "network": null,
+          "agent_completed": false,
+          "patch_bytes": null
+        }
+      ],
+      "source_bindings": {
+        "arm_env.txt": {
+          "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/arm_env.txt",
+          "sha256": "5f353d6a9ffd656157286b1abc2ad4a99b76340445fa487807f1ef55483f2163"
+        },
+        "container_env.txt": {
+          "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/container_env.txt",
+          "sha256": "51ee9474cd808346e5e46f25f80d492f1188c78e30012389eecb760bb9212fb7"
+        },
+        "offload_proxy_env.txt": {
+          "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/offload_proxy_env.txt",
+          "sha256": "88f687843eb4563d4c59cd124234241073041b0bae663bfb733b377625cc8ef8"
+        }
+      },
+      "git_head": {
+        "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/git_head.txt",
+        "sha256": "0a579aaa83e9009775d67459d28116d3ae75ba4eee3928abca1241135ec5481d",
+        "value": "a450f6c3600d088bd259df65e3940a64dc8de199"
+      },
+      "runtime_attestation": {
+        "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/logs/fr13_fixed32_runtime_attestation.json",
+        "sha256": "cbd3e3dcf1e6edd489667422e64afa9423e211980aac3f8fad4fcf32f53195de",
+        "data": {
+          "arctic": {
+            "cache_class_module": "arctic_inference.suffix_decoding.cache",
+            "cache_class_qualname": "SuffixDecodingCache",
+            "canonical_sha256": "cff44ef62667e23b37caa81540453f398c4017b74b593081c89b40a9e7840535",
+            "files": [
+              {
+                "path": "arctic_inference-0.1.2.dist-info/INSTALLER",
+                "sha256": "ceebae7b8927a3227e5303cf5e0f1f7b34bb542ad7250ac03fbcde36ec2f1508",
+                "size": 4
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/METADATA",
+                "sha256": "f9b02d5ad30fa2aa79fb6cc25d1e8d040b1701216a1f9ab1583dcc32ab5f433d",
+                "size": 1063
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/RECORD",
+                "sha256": "33aa2e2df2586d7c1761f965f64c43a489971dcb30c984773ee481055ff0f947",
+                "size": 10425
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/REQUESTED",
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "size": 0
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/WHEEL",
+                "sha256": "bf1edac492fed1140b75ac92d9e33324aaf5b0f691fb3b8b1bdd1f7d19951bab",
+                "size": 105
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/direct_url.json",
+                "sha256": "713fa3e7b7d9af4089aeda2befe197c30a1a91a7e905410abc24b2657bb4110b",
+                "size": 338
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/entry_points.txt",
+                "sha256": "ea394c93778f233eb69d15e5b5dd8897d76980ba852b40a3cec2b9234631e027",
+                "size": 95
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/licenses/LICENSE",
+                "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+                "size": 11357
+              },
+              {
+                "path": "arctic_inference-0.1.2.dist-info/top_level.txt",
+                "sha256": "8cdb33683bcc1459e76cd1c375bd920185e9058c749573e3af338fb9ef1375c9",
+                "size": 17
+              },
+              {
+                "path": "arctic_inference/__init__.py",
+                "sha256": "061df7164491227e3d9816ec4a90fa2bc25c65ecb6471f249f1831f4240125c3",
+                "size": 613
+              },
+              {
+                "path": "arctic_inference/common/__init__.py",
+                "sha256": "061df7164491227e3d9816ec4a90fa2bc25c65ecb6471f249f1831f4240125c3",
+                "size": 613
+              },
+              {
+                "path": "arctic_inference/common/swiftkv/__init__.py",
+                "sha256": "4218e25763a4aeca334c5faacc0141d792b2f74f9f1a63742215354787c5da87",
+                "size": 687
+              },
+              {
+                "path": "arctic_inference/common/swiftkv/configs.py",
+                "sha256": "d1f78b8dc9a2b76af2fc93b3102ce3284d18fe15d1e5f757bf15004388e45b67",
+                "size": 1191
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/CMakeLists.txt",
+                "sha256": "7c60f27f977816daaecc869eb5b756dcdee87650f2d87bfa74e87f12083dd796",
+                "size": 888
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/attention_generic.cuh",
+                "sha256": "9cfa0bf1971788d7afd10c90bb2f98384e6f83f0f0893cbeddabcf9d55f3f3e6",
+                "size": 1731
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/custom_ops.h",
+                "sha256": "f4077f1510455431a55fda4ad97547f9ddf413ff1dc02377a5f3c83b27c944c4",
+                "size": 1801
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/dispatch_utils.h",
+                "sha256": "27652d8b90b0b89c6d2762915e66d7f6f2049a6a7ff64c13ca2de1bd4c30216d",
+                "size": 3691
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/dtype_common.cuh",
+                "sha256": "aefcc4a974ed455912adf48821bbcea339f6b2fb813c7381dc535e663d2e1a87",
+                "size": 1895
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/dtype_fp8.cuh",
+                "sha256": "48d96c171edc835d6fbfdabd4deedc9c2709156555bc35201c59657ce4176e1c",
+                "size": 594
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/quant_utils.cuh",
+                "sha256": "2bf006408836cc978cec47eb66ce6aa197f6b2e8b62ecfdefe8b6fe7d0df9b9e",
+                "size": 19216
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/reshape_and_cache_flash_bulk.cu",
+                "sha256": "609535c45e103493aa8caca5a96e44efa51f524ca5ed70488910512bdf470655",
+                "size": 5951
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/reshape_and_cache_flash_fp4.cu",
+                "sha256": "76e5fa555271f1ac32538dd37854db7fc5f283c2c3d5cb525070882be51f102b",
+                "size": 12756
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/speculator_ln.cu",
+                "sha256": "4b3f117c4ac218ba853c117f4c34b93b011d0efe1edd4c221a00a24e7ba507e3",
+                "size": 8419
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/sum_lstm.cu",
+                "sha256": "9b17ae6ff62274853dd49e9fb00c09ae949648caf98ebba0b9ae38c5e240e286",
+                "size": 17665
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/torch_bindings.cpp",
+                "sha256": "24204b085df80df516b8295822d62909f448e759995139361fc279f26c1f0ce6",
+                "size": 2414
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/vectorization.cuh",
+                "sha256": "36bc050e7e3923e9f8270d6773058c61dbf802850e5a7f6826f51f992c136baa",
+                "size": 877
+              },
+              {
+                "path": "arctic_inference/csrc/custom_ops/vectorization_utils.cuh",
+                "sha256": "2b4557657134be17d74937b85aa1de904637c4fb8cae6eb67fd8b948f9b31b79",
+                "size": 5981
+              },
+              {
+                "path": "arctic_inference/csrc/suffix_decoding/CMakeLists.txt",
+                "sha256": "d0ba0a52b33dc97466f3fe17a2f0207c7e6e3e2cf8b42409e99c3d12ecf13ff2",
+                "size": 1451
+              },
+              {
+                "path": "arctic_inference/csrc/suffix_decoding/bindings.cc",
+                "sha256": "4fbc28596b4cdfa898e3341468fc6debed5a33bb4d9df37566907071ae60f41d",
+                "size": 3447
+              },
+              {
+                "path": "arctic_inference/csrc/suffix_decoding/int32_map.h",
+                "sha256": "49fd3c8ffb900630f145958211d2e121a3347583ef4cf42910572ad2166e54ef",
+                "size": 13285
+              },
+              {
+                "path": "arctic_inference/csrc/suffix_decoding/suffix_tree.cc",
+                "sha256": "cbd8b63b13fbf0beaab4e8736a54d52891b1aac959c5d292d083d88ed37dfc7c",
+                "size": 38874
+              },
+              {
+                "path": "arctic_inference/csrc/suffix_decoding/suffix_tree.h",
+                "sha256": "d3c9a51fc57a974d680510bee8cfb1ba0a6f5ce6c582ed472cb5ef975b2f5aec",
+                "size": 5867
+              },
+              {
+                "path": "arctic_inference/dynasor/__init__.py",
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "size": 0
+              },
+              {
+                "path": "arctic_inference/dynasor/cot.py",
+                "sha256": "ef268f5a26e4167d2b04424dca5b5dc87ba7dd738e559b46b728b221556d6e85",
+                "size": 6607
+              },
+              {
+                "path": "arctic_inference/dynasor/entropy.py",
+                "sha256": "40247961530771dbe82d33099cf30c0a26fe062f0472056147a55280f67fab68",
+                "size": 7115
+              },
+              {
+                "path": "arctic_inference/dynasor/evaluator.py",
+                "sha256": "8ad33ac6cb9afeba1282b90ae9ca905f9493cf4768397dd6e3861c63bddfa37b",
+                "size": 22845
+              },
+              {
+                "path": "arctic_inference/dynasor/openai_server.py",
+                "sha256": "3b0b78435ed710f13e909b32c00601337e5430da82a9bd9317806200b1a18d3b",
+                "size": 15680
+              },
+              {
+                "path": "arctic_inference/dynasor/util.py",
+                "sha256": "d487fba0b071140d0e54ceccb184a80e0edcf3bda109a2a76fe5f09801e7599f",
+                "size": 2865
+              },
+              {
+                "path": "arctic_inference/dynasor/vllm_server.py",
+                "sha256": "70c9872e567cced5917ea456ba7e5bb67905b8490af6cebd60d1d7d0df742a1a",
+                "size": 3853
+              },
+              {
+                "path": "arctic_inference/embedding/client.py",
+                "sha256": "387e664a67dca923cc8f0bbb6cca77906f0b46fc6db5fd662b83e4b3d4f70d2d",
+                "size": 10012
+              },
+              {
+                "path": "arctic_inference/embedding/generate_proto.py",
+                "sha256": "ef4514875437ea080ace08d4425b476b0db6b46ff6ec50476c0f71f386e4411e",
+                "size": 2403
+              },
+              {
+                "path": "arctic_inference/embedding/proto/inference.proto",
+                "sha256": "833d9be1a931be0e9443fa55f85c199e38f562f25d27ff57b456dce76b7fbb1e",
+                "size": 2049
+              },
+              {
+                "path": "arctic_inference/embedding/proto/python/inference_pb2.py",
+                "sha256": "30a353a2991fbd878b39ec7f4b0923dc02c0e89ef6a1d1f1d796c8e9b8a66b92",
+                "size": 4131
+              },
+              {
+                "path": "arctic_inference/embedding/proto/python/inference_pb2_grpc.py",
+                "sha256": "2b57a56128b149f518b2ef1c4077900569ed332a5bc1e8057dcd5bd30a8f41f7",
+                "size": 8578
+              },
+              {
+                "path": "arctic_inference/embedding/replica.py",
+                "sha256": "7b1827abc6d963f5d5b59932b79f214b7c5e0a7195bb1846a40bae2eb7018129",
+                "size": 17594
+              },
+              {
+                "path": "arctic_inference/embedding/replica_manager.py",
+                "sha256": "333f0f2685b38d94f8fcb939fc9f9d0bd41e0774b5d45c46357c9fede6d01698",
+                "size": 18236
+              },
+              {
+                "path": "arctic_inference/envs.py",
+                "sha256": "6b5fc9c428432415017c56f9184a2a7ddc7589c6f6c2afacc23101ee8b104c78",
+                "size": 1534
+              },
+              {
+                "path": "arctic_inference/op_builder/__init__.py",
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "size": 0
+              },
+              {
+                "path": "arctic_inference/op_builder/builder.py",
+                "sha256": "b565541e618ca4b70225e0d5b08543bbc88faf7eca7def4259f29a4b3a89e121",
+                "size": 22641
+              },
+              {
+                "path": "arctic_inference/op_builder/swiftkv_ops_builder.py",
+                "sha256": "c99047af2584c8ec0f6680fbb1ece8c233d55a2ac32f65630de8dd97f8c40980",
+                "size": 939
+              },
+              {
+                "path": "arctic_inference/patching.py",
+                "sha256": "89c16caf99911c7bde8a53cd44a7be22634d5e2743d92f36aa72c5e54285dd91",
+                "size": 5106
+              },
+              {
+                "path": "arctic_inference/py_custom_ops.py",
+                "sha256": "2f4850cc5893eefc9e7702c9b39ec3788803257e7ca1b4ab767fbd9dbcf752fc",
+                "size": 3716
+              },
+              {
+                "path": "arctic_inference/suffix_decoding/_C.cpython-312-aarch64-linux-gnu.so",
+                "sha256": "3f35375aa20610e33bd839a051f9d15f0dd75065874554af90584c999e87864e",
+                "size": 176808
+              },
+              {
+                "path": "arctic_inference/suffix_decoding/__init__.py",
+                "sha256": "e2736d5f6d3472e74f2f25795de8f754ddb3279e9cf497b13f54e8fa164dd5bd",
+                "size": 731
+              },
+              {
+                "path": "arctic_inference/suffix_decoding/cache.py",
+                "sha256": "91c48e6cb335edbd202c8f440e5766df54315ea2d8e40decf8f7a130f3a5e126",
+                "size": 14502
+              },
+              {
+                "path": "arctic_inference/suffix_decoding/simulator.py",
+                "sha256": "ed576d5e1c8b85a2a3ac82031332337f34ee0c894ed2d3fee54d72922591e485",
+                "size": 20311
+              },
+              {
+                "path": "arctic_inference/utils.py",
+                "sha256": "9b2634a1afaf7b2d94fe12eeac4e0b1dc554f85e431eaf43306d513fda514ea0",
+                "size": 1075
+              },
+              {
+                "path": "arctic_inference/vllm/__init__.py",
+                "sha256": "061df7164491227e3d9816ec4a90fa2bc25c65ecb6471f249f1831f4240125c3",
+                "size": 613
+              },
+              {
+                "path": "arctic_inference/vllm/args.py",
+                "sha256": "a98ea757578ce2f01060a0dc164b07d799a08fb36e66f627a0b9f2bd40f19ccd",
+                "size": 5960
+              },
+              {
+                "path": "arctic_inference/vllm/config.py",
+                "sha256": "a16007c84a9a83b10229462623df8a8fac465c4bc9c48e688f9f6cb0319c7101",
+                "size": 4945
+              },
+              {
+                "path": "arctic_inference/vllm/model_runner.py",
+                "sha256": "2bdb619a86b47a50e04a7615759e48c0ea2b9dccaab09cc9d886c1cb909ee9c9",
+                "size": 50378
+              },
+              {
+                "path": "arctic_inference/vllm/patches.py",
+                "sha256": "da60eff50d262c16c4372a79a55b2dbfe66e15d2da0f06becf586a80134c8a21",
+                "size": 4369
+              },
+              {
+                "path": "arctic_inference/vllm/plugin.py",
+                "sha256": "d821c578234c8fc5e14938f683b16f88aed651919c89339d8e5328b1adb95c72",
+                "size": 1622
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/__init__.py",
+                "sha256": "ffafc758a2a63f95d78247b26c5a3169d1395da79b44dc1b6a5a68011f0c79b3",
+                "size": 611
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/arctic_proposer.py",
+                "sha256": "efa1237c7a59e648bd84669e30bd11922c04c68c1962af8d7c88403d0af000e4",
+                "size": 6653
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/arctic_speculator.py",
+                "sha256": "551566c5c476137a3bf1984511bb3ebdcef23ed89e38cb91fad7c2c540796ecc",
+                "size": 38524
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/fp8.py",
+                "sha256": "653f168f0c51d0c6fa8c8ad8f9a0b802dab1696e992611a884d27a20cb665c66",
+                "size": 15349
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/logits_processor_opt.py",
+                "sha256": "21560d3d2f2f0c49d75d526f98a133f680094c4acf833ff66237dacf1d2e99fb",
+                "size": 3893
+              },
+              {
+                "path": "arctic_inference/vllm/spec_dec/vocab_parallel_embedding.py",
+                "sha256": "a2a41adf975515c43194793bc3037c0b6af98e5ebed3800dbb3806f3f19cc9b9",
+                "size": 22887
+              },
+              {
+                "path": "arctic_inference/vllm/stats.py",
+                "sha256": "b60ebfe97f525b7cb77152c2c79faa4edfcf68636bb1e6973508950950a1ab8a",
+                "size": 2487
+              },
+              {
+                "path": "arctic_inference/vllm/structured_output.py",
+                "sha256": "cbb5ac6fd3fe18cdf0200dff0ff334a639bdcb965141f024b9d4f2e7ff1cb290",
+                "size": 1445
+              },
+              {
+                "path": "arctic_inference/vllm/swiftkv/__init__.py",
+                "sha256": "8b19cf03ced93cd5b0e1015dc6f5975f508055b48c0f9cdff1616b2e7cb19ea6",
+                "size": 703
+              },
+              {
+                "path": "arctic_inference/vllm/swiftkv/llama_swiftkv.py",
+                "sha256": "20897ab43fa39660684d04ec1f30757708bcf61d86c4c7e395522b3ad7c4b8c9",
+                "size": 38039
+              },
+              {
+                "path": "arctic_inference/vllm/ulysses.py",
+                "sha256": "cb84203e23c1eaa75ac9977b2a7dd3879d1e9b9ec5c88c1107ba5430b5038415",
+                "size": 21148
+              }
+            ],
+            "name": "arctic_inference",
+            "pinned_source_sha256": "e4f4d5a4f25c5ba2b0d1641d9a66f0d38cab5859ff3571eb4c59898bce0dca50",
+            "pinned_source_url": "https://files.pythonhosted.org/packages/a9/c9/9ade0a7ec01f98b5340f1d0e3699f0fb2a686fe1c8594f1e7055607b3d0e/arctic_inference-0.1.2.tar.gz",
+            "version": "0.1.2"
+          },
+          "canonical_format": "utf8-json-sort-keys-compact-v1",
+          "forked_fa2": {
+            "byte_identical": true,
+            "destination": {
+              "path": "/usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so",
+              "sha256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+              "size": 300123792
+            },
+            "source": {
+              "path": "/tmp/fr13_fork_fa2.so",
+              "sha256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+              "size": 300123792
+            }
+          },
+          "overall_canonical_sha256": "1289c82bd59f6f44a2d80a200e6d96c0b50d5c83d51bfecd339a0489d7d603b9",
+          "python": {
+            "implementation": "CPython",
+            "version": "3.12.13"
+          },
+          "schema": "fr13-fixed32-runtime-attestation-v1",
+          "vllm": {
+            "module_path": "/usr/local/lib/python3.12/dist-packages/vllm/__init__.py",
+            "version": "0.19.2rc1.dev134+gfe9c3d6c5"
+          }
+        }
+      },
+      "boot_excerpt": {
+        "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/docker_full.log",
+        "first280_selected_lines": []
+      }
+    }
+  ]
+}

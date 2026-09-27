@@ -1,0 +1,13 @@
+id,category,selected,citation,reason,execution_status
+native5,strong_chain,conditional,qwen2026qwen36fp8,Native control in historical task campaigns and FP8 E1; matched current NVFP4 task comparison proposed,E1_audit_only_performance; current_matched_tasks_not_launched
+native11,longer_chain_control,conditional,lumo2026cost,Longer native chain in archived controls; optional current task comparator,E1_audit_only_performance; current_matched_tasks_not_launched
+tree_agent,method,yes,lumo2026archive,NVFP4 Hydra27 FA2 splitK4 graph and cache enabled ten-task SWE Verified Astropy deployment,pooled_decode_descriptive_comparison_complete
+tree_qualification,mechanism_reference,yes,lumo2026archive,FP8 Cat10 stock TREE_ATTN flat-map synchronous eager cache-off route,numerical_qualification_complete; E1_audit_only_performance
+autoregressive,foundational,conditional,leviathan2023fast,Context baseline; not replacement for chain,planned_if_requested
+tree_no_kv_remap,ablation,yes,lumo2026stateless,Accepted-path KV witness,historical_design_witness; fresh_E2_backend_specific_checks
+tree_interleaved,ablation,yes,lumo2026spine,Controlled spine numerical witness,historical_FA2_layout_witness_only; not_a_fresh_TreeATtn_timing_ablation
+sglang_eagle,direct,yes_descriptive,zheng2024sglang,Two completed NVFP4 SWE Verified Astropy tasks shared with Sr12 Cqc16 Cqc15; common pooled decode; different revisions and caps,pooled_decode_descriptive_comparison_complete; paired_causal_comparison_not_run
+bole,direct,conditional,wang2026bole,Same problem and overlapping platform; implementation feasibility first,literature_only
+treewy,direct,conditional,ghantasala2026treewy,Alternative verifier and state reconstruction,literature_only
+replayssm,chain_state,conditional,replayssm2026,Alternative state materialization policy,literature_only
+stree,foundational,no,wu2025stree,Different recurrence; related work not direct GDN control,literature_only

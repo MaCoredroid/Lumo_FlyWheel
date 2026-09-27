@@ -1,0 +1,25 @@
+{
+  "created_utc": "2026-09-26T18:47:42.154146+00:00",
+  "status": "PASS",
+  "scope": "Remove only the user-specified ten-task behavior sentence from the abstract; retain results section.",
+  "removed_sentence": "In a separate ten-task deployment, all tree-served agent attempts terminated and produced nonempty patches, with no degeneration detected by the recorded trace checks.",
+  "exact_requested_edit_verified": true,
+  "other_paper_sources_unchanged": true,
+  "pages": 10,
+  "latex_errors": 0,
+  "overfull_boxes": 0,
+  "latex_warnings": 0,
+  "underfull_boxes": 2,
+  "visual_qa": "All 10 rendered pages inspected after reflow; no clipping, overlap, or figure/table overflow.",
+  "sources": {
+    "main.tex": "7fd3e3966a92e462122fc3700e39100c5abb766a663da1fcfd61253e0066eaf5",
+    "abstract.tex": "10d502dfad6cf4b21ab97e6573d282e2f3ce7c439dd7124324d4465b7b3a3f63",
+    "results/agent-workload/case-study.tex": "091f567a2dc1367c67a31947c11608c53457920983751a603a62df07773dab35",
+    "main.pdf": "9213e4c6f7401442149947ab80bc9ef46ee4a84347635e8fa43659643644c79d",
+    "ref.bib": "2ad620c7496f093482d9beb43b123c5996a50784c72e48464cbcd8cb297ece8e",
+    "figures/pipeline.tikz": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c",
+    "figures/pipeline-preview.png": "1cb62f14b0e5d192c3f2cc8c90de10ed3459184a0a44887ff0532c05252db2bc"
+  },
+  "prior_delivery_receipt": "p0/monitor/before-abstract-trim-20260926T184612Z/artifacts/FINAL-DELIVERY.json",
+  "new_inference_launched": false
+}

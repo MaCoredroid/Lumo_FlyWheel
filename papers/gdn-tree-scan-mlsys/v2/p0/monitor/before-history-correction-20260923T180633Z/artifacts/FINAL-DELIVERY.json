@@ -1,0 +1,112 @@
+{
+  "completed_utc": "2026-09-23T17:56:37.721650+00:00",
+  "status": "COMPLETE_AGENT_BEHAVIOR_ABSTRACT_REVISION",
+  "scope": "Abstract centered on observed agent behavior and defined decode statistic; no comparative speed or unchanged-quality claim",
+  "paper_archive": {
+    "file": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/papers/gdn-tree-scan-mlsys/v2/artifacts/paper-agent-abstract-20260923T175633Z.tar.gz",
+    "sha256": "046f00d0222b18a92cb41ee2f192e9f94710f080bd545ce4343f8db590a86425",
+    "files": 340,
+    "bytes": 2179663
+  },
+  "paper_manifest_sha256": "bcc5a7ec00c6b922b33555b6eb8a04a23ec6f7c36d80c238c71d08b1668be51b",
+  "paper": {
+    "main.tex": "bf8f1f47a95e95e0a4732691dbcf56d86f2150b4a9da70d6b762005baf10e90c",
+    "abstract.tex": "4bedfb502db02d1f23ffe61461036d125748bf0fd6a7e959f6f9c5d21669ed1b",
+    "results/agent-workload/case-study.tex": "997bceba4787944c56327822d4655e73c92a8e8c56805ffec9bf42098c538312",
+    "main.pdf": "2af86425ddc04d68a1fe72f9691ef58fb7cd287bdf14eadaeb697815bc86a796",
+    "ref.bib": "88ceccadbd0376d694f6037181ebf0dacd71f0936558d6c88f856666ccc05fc8"
+  },
+  "all_companions": [
+    {
+      "file": "e7a-evidence-20260922T0709Z.tar.gz",
+      "sha256": "776ddcaf5d938cc665bafca20f46e29d1e9a550a34914d798e78f70636cd180b",
+      "bytes": 268871594,
+      "manifest": "e7a-evidence-20260922T0709Z.tar.gz.manifest.json",
+      "manifest_sha256": "50dd06ea612e00caec86e84db0b49321d3fd9878e8e4f79d68bb95dfa88c0e7d"
+    },
+    {
+      "file": "e7b-diagnostics-20260922T0801Z.tar.gz",
+      "sha256": "c573b5064d944547df280e314520a97dd0c10678fb877c8d75b3a898d548ad05",
+      "bytes": 2179735658,
+      "manifest": "e7b-diagnostics-20260922T0801Z.tar.gz.manifest.json",
+      "manifest_sha256": "f36db7f4f0b16f9f43a0d70b535ca664a66f1ef447789985b82f3a78db8b4682"
+    },
+    {
+      "file": "selected-route-20260922T0930Z.tar.gz",
+      "sha256": "7f127f0c2e8198f067eb0f59737e1a58afc34991aa562dacbc11d7d147d25a30",
+      "bytes": 1735458237,
+      "manifest": "selected-route-20260922T0930Z.tar.gz.manifest.json",
+      "manifest_sha256": "d1fe338b3bae56a755725a622fa679692377156b56be0d85952fd654d9e386b8"
+    },
+    {
+      "file": "e1-timing-20260922T1225Z.tar.gz",
+      "sha256": "bf50b33386eb9614cf7874039f60cb62a484ee62bc0882e32ab32731857318d6",
+      "bytes": 12955447,
+      "manifest": "e1-timing-20260922T1225Z.tar.gz.manifest.json",
+      "manifest_sha256": "47936b8a7cb22bf389b452ce2f013e5092d9f9c34b639b640f54768b3ecd4414"
+    },
+    {
+      "file": "e8-single-logits-20260922T2255Z.tar.gz",
+      "sha256": "b4c0a5cbcd2592ce5ddfdc823243f0e99dc15ef412d238a096068d6bae11ebf4",
+      "bytes": 16237576,
+      "manifest": "e8-single-logits-20260922T2255Z.tar.gz.manifest.json",
+      "manifest_sha256": "d2512b2141628c77746d5f1ddc0de025bb3de525fba5dd375226a60427c70439"
+    }
+  ],
+  "canonical_build": {
+    "path": "p0/monitor/2026-09-23-agent-abstract-build.json",
+    "sha256": "2d15851eeece6c6f395b100820d9af5e13c67c6d6d8cae06c8e82a9b8f687e10",
+    "pages": 12
+  },
+  "extracted_rebuild": {
+    "directory": "/private/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/lumo-agent-abstract-extracted-nif9e5db",
+    "files_verified": 340,
+    "latex_build": "PASS"
+  },
+  "reviews": [
+    {
+      "path": "p0/monitor/paper-agent-workload-redteam.md",
+      "sha256": "8676789c647376cedb0e67df56098a4396eba736e2746ed99ac23ea24071affc",
+      "verdict": "PASS"
+    },
+    {
+      "path": "p0/monitor/paper-agent-metrics-redteam.md",
+      "sha256": "4fff7d7d38bd37d61e9d7b8c2db881b8438a3357ca8256f539a1ca454346e87f",
+      "verdict": "PASS"
+    },
+    {
+      "path": "notes/agent-behavior-abstract-evidence-2026-09-23.md",
+      "sha256": "748ba0786b0ebb8d6f2f86d377754295490b79c6b5f2d87e794673a1e53c4001",
+      "verdict": "PASS"
+    }
+  ],
+  "workload_evidence": {
+    "raw_manifest": "results/agent-workload/raw/cqc10/MANIFEST.json",
+    "raw_manifest_sha256": "01c3922b06377c85d86b213bded399af377809f22d0df63829c5358ef7a86bcf",
+    "original_or_explicit_projection_files": 139,
+    "whole_evidence_manifest_sha256": "75200c9ba4538ae8d1c9889ac798e1604dc6cbb8e98646568e2b9a741b00980c",
+    "metric_reducer_replay": "independent and parent outputs exactly agree; extracted replay agrees"
+  },
+  "new_inference_launched": false,
+  "automation_changed": false,
+  "no_publication_or_submission": true,
+  "comparison_experiment": {
+    "status": "PROPOSED_NOT_LAUNCHED",
+    "plan": "review-experiments.md",
+    "sha256": "565b1721fba4c6f12016350e6b419b99ff77a56203a151f1c38c2cb366a6274b"
+  },
+  "limits": [
+    "Cqc10 is an August24 selected remainder of resumed developmental campaign, not new September inference or full SWE-bench score.",
+    "One completed ten-task configuration, no matched ten-task native arm.",
+    "Request-weighted inverse mean TPOT is not aggregate task throughput or task speedup.",
+    "FP8 Cat10 qualification does not qualify NVFP4 graphs/cache/stochastic route universally.",
+    "Full model/runtime/evaluator dependencies not bundled; two configuration receipts are explicit sanitized projections."
+  ],
+  "prior_delivery_receipt": "p0/monitor/before-agent-abstract-20260923T175133Z/artifacts/FINAL-DELIVERY.json",
+  "remote_copy": "No remote paper sync performed in this revision; local PDF/archive is authoritative.",
+  "behavior_evidence": {
+    "manifest": "results/agent-workload/BEHAVIOR_MANIFEST.json",
+    "sha256": "60606fd37fa463844715cf586d824611c1b30587dd68c8811e87ccec7b6ccb59",
+    "claim": "No detected degeneration in10selectedtasktraces under explicitly limited diagnostic; prior positive retained"
+  }
+}

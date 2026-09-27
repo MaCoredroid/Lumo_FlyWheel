@@ -210,8 +210,8 @@
  author={{Dao AI Lab and NVIDIA}},
  title={{ReplaySSM: Cache SSM Inputs Instead of State}},
  year={2026},
- howpublished={\url{https://github.com/vllm-project/vllm/issues/47572}},
- note={Implementation RFC; accessed 2026-09-21}
+ howpublished={\url{https://dao-lab.ai/blog/2026/replayssm/}},
+ note={Author technical report; accessed 2026-09-26}
 }
 @misc{lumo2026archive,
  author={Ma, Zhiyuan},
@@ -219,4 +219,96 @@
  year={2026},
  howpublished={\url{https://github.com/MaCoredroid/Lumo_FlyWheel/tree/984f613d7885d9bf7898866827552b68a3199d0c}},
  note={Revision evidence snapshot; individual campaigns retain their own run identities}
+}
+
+
+@misc{oda2026marginals,
+ title={{Trees from Marginals: Autoregressive drafting with factorized priors}},
+ author={Oda, Yuma and Mathieu, Ryan and Knyazhitskiy, Roman and Chakhvadze, Artur},
+ year={2026}, eprint={2607.06763}, archivePrefix={arXiv},
+ url={https://arxiv.org/abs/2607.06763v2}, note={Version 2, July 12, 2026; first submitted July 7, 2026}
+}
+@misc{wang2026specla,
+ title={{SpecLA: Efficient Speculative Decoding for Linear-Attention Models}},
+ author={Wang, Zhibin and Han, Xuying and Yang, Zhaohua and Liu, Fuliang and Li, Xue and Gu, Rong and Zhong, Sheng and Tian, Chen},
+ year={2026}, eprint={2607.16673}, archivePrefix={arXiv}, url={https://arxiv.org/abs/2607.16673v1}
+}
+@inproceedings{wu2024snakes,
+ title={{Snakes and Ladders: Accelerating SSM Inference with Speculative Decoding}},
+ author={Wu, Yangchao and Dukler, Yonatan and Trager, Matthew and Achille, Alessandro and Xia, Wei and Soatto, Stefano},
+ booktitle={Proceedings of the 4th NeurIPS Efficient Natural Language and Speech Processing Workshop},
+ volume={262}, pages={292--304}, publisher={PMLR}, year={2024}, url={https://proceedings.mlr.press/v262/wu24a.html}
+}
+@misc{dao2023flashdecoding,
+ title={{Flash-Decoding for long-context inference}}, author={Dao, Tri and Haziza, Daniel and Massa, Francisco and Sizov, Grigory},
+ year={2023}, howpublished={\url{https://pytorch.org/blog/flash-decoding/}}, note={October 13, 2023}
+}
+@misc{ye2025flashinfer,
+ title={{FlashInfer: Efficient and Customizable Attention Engine for LLM Inference Serving}},
+ author={Ye, Zihao and Chen, Lequn and Lai, Ruihang and Lin, Wuwei and Zhang, Yineng and Wang, Stephanie and Chen, Tianqi and Kasikci, Baris and Grover, Vinod and Krishnamurthy, Arvind and Ceze, Luis},
+ year={2025}, eprint={2501.01005}, archivePrefix={arXiv}, url={https://arxiv.org/abs/2501.01005}
+}
+@misc{yao2024deft,
+ title={{DeFT: Decoding with Flash Tree-attention for Efficient Tree-structured LLM Inference}},
+ author={Yao, Jinwei and Chen, Kaiqi and Zhang, Kexun and You, Jiaxuan and Yuan, Binhang and Wang, Zeke and Lin, Tao},
+ year={2025}, eprint={2404.00242}, archivePrefix={arXiv}, url={https://arxiv.org/abs/2404.00242}
+}
+@misc{he2025determinism,
+ title={{Defeating Nondeterminism in LLM Inference}}, author={He, Horace},
+ year={2025}, howpublished={\url{https://thinkingmachines.ai/blog/defeating-nondeterminism-in-llm-inference/}}, note={Thinking Machines Lab, September 10, 2025}
+}
+@misc{oliaro2025suffix,
+ title={{SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications}},
+ author={Oliaro, Gabriele and Jia, Zhihao and Campos, Daniel and Qiao, Aurick},
+ year={2025}, eprint={2411.04975}, archivePrefix={arXiv}, url={https://arxiv.org/abs/2411.04975v3}
+}
+@misc{arctic2026suffix,
+ title={{Suffix Decoding}}, author={{Snowflake Arctic Inference}}, year={2026},
+ howpublished={\url{https://arcticinference.readthedocs.io/en/latest/suffix-decoding.html}}, note={Implementation documentation; accessed September 24, 2026}
+}
+@misc{hu2024sam,
+ title={{SAM Decoding: Speculative Decoding via Suffix Automaton}},
+ author={Hu, Yuxuan and Wang, Ke and Zhang, Xiaokang and Zhang, Fanjin and Li, Cuiping and Chen, Hong and Zhang, Jing},
+ year={2024}, eprint={2411.10666}, archivePrefix={arXiv}, url={https://arxiv.org/abs/2411.10666v3}
+}
+@misc{pan2024marconi,
+ title={{Marconi: Prefix Caching for the Era of Hybrid LLMs}},
+ author={Pan, Rui and Wang, Zhuang and Jia, Zhen and Karakus, Can and Zancato, Luca and Dao, Tri and Wang, Yida and Netravali, Ravi},
+ year={2025}, eprint={2411.19379}, archivePrefix={arXiv}, url={https://arxiv.org/abs/2411.19379}
+}
+@misc{li2025eagle3,
+ title={{EAGLE-3: Scaling up Inference Acceleration of Large Language Models via Training-Time Test}},
+ author={Li, Yuhui and Wei, Fangyun and Zhang, Chao and Zhang, Hongyang},
+ year={2025}, eprint={2503.01840}, archivePrefix={arXiv}, url={https://arxiv.org/abs/2503.01840}
+}
+@misc{chen2026dflash,
+ title={{DFlash: Block Diffusion for Flash Speculative Decoding}},
+ author={Chen, Jian and Liang, Yesheng and Liu, Zhijian},
+ year={2026}, eprint={2602.06036}, archivePrefix={arXiv}, url={https://arxiv.org/abs/2602.06036}
+}
+@misc{ghantasala2026treewycode,
+ author={Ghantasala, Sneha Murthy},
+ title={{TreeWY: Tree Speculative Decoding for Hybrid GDN Models}},
+ year={2026},
+ howpublished={\url{https://github.com/vllm-project/vllm/issues/54080}},
+ note={Author implementation RFC; linked source revision b073ed6cacfa1cf5ae23111854729e662a72a6d1; accessed September 26, 2026}
+}
+@misc{yang2026onela,
+ author={Yang, Xiangrui and Peng, Cheng and Zhao, Yunfeng and Zeng, Liang and Hu, Ao and Yang, Jiawei and Wang, Shengzhe and Lv, Jingshan and Liang, Xiao and Yang, Chen and Liu, Jiaqiang and Qiu, Yiming},
+ title={{OneLA: Scaling Linear-Attention Decoding to Large Beams in Generative Recommendation}},
+ year={2026}, eprint={2609.12399}, archivePrefix={arXiv},
+ url={https://arxiv.org/abs/2609.12399v1}
+}
+@inproceedings{pan2025fasttree,
+ author={Pan, Zaifeng and Ding, Yitong and Guan, Yue and Wang, Zheng and Yu, Zhongkai and Tang, Xulong and Wang, Yida and Ding, Yufei},
+ title={{FastTree: Optimizing Attention Kernel and Runtime for Tree-Structured LLM Inference}},
+ booktitle={Proceedings of Machine Learning and Systems}, volume={7}, year={2025},
+ url={https://proceedings.mlsys.org/paper_files/paper/2025/hash/96894468eb44631a32d7ebd56f9892c7-Abstract-Conference.html}
+}
+@misc{weaver2026code,
+ author={{Mirai}},
+ title={{Weaver SGLang implementation}},
+ year={2026},
+ howpublished={\url{https://github.com/trymirai/sglang/tree/aeac03f0d4c8789559411be95c5c127bdff24d1c}},
+ note={Pinned author source; accessed September 26, 2026}
 }

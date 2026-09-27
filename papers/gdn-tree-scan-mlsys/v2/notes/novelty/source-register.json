@@ -1,0 +1,207 @@
+{
+  "review_date": "2026-09-24",
+  "scope": "Current Hydra27 claim-set novelty audit",
+  "source_policy": "Primary sources only for conclusions; secondary summaries used solely to discover original sources",
+  "sources": [
+    {
+      "id": "weaver",
+      "title": "Trees from Marginals",
+      "url": "https://arxiv.org/pdf/2607.06763v2",
+      "version_date": "2026-07-12",
+      "locations": "3.4.1-3.4.2, pp.12-15",
+      "relevance": "Triangular tree verify; selected path recurrence replay; fixed shapes; direct overlap"
+    },
+    {
+      "id": "specla",
+      "title": "SpecLA",
+      "url": "https://arxiv.org/html/2607.16673v1",
+      "version_date": "2026-07-18",
+      "locations": "4.1-4.3; 5.1-5.2",
+      "relevance": "Sequential V-tiles; chain decomposition; exported boundary states; delayed accepted factors"
+    },
+    {
+      "id": "snakes",
+      "title": "Snakes and Ladders",
+      "url": "https://proceedings.mlr.press/v262/wu24a.html",
+      "version_date": "2024",
+      "locations": "3.3 in linked paper",
+      "relevance": "Activation replay predates present replay framing"
+    },
+    {
+      "id": "stree",
+      "title": "STree",
+      "url": "https://arxiv.org/html/2505.14969v1",
+      "version_date": "2025-05-20",
+      "locations": "3-4",
+      "relevance": "Hybrid SSM tree ancestry and replay; transition differs from GDN"
+    },
+    {
+      "id": "bole",
+      "title": "Bole",
+      "url": "https://arxiv.org/html/2608.01651v1",
+      "version_date": "2026-08-03",
+      "locations": "IV-V; VI-D",
+      "relevance": "Finite polynomial solve; factorized commit; coherent hybrid publication; agent replay"
+    },
+    {
+      "id": "treewy",
+      "title": "TreeWY",
+      "url": "https://arxiv.org/html/2608.20961v1",
+      "version_date": "2026-08-21",
+      "locations": "3-5",
+      "relevance": "Triangular solve; pseudo-value reconstruction; stated numerical and graph/cache scope"
+    },
+    {
+      "id": "replayssm",
+      "title": "ReplaySSM",
+      "url": "https://dao-lab.ai/blog/2026/replayssm/",
+      "version_date": "2026",
+      "locations": "3-5 and Appendix",
+      "relevance": "Buffered inputs and delayed state materialization; chain GDN output formulation"
+    },
+    {
+      "id": "replayrfc",
+      "title": "ReplaySSM RFC",
+      "url": "https://github.com/vllm-project/vllm/issues/47572",
+      "version_date": "2026",
+      "locations": "Issue body and implementation links",
+      "relevance": "Implementation availability and scope; not a paper date"
+    },
+    {
+      "id": "flashdecoding",
+      "title": "Flash-Decoding",
+      "url": "https://pytorch.org/blog/flash-decoding/",
+      "version_date": "2023-10-13",
+      "locations": "A faster attention for decoding",
+      "relevance": "Split KV; partial outputs/LSE; rescale-combine"
+    },
+    {
+      "id": "flashinfer",
+      "title": "FlashInfer",
+      "url": "https://arxiv.org/html/2501.01005v1",
+      "version_date": "2025-01",
+      "locations": "3.4; Appendix A",
+      "relevance": "Reusable graph workspaces; fused head/query reuse; split-KV"
+    },
+    {
+      "id": "deft",
+      "title": "DeFT",
+      "url": "https://arxiv.org/html/2404.00242v2",
+      "version_date": "2025",
+      "locations": "3.2-3.3; Appendix A.8",
+      "relevance": "Tree KV flattening and grouping; IO motivation differs from numerical spine placement"
+    },
+    {
+      "id": "invariance",
+      "title": "Defeating Nondeterminism",
+      "url": "https://thinkingmachines.ai/blog/defeating-nondeterminism-in-llm-inference/",
+      "version_date": "2025-09-10",
+      "locations": "Batch-invariant attention",
+      "relevance": "Reduction schedules and cache layout affect finite-precision results"
+    },
+    {
+      "id": "llm42",
+      "title": "LLM-42",
+      "url": "https://arxiv.org/html/2601.17768v2",
+      "version_date": "2026",
+      "locations": "4.2-4.4",
+      "relevance": "Fixed-shape verified speculation for determinism; different objective and guarantee"
+    },
+    {
+      "id": "suffix",
+      "title": "SuffixDecoding",
+      "url": "https://arxiv.org/abs/2411.04975v3",
+      "version_date": "2025-10-07",
+      "locations": "Abstract and method",
+      "relevance": "Suffix proposals for repetitive agent workloads; not a new Lumo primitive"
+    },
+    {
+      "id": "arctic",
+      "title": "Arctic suffix documentation",
+      "url": "https://arcticinference.readthedocs.io/en/latest/suffix-decoding.html",
+      "version_date": "accessed 2026-09-24",
+      "locations": "Combining with Arctic Speculator",
+      "relevance": "Existing neural/retrieval source selection"
+    },
+    {
+      "id": "sam",
+      "title": "SAM Decoding",
+      "url": "https://arxiv.org/abs/2411.10666v3",
+      "version_date": "2024-12-16",
+      "locations": "Abstract and EAGLE-2 integration",
+      "relevance": "Neural plus suffix proposals established"
+    },
+    {
+      "id": "marconi",
+      "title": "Marconi",
+      "url": "https://arxiv.org/html/2411.19379v1",
+      "version_date": "2024-11-28",
+      "locations": "3-4",
+      "relevance": "Hybrid prefix-state caching is established"
+    },
+    {
+      "id": "eagle3",
+      "title": "EAGLE-3",
+      "url": "https://arxiv.org/abs/2503.01840",
+      "version_date": "2025-03-03",
+      "locations": "Abstract/method",
+      "relevance": "Draft-model baseline context; not a GDN state-publication mechanism"
+    },
+    {
+      "id": "dflash",
+      "title": "DFlash",
+      "url": "https://arxiv.org/abs/2602.06036",
+      "version_date": "2026-02-05",
+      "locations": "Abstract/method",
+      "relevance": "Block-parallel draft-model baseline context"
+    },
+    {
+      "id": "weavercode",
+      "title": "Weaver author SGLang fork",
+      "url": "https://github.com/trymirai/sglang/tree/aeac03f0d4c8789559411be95c5c127bdff24d1c",
+      "version_date": "2026-09-08 commit",
+      "locations": "gdn_backend.py; chunk_tree_verify.py",
+      "relevance": "Independent reviewer inspected operand stash and selected replay code; this code date is distinct from July paper"
+    },
+    {
+      "id": "sgaccept",
+      "title": "SGLang GPU acceptance",
+      "url": "https://github.com/sgl-project/sglang/blob/cfceb83d057624dd8a8da5fd29e394ccb3dfe068/sgl-kernel/csrc/speculative/speculative_sampling.cuh",
+      "version_date": "2025-06 revision",
+      "locations": "30-96",
+      "relevance": "Device accepted-index/count products; not proof of same sampling law"
+    },
+    {
+      "id": "torchargmax",
+      "title": "PyTorch argmax",
+      "url": "https://docs.pytorch.org/docs/2.9/generated/torch.argmax.html",
+      "version_date": "2.9 docs",
+      "locations": "Note",
+      "relevance": "First maximum contract"
+    },
+    {
+      "id": "torchtopk",
+      "title": "PyTorch topk",
+      "url": "https://docs.pytorch.org/docs/2.9/generated/torch.topk.html",
+      "version_date": "2.9 docs",
+      "locations": "Note",
+      "relevance": "Tied indices are not a stable API contract"
+    },
+    {
+      "id": "oursarxiv",
+      "title": "GDN Tree-Scan public v1",
+      "url": "https://arxiv.org/abs/2609.23900v1",
+      "version_date": "2026-09-20",
+      "locations": "Submission history only",
+      "relevance": "Public paper chronology; its older rates are not reused"
+    },
+    {
+      "id": "mamballama",
+      "title": "The Mamba in the Llama",
+      "url": "https://arxiv.org/html/2408.15237v1",
+      "version_date": "2024-08-27",
+      "locations": "4.2, Algorithm 2 and Figure 2; independent recurrent review",
+      "relevance": "Lazy recurrent advancement/recomputation in hybrid chain speculation"
+    }
+  ]
+}

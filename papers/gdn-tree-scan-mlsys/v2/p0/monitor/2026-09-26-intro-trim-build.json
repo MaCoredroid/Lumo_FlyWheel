@@ -1,0 +1,25 @@
+{
+  "created_utc": "2026-09-26T18:53:11.169726+00:00",
+  "status": "PASS",
+  "scope": "Remove only the user-specified novelty disclaimer clause from the introduction.",
+  "removed_clause": "; we do not claim the first hybrid-tree system, a new GDN recurrence, or the invention of accepted-path replay or chain decomposition",
+  "exact_requested_edit_verified": true,
+  "other_paper_sources_unchanged": true,
+  "pages": 10,
+  "latex_errors": 0,
+  "overfull_boxes": 0,
+  "latex_warnings": 0,
+  "underfull_boxes": 2,
+  "visual_qa": "All 10 rendered pages inspected after reflow; no clipping, overlap, or figure/table overflow.",
+  "sources": {
+    "main.tex": "bcb973a5c6018a3399bb3d7cb7a62a57b33600c9dd7df7982be9854b1b8aab0e",
+    "abstract.tex": "10d502dfad6cf4b21ab97e6573d282e2f3ce7c439dd7124324d4465b7b3a3f63",
+    "results/agent-workload/case-study.tex": "091f567a2dc1367c67a31947c11608c53457920983751a603a62df07773dab35",
+    "main.pdf": "26ed7d2044b4a16f8c1c173c726c5dfb71de1c3be7dbd697f49db92c896b38ff",
+    "ref.bib": "2ad620c7496f093482d9beb43b123c5996a50784c72e48464cbcd8cb297ece8e",
+    "figures/pipeline.tikz": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c",
+    "figures/pipeline-preview.png": "1cb62f14b0e5d192c3f2cc8c90de10ed3459184a0a44887ff0532c05252db2bc"
+  },
+  "prior_delivery_receipt": "p0/monitor/before-intro-trim-20260926T185156Z/artifacts/FINAL-DELIVERY.json",
+  "new_inference_launched": false
+}

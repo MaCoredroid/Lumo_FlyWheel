@@ -1,0 +1,36 @@
+{
+  "review_date": "2026-09-24",
+  "parent_queries": [
+    "\"Gated DeltaNet\" \"tree\" speculative verification",
+    "speculative decoding recurrent hybrid tree verification replay state 2026",
+    "\"tree\" \"attention\" \"numerical\" \"layout\" speculative",
+    "DFlash block diffusion speculative decoding hybrid Gated DeltaNet",
+    "\"Trees from Marginals\"",
+    "\"Gated DeltaNet\" \"rollback-free\"",
+    "\"DeFT\" \"tree\" attention arxiv",
+    "\"speculative\" \"batch invariant\" numerical attention",
+    "\"Trees from Marginals\" github Weaver",
+    "\"Gated DeltaNet\" \"tree\" \"verification\" after:2026-08-20 before:2026-09-25",
+    "site:arxiv.org speculative tree verification gated delta kernel 2026 \"state\"",
+    "\"Gated DeltaNet\" \"speculative\" \"numerical\"",
+    "\"spine-first\" \"attention\" -site:linkedin.com",
+    "\"tree\" \"masked\" \"batch-invariant\"",
+    "\"SpecLA\" \"Speculative Decoding for Linear Attention\"",
+    "\"Snakes and Ladders\" \"Speculative\" PMLR",
+    "\"SuffixDecoding\" arxiv Snowflake",
+    "\"FlashInfer\" arxiv 2501.01005",
+    "site:arxiv.org \"speculative\" \"Gated Delta\" -TreeWY -Bole -\"Tree-Scan\" -\"Marginals\" -SpecLA",
+    "\"tree verification\" \"replay\" \"GDN\"",
+    "site:arxiv.org \"Marconi\" \"Prefix Caching\"",
+    "site:arxiv.org \"EAGLE-3\""
+  ],
+  "independent_searches": "See two reviewer reports for additional exact source inspections.",
+  "expansion": "Followed direct GDN sources, their references and author implementation links; exact-mechanism searches followed broad terms.",
+  "access_failures": [
+    "Weaver HTML v1 404; read PDF v2 instead",
+    "arxiv_registry.py fetch-bibtex could not retrieve metadata for seven IDs; verified original arXiv records manually",
+    "Lumo Pages spine article inaccessible through web tool",
+    "GitHub deployments API HTTP403 rate limit; public first-disclosure chronology unresolved"
+  ],
+  "stop_rule": "All current contribution and mechanism rows have nearest-neighbor attribution, evidence status and an explicit residual claim; no promise of exhaustive literature coverage."
+}

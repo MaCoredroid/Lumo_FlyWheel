@@ -1,0 +1,25 @@
+{
+  "created_utc": "2026-09-23T21:38:03.269062+00:00",
+  "status": "PASS",
+  "command": "latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex",
+  "pages": 13,
+  "latex_errors": 0,
+  "overfull_boxes": 0,
+  "latex_warnings": 0,
+  "underfull_boxes": 9,
+  "citation_keys": 23,
+  "sources": {
+    "main.tex": "2ee3791b9f60bd839ae73a5d81cd106d6725f7192b04de5d85ffc77e70231342",
+    "abstract.tex": "40fbbff240d41c1948a2c669fb1f18d524793dc4f7f97bdd9458ef8086a12798",
+    "results/agent-workload/case-study.tex": "a689968b51b2ff2701c5d9867535f2f054329d1b21e4dd63fbe2d987002b4007",
+    "ref.bib": "88ceccadbd0376d694f6037181ebf0dacd71f0936558d6c88f856666ccc05fc8",
+    "main.bbl": "c51d05c1f3ae5deddceebe09facc7f1beaa8c766e91a21231710ef1a9153b654",
+    "main.pdf": "af1064ccc70f89814e6774168205d6a2a2be23abf04835a2c4cdfd917f612016"
+  },
+  "visual_qa": "All pages reviewed in contact sheets; final changed pages 1 and 7 at 130dpi and pages 11-13 at 90dpi; no clipping or overlapping text. Validation table moved ahead of references, eliminating the isolated table-only last page. Last page contains references.",
+  "speed_audit": {
+    "path": "p0/monitor/2026-09-23-pooled-speed-claims-audit.json",
+    "sha256": "5f590118a48e107d057cea2318b9dd6f901e52a1db4712481869a90d16a962f0"
+  },
+  "new_inference_launched": false
+}

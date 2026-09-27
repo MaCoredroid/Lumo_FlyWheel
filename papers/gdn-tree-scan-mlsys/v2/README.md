@@ -1,36 +1,36 @@
-# GDN Tree-Scan v2: verifier design and optimization
+# LumoTree — current production method
 
-This directory contains the revision requested on 2026-09-21 and the author-approved system-design reframing on 2026-09-22. The preceding manuscript remains in the parent directory; dated review packages preserve earlier v2 revisions.
+26 September 2026.
 
-The paper centers on the integrated verifier architecture, GPU scan/replay execution, and optimization mechanisms of the qualified Cat10/stock TREE_ATTN flat-slot route. Current descriptions are bound to the exact loaded source, including recorded overlays; repository HEAD alone is not an execution receipt. Superseded implementation narratives and pilot-only quantitative summaries have been removed. Historical quantitative results remain excluded; original evidence and dated snapshots remain available for audit.
+**LumoTree: Path-Parallel Speculative Verification for Hybrid Language Models.** The latest mechanism memo is integrated into the background, comparison table and path-tile method. TreeWY/Weaver author components have now been executed on GB10; see `experiments/author-code-20260926/README.md` and `review-experiments.md`. Workload rates are unchanged.
 
-All 18 original E1 timing cells remain unchanged and independently verified. The reported values are three-boot means for fixed qualified eager configurations, not a maximum-performance tuning search. B4 rates aggregate four active requests. The seed deviation, differing output streams and failed compact-candidate promotion criteria remain explicit.
+The paper describes the latest deployed NVFP4 Hydra27/fixed32 method located in the production history: forked FA2 GQA-pair split-K4, spine-first KV slots with matching mask columns, full-vocabulary single-logits drafting and fused top-three selection, two-level GDN path scans with transient cut states, fixed32 device acceptance, and one captured committer replay containing 48 native per-layer GDN updates. Prefix caching and serving/drafter/committer graphs are enabled. Query row and position order remain logical. The single-launch GDN and Hydra31 candidates are not the executed workload method.
 
-E8 is complete: two qualification boots and all six fixed B1 timing boots independently PASS. ON/OFF mean rates are 12.69119/9.69541 tokens/s; the frozen mean of three paired relative changes is +30.89888%, with coarse 95% paired-block bootstrap interval [29.80504%, 32.90320%]. All original cells remain included. The last ON boot differs on all eight continuations, including p021 EOS at 101 tokens. This is an instrumented rate comparison, not equal-output acceleration or quality evidence. E1 already enabled reuse; E8 does not increase its Cat10 row again.
+The September 22 Cat10/E2/E7/E8 jobs revisited a superseded route. Their original data, adverse outcomes and dated analyses remain intact in the archive, but all their numerical results and current-method qualification claims are removed from the paper. A later run date does not make an old implementation current. The current scan and native committer are not claimed to share one update body or to be bit-identical by construction.
 
-Latest source audit: `notes/latest-design-supersession-audit-2026-09-22.md`. Actual E8 review: `p0/monitor/e8-timing-final-redteam.md`. Final manuscript/build/artifact identities are recorded in `artifacts/FINAL-DELIVERY.json`. This is a private review draft, not an arXiv submission.
+Current validation is bound to the deployed binaries: fused-selection parity over 6,840 configurations and 24 graph replays, and the split-K numerical credential with 16 determinism cases across two processes and all nine declared checks passing. The attention probe uses synthetic tensors at scales measured from model operands; it is not a captured-task/full-model equivalence test. Runtime receipts positively identify the engaged attention arm and captured device route.
 
-- `main.pdf`: compiled review draft.
-- `main.tex`, `abstract.tex`, `ref.bib`, `figures/`: editable manuscript sources.
-- `review-experiments.md`: final recommended bounded scope: three core experiments plus provenance audit, with one conditional optimization study. Completed evidence, original failures and deferred extensions are tracked in `experiments/STATUS.md` and `p0/monitor/closure-ledger.md`.
-- `notes/evidence-sources.json`: paths and hashes of selected archived evidence.
-- `results/historical-metrics.csv`: archived three-arm accounting proxies; `committed` is accepted + 1, `tps` is a mixed-population rate proxy, and `residual_ms` is not measured host time.
-- `results/historical-supports.json`: exact global, pure-forward, pure-wall, and component-span supports.
-- `p0/P0-MEASUREMENT-ERRATUM.md`: historical measurement-label correction; original P0 report and raw measurements are preserved.
-- `notes/citation-verification.json`: primary arXiv metadata checked during drafting.
-- `notes/closest-work-reading.md`: reading record; the substantive comparison is in the manuscript.
-- `notes/numerical-comparison-decision.md`: source-linked WY chronology, Bole comparison rationale, and selected experiment decisions.
-- `issues/2026-09-21-v2.csv`: drafting and validation status.
-- `p0/P0-REPORT.md`: completed no-inference audit, source reconstructions, binary/model hashes, and readiness decision.
-- `p0/HANDOFF-CLAUDE.md`, `p0/handoff-status.json`: authorized remote experiment scope and verified session handoff state.
+Among recorded run-pairs producing nonempty patches on both shared SWE-bench Verified Astropy tasks, the best tree run achieves 29.09 pooled tokens/s versus SGLang EAGLE's 26.89 (+8.18%). The retrospective rule applies symmetrically, retains failed-test patches, and excludes the earlier empty-patch SGLang pair from performance while retaining its failed outcome. Other eligible tree runs remain 28.28 and 27.27; the separate latest completed ten-task Cqc10 segment remains 25.63. Best recorded rate and latest completed deployment are explicitly distinct.
 
-`verified` in the historical evidence/design files means verified against the archive, not rerun on current HEAD. P0 reconstructed duplicate target sampling constraints for the three July patchers and retained missing historical loaded-binary/model identities as unknown. Fresh model measurements remain separate from that audit; completed execution chronology is in `experiments/STATUS.md`. Final claim scope is in `notes/claim-evidence-ledger.md`; review reports and PDF verification are in `p0/monitor/`; private evidence packages and the delivery receipt are under `artifacts/`.
-
-From this directory, using the Python runtime in `paper.config.yaml`:
+Reproduce the workload selection and current-component audit without inference:
 
 ```sh
-python3 scripts/audit_evidence.py
+python3 results/agent-workload/patch_producing_rate_reduce.py
+python3 results/current-production/reduce.py
 latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
 ```
 
-The audit requires the accompanying repository's stored campaign JSON. It performs no inference, networking, GPU allocation, or model experiment. The LaTeX build uses the checked-in derived tables. The review draft is not a submission bundle.
+The outputs must match `results/agent-workload/patch-producing-rate-audit.json` and `results/current-production/audit.json`. The former retains 94 input bindings plus five safe projections. The latter pins 20 source/receipt/gate files and verifies component identity against the workload deployment. Original task files and prior reducers are unchanged. Superseded experiment companions remain private historical audit material.
+
+Current history audits: `notes/latest-production-design-evidence-2026-09-24.md` and `notes/latest-optimization-supersession-2026-09-24.md`. Final source/PDF identity: `artifacts/FINAL-DELIVERY.json`. No new full-model inference, publication or push performed; bounded author-component runs are recorded separately.
+
+## Novelty review — 24 September 2026
+
+The current claim set has now undergone primary-source review and two independent mechanism reviews. See `notes/novelty/novelty-review-2026-09-24.md`, `claim-matrix.csv` and `source-register.json`. Direct overlap requires attribution to SpecLA, Trees from Marginals and Snakes and Ladders; attention/drafting/caching precedents were added. The paper is positioned as an implemented systems design with scoped component and workload evidence. A new general verifier, replay mechanism, chain schedule or split-K algorithm is not established. The most specific layout intervention remains a candidate for controlled current-build validation.
+
+This review did not change workload arithmetic or run inference. Earlier implementation-audit PASS statuses are not novelty approvals. The dated review reports describe their exact input snapshots.
+
+
+## Figure 1 revision — 24 September 2026
+
+The overview now uses a full-width vector diagram with an explicit candidate tree, branch-local target computation, selected path, pending token, and separate recurrent/convolution/KV commitment. The working-revision footnote has been removed. Novelty attribution and all measured results are unchanged. See `notes/novelty/figure-and-novelty-integration-review-2026-09-24.md` and `p0/monitor/2026-09-24-figure-build.json`.

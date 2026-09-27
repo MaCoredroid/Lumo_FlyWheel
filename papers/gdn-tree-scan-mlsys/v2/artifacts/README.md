@@ -1,3 +1,19 @@
+Design-distinction update (26 September 2026): Section IV now names the specific scheduling and commit-policy differences from the closest methods. Section V explains four concrete implementation changes, their nontrivial constraints, and established supporting techniques; Table II summarizes the changes. The 11-page PDF was rendered and checked. See `notes/novelty/design-distinction-2026-09-26.md` and `p0/monitor/2026-09-26-design-distinction-build.json`. Empirical results are unchanged.
+
+Algorithm readability update (26 September 2026): both algorithms now span the page width, use normal-size text and descriptive operations, and separate verification, selection and state publication. Algorithm 2 explicitly marks parallel work and preserves per-layer replay. The 11-page PDF was rendered and visually checked, including both algorithm pages (5 and 6). Build receipt: `p0/monitor/2026-09-26-algorithm-readability-build.json`. Experimental results and citations are unchanged. Earlier formatting checkpoints below are superseded.
+
+Algorithm formatting update (26 September 2026): both algorithms now use compact `algpseudocode` with explicit inputs/outputs, aligned line numbers and nested loops. The state-publication boundary is unchanged; a notation paragraph defines helper outputs. The 11-page PDF has been rendered and checked; build details are in `p0/monitor/2026-09-26-algorithm-format-build.json`. Existing experimental evidence is unchanged.
+
+Current LumoTree revision (26 September 2026): approved title and framing; mechanism memo integrated into background/method/comparison and experiment planning. Pinned TreeWY and Weaver author components executed on GB10; exact sources, licenses, adapters and raw records included. No new SWE performance claims. FINAL-DELIVERY.json identifies the current 11-page PDF and private source archive. Earlier checkpoints below remain historical.
+
+Current patch-producing revision (24 September 2026): conditional best tree29.09 versus SGLang26.89; one empty-patch SGLang pair excluded from the performance table with raw evidence preserved. Run `results/agent-workload/patch_producing_rate_reduce.py`; FINAL-DELIVERY.json binds current artifacts. Entries below are dated earlier checkpoints.
+
+Current pooled decode revision (23 September 2026): the common tree/SGLang comparison and its 48 hash-bound input files are packaged with the current paper. Run `results/agent-workload/shared_rate_reduce.py` from the extracted paper directory. See `FINAL-DELIVERY.json` for final source/PDF/archive identity. Older checkpoints below retain their original scope and superseded estimator labels.
+
+Current history-correction revision (23 September 2026): executed comparator experiments are acknowledged; superseded rates remain excluded. The current PDF and source checkpoint are identified by `FINAL-DELIVERY.json`. See `../notes/comparator-git-history-2026-09-23.md`.
+
+> **Current scope — 23 September 2026:** Paper performance now uses only named coding-agent workloads. E1/E8 local-document rate results below are audit history, not current manuscript claims. Latest eligible completed workload case is dated Cqc10 NVFP4; matched current native/tree task comparison remains proposed, not launched. See `review-experiments.md` and current `FINAL-REVIEW.md`. Earlier completion statements apply only to their original bounded scope.
+
 # Private review checkpoints
 
 These files are private review artifacts. The latest manuscript uses the qualified design and final current results; obsolete narratives and pilot-only summaries have been removed. Core E1/E2/E7 evidence remains unchanged. E8 is complete and independently verified, with two qualification and six timing boots. No further GPU experiment is required for the bounded claims. The delivery receipt identifies the latest reviewed PDF/build and paper archive, which binds five evidence companions. Dated entries below describe preserved earlier checkpoints.
@@ -53,3 +69,25 @@ The final paper package built by `../scripts/build_review_bundle.py` binds all f
 ## Historical-number removal revision, 2026-09-22 19:45 UTC
 
 The current 11-page manuscript reports quantitative results only from fresh v2 captures or fresh synthetic controls. Historical result numbers, plots and mixed archived-operand remeasurements were removed at the author's request; historical raw files and earlier immutable checkpoints remain audit evidence. `paper-final-20260922T194605Z.tar.gz` supersedes the 12:39 paper archive for manuscript review and binds the same four unchanged raw-evidence companions. See `FINAL-DELIVERY.json` for archive hashes and member checks; the independent removal review and canonical build/visual proof are included in the archive. The earlier extracted numerical replay checks remain applicable to the unchanged raw evidence, not a claim of a repeated GPU campaign.
+
+
+## Attention provenance correction — 24 September 2026
+
+Earlier entries calling the recorded Cat10 qualification attention stock are superseded by the loaded-source audit in `notes/attention-backend-provenance-correction-2026-09-24.md`. These jobs use patched Triton unified attention selected as TREE_ATTN; the recorded agent deployment uses patched FA2. Backend identity is specific to each launch, not determined by FP8 versus NVFP4. Historical records remain intact, and no existing qualification is relabeled as an FA2 execution. The current build is recorded in `p0/monitor/2026-09-24-attention-correction-build.json`.
+
+
+## Superseded-route removal — 24 September 2026
+
+The paper describes the latest deployed NVFP4 Hydra27/fixed32 method located in the production history: forked FA2 GQA-pair split-K4, spine-first KV slots with matching mask columns, full-vocabulary single-logits drafting and fused top-three selection, two-level GDN path scans with transient cut states, fixed32 device acceptance, and one captured committer replay containing 48 native per-layer GDN updates. Prefix caching and serving/drafter/committer graphs are enabled. Query row and position order remain logical. The single-launch GDN and Hydra31 candidates are not the executed workload method.
+
+The September 22 Cat10/E2/E7/E8 jobs revisited a superseded route. Their original data, adverse outcomes and dated analyses remain intact in the archive, but all their numerical results and current-method qualification claims are removed from the paper. A later run date does not make an old implementation current. The current scan and native committer are not claimed to share one update body or to be bit-identical by construction.
+
+Current validation is bound to the deployed binaries: fused-selection parity over 6,840 configurations and 24 graph replays, and the split-K numerical credential with 16 determinism cases across two processes and all nine declared checks passing. The attention probe uses synthetic tensors at scales measured from model operands; it is not a captured-task/full-model equivalence test. Runtime receipts positively identify the engaged attention arm and captured device route.
+
+Current receipt: `artifacts/FINAL-DELIVERY.json`. Build: `p0/monitor/2026-09-24-current-production-build.json`. Earlier attention-provenance wording is accurate only as an archived run description and no longer defines the paper method.
+
+## Novelty review — 24 September 2026
+
+The current claim set has now undergone primary-source review and two independent mechanism reviews. See `notes/novelty/novelty-review-2026-09-24.md`, `claim-matrix.csv` and `source-register.json`. Direct overlap requires attribution to SpecLA, Trees from Marginals and Snakes and Ladders; attention/drafting/caching precedents were added. The paper is positioned as an implemented systems design with scoped component and workload evidence. A new general verifier, replay mechanism, chain schedule or split-K algorithm is not established. The most specific layout intervention remains a candidate for controlled current-build validation.
+
+This review did not change workload arithmetic or run inference. Earlier implementation-audit PASS statuses are not novelty approvals. The dated review reports describe their exact input snapshots.

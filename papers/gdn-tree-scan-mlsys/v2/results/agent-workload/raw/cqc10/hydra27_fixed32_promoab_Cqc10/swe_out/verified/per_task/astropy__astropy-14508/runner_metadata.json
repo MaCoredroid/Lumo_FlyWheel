@@ -1,0 +1,738 @@
+{
+  "instance_id": "astropy__astropy-14508",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "started_at": "2026-08-24T09:30:00Z",
+  "repo": "astropy/astropy",
+  "base_commit": "a3f4ae6cd24d5ecdf49f213d77b3513dd509a06c",
+  "fixed32_dataset_record_sha256": "076469fcc7cf918702633642560b65941c75f94fa96e8558a8d52dadeaa1be43",
+  "agent": {
+    "elapsed_s": 2474.673,
+    "exit_code": 0,
+    "timed_out": false,
+    "container_name": "swe-qwen-astropy__astropy-14508-5e490ca151c86801",
+    "offloaded": true,
+    "codex_host": "alienware",
+    "network_drop": false,
+    "patch_down_rc": 0,
+    "agent_env": "instance_image",
+    "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14508:latest",
+    "host_arch": "x86_64",
+    "image_arch": "x86_64",
+    "qwen_trace_capture": {
+      "schema": "fr13-remote-qwen-trace-observation-v1",
+      "bytes": 184862,
+      "sha256": "824ffca7e8ccdd9ed5ecdfe87a11beee8200a3529f0f6d1522806b327a58c0aa",
+      "event_count": 111
+    },
+    "qwen_runtime_attestation": {
+      "schema": "fr13-fixed32-qwen-runtime-attestation-v1",
+      "launcher": "qwen-code-instance-image",
+      "agent_env": "instance_image",
+      "host_mode": "remote",
+      "qwen_code_version": "0.19.4",
+      "bundle_tree": {
+        "entrypoints": {
+          "bin/qwen": {
+            "bytes": 217,
+            "mode": "0755",
+            "path": "bin/qwen",
+            "sha256": "286a61bd49fd103d0ea29a8d971030b60ac0a6e7f19b292bdf9b39858e1161e2",
+            "type": "file"
+          },
+          "node/bin/node": {
+            "bytes": 124835376,
+            "mode": "0755",
+            "path": "node/bin/node",
+            "sha256": "93956de2e59480474a7b46571da1651180b1a050cdf32641ebec4ce6e478e068",
+            "type": "file"
+          },
+          "npm/bin/qwen": {
+            "mode": "0777",
+            "path": "npm/bin/qwen",
+            "target": "../lib/node_modules/@qwen-code/qwen-code/cli-entry.js",
+            "type": "symlink"
+          },
+          "npm/lib/node_modules/@qwen-code/qwen-code/chunks/chunk-BFG6OZN7.js": {
+            "bytes": 5451144,
+            "mode": "0644",
+            "path": "npm/lib/node_modules/@qwen-code/qwen-code/chunks/chunk-BFG6OZN7.js",
+            "sha256": "d61b71c03180822e875976a721a856144b70ae8b7ff687910021a5cb91a7db89",
+            "type": "file"
+          },
+          "npm/lib/node_modules/@qwen-code/qwen-code/cli-entry.js": {
+            "bytes": 777,
+            "mode": "0755",
+            "path": "npm/lib/node_modules/@qwen-code/qwen-code/cli-entry.js",
+            "sha256": "98335eda2e0eaa737640cb5d43da032dee457ff7931c429f972ba3ff8a695d3a",
+            "type": "file"
+          }
+        },
+        "manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+        "roots": [
+          "**"
+        ],
+        "schema": "fr13-qwen-agent-bundle-manifest-v1",
+        "summary": {
+          "directory_count": 1514,
+          "entry_count": 10499,
+          "executable_regular_file_count": 93,
+          "manifest_bytes": 2057964,
+          "regular_file_bytes": 327941291,
+          "regular_file_count": 8970,
+          "symlink_count": 15
+        }
+      },
+      "bundle_manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+      "bundle_snapshot": {
+        "kind": "per-task-content-addressed-snapshot",
+        "basename": "qwen_bundle-594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+        "container_path": "/opt/qwen",
+        "mount_mode": "ro"
+      },
+      "cleared_agent_environment": [
+        "BASH_ENV",
+        "LD_LIBRARY_PATH",
+        "LD_PRELOAD",
+        "NODE_OPTIONS",
+        "NODE_PATH"
+      ],
+      "system_settings": {
+        "source": "config/fr13_fixed32/qwen_system_settings.json",
+        "bytes": 98,
+        "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+        "container_path": "/run/fr13/qwen-system-settings.json",
+        "mount_mode": "ro",
+        "environment": {
+          "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+          "value": "/run/fr13/qwen-system-settings.json"
+        },
+        "remote_file": {
+          "mode": "0444",
+          "uid": 1000,
+          "gid": 1000,
+          "nlink": 1,
+          "xattrs": []
+        },
+        "enable_auto_skill": false
+      }
+    },
+    "qwen_runtime_attestation_sha256": "6e207547b49f17b5f31ad780cf04f71af0aa7787d11260a5415347a8041a7a67",
+    "qwen_runtime_postrun_attestation_sha256": "6e207547b49f17b5f31ad780cf04f71af0aa7787d11260a5415347a8041a7a67",
+    "instance_image_identity": {
+      "instance_id": "astropy__astropy-14508",
+      "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14508:latest",
+      "id": "sha256:f1f44383c21a57c5047ac6cdb4375407350dd14d54e455ec3b5dfec79ee26c7c",
+      "repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14508@sha256:a6aea03ce1c6a2e897e78a4339e44f02643deb9007e0628a058034779181ce71",
+      "architecture": "amd64",
+      "os": "linux"
+    },
+    "instance_image_identity_sha256": "475101da8a851dc3a4eca012ab58f231f9b47c21241206e5350faec60897754f",
+    "instance_image_postrun_identity_sha256": "475101da8a851dc3a4eca012ab58f231f9b47c21241206e5350faec60897754f",
+    "instance_image_run_reference": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14508@sha256:a6aea03ce1c6a2e897e78a4339e44f02643deb9007e0628a058034779181ce71",
+    "qwen_bundle_snapshot": {
+      "kind": "per-task-content-addressed-snapshot",
+      "basename": "qwen_bundle-594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+      "container_path": "/opt/qwen",
+      "mount_mode": "ro"
+    },
+    "qwen_mounted_runtime_proof": {
+      "bundle_tree": {
+        "container_path": "/opt/qwen",
+        "mount_mode": "ro",
+        "observation": {
+          "bundle_tree": {
+            "entrypoints": {
+              "bin/qwen": {
+                "bytes": 217,
+                "mode": "0755",
+                "path": "bin/qwen",
+                "sha256": "286a61bd49fd103d0ea29a8d971030b60ac0a6e7f19b292bdf9b39858e1161e2",
+                "type": "file"
+              },
+              "node/bin/node": {
+                "bytes": 124835376,
+                "mode": "0755",
+                "path": "node/bin/node",
+                "sha256": "93956de2e59480474a7b46571da1651180b1a050cdf32641ebec4ce6e478e068",
+                "type": "file"
+              },
+              "npm/bin/qwen": {
+                "mode": "0777",
+                "path": "npm/bin/qwen",
+                "target": "../lib/node_modules/@qwen-code/qwen-code/cli-entry.js",
+                "type": "symlink"
+              },
+              "npm/lib/node_modules/@qwen-code/qwen-code/chunks/chunk-BFG6OZN7.js": {
+                "bytes": 5451144,
+                "mode": "0644",
+                "path": "npm/lib/node_modules/@qwen-code/qwen-code/chunks/chunk-BFG6OZN7.js",
+                "sha256": "d61b71c03180822e875976a721a856144b70ae8b7ff687910021a5cb91a7db89",
+                "type": "file"
+              },
+              "npm/lib/node_modules/@qwen-code/qwen-code/cli-entry.js": {
+                "bytes": 777,
+                "mode": "0755",
+                "path": "npm/lib/node_modules/@qwen-code/qwen-code/cli-entry.js",
+                "sha256": "98335eda2e0eaa737640cb5d43da032dee457ff7931c429f972ba3ff8a695d3a",
+                "type": "file"
+              }
+            },
+            "manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+            "roots": [
+              "**"
+            ],
+            "schema": "fr13-qwen-agent-bundle-manifest-v1",
+            "summary": {
+              "directory_count": 1514,
+              "entry_count": 10499,
+              "executable_regular_file_count": 93,
+              "manifest_bytes": 2057964,
+              "regular_file_bytes": 327941291,
+              "regular_file_count": 8970,
+              "symlink_count": 15
+            }
+          },
+          "qwen_code_version": "0.19.4"
+        },
+        "write_probe_errno": 30
+      },
+      "schema": "fr13-fixed32-qwen-mounted-runtime-proof-v1",
+      "system_settings": {
+        "bytes": 98,
+        "container_path": "/run/fr13/qwen-system-settings.json",
+        "file_identity_sha256": "d505dba1e69535cc4d756ed500dde8cb7fc38b3cca7db683b7155b902cd722e2",
+        "gid": 1000,
+        "mode": "0444",
+        "mount_mode": "ro",
+        "nlink": 1,
+        "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+        "uid": 1000,
+        "write_probe_errno": 30,
+        "xattrs": []
+      }
+    },
+    "qwen_mounted_runtime_proof_sha256": "88920211c7c4514aef3f712dad5a88a1a4530cf9ad3699800ff6f23d2e83a875",
+    "qwen_mounted_runtime_proof_file_sha256": "e3fc586cadfcf59f66ab24d6435c5c86a01064fda14b8e96aa0601c312cf9a87",
+    "qwen_remote_settings_observation": {
+      "bytes": 98,
+      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+      "mode": "0444",
+      "uid": 1000,
+      "gid": 1000,
+      "nlink": 1,
+      "xattrs": [],
+      "file_identity_sha256": "d505dba1e69535cc4d756ed500dde8cb7fc38b3cca7db683b7155b902cd722e2"
+    },
+    "qwen_remote_settings_observation_sha256": "b5adcf74057ab151cfe7d292f2f5f55cc87d1af83713934c6515956941531b2d",
+    "qwen_remote_settings_postrun_observation_sha256": "b5adcf74057ab151cfe7d292f2f5f55cc87d1af83713934c6515956941531b2d",
+    "agent_placement": {
+      "schema": "fr13-fixed32-agent-placement-v1",
+      "agent_host_identity": {
+        "docker_daemon_id_sha256": "2606e93ef9583c1aabb076ed439f9fcf1d60068ddd9ecdc464bbe3a29d9f371f",
+        "hostname_sha256": "84674d76bbc389eb6479d5f3a617bf6b25e05f486d455353e945a700df66afa4",
+        "kernel": "6.14.0-37-generic",
+        "machine": "x86_64",
+        "machine_id_sha256": "e49c50112bb466cb283df00e3f3e7344abc702f887f78550ba44c8611ef657f8",
+        "system": "Linux"
+      },
+      "measured_host_identity": {
+        "docker_daemon_id_sha256": "53fb603eb13afb8d6eb165a2aefa510dd6f9c06faf7c4c80a7e966ce4d5c4fce",
+        "hostname_sha256": "4a30015a37d4584ee4bb29d3144df3ad061b688baaff100d4b0dc675e4988a87",
+        "kernel": "6.14.0-1015-nvidia",
+        "machine": "aarch64",
+        "machine_id_sha256": "2bbfaa2351d92eefaec4bdf90f25f31ebab0973aaf88d7f9c01650b01cdd9113",
+        "system": "Linux"
+      },
+      "identities_distinct": true
+    },
+    "agent_placement_sha256": "ec697009a5f1f1393a131590a27c46714878deb498ffc1175977029ef17318c3",
+    "agent_postrun_placement_sha256": "ec697009a5f1f1393a131590a27c46714878deb498ffc1175977029ef17318c3",
+    "fr14_network_boundary": {
+      "net": "fr14-agent-isolated",
+      "bridge": "fr14agent0",
+      "gateway": "172.31.99.1",
+      "proxy_port": "8023",
+      "rules": "9",
+      "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+    },
+    "campaign_budget_s": 9000.0,
+    "campaign_budget_was_the_binding_limit": true,
+    "budget_capped": false
+  },
+  "codex": {
+    "elapsed_s": 2474.673,
+    "exit_code": 0,
+    "timed_out": false,
+    "container_name": "swe-qwen-astropy__astropy-14508-5e490ca151c86801",
+    "offloaded": true,
+    "codex_host": "alienware",
+    "network_drop": false,
+    "patch_down_rc": 0,
+    "agent_env": "instance_image",
+    "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14508:latest",
+    "host_arch": "x86_64",
+    "image_arch": "x86_64",
+    "qwen_trace_capture": {
+      "schema": "fr13-remote-qwen-trace-observation-v1",
+      "bytes": 184862,
+      "sha256": "824ffca7e8ccdd9ed5ecdfe87a11beee8200a3529f0f6d1522806b327a58c0aa",
+      "event_count": 111
+    },
+    "qwen_runtime_attestation": {
+      "schema": "fr13-fixed32-qwen-runtime-attestation-v1",
+      "launcher": "qwen-code-instance-image",
+      "agent_env": "instance_image",
+      "host_mode": "remote",
+      "qwen_code_version": "0.19.4",
+      "bundle_tree": {
+        "entrypoints": {
+          "bin/qwen": {
+            "bytes": 217,
+            "mode": "0755",
+            "path": "bin/qwen",
+            "sha256": "286a61bd49fd103d0ea29a8d971030b60ac0a6e7f19b292bdf9b39858e1161e2",
+            "type": "file"
+          },
+          "node/bin/node": {
+            "bytes": 124835376,
+            "mode": "0755",
+            "path": "node/bin/node",
+            "sha256": "93956de2e59480474a7b46571da1651180b1a050cdf32641ebec4ce6e478e068",
+            "type": "file"
+          },
+          "npm/bin/qwen": {
+            "mode": "0777",
+            "path": "npm/bin/qwen",
+            "target": "../lib/node_modules/@qwen-code/qwen-code/cli-entry.js",
+            "type": "symlink"
+          },
+          "npm/lib/node_modules/@qwen-code/qwen-code/chunks/chunk-BFG6OZN7.js": {
+            "bytes": 5451144,
+            "mode": "0644",
+            "path": "npm/lib/node_modules/@qwen-code/qwen-code/chunks/chunk-BFG6OZN7.js",
+            "sha256": "d61b71c03180822e875976a721a856144b70ae8b7ff687910021a5cb91a7db89",
+            "type": "file"
+          },
+          "npm/lib/node_modules/@qwen-code/qwen-code/cli-entry.js": {
+            "bytes": 777,
+            "mode": "0755",
+            "path": "npm/lib/node_modules/@qwen-code/qwen-code/cli-entry.js",
+            "sha256": "98335eda2e0eaa737640cb5d43da032dee457ff7931c429f972ba3ff8a695d3a",
+            "type": "file"
+          }
+        },
+        "manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+        "roots": [
+          "**"
+        ],
+        "schema": "fr13-qwen-agent-bundle-manifest-v1",
+        "summary": {
+          "directory_count": 1514,
+          "entry_count": 10499,
+          "executable_regular_file_count": 93,
+          "manifest_bytes": 2057964,
+          "regular_file_bytes": 327941291,
+          "regular_file_count": 8970,
+          "symlink_count": 15
+        }
+      },
+      "bundle_manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+      "bundle_snapshot": {
+        "kind": "per-task-content-addressed-snapshot",
+        "basename": "qwen_bundle-594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+        "container_path": "/opt/qwen",
+        "mount_mode": "ro"
+      },
+      "cleared_agent_environment": [
+        "BASH_ENV",
+        "LD_LIBRARY_PATH",
+        "LD_PRELOAD",
+        "NODE_OPTIONS",
+        "NODE_PATH"
+      ],
+      "system_settings": {
+        "source": "config/fr13_fixed32/qwen_system_settings.json",
+        "bytes": 98,
+        "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+        "container_path": "/run/fr13/qwen-system-settings.json",
+        "mount_mode": "ro",
+        "environment": {
+          "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+          "value": "/run/fr13/qwen-system-settings.json"
+        },
+        "remote_file": {
+          "mode": "0444",
+          "uid": 1000,
+          "gid": 1000,
+          "nlink": 1,
+          "xattrs": []
+        },
+        "enable_auto_skill": false
+      }
+    },
+    "qwen_runtime_attestation_sha256": "6e207547b49f17b5f31ad780cf04f71af0aa7787d11260a5415347a8041a7a67",
+    "qwen_runtime_postrun_attestation_sha256": "6e207547b49f17b5f31ad780cf04f71af0aa7787d11260a5415347a8041a7a67",
+    "instance_image_identity": {
+      "instance_id": "astropy__astropy-14508",
+      "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14508:latest",
+      "id": "sha256:f1f44383c21a57c5047ac6cdb4375407350dd14d54e455ec3b5dfec79ee26c7c",
+      "repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14508@sha256:a6aea03ce1c6a2e897e78a4339e44f02643deb9007e0628a058034779181ce71",
+      "architecture": "amd64",
+      "os": "linux"
+    },
+    "instance_image_identity_sha256": "475101da8a851dc3a4eca012ab58f231f9b47c21241206e5350faec60897754f",
+    "instance_image_postrun_identity_sha256": "475101da8a851dc3a4eca012ab58f231f9b47c21241206e5350faec60897754f",
+    "instance_image_run_reference": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14508@sha256:a6aea03ce1c6a2e897e78a4339e44f02643deb9007e0628a058034779181ce71",
+    "qwen_bundle_snapshot": {
+      "kind": "per-task-content-addressed-snapshot",
+      "basename": "qwen_bundle-594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+      "container_path": "/opt/qwen",
+      "mount_mode": "ro"
+    },
+    "qwen_mounted_runtime_proof": {
+      "bundle_tree": {
+        "container_path": "/opt/qwen",
+        "mount_mode": "ro",
+        "observation": {
+          "bundle_tree": {
+            "entrypoints": {
+              "bin/qwen": {
+                "bytes": 217,
+                "mode": "0755",
+                "path": "bin/qwen",
+                "sha256": "286a61bd49fd103d0ea29a8d971030b60ac0a6e7f19b292bdf9b39858e1161e2",
+                "type": "file"
+              },
+              "node/bin/node": {
+                "bytes": 124835376,
+                "mode": "0755",
+                "path": "node/bin/node",
+                "sha256": "93956de2e59480474a7b46571da1651180b1a050cdf32641ebec4ce6e478e068",
+                "type": "file"
+              },
+              "npm/bin/qwen": {
+                "mode": "0777",
+                "path": "npm/bin/qwen",
+                "target": "../lib/node_modules/@qwen-code/qwen-code/cli-entry.js",
+                "type": "symlink"
+              },
+              "npm/lib/node_modules/@qwen-code/qwen-code/chunks/chunk-BFG6OZN7.js": {
+                "bytes": 5451144,
+                "mode": "0644",
+                "path": "npm/lib/node_modules/@qwen-code/qwen-code/chunks/chunk-BFG6OZN7.js",
+                "sha256": "d61b71c03180822e875976a721a856144b70ae8b7ff687910021a5cb91a7db89",
+                "type": "file"
+              },
+              "npm/lib/node_modules/@qwen-code/qwen-code/cli-entry.js": {
+                "bytes": 777,
+                "mode": "0755",
+                "path": "npm/lib/node_modules/@qwen-code/qwen-code/cli-entry.js",
+                "sha256": "98335eda2e0eaa737640cb5d43da032dee457ff7931c429f972ba3ff8a695d3a",
+                "type": "file"
+              }
+            },
+            "manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+            "roots": [
+              "**"
+            ],
+            "schema": "fr13-qwen-agent-bundle-manifest-v1",
+            "summary": {
+              "directory_count": 1514,
+              "entry_count": 10499,
+              "executable_regular_file_count": 93,
+              "manifest_bytes": 2057964,
+              "regular_file_bytes": 327941291,
+              "regular_file_count": 8970,
+              "symlink_count": 15
+            }
+          },
+          "qwen_code_version": "0.19.4"
+        },
+        "write_probe_errno": 30
+      },
+      "schema": "fr13-fixed32-qwen-mounted-runtime-proof-v1",
+      "system_settings": {
+        "bytes": 98,
+        "container_path": "/run/fr13/qwen-system-settings.json",
+        "file_identity_sha256": "d505dba1e69535cc4d756ed500dde8cb7fc38b3cca7db683b7155b902cd722e2",
+        "gid": 1000,
+        "mode": "0444",
+        "mount_mode": "ro",
+        "nlink": 1,
+        "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+        "uid": 1000,
+        "write_probe_errno": 30,
+        "xattrs": []
+      }
+    },
+    "qwen_mounted_runtime_proof_sha256": "88920211c7c4514aef3f712dad5a88a1a4530cf9ad3699800ff6f23d2e83a875",
+    "qwen_mounted_runtime_proof_file_sha256": "e3fc586cadfcf59f66ab24d6435c5c86a01064fda14b8e96aa0601c312cf9a87",
+    "qwen_remote_settings_observation": {
+      "bytes": 98,
+      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+      "mode": "0444",
+      "uid": 1000,
+      "gid": 1000,
+      "nlink": 1,
+      "xattrs": [],
+      "file_identity_sha256": "d505dba1e69535cc4d756ed500dde8cb7fc38b3cca7db683b7155b902cd722e2"
+    },
+    "qwen_remote_settings_observation_sha256": "b5adcf74057ab151cfe7d292f2f5f55cc87d1af83713934c6515956941531b2d",
+    "qwen_remote_settings_postrun_observation_sha256": "b5adcf74057ab151cfe7d292f2f5f55cc87d1af83713934c6515956941531b2d",
+    "agent_placement": {
+      "schema": "fr13-fixed32-agent-placement-v1",
+      "agent_host_identity": {
+        "docker_daemon_id_sha256": "2606e93ef9583c1aabb076ed439f9fcf1d60068ddd9ecdc464bbe3a29d9f371f",
+        "hostname_sha256": "84674d76bbc389eb6479d5f3a617bf6b25e05f486d455353e945a700df66afa4",
+        "kernel": "6.14.0-37-generic",
+        "machine": "x86_64",
+        "machine_id_sha256": "e49c50112bb466cb283df00e3f3e7344abc702f887f78550ba44c8611ef657f8",
+        "system": "Linux"
+      },
+      "measured_host_identity": {
+        "docker_daemon_id_sha256": "53fb603eb13afb8d6eb165a2aefa510dd6f9c06faf7c4c80a7e966ce4d5c4fce",
+        "hostname_sha256": "4a30015a37d4584ee4bb29d3144df3ad061b688baaff100d4b0dc675e4988a87",
+        "kernel": "6.14.0-1015-nvidia",
+        "machine": "aarch64",
+        "machine_id_sha256": "2bbfaa2351d92eefaec4bdf90f25f31ebab0973aaf88d7f9c01650b01cdd9113",
+        "system": "Linux"
+      },
+      "identities_distinct": true
+    },
+    "agent_placement_sha256": "ec697009a5f1f1393a131590a27c46714878deb498ffc1175977029ef17318c3",
+    "agent_postrun_placement_sha256": "ec697009a5f1f1393a131590a27c46714878deb498ffc1175977029ef17318c3",
+    "fr14_network_boundary": {
+      "net": "fr14-agent-isolated",
+      "bridge": "fr14agent0",
+      "gateway": "172.31.99.1",
+      "proxy_port": "8023",
+      "rules": "9",
+      "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+    },
+    "campaign_budget_s": 9000.0,
+    "campaign_budget_was_the_binding_limit": true,
+    "budget_capped": false
+  },
+  "fixed32_task_boundary": {
+    "forward_step_interval": {
+      "end_forward_step": 36306,
+      "expected_complete_events": 11700,
+      "start_forward_step": 24606
+    },
+    "instance_id": "astropy__astropy-14508",
+    "mode": "hydra27_fixed32",
+    "post": {
+      "action": "snapshot",
+      "counters": {
+        "cfwd_pending": 0,
+        "complete_work_census_events": 36306,
+        "dfwd_pending": 0,
+        "pure_decode_forward_steps": 36306,
+        "sfwd_pending": 0,
+        "work_census_first_forward_step": 0,
+        "work_census_last_forward_step": 36305
+      },
+      "generation": 14,
+      "mode": "hydra27_fixed32",
+      "nonce": "57720cd44b519d7ecd70ef0e99209c9bbf52b6b06ebd61d0192f23411d4a6dfd",
+      "producer_pid": 156,
+      "schema": "fr13-fixed32-flush-ack-v1",
+      "status": "ok"
+    },
+    "post_runtime_snapshot": {
+      "generation": 14,
+      "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc10_20260824T074813Z/hydra27_fixed32_promoab_Cqc10/logs/fr13_fixed32_boundary_snapshot.14.json",
+      "schema": "fr13-fixed32-boundary-snapshot-v4",
+      "sha256": "180c6528f17f3f7d30e4d8bb4a9898c98780d95500dac75b68e90e0bd63957df"
+    },
+    "pre": {
+      "action": "snapshot",
+      "counters": {
+        "cfwd_pending": 0,
+        "complete_work_census_events": 24606,
+        "dfwd_pending": 0,
+        "pure_decode_forward_steps": 24606,
+        "sfwd_pending": 0,
+        "work_census_first_forward_step": 0,
+        "work_census_last_forward_step": 24605
+      },
+      "generation": 13,
+      "mode": "hydra27_fixed32",
+      "nonce": "010d7acc44ad5457e4226685863bf2f291983661f5b0797c792a703437fc07f6",
+      "producer_pid": 156,
+      "schema": "fr13-fixed32-flush-ack-v1",
+      "status": "ok"
+    },
+    "pre_runtime_snapshot": {
+      "generation": 13,
+      "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc10_20260824T074813Z/hydra27_fixed32_promoab_Cqc10/logs/fr13_fixed32_boundary_snapshot.13.json",
+      "schema": "fr13-fixed32-boundary-snapshot-v4",
+      "sha256": "c35581d10bd39f97a9bde0a68ba525702ab9d9f289b5dc048948aec6f57573d7"
+    },
+    "producer_pid": 156,
+    "schema": "fr13-fixed32-task-boundary-v1"
+  },
+  "fixed32_real_task_provenance": {
+    "schema": "fr13-fixed32-real-task-provenance-v3",
+    "instance_id": "astropy__astropy-14508",
+    "task_key_id": "75c839b4f3c89bf6dfc532a6f7d899e6c6753f45ca28958b988297c6ff9c37c5",
+    "qwen_code_version": "0.19.4",
+    "qwen_system_settings_sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+    "qwen_runtime_attestation_sha256": "6e207547b49f17b5f31ad780cf04f71af0aa7787d11260a5415347a8041a7a67",
+    "instance_image_identity_sha256": "475101da8a851dc3a4eca012ab58f231f9b47c21241206e5350faec60897754f",
+    "instance_image_id": "sha256:f1f44383c21a57c5047ac6cdb4375407350dd14d54e455ec3b5dfec79ee26c7c",
+    "instance_image_repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14508@sha256:a6aea03ce1c6a2e897e78a4339e44f02643deb9007e0628a058034779181ce71",
+    "agent_placement_sha256": "ec697009a5f1f1393a131590a27c46714878deb498ffc1175977029ef17318c3",
+    "agent_host_identity": {
+      "docker_daemon_id_sha256": "2606e93ef9583c1aabb076ed439f9fcf1d60068ddd9ecdc464bbe3a29d9f371f",
+      "hostname_sha256": "84674d76bbc389eb6479d5f3a617bf6b25e05f486d455353e945a700df66afa4",
+      "kernel": "6.14.0-37-generic",
+      "machine": "x86_64",
+      "machine_id_sha256": "e49c50112bb466cb283df00e3f3e7344abc702f887f78550ba44c8611ef657f8",
+      "system": "Linux"
+    },
+    "measured_host_identity": {
+      "docker_daemon_id_sha256": "53fb603eb13afb8d6eb165a2aefa510dd6f9c06faf7c4c80a7e966ce4d5c4fce",
+      "hostname_sha256": "4a30015a37d4584ee4bb29d3144df3ad061b688baaff100d4b0dc675e4988a87",
+      "kernel": "6.14.0-1015-nvidia",
+      "machine": "aarch64",
+      "machine_id_sha256": "2bbfaa2351d92eefaec4bdf90f25f31ebab0973aaf88d7f9c01650b01cdd9113",
+      "system": "Linux"
+    },
+    "qwen_bundle_snapshot": {
+      "kind": "per-task-content-addressed-snapshot",
+      "basename": "qwen_bundle-594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+      "container_path": "/opt/qwen",
+      "mount_mode": "ro"
+    },
+    "qwen_remote_settings_file_identity_sha256": "d505dba1e69535cc4d756ed500dde8cb7fc38b3cca7db683b7155b902cd722e2",
+    "qwen_remote_settings_observation_sha256": "b5adcf74057ab151cfe7d292f2f5f55cc87d1af83713934c6515956941531b2d",
+    "qwen_mounted_runtime_proof_sha256": "88920211c7c4514aef3f712dad5a88a1a4530cf9ad3699800ff6f23d2e83a875",
+    "qwen_mounted_runtime_proof_file_sha256": "e3fc586cadfcf59f66ab24d6435c5c86a01064fda14b8e96aa0601c312cf9a87",
+    "qwen_runtime_attestation_file_sha256": "00e199445afc6702b12b58d295c5ef853541a32c98cb5d15e2017ad10b184d01",
+    "qwen_runtime_postrun_attestation_file_sha256": "00e199445afc6702b12b58d295c5ef853541a32c98cb5d15e2017ad10b184d01",
+    "trace_completed_logical_model_requests": 28,
+    "hidden_successful_compaction_model_requests": 2,
+    "hidden_failed_compaction_model_requests": 0,
+    "synthetic_compaction_failure_terminal": false,
+    "budget_capped_terminal": false,
+    "campaign_budget_s": null,
+    "budget_capped_elapsed_s": null,
+    "budget_capped_partial_response_group": false,
+    "budget_capped_aborted_logical_requests": 0,
+    "qwen_metric_scope": "task",
+    "qwen_campaign_metric_proof": null,
+    "qwen_campaign_metric_evidence_sha256": null,
+    "qwen_compaction_metric_evidence": {
+      "schema": "fr13-fixed32-qwen-compaction-metrics-v1",
+      "metrics_pre_sha256": "5fd7219d3cda5a379b5a77abd96b57e3998bc041eabd27fc34ff13bb39be5355",
+      "metrics_post_sha256": "e2bc098ca5540de6bb4889c247d202efb58a15a4255563e2f5d9807eed122038",
+      "completed_engine_requests": 28,
+      "normal_visible_max_output_tokens": 24000,
+      "compaction_max_output_tokens": 20000,
+      "normal_requests": 26,
+      "successful_compaction_requests": 2,
+      "failed_compaction_requests": 0,
+      "total_compaction_requests": 2,
+      "unobservable_compaction_boundaries": 0,
+      "max_tokens_count": 28,
+      "max_tokens_sum": 664000,
+      "max_tokens_le_10000": 0,
+      "max_tokens_le_20000": 2,
+      "max_tokens_le_50000": 28,
+      "max_tokens_le_inf": 28,
+      "request_success_stop": 28,
+      "request_success_length": 0,
+      "request_success_non_stop": 0,
+      "prompt_tokens": 1437102,
+      "generation_tokens": 61099,
+      "visible_prompt_tokens": 1370635,
+      "visible_generation_tokens": 41916,
+      "hidden_prompt_tokens": 66467,
+      "hidden_generation_tokens": 19183
+    },
+    "trace_model_request_ids_sha256": "f7e28f38c799727c082c0219cf39fcd4c752c8269a150792184f9d4086bafb25",
+    "completed_logical_model_requests": 28,
+    "aborted_logical_requests": 0,
+    "accepted_attempts": 28,
+    "completed_attempts": 28,
+    "failed_attempts": 0,
+    "task_auth_evidence_before_sha256": "a11d776890cc44d58a1844fb4ca2d31964f68ef2bd30d1d780bc911ff271a8f9",
+    "task_auth_evidence_after_sha256": "416e04008d29f189f00e5b23f39904572b3957b4e195c3bec2e608e03b677d4b",
+    "task_auth_evidence_after_ledger_records": 737,
+    "task_auth_evidence_after_ledger_chain_head_sha256": "cc7139e5320a857e697373012e1ef3cc82337968c5b31593e8e895bcb77aa38a",
+    "trace_path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc10_20260824T074813Z/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/qwen_trace.jsonl",
+    "trace_sha256": "824ffca7e8ccdd9ed5ecdfe87a11beee8200a3529f0f6d1522806b327a58c0aa",
+    "trace_bytes": 184862,
+    "event_count": 111,
+    "assistant_event_count": 77,
+    "assistant_output_event_count": 68,
+    "qwen_assistant_event_count": 77,
+    "codex_agent_message_event_count": 0,
+    "positive_token_usage": true,
+    "usage_record_count": 78,
+    "positive_usage_record_count": 27,
+    "usage_max_by_field": {
+      "cache_read_input_tokens": 0,
+      "input_tokens": 1437102,
+      "output_tokens": 61099,
+      "total_tokens": 1498201
+    },
+    "agent_terminal": {
+      "exit_code": 0,
+      "timed_out": false,
+      "offloaded": true,
+      "network_drop": false,
+      "stall_killed": null,
+      "cause": null,
+      "ws_down_rc": null,
+      "patch_down_rc": 0,
+      "setup_error": null,
+      "transport_error": null,
+      "dispatch_error": null,
+      "error": null,
+      "elapsed_s": 2474.673,
+      "container_name": "swe-qwen-astropy__astropy-14508-5e490ca151c86801",
+      "codex_host": "alienware",
+      "agent_env": "instance_image",
+      "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14508:latest"
+    }
+  },
+  "vllm_request_metrics_bytes": 0,
+  "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+  "patch_bytes": 1124,
+  "eval": {
+    "exit_code": 0,
+    "elapsed_s": 42.769,
+    "offloaded": true,
+    "eval_host": "alienware",
+    "evaluator": {
+      "mode": "remote_x86_worker",
+      "host": "alienware",
+      "base": "~/swe_eval_offload",
+      "worker": "~/swe_eval_offload/swe_eval_x86_worker.py",
+      "interpreter": "~/swe_eval_offload/venv/bin/python",
+      "worker_sha256": "4a06bbe937af3c04c3897564d7bc27cdad8d8abc8c13fd156650e203e30994da",
+      "worker_bytes": 8046,
+      "interpreter_realpath": "/usr/bin/python3.12"
+    }
+  },
+  "eval_report": {
+    "track": "swe_bench",
+    "instance_id": "astropy__astropy-14508",
+    "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+    "dataset_name": "princeton-nlp/SWE-bench_Verified",
+    "verdict": "resolved",
+    "passed": true,
+    "failure_mode": "tests_passed",
+    "harness_exit_code": 0,
+    "eval_wall_clock_seconds": 40.512,
+    "error": null,
+    "arch": "x86_64",
+    "eval_host": "mark-Alienware-Aurora-ACT1250",
+    "run_id": "x86eval-out-1787566285",
+    "namespace": "swebench",
+    "cache_level": "env"
+  },
+  "ended_at": "2026-08-24T10:12:07Z"
+}

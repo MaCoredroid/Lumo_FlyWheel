@@ -1,0 +1,142 @@
+[
+  {
+    "method": "treewy",
+    "repository": "sneha5gsm/vllm",
+    "commit": "b073ed6cacfa1cf5ae23111854729e662a72a6d1",
+    "upstream_path": "LICENSE",
+    "local_path": "experiments/author-code-20260926/treewy/LICENSE",
+    "url": "https://raw.githubusercontent.com/sneha5gsm/vllm/b073ed6cacfa1cf5ae23111854729e662a72a6d1/LICENSE",
+    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "bytes": 11357
+  },
+  {
+    "method": "treewy",
+    "repository": "sneha5gsm/vllm",
+    "commit": "b073ed6cacfa1cf5ae23111854729e662a72a6d1",
+    "upstream_path": "vllm/third_party/flash_linear_attention/ops/tree_wy_triton.py",
+    "local_path": "experiments/author-code-20260926/treewy/tree_wy_triton.py",
+    "url": "https://raw.githubusercontent.com/sneha5gsm/vllm/b073ed6cacfa1cf5ae23111854729e662a72a6d1/vllm/third_party/flash_linear_attention/ops/tree_wy_triton.py",
+    "sha256": "c3dc8849249b3eef336a77aff50f2b7963d9cc2567a6e8e926257aac04a1f4f7",
+    "bytes": 30381
+  },
+  {
+    "method": "treewy",
+    "repository": "sneha5gsm/vllm",
+    "commit": "b073ed6cacfa1cf5ae23111854729e662a72a6d1",
+    "upstream_path": "vllm/third_party/flash_linear_attention/ops/tree_wy_ref.py",
+    "local_path": "experiments/author-code-20260926/treewy/tree_wy_ref.py",
+    "url": "https://raw.githubusercontent.com/sneha5gsm/vllm/b073ed6cacfa1cf5ae23111854729e662a72a6d1/vllm/third_party/flash_linear_attention/ops/tree_wy_ref.py",
+    "sha256": "aa5f0f07824065044ee3b1c98a5a05ff542feace826239e0d38e9cc6292f01eb",
+    "bytes": 21948
+  },
+  {
+    "method": "treewy",
+    "repository": "sneha5gsm/vllm",
+    "commit": "b073ed6cacfa1cf5ae23111854729e662a72a6d1",
+    "upstream_path": "tests/kernels/mamba/test_tree_wy_chain_capture.py",
+    "local_path": "experiments/author-code-20260926/treewy/test_tree_wy_chain_capture.py",
+    "url": "https://raw.githubusercontent.com/sneha5gsm/vllm/b073ed6cacfa1cf5ae23111854729e662a72a6d1/tests/kernels/mamba/test_tree_wy_chain_capture.py",
+    "sha256": "2c52bf1d1535dea614caa7c89fc92b16797d88a09fae8bb4ff97ad5a5b1deaba",
+    "bytes": 12528
+  },
+  {
+    "method": "treewy",
+    "repository": "sneha5gsm/vllm",
+    "commit": "b073ed6cacfa1cf5ae23111854729e662a72a6d1",
+    "upstream_path": "tests/kernels/mamba/test_treewy_tree_capture.py",
+    "local_path": "experiments/author-code-20260926/treewy/test_treewy_tree_capture.py",
+    "url": "https://raw.githubusercontent.com/sneha5gsm/vllm/b073ed6cacfa1cf5ae23111854729e662a72a6d1/tests/kernels/mamba/test_treewy_tree_capture.py",
+    "sha256": "516a19c6460d4fc8fdf5777edec936c61c96f69b5e6510ef692d7af8b24aff0b",
+    "bytes": 29234
+  },
+  {
+    "method": "treewy",
+    "repository": "sneha5gsm/vllm",
+    "commit": "b073ed6cacfa1cf5ae23111854729e662a72a6d1",
+    "upstream_path": "tests/kernels/mamba/test_tree_wy_ref.py",
+    "local_path": "experiments/author-code-20260926/treewy/test_tree_wy_ref.py",
+    "url": "https://raw.githubusercontent.com/sneha5gsm/vllm/b073ed6cacfa1cf5ae23111854729e662a72a6d1/tests/kernels/mamba/test_tree_wy_ref.py",
+    "sha256": "45f345cf65f920ab828560a5f6b4da4356029ea6121f04952d5ae42024b60154",
+    "bytes": 11147
+  },
+  {
+    "method": "weaver",
+    "repository": "trymirai/sglang",
+    "commit": "aeac03f0d4c8789559411be95c5c127bdff24d1c",
+    "upstream_path": "LICENSE",
+    "local_path": "experiments/author-code-20260926/weaver/LICENSE",
+    "url": "https://raw.githubusercontent.com/trymirai/sglang/aeac03f0d4c8789559411be95c5c127bdff24d1c/LICENSE",
+    "sha256": "1495e1e757ef4d0925a2350563cf5754bb23c51701a8ec4fb3c5cdcbedae6747",
+    "bytes": 11346
+  },
+  {
+    "method": "weaver",
+    "repository": "trymirai/sglang",
+    "commit": "aeac03f0d4c8789559411be95c5c127bdff24d1c",
+    "upstream_path": "python/sglang/srt/layers/attention/fla/chunk_tree_verify.py",
+    "local_path": "experiments/author-code-20260926/weaver/chunk_tree_verify.py",
+    "url": "https://raw.githubusercontent.com/trymirai/sglang/aeac03f0d4c8789559411be95c5c127bdff24d1c/python/sglang/srt/layers/attention/fla/chunk_tree_verify.py",
+    "sha256": "1e141a8d52af973abb06f8ce99380e7636528bb9e917646f6e060923f1392eec",
+    "bytes": 38815
+  },
+  {
+    "method": "treewy",
+    "repository": "sneha5gsm/vllm",
+    "commit": "b073ed6cacfa1cf5ae23111854729e662a72a6d1",
+    "upstream_path": "vllm/v1/spec_decode/tree_spec.py",
+    "local_path": "experiments/author-code-20260926/treewy/tree_spec.py",
+    "url": "https://raw.githubusercontent.com/sneha5gsm/vllm/b073ed6cacfa1cf5ae23111854729e662a72a6d1/vllm/v1/spec_decode/tree_spec.py",
+    "sha256": "441c4338e7a5032f10c963b430ebe9246bd189910d81b44d637898f6dbbbe7a9",
+    "bytes": 30149
+  },
+  {
+    "method": "weaver",
+    "repository": "trymirai/sglang",
+    "commit": "aeac03f0d4c8789559411be95c5c127bdff24d1c",
+    "upstream_path": "benchmark/fla/bench_gdn_tree_bf16.py",
+    "local_path": "experiments/author-code-20260926/weaver/bench_gdn_tree_bf16.py",
+    "url": "https://raw.githubusercontent.com/trymirai/sglang/aeac03f0d4c8789559411be95c5c127bdff24d1c/benchmark/fla/bench_gdn_tree_bf16.py",
+    "sha256": "2507127ee260624a92456af1af91f805b5d10888265bcce8d9e9ca52fc3d1a51",
+    "bytes": 5846
+  },
+  {
+    "method": "weaver",
+    "repository": "trymirai/sglang",
+    "commit": "aeac03f0d4c8789559411be95c5c127bdff24d1c",
+    "upstream_path": "benchmark/fla/GDN_TREE_BF16.md",
+    "local_path": "experiments/author-code-20260926/weaver/GDN_TREE_BF16.md",
+    "url": "https://raw.githubusercontent.com/trymirai/sglang/aeac03f0d4c8789559411be95c5c127bdff24d1c/benchmark/fla/GDN_TREE_BF16.md",
+    "sha256": "9bdf2b5d74c79a89b930826a49b82535c885733f95a2ce699fe684c651e6a82f",
+    "bytes": 2643
+  },
+  {
+    "method": "weaver",
+    "repository": "trymirai/sglang",
+    "commit": "aeac03f0d4c8789559411be95c5c127bdff24d1c",
+    "upstream_path": "python/sglang/srt/layers/attention/fla/gdn_tree_fused.py",
+    "local_path": "experiments/author-code-20260926/weaver/gdn_tree_fused.py",
+    "url": "https://raw.githubusercontent.com/trymirai/sglang/aeac03f0d4c8789559411be95c5c127bdff24d1c/python/sglang/srt/layers/attention/fla/gdn_tree_fused.py",
+    "sha256": "87b54b2edbf051b37d5b61540509aff5d88b2130d10e1400372ee4a36511fc2e",
+    "bytes": 16317
+  },
+  {
+    "method": "weaver",
+    "repository": "trymirai/sglang",
+    "commit": "aeac03f0d4c8789559411be95c5c127bdff24d1c",
+    "upstream_path": "python/sglang/srt/layers/attention/fla/gdn_tree_triton.py",
+    "local_path": "experiments/author-code-20260926/weaver/gdn_tree_triton.py",
+    "url": "https://raw.githubusercontent.com/trymirai/sglang/aeac03f0d4c8789559411be95c5c127bdff24d1c/python/sglang/srt/layers/attention/fla/gdn_tree_triton.py",
+    "sha256": "b151d4b2ade0451a896e99f83e1656bcddd3d8ad279eab399e994c604e28a1ff",
+    "bytes": 20696
+  },
+  {
+    "method": "weaver",
+    "repository": "trymirai/sglang",
+    "commit": "aeac03f0d4c8789559411be95c5c127bdff24d1c",
+    "upstream_path": "python/sglang/srt/layers/attention/linear/gdn_backend.py",
+    "local_path": "experiments/author-code-20260926/weaver/gdn_backend.py",
+    "url": "https://raw.githubusercontent.com/trymirai/sglang/aeac03f0d4c8789559411be95c5c127bdff24d1c/python/sglang/srt/layers/attention/linear/gdn_backend.py",
+    "sha256": "3fd3f730764653b85a6c45362f38e108fa150ca53c9bc87c9d3d67b01e12d5d7",
+    "bytes": 33241
+  }
+]

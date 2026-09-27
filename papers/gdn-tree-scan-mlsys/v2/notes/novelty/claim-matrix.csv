@@ -1,0 +1,14 @@
+claim_id,current_mechanism,source_ids,novelty_status,defensible_scope,missing_or_excluded_claim
+C1,Hybrid tree verification,stree;weaver;specla;bole;treewy,Established capability,Concrete executed fixed32 GDN serving implementation,No first-system claim
+C2,Accepted-prefix continuation interface,bole;stree,Correctness invariant,Logical/physical/native-state coordination,No new sampler law
+C3,Path groups and transient cut states,specla,Direct schedule-family overlap,Topology-specific schedule and integration,Matched current schedule contrast absent
+C4,Recorded operands and selected-path replay,snakes;weaver;weavercode;replayssm,Direct mechanism overlap,Immediate captured native replay,No replay-invention claim
+C5,No durable branch-leaf state bank,bole;treewy;replayssm,Established state-lifetime family,Native running-row compatibility,Temporary cut states still exist
+C6,Shared tree descriptor,weaver;bole,Established representation family,Explicit mapping across state surfaces,No representation novelty claim
+C7,Spine-first physical KV and mask/remap,deft;invariance;llm42,Narrow candidate distinction,Coordinate key order while retaining logical query rows,No current controlled benefit or public priority established
+C8,Grouped-query split-K FA2,flashdecoding;flashinfer;deft,Known partitioning and reuse,Current geometry specialization and qualification,No new split-K algorithm
+C9,Fused argmax and top3,torchargmax;torchtopk;flashinfer,Specialized compatibility kernel,Reproduce pinned dual tie semantics,Gate does not establish general algorithm novelty
+C10,Device acceptance and captured replay,sgaccept;weaver;bole;flashinfer,Established execution family,Shared fixed products feeding native continuation,Capture is not fusion or same sampler-law proof
+C11,MTP head plus suffix tail/rescue,suffix;arctic;sam,Known mixed-proposal family,One fixed Hydra27 tree composition,Proposal-source ablation absent
+C12,SWE agent workload evaluation,bole;suffix;dflash;eagle3,"Application evidence, not first agentic speculation",Closed-loop named tasks with outcomes,Selected rates not task-quality or SOTA proof
+C13,Better numerics than compact verifiers,weaver;specla;bole;treewy,Unsupported comparative claim,Separate exact algebra from tested rounding,Needs current source-pinned matched comparison

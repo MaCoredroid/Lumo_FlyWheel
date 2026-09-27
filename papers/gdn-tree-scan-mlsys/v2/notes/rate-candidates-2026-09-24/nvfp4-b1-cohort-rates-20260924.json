@@ -1,0 +1,1046 @@
+[
+  {
+    "run": "Cp1",
+    "root": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cp1_20260818T081918Z",
+    "tasks": [
+      {
+        "run": "Cp1",
+        "task": "astropy__astropy-12907",
+        "metadata": {
+          "instance_id": "astropy__astropy-12907",
+          "started_at": "2026-08-18T08:24:30Z",
+          "ended_at": "2026-08-18T08:31:31Z",
+          "patch_bytes": 504,
+          "agent": {
+            "elapsed_s": 365.058,
+            "exit_code": 0,
+            "timed_out": false,
+            "fr14_network_boundary": {
+              "net": "fr14-agent-isolated",
+              "bridge": "fr14agent0",
+              "gateway": "172.31.99.1",
+              "proxy_port": "8023",
+              "rules": "9",
+              "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+            },
+            "campaign_budget_s": 9000.0,
+            "budget_capped": false
+          }
+        },
+        "eval": {
+          "instance_id": "astropy__astropy-12907",
+          "verdict": "resolved",
+          "error": null,
+          "elapsed_s": null
+        },
+        "N": 6510.0,
+        "R": 13.0,
+        "E": 353.09126353263855,
+        "F": 68.23044443130493,
+        "decode_s": 284.8608191013336,
+        "rate": 22.807629425824338,
+        "status": "PASS",
+        "errors": [],
+        "deltas": {
+          "request_decode_time_seconds_count": 13.0,
+          "num_requests_running": 0.0,
+          "request_decode_time_seconds_sum": 284.86748443054967,
+          "time_to_first_token_seconds_sum": 68.23044443130493,
+          "request_generation_tokens_sum": 6510.0,
+          "num_requests_waiting": 0.0,
+          "time_to_first_token_seconds_count": 13.0,
+          "generation_tokens_total": 6510.0,
+          "request_generation_tokens_count": 13.0,
+          "e2e_request_latency_seconds_count": 13.0,
+          "e2e_request_latency_seconds_sum": 353.09126353263855,
+          "request_success_total": 13.0
+        }
+      },
+      {
+        "run": "Cp1",
+        "task": "astropy__astropy-13033",
+        "metadata": {
+          "instance_id": "astropy__astropy-13033",
+          "started_at": "2026-08-18T08:31:31Z",
+          "ended_at": "2026-08-18T08:53:35Z",
+          "patch_bytes": 1092,
+          "agent": {
+            "elapsed_s": 1267.008,
+            "exit_code": 0,
+            "timed_out": false,
+            "fr14_network_boundary": {
+              "net": "fr14-agent-isolated",
+              "bridge": "fr14agent0",
+              "gateway": "172.31.99.1",
+              "proxy_port": "8023",
+              "rules": "9",
+              "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+            },
+            "campaign_budget_s": 9000.0,
+            "budget_capped": false
+          }
+        },
+        "eval": {
+          "instance_id": "astropy__astropy-13033",
+          "verdict": "failed",
+          "error": null,
+          "elapsed_s": null
+        },
+        "N": 29333.0,
+        "R": 22.0,
+        "E": 1255.634096622467,
+        "F": 93.13320970535278,
+        "decode_s": 1162.5008869171143,
+        "rate": 25.2137442043,
+        "status": "PASS",
+        "errors": [],
+        "deltas": {
+          "request_decode_time_seconds_count": 22.0,
+          "num_requests_running": 0.0,
+          "request_decode_time_seconds_sum": 1162.5046695491765,
+          "time_to_first_token_seconds_sum": 93.13320970535278,
+          "request_generation_tokens_sum": 29333.0,
+          "num_requests_waiting": 0.0,
+          "time_to_first_token_seconds_count": 22.0,
+          "generation_tokens_total": 29333.0,
+          "request_generation_tokens_count": 22.0,
+          "e2e_request_latency_seconds_count": 22.0,
+          "e2e_request_latency_seconds_sum": 1255.634096622467,
+          "request_success_total": 22.0
+        }
+      },
+      {
+        "run": "Cp1",
+        "task": "astropy__astropy-13236",
+        "metadata": {
+          "instance_id": "astropy__astropy-13236",
+          "started_at": "2026-08-18T08:53:35Z",
+          "ended_at": "2026-08-18T09:18:25Z",
+          "patch_bytes": 1809,
+          "agent": {
+            "elapsed_s": 1431.243,
+            "exit_code": 0,
+            "timed_out": false,
+            "fr14_network_boundary": {
+              "net": "fr14-agent-isolated",
+              "bridge": "fr14agent0",
+              "gateway": "172.31.99.1",
+              "proxy_port": "8023",
+              "rules": "9",
+              "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+            },
+            "campaign_budget_s": 9000.0,
+            "budget_capped": false
+          }
+        },
+        "eval": {
+          "instance_id": "astropy__astropy-13236",
+          "verdict": "failed",
+          "error": null,
+          "elapsed_s": null
+        },
+        "N": 30208.0,
+        "R": 47.0,
+        "E": 1363.1107449531555,
+        "F": 125.64191579818726,
+        "decode_s": 1237.4688291549683,
+        "rate": 24.373139176843814,
+        "status": "PASS",
+        "errors": [],
+        "deltas": {
+          "request_decode_time_seconds_count": 47.0,
+          "num_requests_running": 0.0,
+          "request_decode_time_seconds_sum": 1237.4822733032051,
+          "time_to_first_token_seconds_sum": 125.64191579818726,
+          "request_generation_tokens_sum": 30208.0,
+          "num_requests_waiting": 0.0,
+          "time_to_first_token_seconds_count": 47.0,
+          "generation_tokens_total": 30208.0,
+          "request_generation_tokens_count": 47.0,
+          "e2e_request_latency_seconds_count": 47.0,
+          "e2e_request_latency_seconds_sum": 1363.1107449531555,
+          "request_success_total": 47.0
+        }
+      },
+      {
+        "run": "Cp1",
+        "task": "astropy__astropy-13398",
+        "metadata": null,
+        "eval": null,
+        "N": 189933.0,
+        "R": 112.0,
+        "E": 8976.028525352478,
+        "F": 541.5501987934113,
+        "decode_s": 8434.478326559067,
+        "rate": 22.505363420317124,
+        "status": "FAIL",
+        "errors": [
+          [
+            "request_generation_tokens_sum",
+            188089.0,
+            189933.0
+          ],
+          [
+            "time_to_first_token_seconds_count",
+            113.0,
+            112.0
+          ],
+          [
+            "post",
+            "num_requests_running",
+            1.0
+          ]
+        ],
+        "deltas": {
+          "request_decode_time_seconds_count": 112.0,
+          "num_requests_running": 1.0,
+          "request_decode_time_seconds_sum": 8443.27907523862,
+          "time_to_first_token_seconds_sum": 541.5501987934113,
+          "request_generation_tokens_sum": 188089.0,
+          "num_requests_waiting": 0.0,
+          "time_to_first_token_seconds_count": 113.0,
+          "generation_tokens_total": 189933.0,
+          "request_generation_tokens_count": 112.0,
+          "e2e_request_latency_seconds_count": 112.0,
+          "e2e_request_latency_seconds_sum": 8976.028525352478,
+          "request_success_total": 112.0
+        }
+      }
+    ],
+    "pools": {
+      "all_good_brackets": {
+        "rate": 24.57101077172418,
+        "N": 66051.0,
+        "R": 82.0,
+        "E": 2971.836105108261,
+        "F": 287.00556993484497,
+        "tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236"
+        ]
+      },
+      "complete_evaluated": {
+        "rate": 24.57101077172418,
+        "N": 66051.0,
+        "R": 82.0,
+        "E": 2971.836105108261,
+        "F": 287.00556993484497,
+        "tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236"
+        ]
+      },
+      "sglang_overlap": {
+        "rate": 24.74018750883243,
+        "N": 35843.0,
+        "R": 35.0,
+        "E": 1608.7253601551056,
+        "F": 161.36365413665771,
+        "tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033"
+        ]
+      }
+    }
+  },
+  {
+    "run": "Sr12",
+    "root": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z",
+    "tasks": [
+      {
+        "run": "Sr12",
+        "task": "astropy__astropy-12907",
+        "metadata": {
+          "instance_id": "astropy__astropy-12907",
+          "started_at": "2026-08-19T04:40:18Z",
+          "ended_at": "2026-08-19T04:48:03Z",
+          "patch_bytes": 504,
+          "agent": {
+            "elapsed_s": 407.188,
+            "exit_code": 0,
+            "timed_out": false,
+            "fr14_network_boundary": {
+              "net": "fr14-agent-isolated",
+              "bridge": "fr14agent0",
+              "gateway": "172.31.99.1",
+              "proxy_port": "8023",
+              "rules": "9",
+              "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+            },
+            "campaign_budget_s": 9000.0,
+            "budget_capped": false
+          }
+        },
+        "eval": {
+          "instance_id": "astropy__astropy-12907",
+          "verdict": "resolved",
+          "error": null,
+          "elapsed_s": null
+        },
+        "N": 7873.0,
+        "R": 17.0,
+        "E": 372.198046207428,
+        "F": 77.41206645965576,
+        "decode_s": 294.7859797477722,
+        "rate": 26.64984273241838,
+        "status": "PASS",
+        "errors": [],
+        "deltas": {
+          "request_decode_time_seconds_count": 17.0,
+          "num_requests_running": 0.0,
+          "request_decode_time_seconds_sum": 294.7881460196804,
+          "time_to_first_token_seconds_sum": 77.41206645965576,
+          "request_generation_tokens_sum": 7873.0,
+          "num_requests_waiting": 0.0,
+          "time_to_first_token_seconds_count": 17.0,
+          "generation_tokens_total": 7873.0,
+          "request_generation_tokens_count": 17.0,
+          "e2e_request_latency_seconds_count": 17.0,
+          "e2e_request_latency_seconds_sum": 372.198046207428,
+          "request_success_total": 17.0
+        }
+      },
+      {
+        "run": "Sr12",
+        "task": "astropy__astropy-13033",
+        "metadata": {
+          "instance_id": "astropy__astropy-13033",
+          "started_at": "2026-08-19T04:48:03Z",
+          "ended_at": "2026-08-19T04:59:32Z",
+          "patch_bytes": 1017,
+          "agent": {
+            "elapsed_s": 631.567,
+            "exit_code": 0,
+            "timed_out": false,
+            "fr14_network_boundary": {
+              "net": "fr14-agent-isolated",
+              "bridge": "fr14agent0",
+              "gateway": "172.31.99.1",
+              "proxy_port": "8023",
+              "rules": "9",
+              "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+            },
+            "campaign_budget_s": 9000.0,
+            "budget_capped": false
+          }
+        },
+        "eval": {
+          "instance_id": "astropy__astropy-13033",
+          "verdict": "failed",
+          "error": null,
+          "elapsed_s": null
+        },
+        "N": 17154.0,
+        "R": 24.0,
+        "E": 617.0631222724915,
+        "F": 53.03014898300171,
+        "decode_s": 564.0329732894897,
+        "rate": 30.370564862717757,
+        "status": "PASS",
+        "errors": [],
+        "deltas": {
+          "request_decode_time_seconds_count": 24.0,
+          "num_requests_running": 0.0,
+          "request_decode_time_seconds_sum": 564.0425248835236,
+          "time_to_first_token_seconds_sum": 53.03014898300171,
+          "request_generation_tokens_sum": 17154.0,
+          "num_requests_waiting": 0.0,
+          "time_to_first_token_seconds_count": 24.0,
+          "generation_tokens_total": 17154.0,
+          "request_generation_tokens_count": 24.0,
+          "e2e_request_latency_seconds_count": 24.0,
+          "e2e_request_latency_seconds_sum": 617.0631222724915,
+          "request_success_total": 24.0
+        }
+      },
+      {
+        "run": "Sr12",
+        "task": "astropy__astropy-13236",
+        "metadata": {
+          "instance_id": "astropy__astropy-13236",
+          "started_at": "2026-08-19T04:59:32Z",
+          "ended_at": "2026-08-19T05:04:29Z",
+          "patch_bytes": 819,
+          "agent": {
+            "elapsed_s": 238.166,
+            "exit_code": 0,
+            "timed_out": false,
+            "fr14_network_boundary": {
+              "net": "fr14-agent-isolated",
+              "bridge": "fr14agent0",
+              "gateway": "172.31.99.1",
+              "proxy_port": "8023",
+              "rules": "9",
+              "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+            },
+            "campaign_budget_s": 9000.0,
+            "budget_capped": false
+          }
+        },
+        "eval": {
+          "instance_id": "astropy__astropy-13236",
+          "verdict": "resolved",
+          "error": null,
+          "elapsed_s": null
+        },
+        "N": 5311.0,
+        "R": 25.0,
+        "E": 217.9791977405548,
+        "F": 47.46347999572754,
+        "decode_s": 170.51571774482727,
+        "rate": 31.000074772639866,
+        "status": "PASS",
+        "errors": [],
+        "deltas": {
+          "request_decode_time_seconds_count": 25.0,
+          "num_requests_running": 0.0,
+          "request_decode_time_seconds_sum": 170.5155896844808,
+          "time_to_first_token_seconds_sum": 47.46347999572754,
+          "request_generation_tokens_sum": 5311.0,
+          "num_requests_waiting": 0.0,
+          "time_to_first_token_seconds_count": 25.0,
+          "generation_tokens_total": 5311.0,
+          "request_generation_tokens_count": 25.0,
+          "e2e_request_latency_seconds_count": 25.0,
+          "e2e_request_latency_seconds_sum": 217.9791977405548,
+          "request_success_total": 25.0
+        }
+      },
+      {
+        "run": "Sr12",
+        "task": "astropy__astropy-13398",
+        "metadata": {
+          "instance_id": "astropy__astropy-13398",
+          "started_at": "2026-08-19T05:04:29Z",
+          "ended_at": "2026-08-19T05:57:53Z",
+          "patch_bytes": 3942,
+          "agent": {
+            "elapsed_s": 3143.315,
+            "exit_code": 0,
+            "timed_out": false,
+            "fr14_network_boundary": {
+              "net": "fr14-agent-isolated",
+              "bridge": "fr14agent0",
+              "gateway": "172.31.99.1",
+              "proxy_port": "8023",
+              "rules": "9",
+              "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+            },
+            "campaign_budget_s": 9000.0,
+            "budget_capped": false
+          }
+        },
+        "eval": {
+          "instance_id": "astropy__astropy-13398",
+          "verdict": "failed",
+          "error": null,
+          "elapsed_s": null
+        },
+        "N": 71585.0,
+        "R": 58.0,
+        "E": 3093.5175693035126,
+        "F": 238.18968033790588,
+        "decode_s": 2855.3278889656067,
+        "rate": 25.05036296406292,
+        "status": "PASS",
+        "errors": [],
+        "deltas": {
+          "request_decode_time_seconds_count": 58.0,
+          "num_requests_running": 0.0,
+          "request_decode_time_seconds_sum": 2855.3442829228006,
+          "time_to_first_token_seconds_sum": 238.18968033790588,
+          "request_generation_tokens_sum": 71585.0,
+          "num_requests_waiting": 0.0,
+          "time_to_first_token_seconds_count": 58.0,
+          "generation_tokens_total": 71585.0,
+          "request_generation_tokens_count": 58.0,
+          "e2e_request_latency_seconds_count": 58.0,
+          "e2e_request_latency_seconds_sum": 3093.5175693035126,
+          "request_success_total": 58.0
+        }
+      }
+    ],
+    "pools": {
+      "all_good_brackets": {
+        "rate": 26.20536492791583,
+        "N": 101923.0,
+        "R": 124.0,
+        "E": 4300.757935523987,
+        "F": 416.0953757762909,
+        "tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13398"
+        ]
+      },
+      "complete_evaluated": {
+        "rate": 26.20536492791583,
+        "N": 101923.0,
+        "R": 124.0,
+        "E": 4300.757935523987,
+        "F": 416.0953757762909,
+        "tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13398"
+        ]
+      },
+      "sglang_overlap": {
+        "rate": 29.093442700158857,
+        "N": 25027.0,
+        "R": 41.0,
+        "E": 989.2611684799194,
+        "F": 130.44221544265747,
+        "tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033"
+        ]
+      }
+    }
+  },
+  {
+    "run": "Cqc16",
+    "root": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z",
+    "tasks": [
+      {
+        "run": "Cqc16",
+        "task": "astropy__astropy-12907",
+        "metadata": {
+          "instance_id": "astropy__astropy-12907",
+          "started_at": "2026-08-19T22:29:49Z",
+          "ended_at": "2026-08-19T22:35:38Z",
+          "patch_bytes": 504,
+          "agent": {
+            "elapsed_s": 291.437,
+            "exit_code": 0,
+            "timed_out": false,
+            "fr14_network_boundary": {
+              "net": "fr14-agent-isolated",
+              "bridge": "fr14agent0",
+              "gateway": "172.31.99.1",
+              "proxy_port": "8023",
+              "rules": "9",
+              "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+            },
+            "campaign_budget_s": 9000.0,
+            "budget_capped": false
+          }
+        },
+        "eval": {
+          "instance_id": "astropy__astropy-12907",
+          "verdict": "resolved",
+          "error": null,
+          "elapsed_s": null
+        },
+        "N": 5603.0,
+        "R": 15.0,
+        "E": 269.4160666465759,
+        "F": 71.57123923301697,
+        "decode_s": 197.84482741355896,
+        "rate": 28.24435732312219,
+        "status": "PASS",
+        "errors": [],
+        "deltas": {
+          "request_decode_time_seconds_count": 15.0,
+          "num_requests_running": 0.0,
+          "request_decode_time_seconds_sum": 197.8498283198569,
+          "time_to_first_token_seconds_sum": 71.57123923301697,
+          "request_generation_tokens_sum": 5603.0,
+          "num_requests_waiting": 0.0,
+          "time_to_first_token_seconds_count": 15.0,
+          "generation_tokens_total": 5603.0,
+          "request_generation_tokens_count": 15.0,
+          "e2e_request_latency_seconds_count": 15.0,
+          "e2e_request_latency_seconds_sum": 269.4160666465759,
+          "request_success_total": 15.0
+        }
+      },
+      {
+        "run": "Cqc16",
+        "task": "astropy__astropy-13033",
+        "metadata": {
+          "instance_id": "astropy__astropy-13033",
+          "started_at": "2026-08-19T22:35:38Z",
+          "ended_at": "2026-08-19T22:49:47Z",
+          "patch_bytes": 1092,
+          "agent": {
+            "elapsed_s": 791.87,
+            "exit_code": 0,
+            "timed_out": false,
+            "fr14_network_boundary": {
+              "net": "fr14-agent-isolated",
+              "bridge": "fr14agent0",
+              "gateway": "172.31.99.1",
+              "proxy_port": "8023",
+              "rules": "9",
+              "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+            },
+            "campaign_budget_s": 9000.0,
+            "budget_capped": false
+          }
+        },
+        "eval": {
+          "instance_id": "astropy__astropy-13033",
+          "verdict": "failed",
+          "error": null,
+          "elapsed_s": null
+        },
+        "N": 20636.0,
+        "R": 20.0,
+        "E": 779.3725461959839,
+        "F": 50.72596263885498,
+        "decode_s": 728.6465835571289,
+        "rate": 28.293551997946917,
+        "status": "PASS",
+        "errors": [],
+        "deltas": {
+          "request_decode_time_seconds_count": 20.0,
+          "num_requests_running": 0.0,
+          "request_decode_time_seconds_sum": 728.6508799628355,
+          "time_to_first_token_seconds_sum": 50.72596263885498,
+          "request_generation_tokens_sum": 20636.0,
+          "num_requests_waiting": 0.0,
+          "time_to_first_token_seconds_count": 20.0,
+          "generation_tokens_total": 20636.0,
+          "request_generation_tokens_count": 20.0,
+          "e2e_request_latency_seconds_count": 20.0,
+          "e2e_request_latency_seconds_sum": 779.3725461959839,
+          "request_success_total": 20.0
+        }
+      },
+      {
+        "run": "Cqc16",
+        "task": "astropy__astropy-13236",
+        "metadata": null,
+        "eval": null,
+        "N": 33313.0,
+        "R": 2.0,
+        "E": 1234.2543733119965,
+        "F": 30.120347261428833,
+        "decode_s": 1204.1340260505676,
+        "rate": 27.66386405444962,
+        "status": "PASS",
+        "errors": [],
+        "deltas": {
+          "request_decode_time_seconds_count": 2.0,
+          "num_requests_running": 0.0,
+          "request_decode_time_seconds_sum": 1204.1332794029731,
+          "time_to_first_token_seconds_sum": 30.120347261428833,
+          "request_generation_tokens_sum": 33313.0,
+          "num_requests_waiting": 0.0,
+          "time_to_first_token_seconds_count": 2.0,
+          "generation_tokens_total": 33313.0,
+          "request_generation_tokens_count": 2.0,
+          "e2e_request_latency_seconds_count": 2.0,
+          "e2e_request_latency_seconds_sum": 1234.2543733119965,
+          "request_success_total": 2.0
+        }
+      }
+    ],
+    "pools": {
+      "all_good_brackets": {
+        "rate": 27.933112487010202,
+        "N": 59552.0,
+        "R": 37.0,
+        "E": 2283.0429861545563,
+        "F": 152.41754913330078,
+        "tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236"
+        ]
+      },
+      "complete_evaluated": {
+        "rate": 28.28304686877344,
+        "N": 26239.0,
+        "R": 35.0,
+        "E": 1048.7886128425598,
+        "F": 122.29720187187195,
+        "tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033"
+        ]
+      },
+      "sglang_overlap": {
+        "rate": 28.28304686877344,
+        "N": 26239.0,
+        "R": 35.0,
+        "E": 1048.7886128425598,
+        "F": 122.29720187187195,
+        "tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033"
+        ]
+      }
+    }
+  },
+  {
+    "run": "Cqc15",
+    "root": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z",
+    "tasks": [
+      {
+        "run": "Cqc15",
+        "task": "astropy__astropy-12907",
+        "metadata": {
+          "instance_id": "astropy__astropy-12907",
+          "started_at": "2026-08-23T19:42:11Z",
+          "ended_at": "2026-08-23T19:54:18Z",
+          "patch_bytes": 504,
+          "agent": {
+            "elapsed_s": 670.872,
+            "exit_code": 0,
+            "timed_out": false,
+            "fr14_network_boundary": {
+              "net": "fr14-agent-isolated",
+              "bridge": "fr14agent0",
+              "gateway": "172.31.99.1",
+              "proxy_port": "8023",
+              "rules": "9",
+              "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+            },
+            "campaign_budget_s": 9000.0,
+            "budget_capped": false
+          }
+        },
+        "eval": {
+          "instance_id": "astropy__astropy-12907",
+          "verdict": "resolved",
+          "error": null,
+          "elapsed_s": null
+        },
+        "N": 14138.0,
+        "R": 25.0,
+        "E": 640.3167777061462,
+        "F": 94.51715564727783,
+        "decode_s": 545.7996220588684,
+        "rate": 25.857474849035004,
+        "status": "PASS",
+        "errors": [],
+        "deltas": {
+          "request_decode_time_seconds_count": 25.0,
+          "num_requests_running": 0.0,
+          "request_decode_time_seconds_sum": 545.8002772885375,
+          "time_to_first_token_seconds_sum": 94.51715564727783,
+          "request_generation_tokens_sum": 14138.0,
+          "num_requests_waiting": 0.0,
+          "time_to_first_token_seconds_count": 25.0,
+          "generation_tokens_total": 14138.0,
+          "request_generation_tokens_count": 25.0,
+          "e2e_request_latency_seconds_count": 25.0,
+          "e2e_request_latency_seconds_sum": 640.3167777061462,
+          "request_success_total": 25.0
+        }
+      },
+      {
+        "run": "Cqc15",
+        "task": "astropy__astropy-13033",
+        "metadata": {
+          "instance_id": "astropy__astropy-13033",
+          "started_at": "2026-08-23T19:54:18Z",
+          "ended_at": "2026-08-23T20:32:45Z",
+          "patch_bytes": 1450,
+          "agent": {
+            "elapsed_s": 2249.684,
+            "exit_code": 0,
+            "timed_out": false,
+            "fr14_network_boundary": {
+              "net": "fr14-agent-isolated",
+              "bridge": "fr14agent0",
+              "gateway": "172.31.99.1",
+              "proxy_port": "8023",
+              "rules": "9",
+              "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+            },
+            "campaign_budget_s": 9000.0,
+            "budget_capped": false
+          }
+        },
+        "eval": {
+          "instance_id": "astropy__astropy-13033",
+          "verdict": "failed",
+          "error": null,
+          "elapsed_s": null
+        },
+        "N": 56286.0,
+        "R": 28.0,
+        "E": 2209.566827774048,
+        "F": 174.64989686012268,
+        "decode_s": 2034.9169309139252,
+        "rate": 27.64633737394544,
+        "status": "PASS",
+        "errors": [],
+        "deltas": {
+          "request_decode_time_seconds_count": 28.0,
+          "num_requests_running": 0.0,
+          "request_decode_time_seconds_sum": 2034.9235856237356,
+          "time_to_first_token_seconds_sum": 174.64989686012268,
+          "request_generation_tokens_sum": 56286.0,
+          "num_requests_waiting": 0.0,
+          "time_to_first_token_seconds_count": 28.0,
+          "generation_tokens_total": 56286.0,
+          "request_generation_tokens_count": 28.0,
+          "e2e_request_latency_seconds_count": 28.0,
+          "e2e_request_latency_seconds_sum": 2209.566827774048,
+          "request_success_total": 28.0
+        }
+      },
+      {
+        "run": "Cqc15",
+        "task": "astropy__astropy-13398",
+        "metadata": null,
+        "eval": null,
+        "N": 205470.0,
+        "R": 149.0,
+        "E": 8988.3370718956,
+        "F": 650.8573532104492,
+        "decode_s": 8337.47971868515,
+        "rate": 24.626266800967983,
+        "status": "FAIL",
+        "errors": [
+          [
+            "request_generation_tokens_sum",
+            203612.0,
+            205470.0
+          ],
+          [
+            "time_to_first_token_seconds_count",
+            150.0,
+            149.0
+          ],
+          [
+            "post",
+            "num_requests_running",
+            1.0
+          ]
+        ],
+        "deltas": {
+          "request_decode_time_seconds_count": 149.0,
+          "num_requests_running": 1.0,
+          "request_decode_time_seconds_sum": 8339.658773485105,
+          "time_to_first_token_seconds_sum": 650.8573532104492,
+          "request_generation_tokens_sum": 203612.0,
+          "num_requests_waiting": 0.0,
+          "time_to_first_token_seconds_count": 150.0,
+          "generation_tokens_total": 205470.0,
+          "request_generation_tokens_count": 149.0,
+          "e2e_request_latency_seconds_count": 149.0,
+          "e2e_request_latency_seconds_sum": 8988.3370718956,
+          "request_success_total": 149.0
+        }
+      }
+    ],
+    "pools": {
+      "all_good_brackets": {
+        "rate": 27.26800815027045,
+        "N": 70424.0,
+        "R": 53.0,
+        "E": 2849.883605480194,
+        "F": 269.1670525074005,
+        "tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033"
+        ]
+      },
+      "complete_evaluated": {
+        "rate": 27.26800815027045,
+        "N": 70424.0,
+        "R": 53.0,
+        "E": 2849.883605480194,
+        "F": 269.1670525074005,
+        "tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033"
+        ]
+      },
+      "sglang_overlap": {
+        "rate": 27.26800815027045,
+        "N": 70424.0,
+        "R": 53.0,
+        "E": 2849.883605480194,
+        "F": 269.1670525074005,
+        "tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033"
+        ]
+      }
+    }
+  },
+  {
+    "run": "Cqc12",
+    "root": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc12_20260824T021301Z",
+    "tasks": [
+      {
+        "run": "Cqc12",
+        "task": "astropy__astropy-13453",
+        "metadata": {
+          "instance_id": "astropy__astropy-13453",
+          "started_at": "2026-08-24T02:18:21Z",
+          "ended_at": "2026-08-24T02:34:04Z",
+          "patch_bytes": 1047,
+          "agent": {
+            "elapsed_s": 886.401,
+            "exit_code": 0,
+            "timed_out": false,
+            "fr14_network_boundary": {
+              "net": "fr14-agent-isolated",
+              "bridge": "fr14agent0",
+              "gateway": "172.31.99.1",
+              "proxy_port": "8023",
+              "rules": "9",
+              "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+            },
+            "campaign_budget_s": 9000.0,
+            "budget_capped": false
+          }
+        },
+        "eval": {
+          "instance_id": "astropy__astropy-13453",
+          "verdict": "resolved",
+          "error": null,
+          "elapsed_s": null
+        },
+        "N": 19655.0,
+        "R": 44.0,
+        "E": 866.5348670482635,
+        "F": 160.93485379219055,
+        "decode_s": 705.600013256073,
+        "rate": 27.79336682478614,
+        "status": "PASS",
+        "errors": [],
+        "deltas": {
+          "request_decode_time_seconds_count": 44.0,
+          "num_requests_running": 0.0,
+          "request_decode_time_seconds_sum": 705.6039000425953,
+          "time_to_first_token_seconds_sum": 160.93485379219055,
+          "request_generation_tokens_sum": 19655.0,
+          "num_requests_waiting": 0.0,
+          "time_to_first_token_seconds_count": 44.0,
+          "generation_tokens_total": 19655.0,
+          "request_generation_tokens_count": 44.0,
+          "e2e_request_latency_seconds_count": 44.0,
+          "e2e_request_latency_seconds_sum": 866.5348670482635,
+          "request_success_total": 44.0
+        }
+      },
+      {
+        "run": "Cqc12",
+        "task": "astropy__astropy-13579",
+        "metadata": null,
+        "eval": null,
+        "N": 211476.0,
+        "R": 85.0,
+        "E": 8607.795336961746,
+        "F": 395.3359739780426,
+        "decode_s": 8212.459362983704,
+        "rate": 25.74027957481407,
+        "status": "FAIL",
+        "errors": [
+          [
+            "request_generation_tokens_sum",
+            200319.0,
+            211476.0
+          ],
+          [
+            "time_to_first_token_seconds_count",
+            86.0,
+            85.0
+          ],
+          [
+            "post",
+            "num_requests_running",
+            1.0
+          ]
+        ],
+        "deltas": {
+          "request_decode_time_seconds_count": 85.0,
+          "num_requests_running": 1.0,
+          "request_decode_time_seconds_sum": 8234.02730777557,
+          "time_to_first_token_seconds_sum": 395.3359739780426,
+          "request_generation_tokens_sum": 200319.0,
+          "num_requests_waiting": 0.0,
+          "time_to_first_token_seconds_count": 86.0,
+          "generation_tokens_total": 211476.0,
+          "request_generation_tokens_count": 85.0,
+          "e2e_request_latency_seconds_count": 85.0,
+          "e2e_request_latency_seconds_sum": 8607.795336961746,
+          "request_success_total": 85.0
+        }
+      }
+    ],
+    "pools": {
+      "all_good_brackets": {
+        "rate": 27.79336682478614,
+        "N": 19655.0,
+        "R": 44.0,
+        "E": 866.5348670482635,
+        "F": 160.93485379219055,
+        "tasks": [
+          "astropy__astropy-13453"
+        ]
+      },
+      "complete_evaluated": {
+        "rate": 27.79336682478614,
+        "N": 19655.0,
+        "R": 44.0,
+        "E": 866.5348670482635,
+        "F": 160.93485379219055,
+        "tasks": [
+          "astropy__astropy-13453"
+        ]
+      },
+      "sglang_overlap": null
+    }
+  },
+  {
+    "run": "Cqc12_unharvested",
+    "root": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc12_20260824T000712Z",
+    "tasks": [
+      {
+        "run": "Cqc12_unharvested",
+        "task": "astropy__astropy-13453",
+        "metadata": null,
+        "eval": null,
+        "N": 7927.0,
+        "R": 27.0,
+        "E": 397.54645824432373,
+        "F": 101.30784916877747,
+        "decode_s": 296.23860907554626,
+        "rate": 26.667692049503767,
+        "status": "PASS",
+        "errors": [],
+        "deltas": {
+          "request_decode_time_seconds_count": 27.0,
+          "num_requests_running": 0.0,
+          "request_decode_time_seconds_sum": 296.24732828931883,
+          "time_to_first_token_seconds_sum": 101.30784916877747,
+          "request_generation_tokens_sum": 7927.0,
+          "num_requests_waiting": 0.0,
+          "time_to_first_token_seconds_count": 27.0,
+          "generation_tokens_total": 7927.0,
+          "request_generation_tokens_count": 27.0,
+          "e2e_request_latency_seconds_count": 27.0,
+          "e2e_request_latency_seconds_sum": 397.54645824432373,
+          "request_success_total": 27.0
+        }
+      }
+    ],
+    "pools": {
+      "all_good_brackets": {
+        "rate": 26.667692049503767,
+        "N": 7927.0,
+        "R": 27.0,
+        "E": 397.54645824432373,
+        "F": 101.30784916877747,
+        "tasks": [
+          "astropy__astropy-13453"
+        ]
+      },
+      "complete_evaluated": null,
+      "sglang_overlap": null
+    }
+  }
+]

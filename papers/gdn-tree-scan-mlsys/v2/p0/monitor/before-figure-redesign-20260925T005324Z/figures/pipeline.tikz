@@ -1,0 +1,17 @@
+\begin{tikzpicture}[font=\scriptsize,
+ box/.style={draw=inkblue,fill=inkblue!7,rounded corners,align=center,text width=3.15cm,minimum height=0.62cm},
+ side/.style={box,text width=2.4cm,draw=mutedamber,fill=mutedamber!8},
+ arr/.style={-{Latex[length=1.6mm]},thick,draw=inkblue}]
+\node[box] (draft) at (0,0) {Draft tokens and proposal scores};
+\node[box] (desc) at (0,-1.0) {Shared tree descriptor\\parents, positions, masks, slots};
+\node[box] (verify) at (0,-2.0) {Path-local target forward\\GDN, convolution, attention};
+\node[box] (select) at (0,-3.0) {Fixed-shape device acceptance\\selected path and pending token};
+\node[box,draw=mutedgreen,fill=mutedgreen!8] (commit) at (0,-4.0) {Accepted replay and remap\\native continuation state};
+\foreach \a/\b in {draft/desc,desc/verify,verify/select,select/commit} \draw[arr] (\a)--(\b);
+\node[side] (layout) at (3.4,-1.5) {Backend-specific physical mapping};
+\node[side] (scratch) at (3.4,-3.2) {Temporary branch states and recorded operands};
+\draw[arr] (desc.east) -| (layout.north);
+\draw[arr] (layout.west) -- (verify.north east);
+\draw[arr] (verify.east) -- (scratch.north west);
+\draw[arr] (scratch.south west) -- (commit.east);
+\end{tikzpicture}

@@ -1,0 +1,18 @@
+# Current claim-to-evidence ledger — 23 September 2026
+
+This ledger supersedes the September 22 manuscript-performance framing. Prior versions remain in `p0/monitor/before-workload-revision-20260923/` and dated archives. A valid local timing measurement does not become evidence for a coding-agent workload.
+
+| Claim | Evidence | Allowed interpretation | Limit / missing work |
+| --- | --- | --- | --- |
+| Integrated tree verifier and selected continuation | Exact source/route audits; descriptor, recurrence, convolution, KV and pending-token contract | Implemented system design and GPU memory/recomputation choices | Prior tree/reconstruction work credited; no first-system or new-recurrence claim |
+| NVFP4 agent deployment | Cqc10 boot/configuration/extension receipts; Hydra27, patched FA2 split-K4, graphs/APC | Describes the exact dated agent-serving route | Not the FP8 Cat10 eager qualification; not proof current HEAD reproduced it |
+| Actual coding-agent task outcomes and elapsed times | Original Cqc10 ten task metadata/evaluator reports; independent SWE review | Six resolved/four failed in this completed development segment; every task time reported | Selected remaining ten of interrupted sixteen, one boot, no matched native ten-task arm; not full SWE-bench score |
+| Observed agent behavior in Cqc10 | Ten original traces hash-bound to runner metadata; independent replay in notes/agent-behavior-abstract-evidence-2026-09-23.md | Every task used tools and produced a nonempty patch; no detected degeneration or malformed tool-call arguments | Finite heuristic can miss loops with narration/tool use; prior campaign counterexample retained; no unchanged-quality claim |
+| Request decode observation | Cqc10 ten contiguous metric brackets, request-count reconciliation, independent reducer | Inverse mean request TPOT 28.1973882172 tokens/s across 265 observations, including 9 compactions | Request-weighted, not aggregate tokens/taskwall, not task speedup or output-quality evidence |
+| Optimizations reduce specified work in source | Exact route inventory and same-input head qualification | Source-level mechanism and configuration/engagement evidence at stated route | No agent-workload head-reuse or composed ablation; do not transfer E8 gain |
+| Sequential/compact arithmetic characterization | E7a final31/32 eligible confirmation, failed frozen criteria and corrected audit | Numerical comparison on same operands and stated references | Local family reimplementations, not authors' systems; neither candidate promoted; local timings excluded |
+| Bounded continuation evidence | E2/E7b, selected FP8 flat-slot B1/B4 route and helper controls | State publication consumed on tested links; finite legal-path checks | No live full conv/KV snapshot equivalence, general sampler proof, NVFP4 route qualification, or model-quality guarantee |
+| Same-input draft-logit equivalence | Two E8 qualification boots, 515 complete head/candidate comparisons each | Tested input/candidate/stream agreement | Internal-document qualification only; E8 timed rates excluded |
+| Application-speed advantage | Not yet measured under matched current full-task conditions | No speedup claimed | Proposed matched SWE experiment in review-experiments.md, not launched |
+
+Excluded from manuscript performance: E1/E8 internal-document rates; their paired percentage gain; older mixed-support historical proxies; old partial split-K pair relative gain; mixed-version sixteen-task aggregate score. The raw originals, adverse outcomes and dated analysis stay available for audit. Do not label August task runs as new September inference.

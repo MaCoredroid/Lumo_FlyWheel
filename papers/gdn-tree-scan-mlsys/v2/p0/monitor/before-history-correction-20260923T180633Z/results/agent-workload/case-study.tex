@@ -1,0 +1,44 @@
+The latest complete single-configuration task segment recovered from the NVFP4 campaign is Cqc10, recorded on 24 August 2026 and audited for this revision. It runs ten named Astropy instances from the test split of \texttt{princeton-nlp/SWE-bench\_Verified}, using Qwen Code 0.19.4 to inspect repositories, edit files, execute tools, and produce patches. The task/evaluation worker is x86-64; model serving runs on the GB10. These are full agent attempts, not fixed-prefix generation requests. Table~\ref{tab:swe-tasks} lists every task and saved evaluator outcome in this segment.
+
+\paragraph{Deployment}
+The served model is the port's \texttt{qwen3.8-27b-nvfp4-radixark} checkpoint with ModelOpt mixed quantization and bfloat16 execution dtype. The route uses Hydra27 with 32 physical verification rows, full-vocabulary draft logits, draft-logit reuse, and a patched FA2 GQA-pair split-K4 attention kernel. Prefix caching and full/piecewise CUDA graphs are enabled. The engine permits one active sequence, with maximum context 131,072 tokens and a 4,096-token scheduler budget. Source commit \texttt{e7af6b595a8b} and the loaded extension hash are retained in the artifact. This graph/cache-enabled stochastic deployment is distinct from the Cat10 eager qualification below; passing that qualification does not prove this route's full-model equivalence.
+
+The proxy supplies temperature 0.6, top-$p$ 0.95, top-$k$ 20, minimum-$p$ 0, and presence penalty 1.0; the engine seed is zero. The per-response output cap is 24,000 tokens, with a separate 20,000-token compaction cap and a 9,000-second agent timeout. Proxy auto-continuation is disabled. The agent runs in the task's repository image on an internal network that permits the model proxy and blocks external egress; per-task records retain the verified network-policy fingerprint. Agent duration comes from the task runner's elapsed-time field: it includes the agent loop and tool work, and excludes server startup and subsequent evaluation. We do not infer a completed-task speedup from model-only counters.
+
+\begin{table}[t]
+\caption{All ten tasks in the completed Cqc10 Astropy case. IDs have prefix \texttt{astropy\_\_astropy-}. Times are agent elapsed minutes, rounded from saved runner metadata; evaluation is subsequent. This selected development segment has one attempt per listed task and no matched native arm.}
+\label{tab:swe-tasks}
+\centering\small
+\begin{tabular}{@{}lrl@{}}
+\toprule
+Task suffix & Agent time (min) & Saved evaluation \\
+\midrule
+13977 & 24.59 & Failed tests \\
+14096 & 22.99 & Resolved \\
+14182 & 7.23 & Failed tests \\
+14309 & 1.67 & Resolved \\
+14365 & 6.78 & Failed tests \\
+14369 & 27.70 & Resolved \\
+14508 & 41.24 & Resolved \\
+14539 & 18.57 & Resolved \\
+14598 & 25.79 & Failed tests \\
+14995 & 4.59 & Resolved \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Workload observations}
+All ten attempts have evaluator reports: six resolved their tasks and four failed tests. Recorded agent durations sum to 181.15 minutes, with a range of 1.67--41.24 minutes. This is an observed task ledger, not a representative SWE-bench Verified success estimate. The sum is accumulated agent time, not elapsed campaign time including startup and evaluation.
+
+Every task used tools and produced a nonempty patch. A source-bound replay of the recorded trace checks detects no degeneration in these ten runs and no malformed tool-call arguments. The degeneration heuristic jointly requires at most 200 visible characters, zero tool calls, and at least 2,000 thinking characters; none of the ten traces meets that conjunction. This screen can miss loops that continue narrating or using tools, so its zero detections establish neither universal degeneration freedom nor preserved task quality. The earlier campaign's detected degeneration remains an adverse observation in the lineage audit.
+
+The service statistic is the inverse of the mean request-level time per output token (TPOT). Let $\bar\tau_r$ be the server's mean TPOT observation for request $r$ in a task's pre/post metric bracket. We compute
+\begin{equation}
+ D_{\mathrm{req}} = \frac{N}{\sum_{r=1}^{N}\bar\tau_r}
+ = \frac{265}{9.3980335\ \mathrm{s/token}}
+ = 28.20\ \mathrm{tokens/s}.
+\end{equation}
+The corresponding mean TPOT is 35.46 milliseconds. Raw pre/post counters for the ten tasks are contiguous and reproduce the stored reduction. The 265 observations reconcile with 256 normal model requests and nine successful internal compaction requests; all recorded completion reasons are stop, with no length-capped completion. Requests receive equal weight regardless of length; this is neither aggregate generated tokens divided by agent wall time nor a mean of per-request token rates. The statistic covers these completed engine requests in the task brackets, including internal compaction, rather than only final user-facing answers. It is secondary to the task outcomes and elapsed times above.
+
+\paragraph{Selection and comparison limits}
+Cqc10 contains the ten remaining tasks of an interrupted sixteen-task development campaign. Earlier segments changed source revisions and output caps and included degeneration, incomplete output, and budget-capped attempts. Source-bound audit records of those failures, retries, and missing evaluations remain in the artifact; the original records remain at their recorded source paths. We do not relabel the completed segment as the entire campaign, combine those segments into a single-configuration benchmark score, or drop unsuccessful attempts from a claimed benchmark denominator. The tasks were selected from one repository, and this deployment has one recorded boot without a matched ten-task native run. Separate targeted native probes change other serving settings and do not supply that comparator. Consequently, these records demonstrate an implemented verifier serving real coding-agent work, but establish no native-versus-tree task-speed or quality advantage. A current, matched task campaign is the remaining experiment for that claim.

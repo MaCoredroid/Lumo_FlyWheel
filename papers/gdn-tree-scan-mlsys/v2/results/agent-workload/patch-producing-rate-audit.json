@@ -1,0 +1,1107 @@
+{
+  "best_eligible_sglang": "SGLang_later",
+  "best_eligible_tree": "Sr12",
+  "configuration_and_behavior_projections": {
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/audit-projections/nvfp4-b1-cohort-caps-20260924.json": "8efcf7a07982f1eda49c2eade9bd62fd1b754180cf2eb62a3dd8c35004602a2e",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/audit-projections/nvfp4-b1-cohort-config-behavior-20260924.json": "d25ca9d36dbdcb94e701ed6dda1a879212702a49666072d84598786b31d55a77",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/audit-projections/nvfp4-b1-cohort-engagement-20260924.json": "cd3de566e6f14d6dcd98414f240a17ec04bb497f4b16a70858efcc6b1108fae4",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/sglang-step2-behavior-projection.json": "8ffb89b13304bf4a3005725085234f0af3bb53b8a79059b929c4b55488866115",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/sglang-step2-config-projection.json": "5ebbd60c77b000efc5890a6e97bd33c249f30583a7162b6258e05b6ba13055dc"
+  },
+  "context_arms": {
+    "Cqc10": {
+      "resolved": 6,
+      "task_count": 10,
+      "tasks": [
+        {
+          "agent_elapsed_s": 1475.104,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 32.0,
+          "eval_verdict": "failed",
+          "output_tokens": 32483.0,
+          "output_tokens_per_agent_elapsed_second": 22.020820226912814,
+          "pooled_post_first_token_tokens_per_s": 24.95264674075653,
+          "pooled_request_tokens_per_s_including_ttft": 22.406973398599792,
+          "post_first_token_count": 32451.0,
+          "post_first_token_latency_sum_s": 1300.503322839737,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 32.0,
+            "e2e_request_latency_seconds_sum": 1449.6826243400574,
+            "generation_tokens_total": 32483.0,
+            "request_decode_time_seconds_count": 32.0,
+            "request_decode_time_seconds_sum": 1300.5103775449097,
+            "request_generation_tokens_count": 32.0,
+            "request_generation_tokens_sum": 32483.0,
+            "request_success_total": 32.0,
+            "time_to_first_token_seconds_count": 32.0,
+            "time_to_first_token_seconds_sum": 149.17930150032043
+          },
+          "request_latency_sum_s": 1449.6826243400574,
+          "task": "astropy__astropy-13977",
+          "ttft_sum_s": 149.17930150032043
+        },
+        {
+          "agent_elapsed_s": 1379.13,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 26.0,
+          "eval_verdict": "resolved",
+          "output_tokens": 34026.0,
+          "output_tokens_per_agent_elapsed_second": 24.672075873920512,
+          "pooled_post_first_token_tokens_per_s": 26.879373495140268,
+          "pooled_request_tokens_per_s_including_ttft": 24.952259751574232,
+          "post_first_token_count": 34000.0,
+          "post_first_token_latency_sum_s": 1264.9104342460632,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 26.0,
+            "e2e_request_latency_seconds_sum": 1363.644028186798,
+            "generation_tokens_total": 34026.0,
+            "request_decode_time_seconds_count": 26.0,
+            "request_decode_time_seconds_sum": 1264.919154248666,
+            "request_generation_tokens_count": 26.0,
+            "request_generation_tokens_sum": 34026.0,
+            "request_success_total": 26.0,
+            "time_to_first_token_seconds_count": 26.0,
+            "time_to_first_token_seconds_sum": 98.73359394073486
+          },
+          "request_latency_sum_s": 1363.644028186798,
+          "task": "astropy__astropy-14096",
+          "ttft_sum_s": 98.73359394073486
+        },
+        {
+          "agent_elapsed_s": 433.624,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 35.0,
+          "eval_verdict": "failed",
+          "output_tokens": 9823.0,
+          "output_tokens_per_agent_elapsed_second": 22.653266424367654,
+          "pooled_post_first_token_tokens_per_s": 28.339445640073272,
+          "pooled_request_tokens_per_s_including_ttft": 23.85233488002176,
+          "post_first_token_count": 9788.0,
+          "post_first_token_latency_sum_s": 345.38431429862976,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 35.0,
+            "e2e_request_latency_seconds_sum": 411.82551097869873,
+            "generation_tokens_total": 9823.0,
+            "request_decode_time_seconds_count": 35.0,
+            "request_decode_time_seconds_sum": 345.39677783171646,
+            "request_generation_tokens_count": 35.0,
+            "request_generation_tokens_sum": 9823.0,
+            "request_success_total": 35.0,
+            "time_to_first_token_seconds_count": 35.0,
+            "time_to_first_token_seconds_sum": 66.44119668006897
+          },
+          "request_latency_sum_s": 411.82551097869873,
+          "task": "astropy__astropy-14182",
+          "ttft_sum_s": 66.44119668006897
+        },
+        {
+          "agent_elapsed_s": 100.411,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 7.0,
+          "eval_verdict": "resolved",
+          "output_tokens": 2325.0,
+          "output_tokens_per_agent_elapsed_second": 23.154833633765225,
+          "pooled_post_first_token_tokens_per_s": 30.670735472273588,
+          "pooled_request_tokens_per_s_including_ttft": 25.54022852490337,
+          "post_first_token_count": 2318.0,
+          "post_first_token_latency_sum_s": 75.57692909240723,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 7.0,
+            "e2e_request_latency_seconds_sum": 91.03285813331604,
+            "generation_tokens_total": 2325.0,
+            "request_decode_time_seconds_count": 7.0,
+            "request_decode_time_seconds_sum": 75.58409361122176,
+            "request_generation_tokens_count": 7.0,
+            "request_generation_tokens_sum": 2325.0,
+            "request_success_total": 7.0,
+            "time_to_first_token_seconds_count": 7.0,
+            "time_to_first_token_seconds_sum": 15.455929040908813
+          },
+          "request_latency_sum_s": 91.03285813331604,
+          "task": "astropy__astropy-14309",
+          "ttft_sum_s": 15.455929040908813
+        },
+        {
+          "agent_elapsed_s": 407.009,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 18.0,
+          "eval_verdict": "failed",
+          "output_tokens": 8860.0,
+          "output_tokens_per_agent_elapsed_second": 21.768560400384267,
+          "pooled_post_first_token_tokens_per_s": 25.236026515850995,
+          "pooled_request_tokens_per_s_including_ttft": 22.644766305633983,
+          "post_first_token_count": 8842.0,
+          "post_first_token_latency_sum_s": 350.37211561203003,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 18.0,
+            "e2e_request_latency_seconds_sum": 391.26038575172424,
+            "generation_tokens_total": 8860.0,
+            "request_decode_time_seconds_count": 18.0,
+            "request_decode_time_seconds_sum": 350.3772133344319,
+            "request_generation_tokens_count": 18.0,
+            "request_generation_tokens_sum": 8860.0,
+            "request_success_total": 18.0,
+            "time_to_first_token_seconds_count": 18.0,
+            "time_to_first_token_seconds_sum": 40.888270139694214
+          },
+          "request_latency_sum_s": 391.26038575172424,
+          "task": "astropy__astropy-14365",
+          "ttft_sum_s": 40.888270139694214
+        },
+        {
+          "agent_elapsed_s": 1661.955,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 37.0,
+          "eval_verdict": "resolved",
+          "output_tokens": 36275.0,
+          "output_tokens_per_agent_elapsed_second": 21.826704092469413,
+          "pooled_post_first_token_tokens_per_s": 24.625683193848783,
+          "pooled_request_tokens_per_s_including_ttft": 22.327663143616373,
+          "post_first_token_count": 36238.0,
+          "post_first_token_latency_sum_s": 1471.5530819892883,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 37.0,
+            "e2e_request_latency_seconds_sum": 1624.6662163734436,
+            "generation_tokens_total": 36275.0,
+            "request_decode_time_seconds_count": 37.0,
+            "request_decode_time_seconds_sum": 1471.5649461655412,
+            "request_generation_tokens_count": 37.0,
+            "request_generation_tokens_sum": 36275.0,
+            "request_success_total": 37.0,
+            "time_to_first_token_seconds_count": 37.0,
+            "time_to_first_token_seconds_sum": 153.11313438415527
+          },
+          "request_latency_sum_s": 1624.6662163734436,
+          "task": "astropy__astropy-14369",
+          "ttft_sum_s": 153.11313438415527
+        },
+        {
+          "agent_elapsed_s": 2474.673,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 28.0,
+          "eval_verdict": "resolved",
+          "output_tokens": 61099.0,
+          "output_tokens_per_agent_elapsed_second": 24.68972668308096,
+          "pooled_post_first_token_tokens_per_s": 26.565871480002894,
+          "pooled_request_tokens_per_s_including_ttft": 24.927880607349778,
+          "post_first_token_count": 61071.0,
+          "post_first_token_latency_sum_s": 2298.8517446517944,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 28.0,
+            "e2e_request_latency_seconds_sum": 2451.0306737422943,
+            "generation_tokens_total": 61099.0,
+            "request_decode_time_seconds_count": 28.0,
+            "request_decode_time_seconds_sum": 2298.8653508333955,
+            "request_generation_tokens_count": 28.0,
+            "request_generation_tokens_sum": 61099.0,
+            "request_success_total": 28.0,
+            "time_to_first_token_seconds_count": 28.0,
+            "time_to_first_token_seconds_sum": 152.17892909049988
+          },
+          "request_latency_sum_s": 2451.0306737422943,
+          "task": "astropy__astropy-14508",
+          "ttft_sum_s": 152.17892909049988
+        },
+        {
+          "agent_elapsed_s": 1114.236,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 34.0,
+          "eval_verdict": "resolved",
+          "output_tokens": 24746.0,
+          "output_tokens_per_agent_elapsed_second": 22.208939578329904,
+          "pooled_post_first_token_tokens_per_s": 25.01315897580225,
+          "pooled_request_tokens_per_s_including_ttft": 22.45412980005357,
+          "post_first_token_count": 24712.0,
+          "post_first_token_latency_sum_s": 987.9599783420563,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 34.0,
+            "e2e_request_latency_seconds_sum": 1102.0689833164215,
+            "generation_tokens_total": 24746.0,
+            "request_decode_time_seconds_count": 34.0,
+            "request_decode_time_seconds_sum": 987.9724464623723,
+            "request_generation_tokens_count": 34.0,
+            "request_generation_tokens_sum": 24746.0,
+            "request_success_total": 34.0,
+            "time_to_first_token_seconds_count": 34.0,
+            "time_to_first_token_seconds_sum": 114.10900497436523
+          },
+          "request_latency_sum_s": 1102.0689833164215,
+          "task": "astropy__astropy-14539",
+          "ttft_sum_s": 114.10900497436523
+        },
+        {
+          "agent_elapsed_s": 1547.614,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 37.0,
+          "eval_verdict": "failed",
+          "output_tokens": 31954.0,
+          "output_tokens_per_agent_elapsed_second": 20.647267341856562,
+          "pooled_post_first_token_tokens_per_s": 23.47479596333717,
+          "pooled_request_tokens_per_s_including_ttft": 21.012580310727113,
+          "post_first_token_count": 31917.0,
+          "post_first_token_latency_sum_s": 1359.6284308433533,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 37.0,
+            "e2e_request_latency_seconds_sum": 1520.708048582077,
+            "generation_tokens_total": 31954.0,
+            "request_decode_time_seconds_count": 37.0,
+            "request_decode_time_seconds_sum": 1359.6351365773007,
+            "request_generation_tokens_count": 37.0,
+            "request_generation_tokens_sum": 31954.0,
+            "request_success_total": 37.0,
+            "time_to_first_token_seconds_count": 37.0,
+            "time_to_first_token_seconds_sum": 161.07961773872375
+          },
+          "request_latency_sum_s": 1520.708048582077,
+          "task": "astropy__astropy-14598",
+          "ttft_sum_s": 161.07961773872375
+        },
+        {
+          "agent_elapsed_s": 275.154,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 11.0,
+          "eval_verdict": "resolved",
+          "output_tokens": 6751.0,
+          "output_tokens_per_agent_elapsed_second": 24.53535111246793,
+          "pooled_post_first_token_tokens_per_s": 30.216510879443835,
+          "pooled_request_tokens_per_s_including_ttft": 25.79653456639104,
+          "post_first_token_count": 6740.0,
+          "post_first_token_latency_sum_s": 223.05685877799988,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 11.0,
+            "e2e_request_latency_seconds_sum": 261.70181822776794,
+            "generation_tokens_total": 6751.0,
+            "request_decode_time_seconds_count": 11.0,
+            "request_decode_time_seconds_sum": 223.0590138931293,
+            "request_generation_tokens_count": 11.0,
+            "request_generation_tokens_sum": 6751.0,
+            "request_success_total": 11.0,
+            "time_to_first_token_seconds_count": 11.0,
+            "time_to_first_token_seconds_sum": 38.644959449768066
+          },
+          "request_latency_sum_s": 261.70181822776794,
+          "task": "astropy__astropy-14995",
+          "ttft_sum_s": 38.644959449768066
+        }
+      ],
+      "totals": {
+        "agent_elapsed_s": 10868.91,
+        "completed_requests": 265.0,
+        "output_tokens": 248342.0,
+        "output_tokens_per_agent_elapsed_second": 22.848841328155263,
+        "pooled_post_first_token_tokens_per_s": 25.633622465853126,
+        "pooled_request_tokens_per_s_including_ttft": 23.279979347139925,
+        "post_first_token_count": 248077.0,
+        "post_first_token_latency_sum_s": 9677.79721069336,
+        "request_latency_sum_s": 10667.621147632599,
+        "ttft_sum_s": 989.8239369392395
+      }
+    },
+    "Sr12_full_four_tasks": {
+      "resolved": 2,
+      "task_count": 4,
+      "tasks": [
+        {
+          "agent_elapsed_s": 407.188,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 17.0,
+          "eval_verdict": "resolved",
+          "output_tokens": 7873.0,
+          "output_tokens_per_agent_elapsed_second": 19.335049166478385,
+          "pooled_post_first_token_tokens_per_s": 26.64984273241838,
+          "pooled_request_tokens_per_s_including_ttft": 21.152717162873913,
+          "post_first_token_count": 7856.0,
+          "post_first_token_latency_sum_s": 294.7859797477722,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 17.0,
+            "e2e_request_latency_seconds_sum": 372.198046207428,
+            "generation_tokens_total": 7873.0,
+            "request_decode_time_seconds_count": 17.0,
+            "request_decode_time_seconds_sum": 294.7881460196804,
+            "request_generation_tokens_count": 17.0,
+            "request_generation_tokens_sum": 7873.0,
+            "request_success_total": 17.0,
+            "time_to_first_token_seconds_count": 17.0,
+            "time_to_first_token_seconds_sum": 77.41206645965576
+          },
+          "request_latency_sum_s": 372.198046207428,
+          "task": "astropy__astropy-12907",
+          "ttft_sum_s": 77.41206645965576
+        },
+        {
+          "agent_elapsed_s": 631.567,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 24.0,
+          "eval_verdict": "failed",
+          "output_tokens": 17154.0,
+          "output_tokens_per_agent_elapsed_second": 27.161013795844305,
+          "pooled_post_first_token_tokens_per_s": 30.370564862717757,
+          "pooled_request_tokens_per_s_including_ttft": 27.799425019641497,
+          "post_first_token_count": 17130.0,
+          "post_first_token_latency_sum_s": 564.0329732894897,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 24.0,
+            "e2e_request_latency_seconds_sum": 617.0631222724915,
+            "generation_tokens_total": 17154.0,
+            "request_decode_time_seconds_count": 24.0,
+            "request_decode_time_seconds_sum": 564.0425248835236,
+            "request_generation_tokens_count": 24.0,
+            "request_generation_tokens_sum": 17154.0,
+            "request_success_total": 24.0,
+            "time_to_first_token_seconds_count": 24.0,
+            "time_to_first_token_seconds_sum": 53.03014898300171
+          },
+          "request_latency_sum_s": 617.0631222724915,
+          "task": "astropy__astropy-13033",
+          "ttft_sum_s": 53.03014898300171
+        },
+        {
+          "agent_elapsed_s": 238.166,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 25.0,
+          "eval_verdict": "resolved",
+          "output_tokens": 5311.0,
+          "output_tokens_per_agent_elapsed_second": 22.299572567033078,
+          "pooled_post_first_token_tokens_per_s": 31.000074772639866,
+          "pooled_request_tokens_per_s_including_ttft": 24.364710279929128,
+          "post_first_token_count": 5286.0,
+          "post_first_token_latency_sum_s": 170.51571774482727,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 25.0,
+            "e2e_request_latency_seconds_sum": 217.9791977405548,
+            "generation_tokens_total": 5311.0,
+            "request_decode_time_seconds_count": 25.0,
+            "request_decode_time_seconds_sum": 170.5155896844808,
+            "request_generation_tokens_count": 25.0,
+            "request_generation_tokens_sum": 5311.0,
+            "request_success_total": 25.0,
+            "time_to_first_token_seconds_count": 25.0,
+            "time_to_first_token_seconds_sum": 47.46347999572754
+          },
+          "request_latency_sum_s": 217.9791977405548,
+          "task": "astropy__astropy-13236",
+          "ttft_sum_s": 47.46347999572754
+        },
+        {
+          "agent_elapsed_s": 3143.315,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 58.0,
+          "eval_verdict": "failed",
+          "output_tokens": 71585.0,
+          "output_tokens_per_agent_elapsed_second": 22.773727736482027,
+          "pooled_post_first_token_tokens_per_s": 25.05036296406292,
+          "pooled_request_tokens_per_s_including_ttft": 23.14032437065387,
+          "post_first_token_count": 71527.0,
+          "post_first_token_latency_sum_s": 2855.3278889656067,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 58.0,
+            "e2e_request_latency_seconds_sum": 3093.5175693035126,
+            "generation_tokens_total": 71585.0,
+            "request_decode_time_seconds_count": 58.0,
+            "request_decode_time_seconds_sum": 2855.3442829228006,
+            "request_generation_tokens_count": 58.0,
+            "request_generation_tokens_sum": 71585.0,
+            "request_success_total": 58.0,
+            "time_to_first_token_seconds_count": 58.0,
+            "time_to_first_token_seconds_sum": 238.18968033790588
+          },
+          "request_latency_sum_s": 3093.5175693035126,
+          "task": "astropy__astropy-13398",
+          "ttft_sum_s": 238.18968033790588
+        }
+      ],
+      "totals": {
+        "agent_elapsed_s": 4420.236,
+        "completed_requests": 124.0,
+        "output_tokens": 101923.0,
+        "output_tokens_per_agent_elapsed_second": 23.058271096837363,
+        "pooled_post_first_token_tokens_per_s": 26.20536492791583,
+        "pooled_request_tokens_per_s_including_ttft": 23.69884600063689,
+        "post_first_token_count": 101799.0,
+        "post_first_token_latency_sum_s": 3884.662559747696,
+        "request_latency_sum_s": 4300.757935523987,
+        "ttft_sum_s": 416.0953757762909
+      }
+    }
+  },
+  "eligibility": {
+    "Cqc10": {
+      "eligible": true,
+      "tasks": [
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "failed",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/runner_metadata.json",
+          "patch_bytes": 1141,
+          "reasons": [],
+          "task": "astropy__astropy-13977"
+        },
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "resolved",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/runner_metadata.json",
+          "patch_bytes": 1321,
+          "reasons": [],
+          "task": "astropy__astropy-14096"
+        },
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "failed",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/runner_metadata.json",
+          "patch_bytes": 745,
+          "reasons": [],
+          "task": "astropy__astropy-14182"
+        },
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "resolved",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/runner_metadata.json",
+          "patch_bytes": 574,
+          "reasons": [],
+          "task": "astropy__astropy-14309"
+        },
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "failed",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/runner_metadata.json",
+          "patch_bytes": 617,
+          "reasons": [],
+          "task": "astropy__astropy-14365"
+        },
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "resolved",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/runner_metadata.json",
+          "patch_bytes": 12307,
+          "reasons": [],
+          "task": "astropy__astropy-14369"
+        },
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "resolved",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/runner_metadata.json",
+          "patch_bytes": 1124,
+          "reasons": [],
+          "task": "astropy__astropy-14508"
+        },
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "resolved",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/runner_metadata.json",
+          "patch_bytes": 662,
+          "reasons": [],
+          "task": "astropy__astropy-14539"
+        },
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "failed",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/runner_metadata.json",
+          "patch_bytes": 808,
+          "reasons": [],
+          "task": "astropy__astropy-14598"
+        },
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "resolved",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/runner_metadata.json",
+          "patch_bytes": 645,
+          "reasons": [],
+          "task": "astropy__astropy-14995"
+        }
+      ]
+    },
+    "Cqc15": {
+      "eligible": true,
+      "tasks": [
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "resolved",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json",
+          "patch_bytes": 504,
+          "reasons": [],
+          "task": "astropy__astropy-12907"
+        },
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "failed",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json",
+          "patch_bytes": 1450,
+          "reasons": [],
+          "task": "astropy__astropy-13033"
+        }
+      ]
+    },
+    "Cqc16": {
+      "eligible": true,
+      "tasks": [
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "resolved",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json",
+          "patch_bytes": 504,
+          "reasons": [],
+          "task": "astropy__astropy-12907"
+        },
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "failed",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json",
+          "patch_bytes": 1092,
+          "reasons": [],
+          "task": "astropy__astropy-13033"
+        }
+      ]
+    },
+    "SGLang_earlier": {
+      "eligible": false,
+      "tasks": [
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "resolved",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-12907/runner_metadata.json",
+          "patch_bytes": 504,
+          "reasons": [],
+          "task": "astropy__astropy-12907"
+        },
+        {
+          "completed": true,
+          "eligible": false,
+          "eval_verdict": "failed",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-13033/runner_metadata.json",
+          "patch_bytes": 0,
+          "reasons": [
+            "empty_patch"
+          ],
+          "task": "astropy__astropy-13033"
+        }
+      ]
+    },
+    "SGLang_later": {
+      "eligible": true,
+      "tasks": [
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "resolved",
+          "metadata_path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json",
+          "patch_bytes": 504,
+          "reasons": [],
+          "task": "astropy__astropy-12907"
+        },
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "failed",
+          "metadata_path": "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json",
+          "patch_bytes": 912,
+          "reasons": [],
+          "task": "astropy__astropy-13033"
+        }
+      ]
+    },
+    "Sr12": {
+      "eligible": true,
+      "tasks": [
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "resolved",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json",
+          "patch_bytes": 504,
+          "reasons": [],
+          "task": "astropy__astropy-12907"
+        },
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "failed",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json",
+          "patch_bytes": 1017,
+          "reasons": [],
+          "task": "astropy__astropy-13033"
+        }
+      ]
+    },
+    "Sr12_full_four_tasks": {
+      "eligible": true,
+      "tasks": [
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "resolved",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json",
+          "patch_bytes": 504,
+          "reasons": [],
+          "task": "astropy__astropy-12907"
+        },
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "failed",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json",
+          "patch_bytes": 1017,
+          "reasons": [],
+          "task": "astropy__astropy-13033"
+        },
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "resolved",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13236/runner_metadata.json",
+          "patch_bytes": 819,
+          "reasons": [],
+          "task": "astropy__astropy-13236"
+        },
+        {
+          "completed": true,
+          "eligible": true,
+          "eval_verdict": "failed",
+          "metadata_path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13398/runner_metadata.json",
+          "patch_bytes": 3942,
+          "reasons": [],
+          "task": "astropy__astropy-13398"
+        }
+      ]
+    }
+  },
+  "eligibility_rule": "Each task: agent exit0, ended_at present, no timeout/budget cap, patch_bytes>0. No condition on test success or decode rate.",
+  "eligible_shared_task_arms": {
+    "Cqc15": {
+      "resolved": 1,
+      "task_count": 2,
+      "tasks": [
+        {
+          "agent_elapsed_s": 670.872,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 25.0,
+          "eval_verdict": "resolved",
+          "output_tokens": 14138.0,
+          "output_tokens_per_agent_elapsed_second": 21.074064799246354,
+          "pooled_post_first_token_tokens_per_s": 25.857474849035004,
+          "pooled_request_tokens_per_s_including_ttft": 22.079696319449248,
+          "post_first_token_count": 14113.0,
+          "post_first_token_latency_sum_s": 545.7996220588684,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 25.0,
+            "e2e_request_latency_seconds_sum": 640.3167777061462,
+            "generation_tokens_total": 14138.0,
+            "request_decode_time_seconds_count": 25.0,
+            "request_decode_time_seconds_sum": 545.8002772885375,
+            "request_generation_tokens_count": 25.0,
+            "request_generation_tokens_sum": 14138.0,
+            "request_success_total": 25.0,
+            "time_to_first_token_seconds_count": 25.0,
+            "time_to_first_token_seconds_sum": 94.51715564727783
+          },
+          "request_latency_sum_s": 640.3167777061462,
+          "task": "astropy__astropy-12907",
+          "ttft_sum_s": 94.51715564727783
+        },
+        {
+          "agent_elapsed_s": 2249.684,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 28.0,
+          "eval_verdict": "failed",
+          "output_tokens": 56286.0,
+          "output_tokens_per_agent_elapsed_second": 25.019513851723172,
+          "pooled_post_first_token_tokens_per_s": 27.64633737394544,
+          "pooled_request_tokens_per_s_including_ttft": 25.47377128063757,
+          "post_first_token_count": 56258.0,
+          "post_first_token_latency_sum_s": 2034.9169309139252,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 28.0,
+            "e2e_request_latency_seconds_sum": 2209.566827774048,
+            "generation_tokens_total": 56286.0,
+            "request_decode_time_seconds_count": 28.0,
+            "request_decode_time_seconds_sum": 2034.9235856237356,
+            "request_generation_tokens_count": 28.0,
+            "request_generation_tokens_sum": 56286.0,
+            "request_success_total": 28.0,
+            "time_to_first_token_seconds_count": 28.0,
+            "time_to_first_token_seconds_sum": 174.64989686012268
+          },
+          "request_latency_sum_s": 2209.566827774048,
+          "task": "astropy__astropy-13033",
+          "ttft_sum_s": 174.64989686012268
+        }
+      ],
+      "totals": {
+        "agent_elapsed_s": 2920.556,
+        "completed_requests": 53.0,
+        "output_tokens": 70424.0,
+        "output_tokens_per_agent_elapsed_second": 24.113216798445226,
+        "pooled_post_first_token_tokens_per_s": 27.26800815027045,
+        "pooled_request_tokens_per_s_including_ttft": 24.711184647884537,
+        "post_first_token_count": 70371.0,
+        "post_first_token_latency_sum_s": 2580.7165529727936,
+        "request_latency_sum_s": 2849.883605480194,
+        "ttft_sum_s": 269.1670525074005
+      }
+    },
+    "Cqc16": {
+      "resolved": 1,
+      "task_count": 2,
+      "tasks": [
+        {
+          "agent_elapsed_s": 291.437,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 15.0,
+          "eval_verdict": "resolved",
+          "output_tokens": 5603.0,
+          "output_tokens_per_agent_elapsed_second": 19.225424362726763,
+          "pooled_post_first_token_tokens_per_s": 28.24435732312219,
+          "pooled_request_tokens_per_s_including_ttft": 20.796829490314327,
+          "post_first_token_count": 5588.0,
+          "post_first_token_latency_sum_s": 197.84482741355896,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 15.0,
+            "e2e_request_latency_seconds_sum": 269.4160666465759,
+            "generation_tokens_total": 5603.0,
+            "request_decode_time_seconds_count": 15.0,
+            "request_decode_time_seconds_sum": 197.8498283198569,
+            "request_generation_tokens_count": 15.0,
+            "request_generation_tokens_sum": 5603.0,
+            "request_success_total": 15.0,
+            "time_to_first_token_seconds_count": 15.0,
+            "time_to_first_token_seconds_sum": 71.57123923301697
+          },
+          "request_latency_sum_s": 269.4160666465759,
+          "task": "astropy__astropy-12907",
+          "ttft_sum_s": 71.57123923301697
+        },
+        {
+          "agent_elapsed_s": 791.87,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 20.0,
+          "eval_verdict": "failed",
+          "output_tokens": 20636.0,
+          "output_tokens_per_agent_elapsed_second": 26.05983305340523,
+          "pooled_post_first_token_tokens_per_s": 28.293551997946917,
+          "pooled_request_tokens_per_s_including_ttft": 26.477709666220132,
+          "post_first_token_count": 20616.0,
+          "post_first_token_latency_sum_s": 728.6465835571289,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 20.0,
+            "e2e_request_latency_seconds_sum": 779.3725461959839,
+            "generation_tokens_total": 20636.0,
+            "request_decode_time_seconds_count": 20.0,
+            "request_decode_time_seconds_sum": 728.6508799628355,
+            "request_generation_tokens_count": 20.0,
+            "request_generation_tokens_sum": 20636.0,
+            "request_success_total": 20.0,
+            "time_to_first_token_seconds_count": 20.0,
+            "time_to_first_token_seconds_sum": 50.72596263885498
+          },
+          "request_latency_sum_s": 779.3725461959839,
+          "task": "astropy__astropy-13033",
+          "ttft_sum_s": 50.72596263885498
+        }
+      ],
+      "totals": {
+        "agent_elapsed_s": 1083.307,
+        "completed_requests": 35.0,
+        "output_tokens": 26239.0,
+        "output_tokens_per_agent_elapsed_second": 24.22120414619309,
+        "pooled_post_first_token_tokens_per_s": 28.28304686877344,
+        "pooled_request_tokens_per_s_including_ttft": 25.018387574674115,
+        "post_first_token_count": 26204.0,
+        "post_first_token_latency_sum_s": 926.4914109706879,
+        "request_latency_sum_s": 1048.7886128425598,
+        "ttft_sum_s": 122.29720187187195
+      }
+    },
+    "SGLang_later": {
+      "resolved": 1,
+      "task_count": 2,
+      "tasks": [
+        {
+          "agent_elapsed_s": 426.131,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 18.0,
+          "eval_verdict": "resolved",
+          "output_tokens": 8314.0,
+          "output_tokens_per_agent_elapsed_second": 19.51043223797377,
+          "pooled_post_first_token_tokens_per_s": 28.366973187187305,
+          "pooled_request_tokens_per_s_including_ttft": 20.58197091691743,
+          "post_first_token_count": 8296.0,
+          "post_first_token_latency_sum_s": 292.45277405017987,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 18.0,
+            "e2e_request_latency_seconds_count|streaming=false": 0.0,
+            "e2e_request_latency_seconds_sum": 403.9457656198647,
+            "e2e_request_latency_seconds_sum|streaming=false": 0.0,
+            "generation_tokens_histogram_count": 18.0,
+            "generation_tokens_histogram_sum": 8314.0,
+            "generation_tokens_total": 8314.0,
+            "generation_tokens_total|streaming=false": 0.0,
+            "num_requests_total": 18.0,
+            "num_requests_total|streaming=false": 0.0,
+            "time_to_first_token_seconds_count": 18.0,
+            "time_to_first_token_seconds_count|streaming=false": 0.0,
+            "time_to_first_token_seconds_sum": 111.49299156968482,
+            "time_to_first_token_seconds_sum|streaming=false": 0.0
+          },
+          "request_latency_sum_s": 403.9457656198647,
+          "task": "astropy__astropy-12907",
+          "ttft_sum_s": 111.49299156968482
+        },
+        {
+          "agent_elapsed_s": 1617.769,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 27.0,
+          "eval_verdict": "failed",
+          "output_tokens": 39540.0,
+          "output_tokens_per_agent_elapsed_second": 24.441066678864534,
+          "pooled_post_first_token_tokens_per_s": 26.603908611936415,
+          "pooled_request_tokens_per_s_including_ttft": 24.56375637083101,
+          "post_first_token_count": 39513.0,
+          "post_first_token_latency_sum_s": 1485.2328872559592,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 27.0,
+            "e2e_request_latency_seconds_count|streaming=false": 0.0,
+            "e2e_request_latency_seconds_sum": 1609.6886568600312,
+            "e2e_request_latency_seconds_sum|streaming=false": 0.0,
+            "generation_tokens_histogram_count": 27.0,
+            "generation_tokens_histogram_sum": 39540.0,
+            "generation_tokens_total": 39540.0,
+            "generation_tokens_total|streaming=false": 0.0,
+            "num_requests_total": 27.0,
+            "num_requests_total|streaming=false": 0.0,
+            "time_to_first_token_seconds_count": 27.0,
+            "time_to_first_token_seconds_count|streaming=false": 0.0,
+            "time_to_first_token_seconds_sum": 124.45576960407197,
+            "time_to_first_token_seconds_sum|streaming=false": 0.0
+          },
+          "request_latency_sum_s": 1609.6886568600312,
+          "task": "astropy__astropy-13033",
+          "ttft_sum_s": 124.45576960407197
+        }
+      ],
+      "totals": {
+        "agent_elapsed_s": 2043.9,
+        "completed_requests": 45.0,
+        "output_tokens": 47854.0,
+        "output_tokens_per_agent_elapsed_second": 23.413082831841088,
+        "pooled_post_first_token_tokens_per_s": 26.893956024189762,
+        "pooled_request_tokens_per_s_including_ttft": 23.764989049534275,
+        "post_first_token_count": 47809.0,
+        "post_first_token_latency_sum_s": 1777.685661306139,
+        "request_latency_sum_s": 2013.6344224798959,
+        "ttft_sum_s": 235.9487611737568
+      }
+    },
+    "Sr12": {
+      "resolved": 1,
+      "task_count": 2,
+      "tasks": [
+        {
+          "agent_elapsed_s": 407.188,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 17.0,
+          "eval_verdict": "resolved",
+          "output_tokens": 7873.0,
+          "output_tokens_per_agent_elapsed_second": 19.335049166478385,
+          "pooled_post_first_token_tokens_per_s": 26.64984273241838,
+          "pooled_request_tokens_per_s_including_ttft": 21.152717162873913,
+          "post_first_token_count": 7856.0,
+          "post_first_token_latency_sum_s": 294.7859797477722,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 17.0,
+            "e2e_request_latency_seconds_sum": 372.198046207428,
+            "generation_tokens_total": 7873.0,
+            "request_decode_time_seconds_count": 17.0,
+            "request_decode_time_seconds_sum": 294.7881460196804,
+            "request_generation_tokens_count": 17.0,
+            "request_generation_tokens_sum": 7873.0,
+            "request_success_total": 17.0,
+            "time_to_first_token_seconds_count": 17.0,
+            "time_to_first_token_seconds_sum": 77.41206645965576
+          },
+          "request_latency_sum_s": 372.198046207428,
+          "task": "astropy__astropy-12907",
+          "ttft_sum_s": 77.41206645965576
+        },
+        {
+          "agent_elapsed_s": 631.567,
+          "boundary_and_population_checks": "PASS",
+          "completed_requests": 24.0,
+          "eval_verdict": "failed",
+          "output_tokens": 17154.0,
+          "output_tokens_per_agent_elapsed_second": 27.161013795844305,
+          "pooled_post_first_token_tokens_per_s": 30.370564862717757,
+          "pooled_request_tokens_per_s_including_ttft": 27.799425019641497,
+          "post_first_token_count": 17130.0,
+          "post_first_token_latency_sum_s": 564.0329732894897,
+          "raw_metric_deltas": {
+            "e2e_request_latency_seconds_count": 24.0,
+            "e2e_request_latency_seconds_sum": 617.0631222724915,
+            "generation_tokens_total": 17154.0,
+            "request_decode_time_seconds_count": 24.0,
+            "request_decode_time_seconds_sum": 564.0425248835236,
+            "request_generation_tokens_count": 24.0,
+            "request_generation_tokens_sum": 17154.0,
+            "request_success_total": 24.0,
+            "time_to_first_token_seconds_count": 24.0,
+            "time_to_first_token_seconds_sum": 53.03014898300171
+          },
+          "request_latency_sum_s": 617.0631222724915,
+          "task": "astropy__astropy-13033",
+          "ttft_sum_s": 53.03014898300171
+        }
+      ],
+      "totals": {
+        "agent_elapsed_s": 1038.755,
+        "completed_requests": 41.0,
+        "output_tokens": 25027.0,
+        "output_tokens_per_agent_elapsed_second": 24.093265495713617,
+        "pooled_post_first_token_tokens_per_s": 29.093442700158857,
+        "pooled_request_tokens_per_s_including_ttft": 25.298678243335914,
+        "post_first_token_count": 24986.0,
+        "post_first_token_latency_sum_s": 858.818953037262,
+        "request_latency_sum_s": 989.2611684799194,
+        "ttft_sum_s": 130.44221544265747
+      }
+    }
+  },
+  "excluded_shared_task_runs": [
+    "SGLang_earlier"
+  ],
+  "formula": "(sum output tokens - completed requests) / (sum E2E request latency - sum TTFT)",
+  "implementation_sha256": {
+    "competitive_rate_reduce.py": "a2d2a669cf63061d5fabddcd39778dadd0dff9c031fec3b9d99ccd9d713c310c",
+    "patch_producing_rate_reduce.py": "d57459bc5706c1e2df849dfa5a04f1f7974e7731ebcd1e04945f7695d0c24e52",
+    "sglang_step2_reduce.py": "9315e2fb93252234c316fde3e684839cf7ba58c047b1d89f1e36546cdc5a237f",
+    "shared_rate_reduce.py": "c201221bff80ff85b104009e9336346c6605f508234f5a68952ad393745cc57f",
+    "shared_task_reduce.py": "d007110971ed8d3d0b2829a4f1f8e617ff12faaf88ca6231263997cfff4881ca"
+  },
+  "included_shared_task_runs": [
+    "Sr12",
+    "Cqc16",
+    "Cqc15",
+    "SGLang_later"
+  ],
+  "input_sha256": {
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/eval/eval_report.json": "1f5b14164712012d82b80c7cbef93f7d9810d8ec0ae72b80f1b83a8e34732fec",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/runner_metadata.json": "3f74dd8d66138e6c6eeac65d5d62f732b91b6138dbd18b2b3d28622b1ba024f6",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/vllm_metrics_post.txt": "c142af7ef3e626b719ac643d3a9592c2b9fdc1ff1418811b577be7b7adea1003",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/vllm_metrics_pre.txt": "8cb4d76bc0abd1f53b5afaeab052f7bec1ff54be6ccb8eb4525125e5b6feeb8e",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/eval/eval_report.json": "320e69da98b54de8f8e2f42f67e920f39bc9987e2a0a333b612aa267a19b3ee0",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/runner_metadata.json": "6738eb0a670320a0e9f3a4d0252cf10e9501849e2375e233c74a533f6277d90c",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/vllm_metrics_post.txt": "b301283cbd88d4688b1958911288b303561bd639c2456105f2a8f5b7a08e7b8f",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/vllm_metrics_pre.txt": "df9cbb21fef7f22d18e4867347959e159b5b21d1d063156cf319a6459a620c7c",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/eval/eval_report.json": "068635a51846ec266c2ace07980d62b1a933e72a5e87c4ab66fbf2c543ac0831",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/runner_metadata.json": "c12a2d42470557f126adaba4fd59634f59e80218e39264675600a7c6143a9f03",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/vllm_metrics_post.txt": "ad9941d6895b8fb5707ee007a23627a6d7d3dc31b7bcbfe6fdfa989215075668",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/vllm_metrics_pre.txt": "34f3b4c3849c631ae278714569f98a307e506195f5c4061300ac39796746b83b",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/eval/eval_report.json": "eb501a85e75d643c3899f4de6726fb5c3832821cca6b38b8b7f8c48be6716963",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/runner_metadata.json": "7b8df4b131ec2cf435f88215afaf7645f0d961ddc3339e8fcfe969763eb037d7",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/vllm_metrics_post.txt": "770d770d1100a2bcf078ca725a55699d4e1c59aa2689cc6e4524ac122acb7adf",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/vllm_metrics_pre.txt": "87b09ae10b5302a0f447b29dedb2c970bbd4994c2091f1d19d98edf9b661759b",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/eval/eval_report.json": "153bc034b43438d866d3eb8050dfd927144bd432125cb71637b033ab4b2c7c68",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/runner_metadata.json": "08e8750f868c7a61d0e3bd2229a2882eeed288090e215eb3e3d13f99afedb557",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/vllm_metrics_post.txt": "b0d4c9dec37017a2b973b6025b4f9847edbb2d08d3b74736023c60982c1d08d4",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/vllm_metrics_pre.txt": "15a6a814d8edd65f7f6ea0bdba9c67689d9a9349e83160102019d66364b9fa2f",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/eval/eval_report.json": "676871871a54a99ad05798ba9e0e3c692ad387bc20bf8a702f04ff6fb073b6f2",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/runner_metadata.json": "fcd0f6c46a02ebfd0d744c1dcfa44161a3addb565accecba8d7bed1eababf8d9",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/vllm_metrics_post.txt": "20362878f3dbe76c7c0bfd79dd1b49749f6bdcd9195c057b652ee4f710ab7be5",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/vllm_metrics_pre.txt": "8c50f5d863ff1743bd3afce48a2e7e1f451ca540aa2ab5d71f1448c1acc1706a",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/eval/eval_report.json": "3e7df6127233c0d0e033ca510dda93f73e5e11144f2f06fc80a6508d1f7866a1",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/runner_metadata.json": "a2d03eef3fc7369b114469241895861eb12c904c42fc83276a1ab112b0ec2552",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/vllm_metrics_post.txt": "e2bc098ca5540de6bb4889c247d202efb58a15a4255563e2f5d9807eed122038",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/vllm_metrics_pre.txt": "5fd7219d3cda5a379b5a77abd96b57e3998bc041eabd27fc34ff13bb39be5355",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/eval/eval_report.json": "b7645fc557bc487f9ac9a6e39ca178eaa64d7793106cde6071ebe1ae520e0c6d",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/runner_metadata.json": "9fa5a88686cb8a061128fca0f36606006b3adba0828bd488227e16bea28ad205",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/vllm_metrics_post.txt": "b55f55099c1518adda38a4f2f4fb6bad673374219eca90cceed5f9c9c152cc6c",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/vllm_metrics_pre.txt": "0330669c3a8ac42853e4903845c14cf0f81d687edfbbca1cb7177a5c08c7b7c8",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/eval/eval_report.json": "5e5becfd0fb1333919015978d284ca8b34274d1eb6aa054a66852582ce7f3bd0",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/runner_metadata.json": "478a10876a87366358e7da9747cba6e410df464fada1e5d36a7993a15619c30d",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/vllm_metrics_post.txt": "7f5ac4212fbe54980150675ca675022454241b383c4ce15a2156f2658cc65795",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/vllm_metrics_pre.txt": "e52049b3985a9607d714db6afa1f6942065c6e4482e61546c4a658a48746e530",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/eval/eval_report.json": "1df319b952b53681daa2ad80c7652274f895f455457f06bfee7fd08647fbda6d",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/runner_metadata.json": "356acf8134a4fd9a081bad4b473fe13e2d116d17fbc793c57aa6f733291588e4",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/vllm_metrics_post.txt": "964bb69b2b02403ec1b21111edd997806e831439ce785aebd034142cf3bfd9a1",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/vllm_metrics_pre.txt": "5348c2d09ca142855918854c258a4d432ee2d6cb9723f8700147fdb6ff77c390",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-12907/eval/eval_report.json": "2d6ff6a782da8c459cfd0e66ad1b2b0521ffab64d46e38d90f592e5513cf5dd3",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-12907/runner_metadata.json": "5a1d8c0257a20769b74295a89f497a8cf5e51da48fb3d05f94ec75bbdb3040cf",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-12907/vllm_metrics_post.txt": "d09f7e711cb5247b160d8f17d6d8ce5d9903d769ba6d66e5b614af2ecb0a49f3",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-12907/vllm_metrics_pre.txt": "6a65f7c595b6b90a590ff8ba45c3ae255721472019c98d4cd5d5065f892193ba",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-13033/eval/eval_report.json": "f76de9ad0b01b9df9291ebfe9b2c01c03e52b835a09b2ac7e4873f03c4099f4b",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-13033/runner_metadata.json": "ffdd5969ccbab6993f9ec88297b2c8b4eb968e265eb9caab39fd460e2dc2ba02",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-13033/vllm_metrics_post.txt": "e01786f4ae6cb978bf4521a1321d0d67f1aa316496ef0f69b5fccb4645ef0d5b",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/astropy__astropy-13033/vllm_metrics_pre.txt": "46fafd463e8943ed25122150734c3c96c8c205e710705bc4bff637f958982a3f",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/launch-and-contemporaneous-notes/ablation_a_step2.json": "cd24f73dd4eb7d7499fe1e8d6bcb5cb30498c398ea574524386a52aa6aa7e5e2",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/launch-and-contemporaneous-notes/ablation_a_step2.md": "94f5910257d03f6b290a2a9d9ccc2563b2e93c87fbaf7cfdeb4858bdd9254445",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/launch-and-contemporaneous-notes/ablation_a_step2_sglang_boot.sh": "68c20121f4fdd6aeca68fb10dcea628e8edb50af24018166beaa5bba1f68be30",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/launch-and-contemporaneous-notes/ablation_a_step2_sglang_cmdline.txt": "eb17eb2b7bf3afeeb7fdb8992160c7935b7b9112e937b20e0ad482b5b3da2aad",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/sglang-step2-20260924/manifest.json": "a524f1e25270a9ca87f737b6f99ff5ae3e814ac265b3c0781d7824caffe5d02e",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json": "947c341b179d2bdd1c3f7c594125d5b7df0cbe8ea5b1668b42b2a83342ff5306",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json": "193c989c10fd94143d5b0765dc9b690ba0a594ea1f068eccd4f6b50ec312fc8b",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt": "4e6f8b17407f164da706a8d145378d95e1cec91ba32a560fcf33d607aaa1be4f",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt": "347091d929fad00a217f669679af2826a8647d8abd166d99035ab077a9f64a95",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json": "3e7c8e9bd6ba49174aeeac629cc783a36a0e9e113889f9e2825c1eb746b90dac",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json": "333b2328235d562351607e833b8b44094d30baffb8d2b1cf81cff900f2102c38",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_post.txt": "0ecaf5807db8ef6e07fe289ef7f12269732cf1c0ed36ef58f7196b02ae572be5",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc15/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_pre.txt": "1150d98626e164a9b63d2999c8df15caafe172c2e5ec338cb27fe44cef316571",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json": "a62f6b555de22602c3e4d3cfc89e9402b75cc0e7ccf29b696428711c6af51a34",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json": "bbb23507db18bd5bd70fa7cdd8f4dc544efc1075c1f3f5161db22e80f4419554",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt": "39dfcfb6e709796e64a9001a801ced623152fe275e4111294a89242f2d8192b4",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt": "90b2894bcd720be3f3b696f76ca86e6a23c7493c259ddd375faf7cc4bc2afb32",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json": "5860883b91d7a8b250acf753d530b6dcc397b0af5af52ea9b6472a5d9a7282af",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json": "a2cbc8e1d1245139918005f1f275eaa6378270535c3a31f6e02bb56c4ebe511d",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_post.txt": "074cced4c01cad462d97222e6feeb85353ec77ead89deeee46b8789e7129ade4",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Cqc16/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_pre.txt": "dd7766089fd6c2bbb1726a64654504f2015c373541f31a5ea007566913a488f1",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/MANIFEST.json": "2e20393e2fa238d489215a11d3b3315a08e9516609f341713ecd1ae62ed4dbd2",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json": "5abc55c85ef8bffa60ad4b9c4108b55a69239c3bb3e40dba631e3eeb90b28fcf",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json": "fe7e5a21b8016b3336717a8c2d73118b1f63d5fe5f21d037ddcd0c506f664e99",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt": "36398c25f6d4f5e437eace1f951c7177faf7a146ed7e04333159485052803385",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt": "892f7b5642fae6de347fb4e9a4c140769af47827221d86124714ac1b0e622ca4",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json": "d8d2c13a8184bfafc1a0e4098d06dfb0d142857f5aee4c2934e0b79a28a03b08",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json": "7640209c38cb66497f19a7bc84fe5c99833a56bf789ddf6bbb6077517984ac0c",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_post.txt": "bce39cabd02df1638e43ecdb6ce535e5063b399a3f6525703a47e7bb6653ff99",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_pre.txt": "4294d7cfbc7806c34d3e64cb14bf17ac5e8242278aa3c65425dcc1f6eb995bdd",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13236/eval/eval_report.json": "8ca4e80a89bd7e1e8b2bbb0a9928a28637669fa8079aae09afe42ad8c0d73efa",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13236/runner_metadata.json": "5fd1c2f2787fcdf4bf332c9f19605189bf211ebf1159795106c7146190caf685",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13236/vllm_metrics_post.txt": "df186d0065ca484c0c6588f9167d981d28b9a91b941545fbe536aa331a647cc9",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13236/vllm_metrics_pre.txt": "828d601710697e676b6c9f0e186b6d7f82d83bc32ca60cf34a57b0f8012a9d71",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13398/eval/eval_report.json": "5fbccd3d3a24fc93bf8f774b1225d159737fac0e748ef58f990d5aa08dcfa8ec",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13398/runner_metadata.json": "29c401f46d5bdb409ee9db4409edb9ac6ff5f0586a77212fe849f0ace67e3986",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13398/vllm_metrics_post.txt": "ffc5b26a25cc8f66f5650d90250b4572a6eeb332f1cea57fe7d00fd65ffa30bd",
+    "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/Sr12/swe_out/verified/per_task/astropy__astropy-13398/vllm_metrics_pre.txt": "0f98868408cde65b70cc2195ea754e13afb6e5641531ef48a5a4eb723f162db9",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json": "edbfc46aef05608155c175a271ff8ae6a78e0f08c46717c6c6d2c6f2abbbf99b",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json": "a8197a47470987fc87076b2163a02dcfac7f30a3652a56f1a4031a3ee9f89ff1",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_post.txt": "b32016db90b22b8c4c9e6c596ead8a23a705a1321a466905e934b90cae534d6a",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_pre.txt": "bfd624fdfdf2a8359641e64e7d327b8477995f8fa77c4b47d00b376d9ab34475",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json": "0c9aefa2d1f712a8108155687c4f3b003b40762aaf1f468658fe2e4060603cfa",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json": "78679842646c92cc927c0cc102836580b965ced7a7ab8d5d4a1f0d0a77d97f71",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt": "7e35034253ec0114076663fc9b8b76c412706ea46ae8cf14c929d2f7ae9c4909",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt": "56e71021b747b98d7b667577d979632f5ee01725a1639c23f388002b5dcc678c"
+  },
+  "new_inference_launched": false,
+  "schema": "patch-producing-shared-task-pooled-decode-v1",
+  "scope": "Retrospective comparison conditional on both shared tasks completing and producing nonempty patches. Same rule applied to both systems; failed tests remain eligible. Excludes whole run-pairs, not individual requests or only their failed tasks. Does not estimate speed over all attempts or establish quality equivalence.",
+  "selection_timing": "Retrospective user-requested rule after inspecting the archived outcomes.",
+  "shared_task_ids": [
+    "astropy__astropy-12907",
+    "astropy__astropy-13033"
+  ],
+  "tree_relative_to_eligible_sglang_percent": 8.178367935125518,
+  "unfiltered_audit": {
+    "path": "competitive-rate-audit.json",
+    "sha256": "e30060ec1c4ade6f4b3765e4a0c55c25cff3ba121715e4ad26f2f2a44abecac7"
+  }
+}

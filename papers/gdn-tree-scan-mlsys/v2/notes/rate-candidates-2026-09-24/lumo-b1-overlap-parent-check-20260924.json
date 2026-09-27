@@ -1,0 +1,221 @@
+[
+  {
+    "run": "Sr12",
+    "pooled_decode": 29.093442700158857,
+    "relative_to_sglang_percent": 8.178367935125518,
+    "totals": {
+      "N": 25027.0,
+      "R": 41.0,
+      "E": 989.2611684799194,
+      "F": 130.44221544265747
+    },
+    "tasks": [
+      {
+        "id": "astropy__astropy-12907",
+        "verdict": "resolved",
+        "rate": 26.64984273241838,
+        "counters": {
+          "N": 7873.0,
+          "R": 17.0,
+          "E": 372.198046207428,
+          "F": 77.41206645965576
+        },
+        "source": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/swe_out/verified/per_task/astropy__astropy-12907",
+        "input_hashes": {
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt": {
+            "sha256": "892f7b5642fae6de347fb4e9a4c140769af47827221d86124714ac1b0e622ca4",
+            "bytes": 67177
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt": {
+            "sha256": "36398c25f6d4f5e437eace1f951c7177faf7a146ed7e04333159485052803385",
+            "bytes": 69024
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json": {
+            "sha256": "fe7e5a21b8016b3336717a8c2d73118b1f63d5fe5f21d037ddcd0c506f664e99",
+            "bytes": 30932
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json": {
+            "sha256": "5abc55c85ef8bffa60ad4b9c4108b55a69239c3bb3e40dba631e3eeb90b28fcf",
+            "bytes": 506
+          }
+        }
+      },
+      {
+        "id": "astropy__astropy-13033",
+        "verdict": "failed",
+        "rate": 30.370564862717757,
+        "counters": {
+          "N": 17154.0,
+          "R": 24.0,
+          "E": 617.0631222724915,
+          "F": 53.03014898300171
+        },
+        "source": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/swe_out/verified/per_task/astropy__astropy-13033",
+        "input_hashes": {
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_pre.txt": {
+            "sha256": "4294d7cfbc7806c34d3e64cb14bf17ac5e8242278aa3c65425dcc1f6eb995bdd",
+            "bytes": 69037
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_post.txt": {
+            "sha256": "bce39cabd02df1638e43ecdb6ce535e5063b399a3f6525703a47e7bb6653ff99",
+            "bytes": 69091
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json": {
+            "sha256": "7640209c38cb66497f19a7bc84fe5c99833a56bf789ddf6bbb6077517984ac0c",
+            "bytes": 30949
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json": {
+            "sha256": "d8d2c13a8184bfafc1a0e4098d06dfb0d142857f5aee4c2934e0b79a28a03b08",
+            "bytes": 505
+          }
+        }
+      }
+    ]
+  },
+  {
+    "run": "Cqc16",
+    "pooled_decode": 28.28304686877344,
+    "relative_to_sglang_percent": 5.165066988784606,
+    "totals": {
+      "N": 26239.0,
+      "R": 35.0,
+      "E": 1048.7886128425598,
+      "F": 122.29720187187195
+    },
+    "tasks": [
+      {
+        "id": "astropy__astropy-12907",
+        "verdict": "resolved",
+        "rate": 28.24435732312219,
+        "counters": {
+          "N": 5603.0,
+          "R": 15.0,
+          "E": 269.4160666465759,
+          "F": 71.57123923301697
+        },
+        "source": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-12907",
+        "input_hashes": {
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt": {
+            "sha256": "90b2894bcd720be3f3b696f76ca86e6a23c7493c259ddd375faf7cc4bc2afb32",
+            "bytes": 67154
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt": {
+            "sha256": "39dfcfb6e709796e64a9001a801ced623152fe275e4111294a89242f2d8192b4",
+            "bytes": 69015
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json": {
+            "sha256": "bbb23507db18bd5bd70fa7cdd8f4dc544efc1075c1f3f5161db22e80f4419554",
+            "bytes": 30937
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json": {
+            "sha256": "a62f6b555de22602c3e4d3cfc89e9402b75cc0e7ccf29b696428711c6af51a34",
+            "bytes": 505
+          }
+        }
+      },
+      {
+        "id": "astropy__astropy-13033",
+        "verdict": "failed",
+        "rate": 28.293551997946917,
+        "counters": {
+          "N": 20636.0,
+          "R": 20.0,
+          "E": 779.3725461959839,
+          "F": 50.72596263885498
+        },
+        "source": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-13033",
+        "input_hashes": {
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_pre.txt": {
+            "sha256": "dd7766089fd6c2bbb1726a64654504f2015c373541f31a5ea007566913a488f1",
+            "bytes": 69015
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_post.txt": {
+            "sha256": "074cced4c01cad462d97222e6feeb85353ec77ead89deeee46b8789e7129ade4",
+            "bytes": 69070
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json": {
+            "sha256": "a2cbc8e1d1245139918005f1f275eaa6378270535c3a31f6e02bb56c4ebe511d",
+            "bytes": 30952
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json": {
+            "sha256": "5860883b91d7a8b250acf753d530b6dcc397b0af5af52ea9b6472a5d9a7282af",
+            "bytes": 505
+          }
+        }
+      }
+    ]
+  },
+  {
+    "run": "Cqc15",
+    "pooled_decode": 27.26800815027045,
+    "relative_to_sglang_percent": 1.39084084819745,
+    "totals": {
+      "N": 70424.0,
+      "R": 53.0,
+      "E": 2849.883605480194,
+      "F": 269.1670525074005
+    },
+    "tasks": [
+      {
+        "id": "astropy__astropy-12907",
+        "verdict": "resolved",
+        "rate": 25.857474849035004,
+        "counters": {
+          "N": 14138.0,
+          "R": 25.0,
+          "E": 640.3167777061462,
+          "F": 94.51715564727783
+        },
+        "source": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-12907",
+        "input_hashes": {
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt": {
+            "sha256": "347091d929fad00a217f669679af2826a8647d8abd166d99035ab077a9f64a95",
+            "bytes": 67186
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt": {
+            "sha256": "4e6f8b17407f164da706a8d145378d95e1cec91ba32a560fcf33d607aaa1be4f",
+            "bytes": 69076
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json": {
+            "sha256": "193c989c10fd94143d5b0765dc9b690ba0a594ea1f068eccd4f6b50ec312fc8b",
+            "bytes": 30951
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json": {
+            "sha256": "947c341b179d2bdd1c3f7c594125d5b7df0cbe8ea5b1668b42b2a83342ff5306",
+            "bytes": 505
+          }
+        }
+      },
+      {
+        "id": "astropy__astropy-13033",
+        "verdict": "failed",
+        "rate": 27.64633737394544,
+        "counters": {
+          "N": 56286.0,
+          "R": 28.0,
+          "E": 2209.566827774048,
+          "F": 174.64989686012268
+        },
+        "source": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-13033",
+        "input_hashes": {
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_pre.txt": {
+            "sha256": "1150d98626e164a9b63d2999c8df15caafe172c2e5ec338cb27fe44cef316571",
+            "bytes": 69076
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_post.txt": {
+            "sha256": "0ecaf5807db8ef6e07fe289ef7f12269732cf1c0ed36ef58f7196b02ae572be5",
+            "bytes": 69133
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json": {
+            "sha256": "333b2328235d562351607e833b8b44094d30baffb8d2b1cf81cff900f2102c38",
+            "bytes": 30974
+          },
+          "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json": {
+            "sha256": "3e7c8e9bd6ba49174aeeac629cc783a36a0e9e113889f9e2825c1eb746b90dac",
+            "bytes": 505
+          }
+        }
+      }
+    ]
+  }
+]

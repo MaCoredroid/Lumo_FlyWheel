@@ -1,3 +1,5 @@
+> **Current scope - 24 September 2026, patch-producing comparison:** Among run-pairs producing nonempty patches on both shared tasks: best tree29.09 versus SGLang26.89 (+8.18%). Retrospective symmetric rule; failed tests retained; one SGLang empty-patch pair excluded from speed only and documented. No inference. Earlier statements below retain their original scope. See FINAL-REVIEW.md and artifacts/FINAL-DELIVERY.json.
+
 # V2 closure ledger
 
 
@@ -181,3 +183,25 @@ Private paper archive `artifacts/paper-final-20260922T1239Z.tar.gz`, SHA256 `a9b
 ## Historical quantitative result removal, 2026-09-22T19:45:23.049712+00:00
 
 At the author's request, removed historical result numbers, old-result tables/plots, related comparisons, and mixed archived-operand numerical summaries from the manuscript. Fresh v2 pilot/confirmation, fresh synthetic controls, E2/E7b, and all E1 adverse results remain. No evidence was deleted or new experiment run. Final source09d5fbd6/abstract36983c20/PDFa6ea4049 is11pages; independent delta review PASS, bibliography27/27, clean build and full-page visual coverage pass. Current proof:2026-09-22-historical-removal-build.json. Earlier archive/checks above remain dated history; current private delivery is recorded in artifacts/FINAL-DELIVERY.json.
+
+
+## Attention provenance correction — 24 September 2026
+
+Earlier entries calling the recorded Cat10 qualification attention stock are superseded by the loaded-source audit in `notes/attention-backend-provenance-correction-2026-09-24.md`. These jobs use patched Triton unified attention selected as TREE_ATTN; the recorded agent deployment uses patched FA2. Backend identity is specific to each launch, not determined by FP8 versus NVFP4. Historical records remain intact, and no existing qualification is relabeled as an FA2 execution. The current build is recorded in `p0/monitor/2026-09-24-attention-correction-build.json`.
+
+
+## Superseded-route removal — 24 September 2026
+
+The paper describes the latest deployed NVFP4 Hydra27/fixed32 method located in the production history: forked FA2 GQA-pair split-K4, spine-first KV slots with matching mask columns, full-vocabulary single-logits drafting and fused top-three selection, two-level GDN path scans with transient cut states, fixed32 device acceptance, and one captured committer replay containing 48 native per-layer GDN updates. Prefix caching and serving/drafter/committer graphs are enabled. Query row and position order remain logical. The single-launch GDN and Hydra31 candidates are not the executed workload method.
+
+The September 22 Cat10/E2/E7/E8 jobs revisited a superseded route. Their original data, adverse outcomes and dated analyses remain intact in the archive, but all their numerical results and current-method qualification claims are removed from the paper. A later run date does not make an old implementation current. The current scan and native committer are not claimed to share one update body or to be bit-identical by construction.
+
+Current validation is bound to the deployed binaries: fused-selection parity over 6,840 configurations and 24 graph replays, and the split-K numerical credential with 16 determinism cases across two processes and all nine declared checks passing. The attention probe uses synthetic tensors at scales measured from model operands; it is not a captured-task/full-model equivalence test. Runtime receipts positively identify the engaged attention arm and captured device route.
+
+Current receipt: `artifacts/FINAL-DELIVERY.json`. Build: `p0/monitor/2026-09-24-current-production-build.json`. Earlier attention-provenance wording is accurate only as an archived run description and no longer defines the paper method.
+
+## Novelty review — 24 September 2026
+
+The current claim set has now undergone primary-source review and two independent mechanism reviews. See `notes/novelty/novelty-review-2026-09-24.md`, `claim-matrix.csv` and `source-register.json`. Direct overlap requires attribution to SpecLA, Trees from Marginals and Snakes and Ladders; attention/drafting/caching precedents were added. The paper is positioned as an implemented systems design with scoped component and workload evidence. A new general verifier, replay mechanism, chain schedule or split-K algorithm is not established. The most specific layout intervention remains a candidate for controlled current-build validation.
+
+This review did not change workload arithmetic or run inference. Earlier implementation-audit PASS statuses are not novelty approvals. The dated review reports describe their exact input snapshots.

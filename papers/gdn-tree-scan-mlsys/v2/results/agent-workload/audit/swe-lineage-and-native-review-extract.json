@@ -1,0 +1,3754 @@
+{
+  "remote_root": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816",
+  "runs": [
+    {
+      "run": "fr14_promoab_Cqc16_20260819T222438Z",
+      "tasks": [
+        {
+          "task": "astropy__astropy-12907",
+          "path": "output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-12907",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 505,
+              "sha256": "a62f6b555de22602c3e4d3cfc89e9402b75cc0e7ccf29b696428711c6af51a34",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-12907",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "resolved",
+                "passed": true,
+                "failure_mode": "tests_passed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 51.86,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787178885",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 355,
+              "sha256": "fc488198ce9c494715586483378cbe7554f91791004b4cf50c0161b81fe9928c",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-12907",
+                "outcome": "resolved",
+                "failure_mode": "tests_passed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 51.86,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 655,
+              "sha256": "90433a1ea9e90d3e235e5e76040142caf4458720d3a2debb2f8adaa0cbad0f33"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 30937,
+              "sha256": "bbb23507db18bd5bd70fa7cdd8f4dc544efc1075c1f3f5161db22e80f4419554",
+              "record": {
+                "instance_id": "astropy__astropy-12907",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "d16bfe05a744909de4b27f5875fe0d4ed41ce607",
+                "fixed32_dataset_record_sha256": "bcadb9e2ee9c01d1951516eeb31a5864abb90adc8e3bedc5419ce4eb414517db",
+                "started_at": "2026-08-19T22:29:49Z",
+                "ended_at": "2026-08-19T22:35:38Z",
+                "patch_bytes": 504,
+                "eval": {
+                  "exit_code": 0,
+                  "elapsed_s": 53.726,
+                  "offloaded": true,
+                  "eval_host": "alienware"
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-12907",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "resolved",
+                  "passed": true,
+                  "failure_mode": "tests_passed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 51.86,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787178885",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 291.437,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-12907:latest",
+                  "instance_image_identity": {
+                    "instance_id": "astropy__astropy-12907",
+                    "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-12907:latest",
+                    "id": "sha256:cce639c4d4c4f8a47893a81a1a1894d3f2c77e603694da4000581450783ef532",
+                    "repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-12907@sha256:f3f63bb87d581c0e7b47f900dd82165b71040e1758d3c29e915e2b18da9baf63",
+                    "architecture": "amd64",
+                    "os": "linux"
+                  },
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": {
+                    "schema": "fr13-remote-qwen-trace-observation-v1",
+                    "bytes": 67487,
+                    "sha256": "2cd9c5719f58546447fcb7d03fc5c3dbe5fd38219f873a3144037cb41bc4382f",
+                    "event_count": 62
+                  },
+                  "runtime": {
+                    "qwen_code_version": "0.19.4",
+                    "bundle_manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+                    "system_settings": {
+                      "source": "config/fr13_fixed32/qwen_system_settings.json",
+                      "bytes": 98,
+                      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+                      "container_path": "/run/fr13/qwen-system-settings.json",
+                      "mount_mode": "ro",
+                      "environment": {
+                        "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+                        "value": "/run/fr13/qwen-system-settings.json"
+                      },
+                      "remote_file": {
+                        "mode": "0444",
+                        "uid": 1000,
+                        "gid": 1000,
+                        "nlink": 1,
+                        "xattrs": []
+                      },
+                      "enable_auto_skill": false
+                    }
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 504,
+              "sha256": "0172ca0d430e58fc42e46d478f879e667a9a6e262295d7b49aea68cbc53d5986"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 2684,
+              "sha256": "007636248f802a78790ce02ab72ca63a3fa6bc4a18e488c121d0acd8381fc72e"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "ed296b247c6e473772c729504121804a21ab3900caf873a63e6c44691c88edd5",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-12907",
+                "metrics_pre_bytes": 67154,
+                "metrics_post_bytes": 69015,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 67487,
+              "sha256": "2cd9c5719f58546447fcb7d03fc5c3dbe5fd38219f873a3144037cb41bc4382f"
+            }
+          }
+        },
+        {
+          "task": "astropy__astropy-13033",
+          "path": "output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-13033",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 505,
+              "sha256": "5860883b91d7a8b250acf753d530b6dcc397b0af5af52ea9b6472a5d9a7282af",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-13033",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "failed",
+                "passed": false,
+                "failure_mode": "tests_failed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 51.423,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787179734",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 354,
+              "sha256": "5583dd0d9f4ca7f0efd420a71a9945330fb5188b1798495fda7511ca5bb8288a",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-13033",
+                "outcome": "failed",
+                "failure_mode": "tests_failed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 51.423,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 1257,
+              "sha256": "8b9f6ea8e8590390e1de6a7c6e998b2ad337da18b93863a543e8f528dd85d937"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 30952,
+              "sha256": "a2cbc8e1d1245139918005f1f275eaa6378270535c3a31f6e02bb56c4ebe511d",
+              "record": {
+                "instance_id": "astropy__astropy-13033",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "298ccb478e6bf092953bca67a3d29dc6c35f6752",
+                "fixed32_dataset_record_sha256": "18fc79d558251fc0e83db12cb6853cd72825c29127e650194ebbc079518b8c99",
+                "started_at": "2026-08-19T22:35:38Z",
+                "ended_at": "2026-08-19T22:49:47Z",
+                "patch_bytes": 1092,
+                "eval": {
+                  "exit_code": 1,
+                  "elapsed_s": 53.013,
+                  "offloaded": true,
+                  "eval_host": "alienware"
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-13033",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "failed",
+                  "passed": false,
+                  "failure_mode": "tests_failed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 51.423,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787179734",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 791.87,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13033:latest",
+                  "instance_image_identity": {
+                    "instance_id": "astropy__astropy-13033",
+                    "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13033:latest",
+                    "id": "sha256:bdbc30d363cfbd9902e0d338fc959782d1a92a9e85236c0dca92c95372088783",
+                    "repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13033@sha256:42797a2c686ed35b43e28dd2f58149381c3bf79abea2346fb7062c009e9fa528",
+                    "architecture": "amd64",
+                    "os": "linux"
+                  },
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": {
+                    "schema": "fr13-remote-qwen-trace-observation-v1",
+                    "bytes": 133912,
+                    "sha256": "c6fac93986ffb1e7a8976b80b3e2b95ad4f05ff75c6a700348a5101d6230be70",
+                    "event_count": 85
+                  },
+                  "runtime": {
+                    "qwen_code_version": "0.19.4",
+                    "bundle_manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+                    "system_settings": {
+                      "source": "config/fr13_fixed32/qwen_system_settings.json",
+                      "bytes": 98,
+                      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+                      "container_path": "/run/fr13/qwen-system-settings.json",
+                      "mount_mode": "ro",
+                      "environment": {
+                        "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+                        "value": "/run/fr13/qwen-system-settings.json"
+                      },
+                      "remote_file": {
+                        "mode": "0444",
+                        "uid": 1000,
+                        "gid": 1000,
+                        "nlink": 1,
+                        "xattrs": []
+                      },
+                      "enable_auto_skill": false
+                    }
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 1092,
+              "sha256": "412b5690faee2bd54c59b69a556cdd4c7ffcead715f794bd55c4a4bf3d7b1ea3"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 4197,
+              "sha256": "ab8025a068c6eb35e2a98a37bb37f264b07cea3e0c308c57b855260c0e578970"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "2889e64052c8a9ae2d98095154dec6dd3b700540093dae7fa096e16a32ee723c",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-13033",
+                "metrics_pre_bytes": 69015,
+                "metrics_post_bytes": 69070,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 133912,
+              "sha256": "c6fac93986ffb1e7a8976b80b3e2b95ad4f05ff75c6a700348a5101d6230be70"
+            }
+          }
+        },
+        {
+          "task": "astropy__astropy-13236",
+          "path": "output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-13236",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": false
+            },
+            "eval/normalized_eval.json": {
+              "exists": false
+            },
+            "eval/predictions.jsonl": {
+              "exists": false
+            },
+            "runner_metadata.json": {
+              "exists": false
+            },
+            "patch.diff": {
+              "exists": false
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 3497,
+              "sha256": "160ebd8c4e503457933993402e9ae3e6d9f33723e40be927d7d0b722fe6e0a66"
+            },
+            "vllm_per_turn.json": {
+              "exists": false
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": false
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 73856,
+              "sha256": "676bf2a7b79328052a9d4f7d1c40e60dbdd91173d5b0892634fca0bf53bb057a"
+            }
+          }
+        }
+      ],
+      "source_files": {
+        "output/fr14_promoab_Cqc16_20260819T222438Z/arm_env.txt": {
+          "sha256": "1e3611fad3c21c9bb143161eca724a7f5bedffe3d5e8369158d574095f7117e0",
+          "text": "FR10_METRICS=0\nFR13_HOST_TAIL_PREP_BAKE=1\nFR13_HOST_TAIL_DEFER=0\nFR13_DFWD_SPLIT=1\nFR13_LFWD_GPU_TIMER=1\nFR14_SUFFIX_PASS_GATE=0\nFR13_B1_CREDENTIAL_POINTER=/nonexistent\nFR13_FA2_QROW32_B1_TIERB_WORKLOAD=exact16\nFR13_FA2_QROW32_B1_TIERB_TASK_IDS=astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398,astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995\nFR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256=47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c\n"
+        },
+        "output/fr14_promoab_Cqc16_20260819T222438Z/arm_meta.txt": {
+          "sha256": "c303455c892ded9c5209c8ffedd2dba76c55ab298bbe5c3521bc23536e300c91",
+          "text": "arm_kind=C\narm=hydra27_fixed32_promoab_Cqc16\nsource_commit=78a29d3391d02166abf571030a90645ce2375ba0\nsubset=config/fr13_fixed32/subset_b4_sixteen.json\nsubset_sha256=47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c\ntask_budget_s=9000\nagent_wall_s=9000\nverdict_instrument=step_wall_ms+s_per_fwd_gpu\nfa2_b1_arm=PROMOTED DEFAULT (B1 arm left UNNAMED; launcher arms split-K tier-B and mints its own provenance)\nstarted=2026-08-19T22:24:39Z\nserve_rc=1\nended=2026-08-19T23:10:50Z\n"
+        },
+        "output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16.runlog": {
+          "sha256": "cd2bfb18e7d171925a6f891951e1ad18effa01b9c03b443382d08612bcefd5af",
+          "selected_lines": [
+            {
+              "line": 68,
+              "text": "swe orchestrator rc=1 wall=2444s"
+            },
+            {
+              "line": 97,
+              "text": "ARM_DONE hydra27_fixed32_promoab_Cqc16 kind=hydra27_fixed32 swerc=1"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "run": "fr14_promoab_Cqc15_20260823T193658Z",
+      "tasks": [
+        {
+          "task": "astropy__astropy-12907",
+          "path": "output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-12907",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 505,
+              "sha256": "947c341b179d2bdd1c3f7c594125d5b7df0cbe8ea5b1668b42b2a83342ff5306",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-12907",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "resolved",
+                "passed": true,
+                "failure_mode": "tests_passed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 50.74,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787514806",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 355,
+              "sha256": "5fa6ce77cc9177196def170493da32dac3f39abd9492ad8c91df87b2172a7b05",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-12907",
+                "outcome": "resolved",
+                "failure_mode": "tests_passed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 50.74,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 655,
+              "sha256": "90433a1ea9e90d3e235e5e76040142caf4458720d3a2debb2f8adaa0cbad0f33"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 30951,
+              "sha256": "193c989c10fd94143d5b0765dc9b690ba0a594ea1f068eccd4f6b50ec312fc8b",
+              "record": {
+                "instance_id": "astropy__astropy-12907",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "d16bfe05a744909de4b27f5875fe0d4ed41ce607",
+                "fixed32_dataset_record_sha256": "bcadb9e2ee9c01d1951516eeb31a5864abb90adc8e3bedc5419ce4eb414517db",
+                "started_at": "2026-08-23T19:42:11Z",
+                "ended_at": "2026-08-23T19:54:18Z",
+                "patch_bytes": 504,
+                "eval": {
+                  "exit_code": 0,
+                  "elapsed_s": 52.746,
+                  "offloaded": true,
+                  "eval_host": "alienware"
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-12907",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "resolved",
+                  "passed": true,
+                  "failure_mode": "tests_passed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 50.74,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787514806",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 670.872,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-12907:latest",
+                  "instance_image_identity": {
+                    "instance_id": "astropy__astropy-12907",
+                    "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-12907:latest",
+                    "id": "sha256:cce639c4d4c4f8a47893a81a1a1894d3f2c77e603694da4000581450783ef532",
+                    "repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-12907@sha256:f3f63bb87d581c0e7b47f900dd82165b71040e1758d3c29e915e2b18da9baf63",
+                    "architecture": "amd64",
+                    "os": "linux"
+                  },
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": {
+                    "schema": "fr13-remote-qwen-trace-observation-v1",
+                    "bytes": 114779,
+                    "sha256": "9c9aab70562081b63baf5cde2390026c639846381393b11631fcd6f533dff065",
+                    "event_count": 103
+                  },
+                  "runtime": {
+                    "qwen_code_version": "0.19.4",
+                    "bundle_manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+                    "system_settings": {
+                      "source": "config/fr13_fixed32/qwen_system_settings.json",
+                      "bytes": 98,
+                      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+                      "container_path": "/run/fr13/qwen-system-settings.json",
+                      "mount_mode": "ro",
+                      "environment": {
+                        "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+                        "value": "/run/fr13/qwen-system-settings.json"
+                      },
+                      "remote_file": {
+                        "mode": "0444",
+                        "uid": 1000,
+                        "gid": 1000,
+                        "nlink": 1,
+                        "xattrs": []
+                      },
+                      "enable_auto_skill": false
+                    }
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 504,
+              "sha256": "0172ca0d430e58fc42e46d478f879e667a9a6e262295d7b49aea68cbc53d5986"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 2684,
+              "sha256": "007636248f802a78790ce02ab72ca63a3fa6bc4a18e488c121d0acd8381fc72e"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "5e1d3b5bda9d6edb3fd901cca5f4b318d1df42751a1f45620ed714c683c5d157",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-12907",
+                "metrics_pre_bytes": 67186,
+                "metrics_post_bytes": 69076,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 114779,
+              "sha256": "9c9aab70562081b63baf5cde2390026c639846381393b11631fcd6f533dff065"
+            }
+          }
+        },
+        {
+          "task": "astropy__astropy-13033",
+          "path": "output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-13033",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 505,
+              "sha256": "3e7c8e9bd6ba49174aeeac629cc783a36a0e9e113889f9e2825c1eb746b90dac",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-13033",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "failed",
+                "passed": false,
+                "failure_mode": "tests_failed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 50.543,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787517114",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 354,
+              "sha256": "fd316b5b76c19e6380d548943a6e343bcd93e8f2046e34c1e0581894c70d9888",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-13033",
+                "outcome": "failed",
+                "failure_mode": "tests_failed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 50.543,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 1625,
+              "sha256": "2297f17bf3980910340ca710aa0c6bd841c1b923df2fb12a41d420b84babead2"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 30974,
+              "sha256": "333b2328235d562351607e833b8b44094d30baffb8d2b1cf81cff900f2102c38",
+              "record": {
+                "instance_id": "astropy__astropy-13033",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "298ccb478e6bf092953bca67a3d29dc6c35f6752",
+                "fixed32_dataset_record_sha256": "18fc79d558251fc0e83db12cb6853cd72825c29127e650194ebbc079518b8c99",
+                "started_at": "2026-08-23T19:54:18Z",
+                "ended_at": "2026-08-23T20:32:45Z",
+                "patch_bytes": 1450,
+                "eval": {
+                  "exit_code": 1,
+                  "elapsed_s": 52.076,
+                  "offloaded": true,
+                  "eval_host": "alienware"
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-13033",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "failed",
+                  "passed": false,
+                  "failure_mode": "tests_failed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 50.543,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787517114",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 2249.684,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13033:latest",
+                  "instance_image_identity": {
+                    "instance_id": "astropy__astropy-13033",
+                    "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13033:latest",
+                    "id": "sha256:bdbc30d363cfbd9902e0d338fc959782d1a92a9e85236c0dca92c95372088783",
+                    "repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13033@sha256:42797a2c686ed35b43e28dd2f58149381c3bf79abea2346fb7062c009e9fa528",
+                    "architecture": "amd64",
+                    "os": "linux"
+                  },
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": {
+                    "schema": "fr13-remote-qwen-trace-observation-v1",
+                    "bytes": 239457,
+                    "sha256": "cb925258be72656ad73ff5d762e4a803428558dce865b96716130a765de1ae8d",
+                    "event_count": 108
+                  },
+                  "runtime": {
+                    "qwen_code_version": "0.19.4",
+                    "bundle_manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+                    "system_settings": {
+                      "source": "config/fr13_fixed32/qwen_system_settings.json",
+                      "bytes": 98,
+                      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+                      "container_path": "/run/fr13/qwen-system-settings.json",
+                      "mount_mode": "ro",
+                      "environment": {
+                        "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+                        "value": "/run/fr13/qwen-system-settings.json"
+                      },
+                      "remote_file": {
+                        "mode": "0444",
+                        "uid": 1000,
+                        "gid": 1000,
+                        "nlink": 1,
+                        "xattrs": []
+                      },
+                      "enable_auto_skill": false
+                    }
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 1450,
+              "sha256": "72af71005e7abf5cf0e67fa94b4eb9232f25ee2fc109d9477f98c3a2c0e2d58c"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 4197,
+              "sha256": "ab8025a068c6eb35e2a98a37bb37f264b07cea3e0c308c57b855260c0e578970"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "001e78ef3fb5e06850e776e5b22414f3282c8cf821629c15a2913d48140dce82",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-13033",
+                "metrics_pre_bytes": 69076,
+                "metrics_post_bytes": 69133,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 239457,
+              "sha256": "cb925258be72656ad73ff5d762e4a803428558dce865b96716130a765de1ae8d"
+            }
+          }
+        },
+        {
+          "task": "astropy__astropy-13398",
+          "path": "output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-13398",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": false
+            },
+            "eval/normalized_eval.json": {
+              "exists": false
+            },
+            "eval/predictions.jsonl": {
+              "exists": false
+            },
+            "runner_metadata.json": {
+              "exists": false
+            },
+            "patch.diff": {
+              "exists": false
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 6712,
+              "sha256": "70a995aa0b2a4a977e0731afe80e4eec0e6cec5cb12b52a1e2099c22cf7445a8"
+            },
+            "vllm_per_turn.json": {
+              "exists": false
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": false
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 836442,
+              "sha256": "d71b02c39e4150685e084ea7842c46bc5940fda0f80d66b61d392cd28ec10d8e"
+            }
+          }
+        }
+      ],
+      "source_files": {
+        "output/fr14_promoab_Cqc15_20260823T193658Z/arm_env.txt": {
+          "sha256": "5f353d6a9ffd656157286b1abc2ad4a99b76340445fa487807f1ef55483f2163",
+          "text": "FR10_METRICS=0\nFR13_HOST_TAIL_PREP_BAKE=1\nFR13_HOST_TAIL_DEFER=0\nFR13_DFWD_SPLIT=1\nFR13_LFWD_GPU_TIMER=1\nFR14_SUFFIX_PASS_GATE=0\nFR13_B1_CREDENTIAL_POINTER=/nonexistent\nFR13_FA2_QROW32_B1_TIERB_WORKLOAD=exact16_minus_13236\nFR13_FA2_QROW32_B1_TIERB_TASK_IDS=astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13398,astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995\nFR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256=24a8cf7c27646b13b76ebafa5a54d79bd5433f01ba34e55503227fdcc96e729a\n"
+        },
+        "output/fr14_promoab_Cqc15_20260823T193658Z/arm_meta.txt": {
+          "sha256": "bf943bcb7c3c7a4603d7267b58be85aca1e5d69993a1f1b845693cb2507c4666",
+          "text": "arm_kind=C\narm=hydra27_fixed32_promoab_Cqc15\nsource_commit=a450f6c3600d088bd259df65e3940a64dc8de199\nsubset=config/fr13_fixed32/subset_b4_sixteen_minus_13236.json\nsubset_sha256=24a8cf7c27646b13b76ebafa5a54d79bd5433f01ba34e55503227fdcc96e729a\ntask_budget_s=9000\nagent_wall_s=9000\nverdict_instrument=step_wall_ms+s_per_fwd_gpu\nfa2_b1_arm=PROMOTED DEFAULT (B1 arm left UNNAMED; launcher arms split-K tier-B and mints its own provenance)\nstarted=2026-08-23T19:36:59Z\nserve_rc=5\nended=2026-08-23T23:05:17Z\n"
+        },
+        "output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15.runlog": {
+          "sha256": "162f65239bd8601a12789681523d6642a978b62be8a14e039d33ce4b58436509",
+          "selected_lines": []
+        }
+      }
+    },
+    {
+      "run": "fr14_promoab_Cqc12_20260824T021301Z",
+      "tasks": [
+        {
+          "task": "astropy__astropy-13453",
+          "path": "output/fr14_promoab_Cqc12_20260824T021301Z/hydra27_fixed32_promoab_Cqc12/swe_out/verified/per_task/astropy__astropy-13453",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 506,
+              "sha256": "2c9475e7f351372f3a75ee1c974abdace96c5ce7c7fb910664fe89bae7d3d571",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-13453",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "resolved",
+                "passed": true,
+                "failure_mode": "tests_passed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 50.759,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787538792",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 356,
+              "sha256": "19b4489b758ae9f597990427d8e5d4ac36756f30899ee2288d054e0a028ad4ce",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-13453",
+                "outcome": "resolved",
+                "failure_mode": "tests_passed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 50.759,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 1211,
+              "sha256": "04713ab7445bee23c1d081d274dda391c14e548777e3a4aa588b68f0bbc77a5d"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 30965,
+              "sha256": "57f5400be5c757f30c54e532b62dd448aa5a00b95abfdd62126eff12499c74e8",
+              "record": {
+                "instance_id": "astropy__astropy-13453",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "19cc80471739bcb67b7e8099246b391c355023ee",
+                "fixed32_dataset_record_sha256": "60e0d736c87acca951a72f305f0bc74304c33030f0a69608981d0320fe9c362c",
+                "started_at": "2026-08-24T02:18:21Z",
+                "ended_at": "2026-08-24T02:34:04Z",
+                "patch_bytes": 1047,
+                "eval": {
+                  "exit_code": 0,
+                  "elapsed_s": 53.078,
+                  "offloaded": true,
+                  "eval_host": "alienware"
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-13453",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "resolved",
+                  "passed": true,
+                  "failure_mode": "tests_passed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 50.759,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787538792",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 886.401,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13453:latest",
+                  "instance_image_identity": {
+                    "instance_id": "astropy__astropy-13453",
+                    "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13453:latest",
+                    "id": "sha256:67e4955c1ea7f9013a51299a236574f87bc1ca2da02c9aa6ac640f8ce61d2f8b",
+                    "repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13453@sha256:6b3593a3d1fa032b8b81f9a1e33738aae14c1cdc8fd887e0a089592c7f9abf9b",
+                    "architecture": "amd64",
+                    "os": "linux"
+                  },
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": {
+                    "schema": "fr13-remote-qwen-trace-observation-v1",
+                    "bytes": 153719,
+                    "sha256": "66edce7b50040a9de4d3a9656fde87a2bd1cb8d97a09e01d3f5bf91fd95a389d",
+                    "event_count": 180
+                  },
+                  "runtime": {
+                    "qwen_code_version": "0.19.4",
+                    "bundle_manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+                    "system_settings": {
+                      "source": "config/fr13_fixed32/qwen_system_settings.json",
+                      "bytes": 98,
+                      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+                      "container_path": "/run/fr13/qwen-system-settings.json",
+                      "mount_mode": "ro",
+                      "environment": {
+                        "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+                        "value": "/run/fr13/qwen-system-settings.json"
+                      },
+                      "remote_file": {
+                        "mode": "0444",
+                        "uid": 1000,
+                        "gid": 1000,
+                        "nlink": 1,
+                        "xattrs": []
+                      },
+                      "enable_auto_skill": false
+                    }
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 1047,
+              "sha256": "a4309d2fa4be93609ce160cebbbe05bde3859e546ee9741fda7577d75d0f1a3a"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 9120,
+              "sha256": "4743dd3f99ad0164053be4e092c9a13349c31b0ea32705d5e6f4cba2888d8bb5"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "dd46f940338a8f6270629123a59b5863b11f56593bfb67eb541e5b229daab8d9",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-13453",
+                "metrics_pre_bytes": 67165,
+                "metrics_post_bytes": 69078,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 153719,
+              "sha256": "66edce7b50040a9de4d3a9656fde87a2bd1cb8d97a09e01d3f5bf91fd95a389d"
+            }
+          }
+        },
+        {
+          "task": "astropy__astropy-13579",
+          "path": "output/fr14_promoab_Cqc12_20260824T021301Z/hydra27_fixed32_promoab_Cqc12/swe_out/verified/per_task/astropy__astropy-13579",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": false
+            },
+            "eval/normalized_eval.json": {
+              "exists": false
+            },
+            "eval/predictions.jsonl": {
+              "exists": false
+            },
+            "runner_metadata.json": {
+              "exists": false
+            },
+            "patch.diff": {
+              "exists": false
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 6181,
+              "sha256": "7567380702e66447021777ad850b7215e6d4c4cf8f9fb504b8329ae7f8898ed2"
+            },
+            "vllm_per_turn.json": {
+              "exists": false
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": false
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 534067,
+              "sha256": "a36a138f6fcaa63117bcd93a9d8258a12735560140bcaedf232cccd38bdb6985"
+            }
+          }
+        }
+      ],
+      "source_files": {
+        "output/fr14_promoab_Cqc12_20260824T021301Z/arm_env.txt": {
+          "sha256": "c72745e345dc4460826dc4282faa0f70f54a9af3a2c7e1e31a95d16509ff71eb",
+          "text": "FR10_METRICS=0\nFR13_HOST_TAIL_PREP_BAKE=1\nFR13_HOST_TAIL_DEFER=0\nFR13_DFWD_SPLIT=1\nFR13_LFWD_GPU_TIMER=1\nFR14_SUFFIX_PASS_GATE=0\nFR13_B1_CREDENTIAL_POINTER=/nonexistent\nFR13_FA2_QROW32_B1_TIERB_WORKLOAD=exact16_qc_remainder_12\nFR13_FA2_QROW32_B1_TIERB_TASK_IDS=astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995\nFR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256=ac54bcc4df1311147616affd71a3722d0c0fda89216b7ac6473a4ab3eab4c424\n"
+        },
+        "output/fr14_promoab_Cqc12_20260824T021301Z/arm_meta.txt": {
+          "sha256": "e45bb075ed898fbb7a1f05f3a6eb9f8f81fda69f3c348b85e1264faf0ea2c2a2",
+          "text": "arm_kind=C\narm=hydra27_fixed32_promoab_Cqc12\nsource_commit=60099f0f3a6d2f926de482e611ba057b90d4c168\nsubset=config/fr13_fixed32/subset_b4_sixteen_qc_remainder_12.json\nsubset_sha256=ac54bcc4df1311147616affd71a3722d0c0fda89216b7ac6473a4ab3eab4c424\ntask_budget_s=9000\nagent_wall_s=9000\nverdict_instrument=step_wall_ms+s_per_fwd_gpu\nfa2_b1_arm=PROMOTED DEFAULT (B1 arm left UNNAMED; launcher arms split-K tier-B and mints its own provenance)\nstarted=2026-08-24T02:13:03Z\nserve_rc=13\nended=2026-08-24T05:06:37Z\n"
+        },
+        "output/fr14_promoab_Cqc12_20260824T021301Z/hydra27_fixed32_promoab_Cqc12.pretask_identity.json": {
+          "sha256": "2b1aac2ad7b0a88476448d12d32f4cd3e4a63349745bf5242e65cd236d74947d",
+          "text": "{\"schema\":\"fr13.pretask_identity.v1\",\"arm\":\"hydra27_fixed32_promoab_Cqc12\",\"kind\":\"hydra27_fixed32\",\"launcher\":\"forked\",\"fixed32_mode\":\"hydra27_fixed32\",\"native_decode\":\"0\",\"identity_class\":\"fixed32\",\"warmup_probe_requested_skip\":\"0\",\"proxy_raw_dumps_mode\":\"auto\",\"offload_agent\":\"1\",\"prefix_cache_reset\":\"skipped-fresh-container\",\"proxy_pair_dumps\":\"not-expected\"}\n"
+        },
+        "output/fr14_promoab_Cqc12_20260824T021301Z/hydra27_fixed32_promoab_Cqc12.runlog": {
+          "sha256": "89b22a4923430449776011a75a13e8ee8b21bd7921d16f9a990b00c7f18dc33a",
+          "selected_lines": [
+            {
+              "line": 70,
+              "text": "swe orchestrator rc=1 wall=10079s"
+            },
+            {
+              "line": 96,
+              "text": "ARM_DONE hydra27_fixed32_promoab_Cqc12 kind=hydra27_fixed32 swerc=13"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "run": "fr14_promoab_Cqc10_20260824T074813Z",
+      "tasks": [
+        {
+          "task": "astropy__astropy-13977",
+          "path": "output/fr14_promoab_Cqc10_20260824T074813Z/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 505,
+              "sha256": "1f5b14164712012d82b80c7cbef93f7d9810d8ec0ae72b80f1b83a8e34732fec",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-13977",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "failed",
+                "passed": false,
+                "failure_mode": "tests_failed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 51.874,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787559492",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 354,
+              "sha256": "892e2c6f28fbf8c5f1e59ca184211bf9662a7ed2c2adcbf7ee674af35d627b71",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-13977",
+                "outcome": "failed",
+                "failure_mode": "tests_failed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 51.874,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 1305,
+              "sha256": "1d083960f3a85d5a7f6e9bf7bd2ab522a2bcf81bc0389ebce860df1bd348b984"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 31582,
+              "sha256": "3f74dd8d66138e6c6eeac65d5d62f732b91b6138dbd18b2b3d28622b1ba024f6",
+              "record": {
+                "instance_id": "astropy__astropy-13977",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "5250b2442501e6c671c6b380536f1edb352602d1",
+                "fixed32_dataset_record_sha256": "f5ff4281926082cee76f9cc656d7e28bfe3a0c99df63965932cf94701070d355",
+                "started_at": "2026-08-24T07:53:32Z",
+                "ended_at": "2026-08-24T08:19:06Z",
+                "patch_bytes": 1141,
+                "eval": {
+                  "exit_code": 1,
+                  "elapsed_s": 54.199,
+                  "offloaded": true,
+                  "eval_host": "alienware",
+                  "evaluator": {
+                    "mode": "remote_x86_worker",
+                    "host": "alienware",
+                    "base": "~/swe_eval_offload",
+                    "worker": "~/swe_eval_offload/swe_eval_x86_worker.py",
+                    "interpreter": "~/swe_eval_offload/venv/bin/python",
+                    "worker_sha256": "4a06bbe937af3c04c3897564d7bc27cdad8d8abc8c13fd156650e203e30994da",
+                    "worker_bytes": 8046,
+                    "interpreter_realpath": "/usr/bin/python3.12"
+                  }
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-13977",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "failed",
+                  "passed": false,
+                  "failure_mode": "tests_failed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 51.874,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787559492",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 1475.104,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13977:latest",
+                  "instance_image_identity": {
+                    "instance_id": "astropy__astropy-13977",
+                    "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13977:latest",
+                    "id": "sha256:fc877eb6e9cada009834e33eeab24e7d6690e189932d3f3c4e5f7a911e7e57b6",
+                    "repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13977@sha256:bcc442a117def63c8011091500b4e2dd49980a08b74e3c2fbdad4e42745278bb",
+                    "architecture": "amd64",
+                    "os": "linux"
+                  },
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": {
+                    "schema": "fr13-remote-qwen-trace-observation-v1",
+                    "bytes": 189609,
+                    "sha256": "10e89ee513ae795fc35e6fe93c2bf000aea2f91005dfe24ae62f174724a656ba",
+                    "event_count": 127
+                  },
+                  "runtime": {
+                    "qwen_code_version": "0.19.4",
+                    "bundle_manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+                    "system_settings": {
+                      "source": "config/fr13_fixed32/qwen_system_settings.json",
+                      "bytes": 98,
+                      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+                      "container_path": "/run/fr13/qwen-system-settings.json",
+                      "mount_mode": "ro",
+                      "environment": {
+                        "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+                        "value": "/run/fr13/qwen-system-settings.json"
+                      },
+                      "remote_file": {
+                        "mode": "0444",
+                        "uid": 1000,
+                        "gid": 1000,
+                        "nlink": 1,
+                        "xattrs": []
+                      },
+                      "enable_auto_skill": false
+                    }
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 1141,
+              "sha256": "b0fd2e607947c0c923075c3bafaca8ce39bdbef38edf4f69bd1a0e3bdefd1dd5"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 5153,
+              "sha256": "b82e78ac4ffc59b630b90b937d0eb58bff05a6de2db6b8b0f008487717e1ba48"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "0b20046e0947c2039e1b4b37b1af5d350461cc984bc22f04a87331b5f2e52c46",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-13977",
+                "metrics_pre_bytes": 67165,
+                "metrics_post_bytes": 69096,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 189609,
+              "sha256": "10e89ee513ae795fc35e6fe93c2bf000aea2f91005dfe24ae62f174724a656ba"
+            }
+          }
+        },
+        {
+          "task": "astropy__astropy-14096",
+          "path": "output/fr14_promoab_Cqc10_20260824T074813Z/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 506,
+              "sha256": "320e69da98b54de8f8e2f42f67e920f39bc9987e2a0a333b612aa267a19b3ee0",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14096",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "resolved",
+                "passed": true,
+                "failure_mode": "tests_passed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 53.392,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787560931",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 356,
+              "sha256": "d196238498e5c993fd8c5cd4787bdbca353cb177732f6e0cc781ab923abe3fa2",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14096",
+                "outcome": "resolved",
+                "failure_mode": "tests_passed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 53.392,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 1495,
+              "sha256": "c51de71d4123f8ab9d9561c5613e469208a88e02ca19b88a3e804926b6e4d2a6"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 31590,
+              "sha256": "6738eb0a670320a0e9f3a4d0252cf10e9501849e2375e233c74a533f6277d90c",
+              "record": {
+                "instance_id": "astropy__astropy-14096",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "1a4462d72eb03f30dc83a879b1dd57aac8b2c18b",
+                "fixed32_dataset_record_sha256": "2ab9bc4442553756efedd9737e68d2c11a68954da353a12acb903c86ba414ec0",
+                "started_at": "2026-08-24T08:19:06Z",
+                "ended_at": "2026-08-24T08:43:07Z",
+                "patch_bytes": 1321,
+                "eval": {
+                  "exit_code": 0,
+                  "elapsed_s": 55.503,
+                  "offloaded": true,
+                  "eval_host": "alienware",
+                  "evaluator": {
+                    "mode": "remote_x86_worker",
+                    "host": "alienware",
+                    "base": "~/swe_eval_offload",
+                    "worker": "~/swe_eval_offload/swe_eval_x86_worker.py",
+                    "interpreter": "~/swe_eval_offload/venv/bin/python",
+                    "worker_sha256": "4a06bbe937af3c04c3897564d7bc27cdad8d8abc8c13fd156650e203e30994da",
+                    "worker_bytes": 8046,
+                    "interpreter_realpath": "/usr/bin/python3.12"
+                  }
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-14096",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "resolved",
+                  "passed": true,
+                  "failure_mode": "tests_passed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 53.392,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787560931",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 1379.13,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14096:latest",
+                  "instance_image_identity": {
+                    "instance_id": "astropy__astropy-14096",
+                    "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14096:latest",
+                    "id": "sha256:3ac2306a3e172713ad0f00dd5daa6d3cfd6990fe3b52afbf585fe1d6161ae8b9",
+                    "repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14096@sha256:f0277869f5874118b6395d945a278d88e8912dbb2970ee2d0289f5591adab8a3",
+                    "architecture": "amd64",
+                    "os": "linux"
+                  },
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": {
+                    "schema": "fr13-remote-qwen-trace-observation-v1",
+                    "bytes": 166570,
+                    "sha256": "e5f2aebab7745dba85ece118b62c69281a2e51309c60bf852cc3619c7c2ff079",
+                    "event_count": 105
+                  },
+                  "runtime": {
+                    "qwen_code_version": "0.19.4",
+                    "bundle_manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+                    "system_settings": {
+                      "source": "config/fr13_fixed32/qwen_system_settings.json",
+                      "bytes": 98,
+                      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+                      "container_path": "/run/fr13/qwen-system-settings.json",
+                      "mount_mode": "ro",
+                      "environment": {
+                        "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+                        "value": "/run/fr13/qwen-system-settings.json"
+                      },
+                      "remote_file": {
+                        "mode": "0444",
+                        "uid": 1000,
+                        "gid": 1000,
+                        "nlink": 1,
+                        "xattrs": []
+                      },
+                      "enable_auto_skill": false
+                    }
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 1321,
+              "sha256": "acd05ca3e5ef92ca01fdd388aca29f5e573bf949bf1e7d641ff50d6cd6fc5ea6"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 2434,
+              "sha256": "a2f5810d59ce4a462ab13e8a83f4312cc5ca57834923aadb39911873beadd603"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "e3218cf3db2ac07cfdd128bd1650aac133280ded65c9025e411c08e0a58b4002",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-14096",
+                "metrics_pre_bytes": 69096,
+                "metrics_post_bytes": 69149,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 166570,
+              "sha256": "e5f2aebab7745dba85ece118b62c69281a2e51309c60bf852cc3619c7c2ff079"
+            }
+          }
+        },
+        {
+          "task": "astropy__astropy-14182",
+          "path": "output/fr14_promoab_Cqc10_20260824T074813Z/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 505,
+              "sha256": "068635a51846ec266c2ace07980d62b1a933e72a5e87c4ab66fbf2c543ac0831",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14182",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "failed",
+                "passed": false,
+                "failure_mode": "tests_failed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 51.517,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787561427",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 354,
+              "sha256": "1d6069a41d7049e08075198f87ac36b11b2542317a056655c57564455c7d28b5",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14182",
+                "outcome": "failed",
+                "failure_mode": "tests_failed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 51.517,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 902,
+              "sha256": "c7d0185482b0670bf8d12292fcca1443421ad8450882054c9ee912a3b7327e9f"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 31582,
+              "sha256": "c12a2d42470557f126adaba4fd59634f59e80218e39264675600a7c6143a9f03",
+              "record": {
+                "instance_id": "astropy__astropy-14182",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "a5917978be39d13cd90b517e1de4e7a539ffaa48",
+                "fixed32_dataset_record_sha256": "9dcacc272ac4712c0fa81524e85d78d0543c8e001a48cf32c1f8d723bec21cc0",
+                "started_at": "2026-08-24T08:43:07Z",
+                "ended_at": "2026-08-24T08:51:20Z",
+                "patch_bytes": 745,
+                "eval": {
+                  "exit_code": 1,
+                  "elapsed_s": 53.366,
+                  "offloaded": true,
+                  "eval_host": "alienware",
+                  "evaluator": {
+                    "mode": "remote_x86_worker",
+                    "host": "alienware",
+                    "base": "~/swe_eval_offload",
+                    "worker": "~/swe_eval_offload/swe_eval_x86_worker.py",
+                    "interpreter": "~/swe_eval_offload/venv/bin/python",
+                    "worker_sha256": "4a06bbe937af3c04c3897564d7bc27cdad8d8abc8c13fd156650e203e30994da",
+                    "worker_bytes": 8046,
+                    "interpreter_realpath": "/usr/bin/python3.12"
+                  }
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-14182",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "failed",
+                  "passed": false,
+                  "failure_mode": "tests_failed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 51.517,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787561427",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 433.624,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14182:latest",
+                  "instance_image_identity": {
+                    "instance_id": "astropy__astropy-14182",
+                    "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14182:latest",
+                    "id": "sha256:770f48b2842d8115639b73b022994b2e1b20af676367509244b9dcbad3f903e9",
+                    "repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14182@sha256:374a7f3206d23fd41aaf6ac3361a34dad941bdbe92ec81ff1b4c3e0163e38453",
+                    "architecture": "amd64",
+                    "os": "linux"
+                  },
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": {
+                    "schema": "fr13-remote-qwen-trace-observation-v1",
+                    "bytes": 98684,
+                    "sha256": "816f98fd2884b6471cacb495d3fdab3c4cf9b44059e1d23a3218d49eac186334",
+                    "event_count": 141
+                  },
+                  "runtime": {
+                    "qwen_code_version": "0.19.4",
+                    "bundle_manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+                    "system_settings": {
+                      "source": "config/fr13_fixed32/qwen_system_settings.json",
+                      "bytes": 98,
+                      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+                      "container_path": "/run/fr13/qwen-system-settings.json",
+                      "mount_mode": "ro",
+                      "environment": {
+                        "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+                        "value": "/run/fr13/qwen-system-settings.json"
+                      },
+                      "remote_file": {
+                        "mode": "0444",
+                        "uid": 1000,
+                        "gid": 1000,
+                        "nlink": 1,
+                        "xattrs": []
+                      },
+                      "enable_auto_skill": false
+                    }
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 745,
+              "sha256": "5e5d3f473f32e65bf50569ec509bedf90618b01c601e4d087ac0389e31f52745"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 3303,
+              "sha256": "a8fd15291d350b4b2c0334fdb3e78a472b0638dece622be376b8aed06a2bc3a3"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "98a85b7fae2d0d19012d0d549f769fe80aa9ed845b698c6cb149b1937e6f5343",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-14182",
+                "metrics_pre_bytes": 69149,
+                "metrics_post_bytes": 69132,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 98684,
+              "sha256": "816f98fd2884b6471cacb495d3fdab3c4cf9b44059e1d23a3218d49eac186334"
+            }
+          }
+        },
+        {
+          "task": "astropy__astropy-14309",
+          "path": "output/fr14_promoab_Cqc10_20260824T074813Z/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 506,
+              "sha256": "eb501a85e75d643c3899f4de6726fb5c3832821cca6b38b8b7f8c48be6716963",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14309",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "resolved",
+                "passed": true,
+                "failure_mode": "tests_passed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 41.734,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787561588",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 356,
+              "sha256": "b95d9a29c3722120459e387a3fcd0de554d2a10331a7100b2a51341e8b996998",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14309",
+                "outcome": "resolved",
+                "failure_mode": "tests_passed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 41.734,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 739,
+              "sha256": "ba1d93cd4704c1e5a844f5aa053f219839849dcea19df30c2f5c76189248fdef"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 31561,
+              "sha256": "7b8df4b131ec2cf435f88215afaf7645f0d961ddc3339e8fcfe969763eb037d7",
+              "record": {
+                "instance_id": "astropy__astropy-14309",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "cdb66059a2feb44ee49021874605ba90801f9986",
+                "fixed32_dataset_record_sha256": "ee34d5ae02c6c96717633dc3bdcf3168d9cfcdad1354a4fc148babd063150b5d",
+                "started_at": "2026-08-24T08:51:20Z",
+                "ended_at": "2026-08-24T08:53:51Z",
+                "patch_bytes": 574,
+                "eval": {
+                  "exit_code": 0,
+                  "elapsed_s": 43.464,
+                  "offloaded": true,
+                  "eval_host": "alienware",
+                  "evaluator": {
+                    "mode": "remote_x86_worker",
+                    "host": "alienware",
+                    "base": "~/swe_eval_offload",
+                    "worker": "~/swe_eval_offload/swe_eval_x86_worker.py",
+                    "interpreter": "~/swe_eval_offload/venv/bin/python",
+                    "worker_sha256": "4a06bbe937af3c04c3897564d7bc27cdad8d8abc8c13fd156650e203e30994da",
+                    "worker_bytes": 8046,
+                    "interpreter_realpath": "/usr/bin/python3.12"
+                  }
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-14309",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "resolved",
+                  "passed": true,
+                  "failure_mode": "tests_passed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 41.734,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787561588",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 100.411,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14309:latest",
+                  "instance_image_identity": {
+                    "instance_id": "astropy__astropy-14309",
+                    "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14309:latest",
+                    "id": "sha256:f896444b1e4977454bd415d711926f7ce0f25c8b4c6c417b26d38df59e8a3ca6",
+                    "repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14309@sha256:89fc1b9379b349c8d1773cc3e6982cb32d2732f90a240047c688735db35c5212",
+                    "architecture": "amd64",
+                    "os": "linux"
+                  },
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": {
+                    "schema": "fr13-remote-qwen-trace-observation-v1",
+                    "bytes": 24030,
+                    "sha256": "c26c9968788d10bc300b40eb5d7deabc431d6a25469550dbe47ccffd09ac569a",
+                    "event_count": 28
+                  },
+                  "runtime": {
+                    "qwen_code_version": "0.19.4",
+                    "bundle_manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+                    "system_settings": {
+                      "source": "config/fr13_fixed32/qwen_system_settings.json",
+                      "bytes": 98,
+                      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+                      "container_path": "/run/fr13/qwen-system-settings.json",
+                      "mount_mode": "ro",
+                      "environment": {
+                        "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+                        "value": "/run/fr13/qwen-system-settings.json"
+                      },
+                      "remote_file": {
+                        "mode": "0444",
+                        "uid": 1000,
+                        "gid": 1000,
+                        "nlink": 1,
+                        "xattrs": []
+                      },
+                      "enable_auto_skill": false
+                    }
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 574,
+              "sha256": "6a1c48a99a547e05b04a9523a0e8678d0dd860ffa85de79c2f91d1b888368fa0"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 6296,
+              "sha256": "7fac15e7fed9dcbbf68eee8864ec4b3f8758ea9da91f772fceeff7aa9e58ac24"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "d92c0fd03f04c83144482c980208bcf9897091d726e1d4dcf259796dd1ac33b8",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-14309",
+                "metrics_pre_bytes": 69132,
+                "metrics_post_bytes": 69252,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 24030,
+              "sha256": "c26c9968788d10bc300b40eb5d7deabc431d6a25469550dbe47ccffd09ac569a"
+            }
+          }
+        },
+        {
+          "task": "astropy__astropy-14365",
+          "path": "output/fr14_promoab_Cqc10_20260824T074813Z/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 505,
+              "sha256": "153bc034b43438d866d3eb8050dfd927144bd432125cb71637b033ab4b2c7c68",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14365",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "failed",
+                "passed": false,
+                "failure_mode": "tests_failed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 40.788,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787562045",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 354,
+              "sha256": "5c833a657cdf2178d809d24bfd31d8396f5e1213b1e51ebcdac105d44949d88b",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14365",
+                "outcome": "failed",
+                "failure_mode": "tests_failed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 40.788,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 780,
+              "sha256": "e4edd172be96ee9e0e141c2f613a292699ed73755b7e4b17cf25774e8bd3fe18"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 31573,
+              "sha256": "08e8750f868c7a61d0e3bd2229a2882eeed288090e215eb3e3d13f99afedb557",
+              "record": {
+                "instance_id": "astropy__astropy-14365",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "7269fa3e33e8d02485a647da91a5a2a60a06af61",
+                "fixed32_dataset_record_sha256": "9839e75adc3a00419843c04f522cea43cb96772cdbea404d8527e6ec55d89928",
+                "started_at": "2026-08-24T08:53:51Z",
+                "ended_at": "2026-08-24T09:01:27Z",
+                "patch_bytes": 617,
+                "eval": {
+                  "exit_code": 1,
+                  "elapsed_s": 42.4,
+                  "offloaded": true,
+                  "eval_host": "alienware",
+                  "evaluator": {
+                    "mode": "remote_x86_worker",
+                    "host": "alienware",
+                    "base": "~/swe_eval_offload",
+                    "worker": "~/swe_eval_offload/swe_eval_x86_worker.py",
+                    "interpreter": "~/swe_eval_offload/venv/bin/python",
+                    "worker_sha256": "4a06bbe937af3c04c3897564d7bc27cdad8d8abc8c13fd156650e203e30994da",
+                    "worker_bytes": 8046,
+                    "interpreter_realpath": "/usr/bin/python3.12"
+                  }
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-14365",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "failed",
+                  "passed": false,
+                  "failure_mode": "tests_failed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 40.788,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787562045",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 407.009,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14365:latest",
+                  "instance_image_identity": {
+                    "instance_id": "astropy__astropy-14365",
+                    "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14365:latest",
+                    "id": "sha256:3925b434247f8fc7aabe79a902d03d4566d697c4f35b7a39fdfa209263efb358",
+                    "repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14365@sha256:bb1ec8d27d478ab7469805680c824a4030fa3f32a592558f7a02485b76f3226b",
+                    "architecture": "amd64",
+                    "os": "linux"
+                  },
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": {
+                    "schema": "fr13-remote-qwen-trace-observation-v1",
+                    "bytes": 93947,
+                    "sha256": "a4b3b2ccdead7c1ca7b426758ed0717d48b5a68a78f3a3d9f27f0649bb251f0a",
+                    "event_count": 72
+                  },
+                  "runtime": {
+                    "qwen_code_version": "0.19.4",
+                    "bundle_manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+                    "system_settings": {
+                      "source": "config/fr13_fixed32/qwen_system_settings.json",
+                      "bytes": 98,
+                      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+                      "container_path": "/run/fr13/qwen-system-settings.json",
+                      "mount_mode": "ro",
+                      "environment": {
+                        "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+                        "value": "/run/fr13/qwen-system-settings.json"
+                      },
+                      "remote_file": {
+                        "mode": "0444",
+                        "uid": 1000,
+                        "gid": 1000,
+                        "nlink": 1,
+                        "xattrs": []
+                      },
+                      "enable_auto_skill": false
+                    }
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 617,
+              "sha256": "d2f7c021982b4fdb23d0c7be7ae0d5572aa14fbe29fb26113efad57e2176ef64"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 2783,
+              "sha256": "01e959f5c71f2164853231776f44d2444e82330685314e9a144075982df3c748"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "6b8a9b7ab0ba230aa590c28c053192b16554bac8e3101ca2ba05f62d129e8ec5",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-14365",
+                "metrics_pre_bytes": 69252,
+                "metrics_post_bytes": 69300,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 93947,
+              "sha256": "a4b3b2ccdead7c1ca7b426758ed0717d48b5a68a78f3a3d9f27f0649bb251f0a"
+            }
+          }
+        },
+        {
+          "task": "astropy__astropy-14369",
+          "path": "output/fr14_promoab_Cqc10_20260824T074813Z/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 506,
+              "sha256": "676871871a54a99ad05798ba9e0e3c692ad387bc20bf8a702f04ff6fb073b6f2",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14369",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "resolved",
+                "passed": true,
+                "failure_mode": "tests_passed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 40.699,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787563758",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 356,
+              "sha256": "93e584d030bae508a6831d4e8fc208f944f738c86a65b53ed960dd8060d9e5b6",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14369",
+                "outcome": "resolved",
+                "failure_mode": "tests_passed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 40.699,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 12665,
+              "sha256": "a04d391ed13c027f64ebb1e1b3385e0000b71357efa6a5d4c4275ce946d21ee5"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 31608,
+              "sha256": "fcd0f6c46a02ebfd0d744c1dcfa44161a3addb565accecba8d7bed1eababf8d9",
+              "record": {
+                "instance_id": "astropy__astropy-14369",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "fa4e8d1cd279acf9b24560813c8652494ccd5922",
+                "fixed32_dataset_record_sha256": "aab772fcf9c5f5d963c02c9aeaed4a7c875649d9aa51ca4b1267b5c1bc6723c6",
+                "started_at": "2026-08-24T09:01:27Z",
+                "ended_at": "2026-08-24T09:30:00Z",
+                "patch_bytes": 12307,
+                "eval": {
+                  "exit_code": 0,
+                  "elapsed_s": 42.242,
+                  "offloaded": true,
+                  "eval_host": "alienware",
+                  "evaluator": {
+                    "mode": "remote_x86_worker",
+                    "host": "alienware",
+                    "base": "~/swe_eval_offload",
+                    "worker": "~/swe_eval_offload/swe_eval_x86_worker.py",
+                    "interpreter": "~/swe_eval_offload/venv/bin/python",
+                    "worker_sha256": "4a06bbe937af3c04c3897564d7bc27cdad8d8abc8c13fd156650e203e30994da",
+                    "worker_bytes": 8046,
+                    "interpreter_realpath": "/usr/bin/python3.12"
+                  }
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-14369",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "resolved",
+                  "passed": true,
+                  "failure_mode": "tests_passed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 40.699,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787563758",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 1661.955,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14369:latest",
+                  "instance_image_identity": {
+                    "instance_id": "astropy__astropy-14369",
+                    "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14369:latest",
+                    "id": "sha256:1a8a749d6b8edb837761e2d09bdf9459e3bdb2436d4070412d886de135ff0a3a",
+                    "repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14369@sha256:113488bfd3a6fb9678705496c18791bf46d98ad0303a682a3d405223eb2e85c4",
+                    "architecture": "amd64",
+                    "os": "linux"
+                  },
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": {
+                    "schema": "fr13-remote-qwen-trace-observation-v1",
+                    "bytes": 207151,
+                    "sha256": "71d741aaaa0b335f669a5f63a62641e8ed3d17ebdc0cefea068e29aca6b0a2b6",
+                    "event_count": 142
+                  },
+                  "runtime": {
+                    "qwen_code_version": "0.19.4",
+                    "bundle_manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+                    "system_settings": {
+                      "source": "config/fr13_fixed32/qwen_system_settings.json",
+                      "bytes": 98,
+                      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+                      "container_path": "/run/fr13/qwen-system-settings.json",
+                      "mount_mode": "ro",
+                      "environment": {
+                        "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+                        "value": "/run/fr13/qwen-system-settings.json"
+                      },
+                      "remote_file": {
+                        "mode": "0444",
+                        "uid": 1000,
+                        "gid": 1000,
+                        "nlink": 1,
+                        "xattrs": []
+                      },
+                      "enable_auto_skill": false
+                    }
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 12307,
+              "sha256": "afcef9c60ba16f662b7c78cd2ec55ba2237678111ba70cafa2e15fd9b0957fde"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 4019,
+              "sha256": "04bb64219926a1781d702da00f42cffc79e9c8fb71a01370e46535cedb49c0a1"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "ebc9c414740838d82b35a7b34bd549a96bb7f8b78c9867f37a93cad06e08b7f0",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-14369",
+                "metrics_pre_bytes": 69287,
+                "metrics_post_bytes": 69300,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 207151,
+              "sha256": "71d741aaaa0b335f669a5f63a62641e8ed3d17ebdc0cefea068e29aca6b0a2b6"
+            }
+          }
+        },
+        {
+          "task": "astropy__astropy-14508",
+          "path": "output/fr14_promoab_Cqc10_20260824T074813Z/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 506,
+              "sha256": "3e7df6127233c0d0e033ca510dda93f73e5e11144f2f06fc80a6508d1f7866a1",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14508",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "resolved",
+                "passed": true,
+                "failure_mode": "tests_passed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 40.512,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787566285",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 356,
+              "sha256": "537be42b7e0f5a561bab7599ba9259e2763587f684a899d28a5d7eb56cbad5e1",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14508",
+                "outcome": "resolved",
+                "failure_mode": "tests_passed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 40.512,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 1316,
+              "sha256": "4d4f8cfae25bddf9ed46535f485a362e5f6b731af76f60f40e6e91c0c4b6254f"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 31605,
+              "sha256": "a2d03eef3fc7369b114469241895861eb12c904c42fc83276a1ab112b0ec2552",
+              "record": {
+                "instance_id": "astropy__astropy-14508",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "a3f4ae6cd24d5ecdf49f213d77b3513dd509a06c",
+                "fixed32_dataset_record_sha256": "076469fcc7cf918702633642560b65941c75f94fa96e8558a8d52dadeaa1be43",
+                "started_at": "2026-08-24T09:30:00Z",
+                "ended_at": "2026-08-24T10:12:07Z",
+                "patch_bytes": 1124,
+                "eval": {
+                  "exit_code": 0,
+                  "elapsed_s": 42.769,
+                  "offloaded": true,
+                  "eval_host": "alienware",
+                  "evaluator": {
+                    "mode": "remote_x86_worker",
+                    "host": "alienware",
+                    "base": "~/swe_eval_offload",
+                    "worker": "~/swe_eval_offload/swe_eval_x86_worker.py",
+                    "interpreter": "~/swe_eval_offload/venv/bin/python",
+                    "worker_sha256": "4a06bbe937af3c04c3897564d7bc27cdad8d8abc8c13fd156650e203e30994da",
+                    "worker_bytes": 8046,
+                    "interpreter_realpath": "/usr/bin/python3.12"
+                  }
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-14508",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "resolved",
+                  "passed": true,
+                  "failure_mode": "tests_passed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 40.512,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787566285",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 2474.673,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14508:latest",
+                  "instance_image_identity": {
+                    "instance_id": "astropy__astropy-14508",
+                    "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14508:latest",
+                    "id": "sha256:f1f44383c21a57c5047ac6cdb4375407350dd14d54e455ec3b5dfec79ee26c7c",
+                    "repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14508@sha256:a6aea03ce1c6a2e897e78a4339e44f02643deb9007e0628a058034779181ce71",
+                    "architecture": "amd64",
+                    "os": "linux"
+                  },
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": {
+                    "schema": "fr13-remote-qwen-trace-observation-v1",
+                    "bytes": 184862,
+                    "sha256": "824ffca7e8ccdd9ed5ecdfe87a11beee8200a3529f0f6d1522806b327a58c0aa",
+                    "event_count": 111
+                  },
+                  "runtime": {
+                    "qwen_code_version": "0.19.4",
+                    "bundle_manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+                    "system_settings": {
+                      "source": "config/fr13_fixed32/qwen_system_settings.json",
+                      "bytes": 98,
+                      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+                      "container_path": "/run/fr13/qwen-system-settings.json",
+                      "mount_mode": "ro",
+                      "environment": {
+                        "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+                        "value": "/run/fr13/qwen-system-settings.json"
+                      },
+                      "remote_file": {
+                        "mode": "0444",
+                        "uid": 1000,
+                        "gid": 1000,
+                        "nlink": 1,
+                        "xattrs": []
+                      },
+                      "enable_auto_skill": false
+                    }
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 1124,
+              "sha256": "879685f512004de093f219e43aed44e7d9c10ddbd307f35381df5a784fadffbb"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 4064,
+              "sha256": "d950e74499863d5289ae1a781d013908f39810ad5f4fe3fbc7e5e393591beeae"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "7db0fb03566919f8240a32cf5f05cf73899938a4db53000788e382c5263b1673",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-14508",
+                "metrics_pre_bytes": 69300,
+                "metrics_post_bytes": 69323,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 184862,
+              "sha256": "824ffca7e8ccdd9ed5ecdfe87a11beee8200a3529f0f6d1522806b327a58c0aa"
+            }
+          }
+        },
+        {
+          "task": "astropy__astropy-14539",
+          "path": "output/fr14_promoab_Cqc10_20260824T074813Z/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 506,
+              "sha256": "b7645fc557bc487f9ac9a6e39ca178eaa64d7793106cde6071ebe1ae520e0c6d",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14539",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "resolved",
+                "passed": true,
+                "failure_mode": "tests_passed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 40.691,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787567453",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 356,
+              "sha256": "d6dd7d4b39ed3239ca555bd4ee29036673566f698e602450e1408f11cf733dbf",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14539",
+                "outcome": "resolved",
+                "failure_mode": "tests_passed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 40.691,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 821,
+              "sha256": "c96f964092bb320753b1fdec9dfa1b2e564c4e947cfbc55cd843b5b52ac14782"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 31602,
+              "sha256": "9fa5a88686cb8a061128fca0f36606006b3adba0828bd488227e16bea28ad205",
+              "record": {
+                "instance_id": "astropy__astropy-14539",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "c0a24c1dc957a3b565294213f435fefb2ec99714",
+                "fixed32_dataset_record_sha256": "4b2d3ad56bbb49fd67ee8b2e3654b0ddd884d7929b6df61dabebab843ff77483",
+                "started_at": "2026-08-24T10:12:07Z",
+                "ended_at": "2026-08-24T10:31:36Z",
+                "patch_bytes": 662,
+                "eval": {
+                  "exit_code": 0,
+                  "elapsed_s": 42.422,
+                  "offloaded": true,
+                  "eval_host": "alienware",
+                  "evaluator": {
+                    "mode": "remote_x86_worker",
+                    "host": "alienware",
+                    "base": "~/swe_eval_offload",
+                    "worker": "~/swe_eval_offload/swe_eval_x86_worker.py",
+                    "interpreter": "~/swe_eval_offload/venv/bin/python",
+                    "worker_sha256": "4a06bbe937af3c04c3897564d7bc27cdad8d8abc8c13fd156650e203e30994da",
+                    "worker_bytes": 8046,
+                    "interpreter_realpath": "/usr/bin/python3.12"
+                  }
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-14539",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "resolved",
+                  "passed": true,
+                  "failure_mode": "tests_passed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 40.691,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787567453",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 1114.236,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14539:latest",
+                  "instance_image_identity": {
+                    "instance_id": "astropy__astropy-14539",
+                    "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14539:latest",
+                    "id": "sha256:290a743498af81faf833324ccb3dfaf877e1d4fdd60594efc1a5f4835601316e",
+                    "repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14539@sha256:a8d0f9829ec24dfb23a2f0097a245ee60faf1b396b33b3af5c22d7ac5f3c00ab",
+                    "architecture": "amd64",
+                    "os": "linux"
+                  },
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": {
+                    "schema": "fr13-remote-qwen-trace-observation-v1",
+                    "bytes": 136870,
+                    "sha256": "ba35138148fed1aa5747e4fba45597921c324e0adb59eb1bc54fba32de9ea651",
+                    "event_count": 137
+                  },
+                  "runtime": {
+                    "qwen_code_version": "0.19.4",
+                    "bundle_manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+                    "system_settings": {
+                      "source": "config/fr13_fixed32/qwen_system_settings.json",
+                      "bytes": 98,
+                      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+                      "container_path": "/run/fr13/qwen-system-settings.json",
+                      "mount_mode": "ro",
+                      "environment": {
+                        "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+                        "value": "/run/fr13/qwen-system-settings.json"
+                      },
+                      "remote_file": {
+                        "mode": "0444",
+                        "uid": 1000,
+                        "gid": 1000,
+                        "nlink": 1,
+                        "xattrs": []
+                      },
+                      "enable_auto_skill": false
+                    }
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 662,
+              "sha256": "2e829b87b408aaf27fc01121ebc12329a82b2891e1e7dd44480840506615d3b5"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 2909,
+              "sha256": "c2a8f5c8d5f76db892f50177cdf8dcb47b85539a532d3c1aa1ece454a9aaa69f"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "847f4a08bae8391cb02aa9fdf2d2758e8ac6f781553e65524e3e1962d14fadea",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-14539",
+                "metrics_pre_bytes": 69311,
+                "metrics_post_bytes": 69334,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 136870,
+              "sha256": "ba35138148fed1aa5747e4fba45597921c324e0adb59eb1bc54fba32de9ea651"
+            }
+          }
+        },
+        {
+          "task": "astropy__astropy-14598",
+          "path": "output/fr14_promoab_Cqc10_20260824T074813Z/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 505,
+              "sha256": "5e5becfd0fb1333919015978d284ca8b34274d1eb6aa054a66852582ce7f3bd0",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14598",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "failed",
+                "passed": false,
+                "failure_mode": "tests_failed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 40.819,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787569056",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 354,
+              "sha256": "ce6f13af3b83f5b7ff7c680897e72b57036ed72204d60cc272869c0677cbdeff",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14598",
+                "outcome": "failed",
+                "failure_mode": "tests_failed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 40.819,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 973,
+              "sha256": "e3edf9b511275c71b3505ef2c1370cbcbb843c75c01afef68770f2022ce3543f"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 31605,
+              "sha256": "478a10876a87366358e7da9747cba6e410df464fada1e5d36a7993a15619c30d",
+              "record": {
+                "instance_id": "astropy__astropy-14598",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "80c3854a5f4f4a6ab86c03d9db7854767fcd83c1",
+                "fixed32_dataset_record_sha256": "a9408ee5b58a58ed9fc7465b6129e321c838a4b8810500ea8898a652c9c11170",
+                "started_at": "2026-08-24T10:31:36Z",
+                "ended_at": "2026-08-24T10:58:18Z",
+                "patch_bytes": 808,
+                "eval": {
+                  "exit_code": 1,
+                  "elapsed_s": 42.638,
+                  "offloaded": true,
+                  "eval_host": "alienware",
+                  "evaluator": {
+                    "mode": "remote_x86_worker",
+                    "host": "alienware",
+                    "base": "~/swe_eval_offload",
+                    "worker": "~/swe_eval_offload/swe_eval_x86_worker.py",
+                    "interpreter": "~/swe_eval_offload/venv/bin/python",
+                    "worker_sha256": "4a06bbe937af3c04c3897564d7bc27cdad8d8abc8c13fd156650e203e30994da",
+                    "worker_bytes": 8046,
+                    "interpreter_realpath": "/usr/bin/python3.12"
+                  }
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-14598",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "failed",
+                  "passed": false,
+                  "failure_mode": "tests_failed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 40.819,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787569056",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 1547.614,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14598:latest",
+                  "instance_image_identity": {
+                    "instance_id": "astropy__astropy-14598",
+                    "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14598:latest",
+                    "id": "sha256:3f3a0c5f4cd49b03ef4fde7f8e8bdf18833ee685d223395893b61426a6e62b8d",
+                    "repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14598@sha256:f1ff70694c403ee7018fef2a00638caa1555948d1c9b821175a7f4bdf2933a52",
+                    "architecture": "amd64",
+                    "os": "linux"
+                  },
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": {
+                    "schema": "fr13-remote-qwen-trace-observation-v1",
+                    "bytes": 539012,
+                    "sha256": "b71dcf54338c649e4e887818438fabbc0a2cd00983fafd31cad8b9e0bdef0302",
+                    "event_count": 141
+                  },
+                  "runtime": {
+                    "qwen_code_version": "0.19.4",
+                    "bundle_manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+                    "system_settings": {
+                      "source": "config/fr13_fixed32/qwen_system_settings.json",
+                      "bytes": 98,
+                      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+                      "container_path": "/run/fr13/qwen-system-settings.json",
+                      "mount_mode": "ro",
+                      "environment": {
+                        "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+                        "value": "/run/fr13/qwen-system-settings.json"
+                      },
+                      "remote_file": {
+                        "mode": "0444",
+                        "uid": 1000,
+                        "gid": 1000,
+                        "nlink": 1,
+                        "xattrs": []
+                      },
+                      "enable_auto_skill": false
+                    }
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 808,
+              "sha256": "09ccbac7bf565acee5b152b04a6e4e4d575d6e0953d71b0e272040bebae001d1"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 4030,
+              "sha256": "1cba02fce4ea9f648bcffb44cb81084944650f0a0668c1a497302cd1734b1cf1"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "78c7002e5b226cd346f27a59b5579a9ffb2df037877b23dbe14186f6b7ab3e42",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-14598",
+                "metrics_pre_bytes": 69334,
+                "metrics_post_bytes": 69348,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 539012,
+              "sha256": "b71dcf54338c649e4e887818438fabbc0a2cd00983fafd31cad8b9e0bdef0302"
+            }
+          }
+        },
+        {
+          "task": "astropy__astropy-14995",
+          "path": "output/fr14_promoab_Cqc10_20260824T074813Z/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 506,
+              "sha256": "1df319b952b53681daa2ad80c7652274f895f455457f06bfee7fd08647fbda6d",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14995",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "resolved",
+                "passed": true,
+                "failure_mode": "tests_passed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 41.286,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787569388",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 356,
+              "sha256": "f8e32cfec7d3dbe45c1903fb42ef4cc64f27dd9b3d44036bfe948e0e74104be1",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14995",
+                "outcome": "resolved",
+                "failure_mode": "tests_passed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 41.286,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 796,
+              "sha256": "28f53a65897fb567c7c0e8d2db131c7f2f876b132c574da9f4382303e3d43f3f"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 31580,
+              "sha256": "356acf8134a4fd9a081bad4b473fe13e2d116d17fbc793c57aa6f733291588e4",
+              "record": {
+                "instance_id": "astropy__astropy-14995",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "b16c7d12ccbc7b2d20364b89fb44285bcbfede54",
+                "fixed32_dataset_record_sha256": "43c7b4a6a2c39623709b5badf60e03b9e14f7f615f4b62c11f404be91cd73112",
+                "started_at": "2026-08-24T10:58:18Z",
+                "ended_at": "2026-08-24T11:03:51Z",
+                "patch_bytes": 645,
+                "eval": {
+                  "exit_code": 0,
+                  "elapsed_s": 43.091,
+                  "offloaded": true,
+                  "eval_host": "alienware",
+                  "evaluator": {
+                    "mode": "remote_x86_worker",
+                    "host": "alienware",
+                    "base": "~/swe_eval_offload",
+                    "worker": "~/swe_eval_offload/swe_eval_x86_worker.py",
+                    "interpreter": "~/swe_eval_offload/venv/bin/python",
+                    "worker_sha256": "4a06bbe937af3c04c3897564d7bc27cdad8d8abc8c13fd156650e203e30994da",
+                    "worker_bytes": 8046,
+                    "interpreter_realpath": "/usr/bin/python3.12"
+                  }
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-14995",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "resolved",
+                  "passed": true,
+                  "failure_mode": "tests_passed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 41.286,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787569388",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 275.154,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14995:latest",
+                  "instance_image_identity": {
+                    "instance_id": "astropy__astropy-14995",
+                    "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14995:latest",
+                    "id": "sha256:99afb65d48b892e0d2e015eeb0794175d26e6a092c81598aa5a32fb0978b30cc",
+                    "repo_digest": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14995@sha256:b29a3bf3daebe6055a2bba46bc98db070043acd53801bd783c2f620813a87eae",
+                    "architecture": "amd64",
+                    "os": "linux"
+                  },
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": {
+                    "schema": "fr13-remote-qwen-trace-observation-v1",
+                    "bytes": 47639,
+                    "sha256": "91b5305b7974d323d822aa8a3b17ada7c6209902055990b44598456f6e941277",
+                    "event_count": 45
+                  },
+                  "runtime": {
+                    "qwen_code_version": "0.19.4",
+                    "bundle_manifest_sha256": "594cac41e2d5ed505e0646f318b263ff70e200bcffe97326fe1c042fdc220516",
+                    "system_settings": {
+                      "source": "config/fr13_fixed32/qwen_system_settings.json",
+                      "bytes": 98,
+                      "sha256": "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f",
+                      "container_path": "/run/fr13/qwen-system-settings.json",
+                      "mount_mode": "ro",
+                      "environment": {
+                        "name": "QWEN_CODE_SYSTEM_SETTINGS_PATH",
+                        "value": "/run/fr13/qwen-system-settings.json"
+                      },
+                      "remote_file": {
+                        "mode": "0444",
+                        "uid": 1000,
+                        "gid": 1000,
+                        "nlink": 1,
+                        "xattrs": []
+                      },
+                      "enable_auto_skill": false
+                    }
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 645,
+              "sha256": "9d9f5dad8a26566282d791b93ad15e1623b66494e76d28499bd8a81a5d6a9ecf"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 3881,
+              "sha256": "33da3b24aa927ed419cad448e6e69ccc4350833abe9a8bc2ea0ca3f71bd90b08"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "aa3fd9493fd76409f177ad151fc6dc5e3f3543383f93a4292f3e52cc81f500ea",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-14995",
+                "metrics_pre_bytes": 69348,
+                "metrics_post_bytes": 69332,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 47639,
+              "sha256": "91b5305b7974d323d822aa8a3b17ada7c6209902055990b44598456f6e941277"
+            }
+          }
+        }
+      ],
+      "source_files": {
+        "output/fr14_promoab_Cqc10_20260824T074813Z/arm_env.txt": {
+          "sha256": "c3b8842d1fdcca40c717fa3fb75c6c0cfecfb6dc8902af6fa542aedd9d9f07ef",
+          "text": "FR10_METRICS=0\nFR13_HOST_TAIL_PREP_BAKE=1\nFR13_HOST_TAIL_DEFER=0\nFR13_DFWD_SPLIT=1\nFR13_LFWD_GPU_TIMER=1\nFR14_SUFFIX_PASS_GATE=0\nFR13_B1_CREDENTIAL_POINTER=/nonexistent\nFR13_FA2_QROW32_B1_TIERB_WORKLOAD=exact16_qc_remainder_10\nFR13_FA2_QROW32_B1_TIERB_TASK_IDS=astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995\nFR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256=716503a46a991e3b187e14777f96f074c1a3359d9f8b7928f4453a6b9da1ee9b\n"
+        },
+        "output/fr14_promoab_Cqc10_20260824T074813Z/arm_meta.txt": {
+          "sha256": "74d1711fc64145c1bcce45a54eccd54a19cef50641a76dab223f06fd19ed0540",
+          "text": "arm_kind=C\narm=hydra27_fixed32_promoab_Cqc10\nsource_commit=e7af6b595a8b3a09b7e88d25a3653d381432b99c\nsubset=config/fr13_fixed32/subset_b4_sixteen_qc_remainder_10.json\nsubset_sha256=716503a46a991e3b187e14777f96f074c1a3359d9f8b7928f4453a6b9da1ee9b\ntask_budget_s=9000\nagent_wall_s=9000\nverdict_instrument=step_wall_ms+s_per_fwd_gpu\nfa2_b1_arm=PROMOTED DEFAULT (B1 arm left UNNAMED; launcher arms split-K tier-B and mints its own provenance)\nstarted=2026-08-24T07:48:14Z\nserve_rc=0\nended=2026-08-24T11:04:21Z\n"
+        },
+        "output/fr14_promoab_Cqc10_20260824T074813Z/hydra27_fixed32_promoab_Cqc10.pretask_identity.json": {
+          "sha256": "787db8868b73f4b8da7b8a7d8073ac1e24edf847cec3ac2b363cd068a0486d4f",
+          "text": "{\"schema\":\"fr13.pretask_identity.v1\",\"arm\":\"hydra27_fixed32_promoab_Cqc10\",\"kind\":\"hydra27_fixed32\",\"launcher\":\"forked\",\"fixed32_mode\":\"hydra27_fixed32\",\"native_decode\":\"0\",\"identity_class\":\"fixed32\",\"warmup_probe_requested_skip\":\"0\",\"proxy_raw_dumps_mode\":\"auto\",\"offload_agent\":\"1\",\"prefix_cache_reset\":\"skipped-fresh-container\",\"proxy_pair_dumps\":\"not-expected\"}\n"
+        },
+        "output/fr14_promoab_Cqc10_20260824T074813Z/hydra27_fixed32_promoab_Cqc10.runlog": {
+          "sha256": "2905f72ff44d78e7a28823f80625110d8e68c661d0d94bb4c38a8c02c9cd28e0",
+          "selected_lines": [
+            {
+              "line": 70,
+              "text": "swe orchestrator rc=0 wall=11421s"
+            },
+            {
+              "line": 155,
+              "text": "ARM_DONE hydra27_fixed32_promoab_Cqc10 kind=hydra27_fixed32 swerc=0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "run": "fr14_mtp5_astropy13236_a_20260824T130251Z",
+      "tasks": [
+        {
+          "task": "astropy__astropy-13236",
+          "path": "output/fr14_mtp5_astropy13236_a_20260824T130251Z/nativemtp5_probe_astropy13236_a/swe_out/verified/per_task/astropy__astropy-13236",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 506,
+              "sha256": "d07c6d9257c2b0da9c6b0f49c0d76cb04e402925e33e4df6c38c12e23e3a60df",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-13236",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "resolved",
+                "passed": true,
+                "failure_mode": "tests_passed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 52.292,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787578675",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 356,
+              "sha256": "931b7470975538206b5190816469d7bcac9c283009e9ceb65cd18d6ad70717e0",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-13236",
+                "outcome": "resolved",
+                "failure_mode": "tests_passed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 52.292,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 975,
+              "sha256": "4675ec8039a585e25435bcfd1ecd466936ad364762ca5baf8c2ea258e4c23a6b"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 3167,
+              "sha256": "0d5d7e34498f826e657b8a24f0289dc166defde6752c797a12939f8e8b46102f",
+              "record": {
+                "instance_id": "astropy__astropy-13236",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "6ed769d58d89380ebaa1ef52b300691eefda8928",
+                "fixed32_dataset_record_sha256": null,
+                "started_at": "2026-08-24T13:08:05Z",
+                "ended_at": "2026-08-24T13:38:49Z",
+                "patch_bytes": 819,
+                "eval": {
+                  "exit_code": 0,
+                  "elapsed_s": 54.046,
+                  "offloaded": true,
+                  "eval_host": "alienware",
+                  "evaluator": {
+                    "mode": "remote_x86_worker",
+                    "host": "alienware",
+                    "base": "~/swe_eval_offload",
+                    "worker": "~/swe_eval_offload/swe_eval_x86_worker.py",
+                    "interpreter": "~/swe_eval_offload/venv/bin/python",
+                    "worker_sha256": "4a06bbe937af3c04c3897564d7bc27cdad8d8abc8c13fd156650e203e30994da",
+                    "worker_bytes": 8046,
+                    "interpreter_realpath": "/usr/bin/python3.12"
+                  }
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-13236",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "resolved",
+                  "passed": true,
+                  "failure_mode": "tests_passed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 52.292,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787578675",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 1788.385,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13236:latest",
+                  "instance_image_identity": null,
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": null,
+                  "runtime": {
+                    "qwen_code_version": null,
+                    "bundle_manifest_sha256": null,
+                    "system_settings": null
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 819,
+              "sha256": "fb1bea863f67dabfa7d64e3a6098e4b34c380c1a12f5a74b1e6ed2710fc40f67"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 3497,
+              "sha256": "160ebd8c4e503457933993402e9ae3e6d9f33723e40be927d7d0b722fe6e0a66"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "1839fb0a82ba85dee4c0b274ba0043864715da6bbae7e81b826d7299ec5773c2",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-13236",
+                "metrics_pre_bytes": 59882,
+                "metrics_post_bytes": 61635,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 146233,
+              "sha256": "bbd77908baff6b93a2e424da0fd58cb2ae8fdee57dd37cc67008fdd732bf356e"
+            }
+          }
+        }
+      ],
+      "source_files": {
+        "output/fr14_mtp5_astropy13236_a_20260824T130251Z/MTP5_PROBE.txt": {
+          "sha256": "7d5e06cff94d6bb82f293ed9ea58afcb39a569c9d57315a19228a57f145bd86a",
+          "text": "probe=drafter_neutrality\nhypothesis=plain MTP-5 removes the merged drafter; does the thinking runaway persist?\nkind=nativemtp5 (LAUNCHER=native: stock vLLM MTP-5, qwen3_5_mtp, 5 tokens, NO tree, NO patcher)\ntask=astropy13236\nreplicate=a\nsubset=config/fr13_fixed32/subset_b1_diagnostic_astropy13236.json\ntier_b_arm=NONE (native launcher never reaches the FA2 selector)\nsplit_k=NOT PRESENT (not merely disarmed)\ncredential=NOT REQUIRED (no re-seal for this arm)\nDECLARED_EXCEPTION=NVFP4 lm_head loader shim (fr14_patch_nvfp4_lmhead.py), WEIGHT LOADING ONLY -- ruled Option A, pass 209\ndeclared_exception_shim_sha256=0a673b5ad0b76467530ef33e8da36500c73b25857eda11281c2e55103ce57a71\ndeclared_exception_why=stock vLLM cannot load this checkpoint at all: its lm_head is quantized (input_scale/weight_scale/weight_scale_2) and Qwen3_5ForCausalLM declares only lm_head.weight. Replicate A died on exactly this at 12:08:49Z.\ndeclared_exception_scope=constructor wiring, quant-method dispatch, key remapping, numel-preserving reshape. Touches NO decode path, attention, drafter or speculative decoding -- so it cannot bias a drafter-neutrality result.\npurity_meaning=NO SIDE CODE ON THE DECODE PATH (not \"no side code\"). The attestor enumerates the shim tokens and excepts exactly those; any other sentinel still fails, including a non-shim blob inside a shim-target file.\nc5_applicable=NO -- c5 is a SEAM conditional and a chain drafter has no seam\nc5_note=do NOT quote a c5 for this arm. On the merged tree drafter c5 flagged exactly one of the canonical sixteen (13236 at 0.3499, all others 0.5182-0.6395); that instrument does not transfer to a chain drafter and its absence here is by construction, not an omission.\nserved_model_path=/models/qwen3.8-27b-nvfp4-radixark\nserved_model_name=qwen3.8-27b-nvfp4-radixark\ncheckpoint_identity=5ec8e24087f2e395\ncheckpoint_note=5ec8e240 separates the 3.8 NVFP4 weights from 3.6-fp8 (d0538237). It does NOT separate radixark from radixark-asshipped: their safetensors are the same inodes, so the weights are identical bytes and only non-safetensors files differ.\ndegeneration_instruments=trace screens (ttr, top-12-gram, max-block, tool cadence) + 24k ceiling length events + conjunction rule (visible-collapse AND tools==0 AND thinking-large)\nconjunction_rule_validation=130 banked traces: 1 degeneration (Cqc16/13236), 9 vacuous, 120 clean; ONE positive example, so it is a floor not a proof\nn2_framing=PRE-REGISTERED: either replicate degenerating strongly REFUTES the machinery hypothesis; both clean is WEAK evidence for it\noutput_ceiling=24000\nboot_head=a9140357879d3a6ad87a6843ad9ef8aea447b140\nstarted=2026-08-24T13:02:52Z\nserve_rc=0\nended=2026-08-24T13:39:07Z\nRESULT=CLEAN, RESOLVED\nwall_min=29.8\npatch_bytes=819  patch_sha16=fb1bea863f67dabf\neval=resolved / passed=True / tests_passed\nturns=104 tools=35 malformed=0\nvisible: chars=5237 ttr=0.491 tailrep=0.000    thinking_chars=59244\nall-text: ttr=0.188 maxline=5 8gram=6 tailrep=0.071\nrequests=37, finish reasons: stop x37, length x0  -> NO ceiling truncation\nrequested max_tokens: 37 x <=50000 (the 24000 deployed ceiling), ZERO compactions\nCONJUNCTION RULE: does NOT fire (visChars 5237 >> 200; tools 35 != 0)\nc5: n/a BY CONSTRUCTION -- chain drafter has no seam\n"
+        },
+        "output/fr14_mtp5_astropy13236_a_20260824T130251Z/MTP5_PURITY.json": {
+          "sha256": "aa6105539e309b1f05f762cd81bd4775b323bfb5263c2784e84ee5791a9048a0",
+          "record": {
+            "ALL_PASS": true,
+            "VERDICT": "engine purity: no side code on the decode path; ONE DECLARED EXCEPTION: NVFP4 lm_head loader shim (weight loading only), sha 0a673b5ad0b76467",
+            "checks": {
+              "1_no_undeclared_side_code": {
+                "PASS": true,
+                "UNDECLARED_violations": 0
+              },
+              "2_import_census": {
+                "PASS": true
+              },
+              "3_attention_backend": {
+                "PASS": true
+              },
+              "4_vllm_at_rest": {
+                "PASS": true,
+                "SCOPE_LIMIT": "a byte-diff against pristine UPSTREAM is NOT performed: upstream is not present in the container. What IS checked is the wheel's own dist-info RECORD hashes for the executed paths (spec_decode/attention/model_executor) -- that detects any at-rest modification of those files since install, which is the actionable half. A baked-in diff that predates the wheel build would NOT be caught by this and is named here rather than glossed.",
+                "UNDECLARED_mismatches": [],
+                "files_checked": 1233,
+                "files_mismatching": 4,
+                "vllm_version": "0.19.2rc1.dev134+gfe9c3d6c5"
+              }
+            }
+          }
+        },
+        "output/fr14_mtp5_astropy13236_a_20260824T130251Z/nativemtp5_probe_astropy13236_a.pretask_identity.json": {
+          "sha256": "44ff2451e4e78ccec98f9df909e3bf6536857cebe05e882761c05642aee00d81",
+          "text": "{\"schema\":\"fr13.pretask_identity.v1\",\"arm\":\"nativemtp5_probe_astropy13236_a\",\"kind\":\"nativemtp5\",\"launcher\":\"native\",\"fixed32_mode\":\"\",\"native_decode\":\"1\",\"identity_class\":\"legacy-or-native\",\"warmup_probe_requested_skip\":\"1\",\"proxy_raw_dumps_mode\":\"off\",\"offload_agent\":\"1\",\"prefix_cache_reset\":\"runs\",\"proxy_pair_dumps\":\"expected\"}\n"
+        },
+        "output/fr14_mtp5_astropy13236_a_20260824T130251Z/nativemtp5_probe_astropy13236_a.runlog": {
+          "sha256": "b8ce141c6b4a1dfc17debf57243d9639ae3c4194065815a1c33b69fe6b35efff",
+          "selected_lines": [
+            {
+              "line": 23,
+              "text": "swe orchestrator rc=0 wall=1845s"
+            },
+            {
+              "line": 44,
+              "text": "ARM_DONE nativemtp5_probe_astropy13236_a kind=nativemtp5 swerc=0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "run": "fr14_mtp5_astropy13236_b_20260824T133941Z",
+      "tasks": [
+        {
+          "task": "astropy__astropy-13236",
+          "path": "output/fr14_mtp5_astropy13236_b_20260824T133941Z/nativemtp5_probe_astropy13236_b/swe_out/verified/per_task/astropy__astropy-13236",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 506,
+              "sha256": "29126725f3ac4ad116b3c9b0aa517378ed0615dae5d93e93c2877b8cf0be9dad",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-13236",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "resolved",
+                "passed": true,
+                "failure_mode": "tests_passed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 52.165,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787584141",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 356,
+              "sha256": "3ad792971f11ef37056d1e1ee6f559cee36ddb8167f549d8325ea69d84a2a8a4",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-13236",
+                "outcome": "resolved",
+                "failure_mode": "tests_passed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 52.165,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 975,
+              "sha256": "4675ec8039a585e25435bcfd1ecd466936ad364762ca5baf8c2ea258e4c23a6b"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 3167,
+              "sha256": "df9d967696e77faa9fa6595fc6a97733628a8ecbc150f43884244b788aeb303d",
+              "record": {
+                "instance_id": "astropy__astropy-13236",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "6ed769d58d89380ebaa1ef52b300691eefda8928",
+                "fixed32_dataset_record_sha256": null,
+                "started_at": "2026-08-24T13:44:50Z",
+                "ended_at": "2026-08-24T15:09:55Z",
+                "patch_bytes": 819,
+                "eval": {
+                  "exit_code": 0,
+                  "elapsed_s": 53.919,
+                  "offloaded": true,
+                  "eval_host": "alienware",
+                  "evaluator": {
+                    "mode": "remote_x86_worker",
+                    "host": "alienware",
+                    "base": "~/swe_eval_offload",
+                    "worker": "~/swe_eval_offload/swe_eval_x86_worker.py",
+                    "interpreter": "~/swe_eval_offload/venv/bin/python",
+                    "worker_sha256": "4a06bbe937af3c04c3897564d7bc27cdad8d8abc8c13fd156650e203e30994da",
+                    "worker_bytes": 8046,
+                    "interpreter_realpath": "/usr/bin/python3.12"
+                  }
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-13236",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "resolved",
+                  "passed": true,
+                  "failure_mode": "tests_passed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 52.165,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787584141",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 5049.512,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13236:latest",
+                  "instance_image_identity": null,
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": null,
+                  "runtime": {
+                    "qwen_code_version": null,
+                    "bundle_manifest_sha256": null,
+                    "system_settings": null
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 819,
+              "sha256": "fb1bea863f67dabfa7d64e3a6098e4b34c380c1a12f5a74b1e6ed2710fc40f67"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 3497,
+              "sha256": "160ebd8c4e503457933993402e9ae3e6d9f33723e40be927d7d0b722fe6e0a66"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "de646b1e241db02c0e85a6e583596ce52275d974cb5283d49afba02806fac655",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-13236",
+                "metrics_pre_bytes": 59882,
+                "metrics_post_bytes": 61670,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 338271,
+              "sha256": "76ec0c3db74c0b2f0604f23a7c8fd3b155484ac60b4781a390d361e307eb7ff8"
+            }
+          }
+        }
+      ],
+      "source_files": {
+        "output/fr14_mtp5_astropy13236_b_20260824T133941Z/MTP5_PROBE.txt": {
+          "sha256": "ec3e6b63e038081e87d6cbdee5d0fb2977e7ba76986b77405af1ba9102512067",
+          "text": "probe=drafter_neutrality\nhypothesis=plain MTP-5 removes the merged drafter; does the thinking runaway persist?\nkind=nativemtp5 (LAUNCHER=native: stock vLLM MTP-5, qwen3_5_mtp, 5 tokens, NO tree, NO patcher)\ntask=astropy13236\nreplicate=b\nsubset=config/fr13_fixed32/subset_b1_diagnostic_astropy13236.json\ntier_b_arm=NONE (native launcher never reaches the FA2 selector)\nsplit_k=NOT PRESENT (not merely disarmed)\ncredential=NOT REQUIRED (no re-seal for this arm)\nDECLARED_EXCEPTION=NVFP4 lm_head loader shim (fr14_patch_nvfp4_lmhead.py), WEIGHT LOADING ONLY -- ruled Option A, pass 209\ndeclared_exception_shim_sha256=0a673b5ad0b76467530ef33e8da36500c73b25857eda11281c2e55103ce57a71\ndeclared_exception_why=stock vLLM cannot load this checkpoint at all: its lm_head is quantized (input_scale/weight_scale/weight_scale_2) and Qwen3_5ForCausalLM declares only lm_head.weight. Replicate A died on exactly this at 12:08:49Z.\ndeclared_exception_scope=constructor wiring, quant-method dispatch, key remapping, numel-preserving reshape. Touches NO decode path, attention, drafter or speculative decoding -- so it cannot bias a drafter-neutrality result.\npurity_meaning=NO SIDE CODE ON THE DECODE PATH (not \"no side code\"). The attestor enumerates the shim tokens and excepts exactly those; any other sentinel still fails, including a non-shim blob inside a shim-target file.\nc5_applicable=NO -- c5 is a SEAM conditional and a chain drafter has no seam\nc5_note=do NOT quote a c5 for this arm. On the merged tree drafter c5 flagged exactly one of the canonical sixteen (13236 at 0.3499, all others 0.5182-0.6395); that instrument does not transfer to a chain drafter and its absence here is by construction, not an omission.\nserved_model_path=/models/qwen3.8-27b-nvfp4-radixark\nserved_model_name=qwen3.8-27b-nvfp4-radixark\ncheckpoint_identity=5ec8e24087f2e395\ncheckpoint_note=5ec8e240 separates the 3.8 NVFP4 weights from 3.6-fp8 (d0538237). It does NOT separate radixark from radixark-asshipped: their safetensors are the same inodes, so the weights are identical bytes and only non-safetensors files differ.\ndegeneration_instruments=trace screens (ttr, top-12-gram, max-block, tool cadence) + 24k ceiling length events + conjunction rule (visible-collapse AND tools==0 AND thinking-large)\nconjunction_rule_validation=130 banked traces: 1 degeneration (Cqc16/13236), 9 vacuous, 120 clean; ONE positive example, so it is a floor not a proof\nn2_framing=PRE-REGISTERED: either replicate degenerating strongly REFUTES the machinery hypothesis; both clean is WEAK evidence for it\noutput_ceiling=24000\nboot_head=267e561334b4f28e9b506d6c87a65ece68803c1e\nstarted=2026-08-24T13:39:43Z\nserve_rc=0\nended=2026-08-24T15:10:10Z\nRESULT=CLEAN, RESOLVED\nwall_min=84.2\npatch_bytes=819  patch_sha16=fb1bea863f67dabf  (IDENTICAL to replicate A and to 4 banked merged-drafter runs)\neval=resolved / passed=True / tests_passed\nturns=242 tools=83 malformed=0\nvisible: chars=5131 ttr=0.506 tailrep=0.000    thinking_chars=152278\nall-text: ttr=0.161 maxline=56 8gram=19 tailrep=0.215\nlive check at 58 min: 52 completed requests, stop x52, length x0, nothing above 10k tokens\nCONJUNCTION RULE: does NOT fire (visChars 5131 >> 200; tools 83 != 0)\nNOTE: thinking_chars 152278 EXCEEDS the known degeneration's 70755 -- second confirmation\n      that thinking volume ALONE is not a discriminator; the conjunction is what separates.\nc5: n/a BY CONSTRUCTION -- chain drafter has no seam\n"
+        },
+        "output/fr14_mtp5_astropy13236_b_20260824T133941Z/MTP5_PURITY.json": {
+          "sha256": "c17d559d0e34d81588088f90a52c86c601df0ceb8a5eb7b853ed2b23e76bc173",
+          "record": {
+            "ALL_PASS": true,
+            "VERDICT": "engine purity: no side code on the decode path; ONE DECLARED EXCEPTION: NVFP4 lm_head loader shim (weight loading only), sha 0a673b5ad0b76467",
+            "checks": {
+              "1_no_undeclared_side_code": {
+                "PASS": true,
+                "UNDECLARED_violations": 0
+              },
+              "2_import_census": {
+                "PASS": true
+              },
+              "3_attention_backend": {
+                "PASS": true
+              },
+              "4_vllm_at_rest": {
+                "PASS": true,
+                "SCOPE_LIMIT": "a byte-diff against pristine UPSTREAM is NOT performed: upstream is not present in the container. What IS checked is the wheel's own dist-info RECORD hashes for the executed paths (spec_decode/attention/model_executor) -- that detects any at-rest modification of those files since install, which is the actionable half. A baked-in diff that predates the wheel build would NOT be caught by this and is named here rather than glossed.",
+                "UNDECLARED_mismatches": [],
+                "files_checked": 1233,
+                "files_mismatching": 4,
+                "vllm_version": "0.19.2rc1.dev134+gfe9c3d6c5"
+              }
+            }
+          }
+        },
+        "output/fr14_mtp5_astropy13236_b_20260824T133941Z/nativemtp5_probe_astropy13236_b.pretask_identity.json": {
+          "sha256": "11cf34f446391098c89272fde11fa741bdb5ade5551eb9edf6243d8f20eb8cb4",
+          "text": "{\"schema\":\"fr13.pretask_identity.v1\",\"arm\":\"nativemtp5_probe_astropy13236_b\",\"kind\":\"nativemtp5\",\"launcher\":\"native\",\"fixed32_mode\":\"\",\"native_decode\":\"1\",\"identity_class\":\"legacy-or-native\",\"warmup_probe_requested_skip\":\"1\",\"proxy_raw_dumps_mode\":\"off\",\"offload_agent\":\"1\",\"prefix_cache_reset\":\"runs\",\"proxy_pair_dumps\":\"expected\"}\n"
+        },
+        "output/fr14_mtp5_astropy13236_b_20260824T133941Z/nativemtp5_probe_astropy13236_b.runlog": {
+          "sha256": "2bec0c245e524c86b105a39439460c9dae15c3f6359e17536163fcee92293beb",
+          "selected_lines": [
+            {
+              "line": 23,
+              "text": "swe orchestrator rc=0 wall=5106s"
+            },
+            {
+              "line": 44,
+              "text": "ARM_DONE nativemtp5_probe_astropy13236_b kind=nativemtp5 swerc=0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "run": "fr14_mtp5_astropy14369_a_20260824T151033Z",
+      "tasks": [
+        {
+          "task": "astropy__astropy-14369",
+          "path": "output/fr14_mtp5_astropy14369_a_20260824T151033Z/nativemtp5_probe_astropy14369_a/swe_out/verified/per_task/astropy__astropy-14369",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 505,
+              "sha256": "24c43a24a2613cbaeec5313b354374c6ed46df639a2fde033d5183da54387a29",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14369",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "failed",
+                "passed": false,
+                "failure_mode": "tests_failed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 41.092,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787587313",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 354,
+              "sha256": "3fa791a3482dd39bb7f97e0caa8edf0e887af76f575814591001d4f6c7e41018",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14369",
+                "outcome": "failed",
+                "failure_mode": "tests_failed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 41.092,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 13299,
+              "sha256": "46bd55825803c724203b6a3459921afb2dc355dfb7844f5dc9659a41d03bcb5c"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 3168,
+              "sha256": "1f5eb264fcb5179b2e87e0d5f108c3655ed65626b4ce620538243ab6f02a7f3f",
+              "record": {
+                "instance_id": "astropy__astropy-14369",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "fa4e8d1cd279acf9b24560813c8652494ccd5922",
+                "fixed32_dataset_record_sha256": null,
+                "started_at": "2026-08-24T15:15:42Z",
+                "ended_at": "2026-08-24T16:02:35Z",
+                "patch_bytes": 12943,
+                "eval": {
+                  "exit_code": 1,
+                  "elapsed_s": 42.765,
+                  "offloaded": true,
+                  "eval_host": "alienware",
+                  "evaluator": {
+                    "mode": "remote_x86_worker",
+                    "host": "alienware",
+                    "base": "~/swe_eval_offload",
+                    "worker": "~/swe_eval_offload/swe_eval_x86_worker.py",
+                    "interpreter": "~/swe_eval_offload/venv/bin/python",
+                    "worker_sha256": "4a06bbe937af3c04c3897564d7bc27cdad8d8abc8c13fd156650e203e30994da",
+                    "worker_bytes": 8046,
+                    "interpreter_realpath": "/usr/bin/python3.12"
+                  }
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-14369",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "failed",
+                  "passed": false,
+                  "failure_mode": "tests_failed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 41.092,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787587313",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 2769.006,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14369:latest",
+                  "instance_image_identity": null,
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": null,
+                  "runtime": {
+                    "qwen_code_version": null,
+                    "bundle_manifest_sha256": null,
+                    "system_settings": null
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 12943,
+              "sha256": "58a9d4d98413b0ef0b5b848e96ff45501ff5bb24b0186b57de500a4adcf4815b"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 4019,
+              "sha256": "04bb64219926a1781d702da00f42cffc79e9c8fb71a01370e46535cedb49c0a1"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "b84d791404e4dcbf8629b6b526c64dea54ec6b5ae3d176023333f996a81bc5bf",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-14369",
+                "metrics_pre_bytes": 59884,
+                "metrics_post_bytes": 61674,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 222639,
+              "sha256": "d44b6a7488db5ea631ca95ee249686abbdc979ffc5140189f8ca6de33941d49f"
+            }
+          }
+        }
+      ],
+      "source_files": {
+        "output/fr14_mtp5_astropy14369_a_20260824T151033Z/MTP5_PROBE.txt": {
+          "sha256": "b08e7862afc093ef694417cedf3f26b491b6591ed18b971ed36d26bfc626b633",
+          "text": "probe=drafter_neutrality\nhypothesis=plain MTP-5 removes the merged drafter; does the thinking runaway persist?\nkind=nativemtp5 (LAUNCHER=native: stock vLLM MTP-5, qwen3_5_mtp, 5 tokens, NO tree, NO patcher)\ntask=astropy14369\nreplicate=a\nsubset=config/fr13_fixed32/subset_b1_diagnostic_astropy14369.json\ntier_b_arm=NONE (native launcher never reaches the FA2 selector)\nsplit_k=NOT PRESENT (not merely disarmed)\ncredential=NOT REQUIRED (no re-seal for this arm)\nDECLARED_EXCEPTION=NVFP4 lm_head loader shim (fr14_patch_nvfp4_lmhead.py), WEIGHT LOADING ONLY -- ruled Option A, pass 209\ndeclared_exception_shim_sha256=0a673b5ad0b76467530ef33e8da36500c73b25857eda11281c2e55103ce57a71\ndeclared_exception_why=stock vLLM cannot load this checkpoint at all: its lm_head is quantized (input_scale/weight_scale/weight_scale_2) and Qwen3_5ForCausalLM declares only lm_head.weight. Replicate A died on exactly this at 12:08:49Z.\ndeclared_exception_scope=constructor wiring, quant-method dispatch, key remapping, numel-preserving reshape. Touches NO decode path, attention, drafter or speculative decoding -- so it cannot bias a drafter-neutrality result.\npurity_meaning=NO SIDE CODE ON THE DECODE PATH (not \"no side code\"). The attestor enumerates the shim tokens and excepts exactly those; any other sentinel still fails, including a non-shim blob inside a shim-target file.\nc5_applicable=NO -- c5 is a SEAM conditional and a chain drafter has no seam\nc5_note=do NOT quote a c5 for this arm. On the merged tree drafter c5 flagged exactly one of the canonical sixteen (13236 at 0.3499, all others 0.5182-0.6395); that instrument does not transfer to a chain drafter and its absence here is by construction, not an omission.\nserved_model_path=/models/qwen3.8-27b-nvfp4-radixark\nserved_model_name=qwen3.8-27b-nvfp4-radixark\ncheckpoint_identity=5ec8e24087f2e395\ncheckpoint_note=5ec8e240 separates the 3.8 NVFP4 weights from 3.6-fp8 (d0538237). It does NOT separate radixark from radixark-asshipped: their safetensors are the same inodes, so the weights are identical bytes and only non-safetensors files differ.\ndegeneration_instruments=trace screens (ttr, top-12-gram, max-block, tool cadence) + 24k ceiling length events + conjunction rule (visible-collapse AND tools==0 AND thinking-large)\nconjunction_rule_validation=130 banked traces: 1 degeneration (Cqc16/13236), 9 vacuous, 120 clean; ONE positive example, so it is a floor not a proof\nn2_framing=PRE-REGISTERED: either replicate degenerating strongly REFUTES the machinery hypothesis; both clean is WEAK evidence for it\noutput_ceiling=24000\nboot_head=0bc000ecf4a64ed7b22b3fefdf9de45def591c79\nstarted=2026-08-24T15:10:35Z\nserve_rc=0\nended=2026-08-24T16:02:58Z\nRESULT=CLEAN (no degeneration) but eval FAILED\nwall_min=46.2\npatch_total=12943 B  =  cds.py 1110 B (+13 -2, sha a0d528ed910362b7)  +  cds_parsetab.py 11833 B (PLY-generated)\neval=failed / passed=False / tests_failed\nturns=101 tools=36 malformed=0\nvisible: chars=4335 ttr=0.547 tailrep=0.000    thinking_chars=97010\nall-text: ttr=0.230 maxline=72 8gram=15 tailrep=0.267\nCONJUNCTION RULE: does NOT fire (visChars 4335 >> 200; tools 36 != 0) -> NOT degenerate\nCOMPARATOR (Cqc10 merged drafter, resolved): cds.py 1318 B (+9 -13, sha 6f077265b491ad95)\n  -> the model edit DIFFERS: a different fix shape (+13 -2 vs +9 -13), and it did not pass tests.\nCAVEAT: 14369 has n=1 on the merged-drafter side, so a single differing MTP-5 run cannot\n  separate \"drafter effect\" from ordinary run-to-run variation. 13236 gave 19 banked patches\n  and 12 distinct shas on the SAME drafter; 14369 has no measured variation at all.\nNOTE: the probe's pre-registered signal is DEGENERATION, not resolve rate. A failed-but-healthy\n  run is not the signature; failure here is uninformative about the machinery hypothesis.\nc5: n/a BY CONSTRUCTION -- chain drafter has no seam\n"
+        },
+        "output/fr14_mtp5_astropy14369_a_20260824T151033Z/MTP5_PURITY.json": {
+          "sha256": "23a9b9743f7dcb78244e09b20d6b11ef4ea1a2314087de3626688baf18e8d148",
+          "record": {
+            "ALL_PASS": true,
+            "VERDICT": "engine purity: no side code on the decode path; ONE DECLARED EXCEPTION: NVFP4 lm_head loader shim (weight loading only), sha 0a673b5ad0b76467",
+            "checks": {
+              "1_no_undeclared_side_code": {
+                "PASS": true,
+                "UNDECLARED_violations": 0
+              },
+              "2_import_census": {
+                "PASS": true
+              },
+              "3_attention_backend": {
+                "PASS": true
+              },
+              "4_vllm_at_rest": {
+                "PASS": true,
+                "SCOPE_LIMIT": "a byte-diff against pristine UPSTREAM is NOT performed: upstream is not present in the container. What IS checked is the wheel's own dist-info RECORD hashes for the executed paths (spec_decode/attention/model_executor) -- that detects any at-rest modification of those files since install, which is the actionable half. A baked-in diff that predates the wheel build would NOT be caught by this and is named here rather than glossed.",
+                "UNDECLARED_mismatches": [],
+                "files_checked": 1233,
+                "files_mismatching": 4,
+                "vllm_version": "0.19.2rc1.dev134+gfe9c3d6c5"
+              }
+            }
+          }
+        },
+        "output/fr14_mtp5_astropy14369_a_20260824T151033Z/nativemtp5_probe_astropy14369_a.pretask_identity.json": {
+          "sha256": "9c624734546c36ba2b176459952c0454a11991b07da8e58476a1dbcabb96e6bb",
+          "text": "{\"schema\":\"fr13.pretask_identity.v1\",\"arm\":\"nativemtp5_probe_astropy14369_a\",\"kind\":\"nativemtp5\",\"launcher\":\"native\",\"fixed32_mode\":\"\",\"native_decode\":\"1\",\"identity_class\":\"legacy-or-native\",\"warmup_probe_requested_skip\":\"1\",\"proxy_raw_dumps_mode\":\"off\",\"offload_agent\":\"1\",\"prefix_cache_reset\":\"runs\",\"proxy_pair_dumps\":\"expected\"}\n"
+        },
+        "output/fr14_mtp5_astropy14369_a_20260824T151033Z/nativemtp5_probe_astropy14369_a.runlog": {
+          "sha256": "7631fc906462514110458512c94c3f53b6af604b7fd5ed19f100386be04b264d",
+          "selected_lines": [
+            {
+              "line": 23,
+              "text": "swe orchestrator rc=0 wall=2814s"
+            },
+            {
+              "line": 44,
+              "text": "ARM_DONE nativemtp5_probe_astropy14369_a kind=nativemtp5 swerc=0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "run": "fr14_mtp5_astropy14369_b_20260824T160304Z",
+      "tasks": [
+        {
+          "task": "astropy__astropy-14369",
+          "path": "output/fr14_mtp5_astropy14369_b_20260824T160304Z/nativemtp5_probe_astropy14369_b/swe_out/verified/per_task/astropy__astropy-14369",
+          "files": {
+            "eval/eval_report.json": {
+              "exists": true,
+              "bytes": 505,
+              "sha256": "6ff8c118dc0d084f075e26a25705dc7898fe0410bf0815413eb25419ad844481",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14369",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "verdict": "failed",
+                "passed": false,
+                "failure_mode": "tests_failed",
+                "harness_exit_code": 0,
+                "eval_wall_clock_seconds": 40.614,
+                "error": null,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250",
+                "run_id": "x86eval-out-1787590335",
+                "namespace": "swebench",
+                "cache_level": "env"
+              }
+            },
+            "eval/normalized_eval.json": {
+              "exists": true,
+              "bytes": 354,
+              "sha256": "cf094bf2773da505d936945aa9f1743b55c7241964b19296a546835ccba9082d",
+              "record": {
+                "track": "swe_bench",
+                "instance_id": "astropy__astropy-14369",
+                "outcome": "failed",
+                "failure_mode": "tests_failed",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                "eval_wall_clock_seconds": 40.614,
+                "arch": "x86_64",
+                "eval_host": "mark-Alienware-Aurora-ACT1250"
+              }
+            },
+            "eval/predictions.jsonl": {
+              "exists": true,
+              "bytes": 13500,
+              "sha256": "ae7d8ba858faddc536db83a014cb1da664e68130224774564dd455a3521ecd41"
+            },
+            "runner_metadata.json": {
+              "exists": true,
+              "bytes": 3168,
+              "sha256": "0674c6113c4da374585b8ebff1d701c29dfa333c25d09350aee6f44edb7d8d2d",
+              "record": {
+                "instance_id": "astropy__astropy-14369",
+                "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                "base_commit": "fa4e8d1cd279acf9b24560813c8652494ccd5922",
+                "fixed32_dataset_record_sha256": null,
+                "started_at": "2026-08-24T16:08:14Z",
+                "ended_at": "2026-08-24T16:52:57Z",
+                "patch_bytes": 13139,
+                "eval": {
+                  "exit_code": 1,
+                  "elapsed_s": 42.238,
+                  "offloaded": true,
+                  "eval_host": "alienware",
+                  "evaluator": {
+                    "mode": "remote_x86_worker",
+                    "host": "alienware",
+                    "base": "~/swe_eval_offload",
+                    "worker": "~/swe_eval_offload/swe_eval_x86_worker.py",
+                    "interpreter": "~/swe_eval_offload/venv/bin/python",
+                    "worker_sha256": "4a06bbe937af3c04c3897564d7bc27cdad8d8abc8c13fd156650e203e30994da",
+                    "worker_bytes": 8046,
+                    "interpreter_realpath": "/usr/bin/python3.12"
+                  }
+                },
+                "eval_report": {
+                  "track": "swe_bench",
+                  "instance_id": "astropy__astropy-14369",
+                  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+                  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+                  "verdict": "failed",
+                  "passed": false,
+                  "failure_mode": "tests_failed",
+                  "harness_exit_code": 0,
+                  "eval_wall_clock_seconds": 40.614,
+                  "error": null,
+                  "arch": "x86_64",
+                  "eval_host": "mark-Alienware-Aurora-ACT1250",
+                  "run_id": "x86eval-out-1787590335",
+                  "namespace": "swebench",
+                  "cache_level": "env"
+                },
+                "vllm_request_metrics_bytes": 0,
+                "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+                "agent": {
+                  "elapsed_s": 2640.045,
+                  "exit_code": 0,
+                  "timed_out": false,
+                  "offloaded": true,
+                  "agent_env": "instance_image",
+                  "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14369:latest",
+                  "instance_image_identity": null,
+                  "campaign_budget_s": 9000.0,
+                  "budget_capped": false,
+                  "qwen_trace_capture": null,
+                  "runtime": {
+                    "qwen_code_version": null,
+                    "bundle_manifest_sha256": null,
+                    "system_settings": null
+                  }
+                }
+              }
+            },
+            "patch.diff": {
+              "exists": true,
+              "bytes": 13139,
+              "sha256": "6d06cf39ab0e10fa65f927787bb972b924a6130d4bbefa90898f4bdad5126cd0"
+            },
+            "prompt.md": {
+              "exists": true,
+              "bytes": 4019,
+              "sha256": "04bb64219926a1781d702da00f42cffc79e9c8fb71a01370e46535cedb49c0a1"
+            },
+            "vllm_per_turn.json": {
+              "exists": true,
+              "bytes": 551,
+              "sha256": "b512db5e281bd928e6fd4fe3fcccd694ea7985f97d886d5b6929992e84c94ad4",
+              "type": "dict",
+              "record": {
+                "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+                "instance_id": "astropy__astropy-14369",
+                "metrics_pre_bytes": 59886,
+                "metrics_post_bytes": 61656,
+                "proxy_request_rows": 0,
+                "model_id": "qwen3.8-27b-nvfp4-radixark",
+                "endpoint": "http://127.0.0.1:8022/v1",
+                "metrics_url": "http://127.0.0.1:9950/metrics",
+                "deferred_full_normalization": true,
+                "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+              }
+            },
+            "vllm_request_metrics.jsonl": {
+              "exists": true,
+              "bytes": 0,
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "qwen_trace.jsonl": {
+              "exists": true,
+              "bytes": 196750,
+              "sha256": "a9ef6b89cee1e21a6a4a419fd954ffd298662d5e242532a96a130191f2b290bf"
+            }
+          }
+        }
+      ],
+      "source_files": {
+        "output/fr14_mtp5_astropy14369_b_20260824T160304Z/MTP5_PROBE.txt": {
+          "sha256": "789f4a5121480cf9d00139c0311c54d6c9c3636d5ba38583f26488bd7bba108b",
+          "text": "probe=drafter_neutrality\nhypothesis=plain MTP-5 removes the merged drafter; does the thinking runaway persist?\nkind=nativemtp5 (LAUNCHER=native: stock vLLM MTP-5, qwen3_5_mtp, 5 tokens, NO tree, NO patcher)\ntask=astropy14369\nreplicate=b\nsubset=config/fr13_fixed32/subset_b1_diagnostic_astropy14369.json\ntier_b_arm=NONE (native launcher never reaches the FA2 selector)\nsplit_k=NOT PRESENT (not merely disarmed)\ncredential=NOT REQUIRED (no re-seal for this arm)\nDECLARED_EXCEPTION=NVFP4 lm_head loader shim (fr14_patch_nvfp4_lmhead.py), WEIGHT LOADING ONLY -- ruled Option A, pass 209\ndeclared_exception_shim_sha256=0a673b5ad0b76467530ef33e8da36500c73b25857eda11281c2e55103ce57a71\ndeclared_exception_why=stock vLLM cannot load this checkpoint at all: its lm_head is quantized (input_scale/weight_scale/weight_scale_2) and Qwen3_5ForCausalLM declares only lm_head.weight. Replicate A died on exactly this at 12:08:49Z.\ndeclared_exception_scope=constructor wiring, quant-method dispatch, key remapping, numel-preserving reshape. Touches NO decode path, attention, drafter or speculative decoding -- so it cannot bias a drafter-neutrality result.\npurity_meaning=NO SIDE CODE ON THE DECODE PATH (not \"no side code\"). The attestor enumerates the shim tokens and excepts exactly those; any other sentinel still fails, including a non-shim blob inside a shim-target file.\nc5_applicable=NO -- c5 is a SEAM conditional and a chain drafter has no seam\nc5_note=do NOT quote a c5 for this arm. On the merged tree drafter c5 flagged exactly one of the canonical sixteen (13236 at 0.3499, all others 0.5182-0.6395); that instrument does not transfer to a chain drafter and its absence here is by construction, not an omission.\nserved_model_path=/models/qwen3.8-27b-nvfp4-radixark\nserved_model_name=qwen3.8-27b-nvfp4-radixark\ncheckpoint_identity=5ec8e24087f2e395\ncheckpoint_note=5ec8e240 separates the 3.8 NVFP4 weights from 3.6-fp8 (d0538237). It does NOT separate radixark from radixark-asshipped: their safetensors are the same inodes, so the weights are identical bytes and only non-safetensors files differ.\ndegeneration_instruments=trace screens (ttr, top-12-gram, max-block, tool cadence) + 24k ceiling length events + conjunction rule (visible-collapse AND tools==0 AND thinking-large)\nconjunction_rule_validation=130 banked traces: 1 degeneration (Cqc16/13236), 9 vacuous, 120 clean; ONE positive example, so it is a floor not a proof\nn2_framing=PRE-REGISTERED: either replicate degenerating strongly REFUTES the machinery hypothesis; both clean is WEAK evidence for it\noutput_ceiling=24000\nboot_head=5cae552b149ae176ce665fb23425e900f4f32783\nstarted=2026-08-24T16:03:06Z\nserve_rc=0\nended=2026-08-24T16:53:12Z\nRESULT=CLEAN (no degeneration) but eval FAILED\nwall_min=44.0\npatch_total=13139 B = cds.py 1274 B (+15 -1, sha b4c41e8e97ffe66f) + cds_parsetab.py 11865 B (PLY-generated)\neval=failed / passed=False / tests_failed\nturns=101 tools=35 malformed=0\nvisible: chars=3608 ttr=0.624 tailrep=0.000    thinking_chars=80750\nCONJUNCTION RULE: does NOT fire -> NOT degenerate\nTHIRD DISTINCT cds.py EDIT across three runs of this task:\n    merged drafter (Cqc10) 1318 B +9 -13 sha 6f077265  RESOLVED\n    MTP-5 replicate A      1110 B +13 -2 sha a0d528ed  failed\n    MTP-5 replicate B      1274 B +15 -1 sha b4c41e8e  failed\nThe two MTP-5 replicates share drafter, weights, config and prompt and STILL produced\ndifferent edits, so edit-difference carries NO drafter signal on this task.\nc5: n/a BY CONSTRUCTION -- chain drafter has no seam\n"
+        },
+        "output/fr14_mtp5_astropy14369_b_20260824T160304Z/MTP5_PURITY.json": {
+          "sha256": "23a9b9743f7dcb78244e09b20d6b11ef4ea1a2314087de3626688baf18e8d148",
+          "record": {
+            "ALL_PASS": true,
+            "VERDICT": "engine purity: no side code on the decode path; ONE DECLARED EXCEPTION: NVFP4 lm_head loader shim (weight loading only), sha 0a673b5ad0b76467",
+            "checks": {
+              "1_no_undeclared_side_code": {
+                "PASS": true,
+                "UNDECLARED_violations": 0
+              },
+              "2_import_census": {
+                "PASS": true
+              },
+              "3_attention_backend": {
+                "PASS": true
+              },
+              "4_vllm_at_rest": {
+                "PASS": true,
+                "SCOPE_LIMIT": "a byte-diff against pristine UPSTREAM is NOT performed: upstream is not present in the container. What IS checked is the wheel's own dist-info RECORD hashes for the executed paths (spec_decode/attention/model_executor) -- that detects any at-rest modification of those files since install, which is the actionable half. A baked-in diff that predates the wheel build would NOT be caught by this and is named here rather than glossed.",
+                "UNDECLARED_mismatches": [],
+                "files_checked": 1233,
+                "files_mismatching": 4,
+                "vllm_version": "0.19.2rc1.dev134+gfe9c3d6c5"
+              }
+            }
+          }
+        },
+        "output/fr14_mtp5_astropy14369_b_20260824T160304Z/nativemtp5_probe_astropy14369_b.pretask_identity.json": {
+          "sha256": "40a99b83e233fb6c015629bfa4f015e144be98c1e616c976baa16ba26a0f7e92",
+          "text": "{\"schema\":\"fr13.pretask_identity.v1\",\"arm\":\"nativemtp5_probe_astropy14369_b\",\"kind\":\"nativemtp5\",\"launcher\":\"native\",\"fixed32_mode\":\"\",\"native_decode\":\"1\",\"identity_class\":\"legacy-or-native\",\"warmup_probe_requested_skip\":\"1\",\"proxy_raw_dumps_mode\":\"off\",\"offload_agent\":\"1\",\"prefix_cache_reset\":\"runs\",\"proxy_pair_dumps\":\"expected\"}\n"
+        },
+        "output/fr14_mtp5_astropy14369_b_20260824T160304Z/nativemtp5_probe_astropy14369_b.runlog": {
+          "sha256": "9bf8b6ad6e096a6b31d4bef892fe22d0313692db6508c456ad89a6f276152970",
+          "selected_lines": [
+            {
+              "line": 23,
+              "text": "swe orchestrator rc=0 wall=2685s"
+            },
+            {
+              "line": 44,
+              "text": "ARM_DONE nativemtp5_probe_astropy14369_b kind=nativemtp5 swerc=0"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

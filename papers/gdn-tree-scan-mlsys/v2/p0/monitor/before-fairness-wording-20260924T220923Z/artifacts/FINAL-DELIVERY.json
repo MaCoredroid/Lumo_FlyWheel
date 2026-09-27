@@ -1,0 +1,165 @@
+{
+  "completed_utc": "2026-09-24T21:44:11.426286+00:00",
+  "status": "COMPLETE_BEST_SHARED_TASK_REVISION",
+  "scope": "private best shared-task pooled-decode revision; best Sr12 29.09 vs SGLang 26.89; later runs and ten-task cohort retained; different revisions and caps disclosed; separate numerical qualification; no causal task speedup or public release claim",
+  "paper_archive": {
+    "file": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/papers/gdn-tree-scan-mlsys/v2/artifacts/paper-best-shared-task-20260924T214307Z.tar.gz",
+    "sha256": "bb093e53b50f7d5a894017bc7bf8940dc549445c3dae24856b75db65031d3dea",
+    "files": 428,
+    "bytes": 2649302
+  },
+  "paper_manifest_sha256": "a1a440e50604c6a4e7bdef27c7b21fc4097168219b69c444a43dcb151d5c98aa",
+  "paper": {
+    "main.tex": "dcd452080c116eafa7836b8c4e580ef53406f7bef499fa404638f88609c3cc69",
+    "abstract.tex": "862a7dd2c33e431ca875a5aebcd8a25db75a45cdba48433578ac5d0aead46274",
+    "results/agent-workload/case-study.tex": "2a841d756d0de05b03458c86d00d29ad2c4b19691d7f6722e19bf14109085c13",
+    "main.pdf": "c90cc9f5cedba96e8bd11dbbb63dce295c19b1f7d8e4797500e2d078b5c2d34c",
+    "ref.bib": "88ceccadbd0376d694f6037181ebf0dacd71f0936558d6c88f856666ccc05fc8"
+  },
+  "all_companions": [
+    {
+      "file": "e7a-evidence-20260922T0709Z.tar.gz",
+      "sha256": "776ddcaf5d938cc665bafca20f46e29d1e9a550a34914d798e78f70636cd180b",
+      "bytes": 268871594,
+      "manifest": "e7a-evidence-20260922T0709Z.tar.gz.manifest.json",
+      "manifest_sha256": "50dd06ea612e00caec86e84db0b49321d3fd9878e8e4f79d68bb95dfa88c0e7d"
+    },
+    {
+      "file": "e7b-diagnostics-20260922T0801Z.tar.gz",
+      "sha256": "c573b5064d944547df280e314520a97dd0c10678fb877c8d75b3a898d548ad05",
+      "bytes": 2179735658,
+      "manifest": "e7b-diagnostics-20260922T0801Z.tar.gz.manifest.json",
+      "manifest_sha256": "f36db7f4f0b16f9f43a0d70b535ca664a66f1ef447789985b82f3a78db8b4682"
+    },
+    {
+      "file": "selected-route-20260922T0930Z.tar.gz",
+      "sha256": "7f127f0c2e8198f067eb0f59737e1a58afc34991aa562dacbc11d7d147d25a30",
+      "bytes": 1735458237,
+      "manifest": "selected-route-20260922T0930Z.tar.gz.manifest.json",
+      "manifest_sha256": "d1fe338b3bae56a755725a622fa679692377156b56be0d85952fd654d9e386b8"
+    },
+    {
+      "file": "e1-timing-20260922T1225Z.tar.gz",
+      "sha256": "bf50b33386eb9614cf7874039f60cb62a484ee62bc0882e32ab32731857318d6",
+      "bytes": 12955447,
+      "manifest": "e1-timing-20260922T1225Z.tar.gz.manifest.json",
+      "manifest_sha256": "47936b8a7cb22bf389b452ce2f013e5092d9f9c34b639b640f54768b3ecd4414"
+    },
+    {
+      "file": "e8-single-logits-20260922T2255Z.tar.gz",
+      "sha256": "b4c0a5cbcd2592ce5ddfdc823243f0e99dc15ef412d238a096068d6bae11ebf4",
+      "bytes": 16237576,
+      "manifest": "e8-single-logits-20260922T2255Z.tar.gz.manifest.json",
+      "manifest_sha256": "d2512b2141628c77746d5f1ddc0de025bb3de525fba5dd375226a60427c70439"
+    }
+  ],
+  "canonical_build": {
+    "path": "p0/monitor/2026-09-24-best-shared-task-build.json",
+    "sha256": "85a0ed6390e49391b5cc89af65a9c2eac4cc7f7cd232b77cbee39e764912c26b",
+    "pages": 13
+  },
+  "extracted_rebuild": {
+    "directory": "/private/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/lumo-best-extracted-5g3uojg2",
+    "files_verified": 428,
+    "input_bindings_verified": 81,
+    "original_task_input_files": 80,
+    "new_shared_task_reducer_byte_identical": "PASS",
+    "earlier_48_input_reducer_byte_identical": "PASS",
+    "latex_build": "PASS",
+    "rendered_pdf_text_identical": "PASS",
+    "pdf_sha256": "f7e61ef1162fcc65a60ee477762544195f4ff75c03c6b2326c0c7e3cb87ce7c5"
+  },
+  "reviews": [
+    {
+      "path": "p0/monitor/paper-best-shared-task-redteam-2026-09-24.md",
+      "sha256": "d1d174a042e680070d2eeec219ad7412e003a9533ab0a0062441865a06f1294b",
+      "verdict": "PASS"
+    },
+    {
+      "path": "notes/best-shared-task-artifact-review-2026-09-24.md",
+      "sha256": "bc183aa596f9b67fa037c9e7c2d7264cdff4d0b0e8ebb0896f673892b532255a",
+      "verdict": "PASS"
+    },
+    {
+      "path": "notes/agent-behavior-abstract-evidence-2026-09-23.md",
+      "sha256": "748ba0786b0ebb8d6f2f86d377754295490b79c6b5f2d87e794673a1e53c4001",
+      "verdict": "PASS"
+    }
+  ],
+  "workload_evidence": {
+    "raw_manifest": "results/agent-workload/raw/cqc10/MANIFEST.json",
+    "raw_manifest_sha256": "01c3922b06377c85d86b213bded399af377809f22d0df63829c5358ef7a86bcf",
+    "original_or_explicit_projection_files": 139,
+    "whole_evidence_manifest_sha256": "75200c9ba4538ae8d1c9889ac798e1604dc6cbb8e98646568e2b9a741b00980c",
+    "metric_reducer_replay": "independent and parent outputs exactly agree; extracted replay agrees"
+  },
+  "new_inference_launched": false,
+  "automation_changed": false,
+  "no_publication_or_submission": true,
+  "comparison_experiment": {
+    "status": "DESCRIPTIVE_COMPARISON_COMPLETE_PAIRED_CAMPAIGN_CONDITIONAL_NOT_LAUNCHED",
+    "plan": "review-experiments.md",
+    "sha256": "7a0e5d5b3f495975b13701514e9ee665280a76481d0291d0457c290ccac4c605",
+    "existing_tests": "SGLang SWE, native MTP, DSpark serving/fusion, DFlash2 capture and later serving smoke; applicability in recovered inventory"
+  },
+  "limits": [
+    "Best of three recorded tree deployments on two comparator-available task IDs; not a claim about the latest configuration.",
+    "Serving revisions, stacks, response caps and trajectories differ; descriptive decode-rate comparison only.",
+    "Full four-task Sr12 pooled rate is 26.21; later shared-task rates are 28.28 and 27.27; the separate ten-task rate is 25.63.",
+    "Recorded adverse/incomplete attempts remain in the artifact and manuscript scope discussion; no universal quality claim.",
+    "Pooled request time excludes TTFT and between-request tool work; it is not machine-wall throughput or task-completion speed.",
+    "FP8 Cat10 qualification does not universally qualify NVFP4 graph/cache/stochastic serving.",
+    "Runtime, model and evaluator dependencies are not all bundled; safe configuration projections are labeled."
+  ],
+  "prior_delivery_receipt": "p0/monitor/before-best-pooled-20260924T213101Z/artifacts/FINAL-DELIVERY.json",
+  "remote_copy": "No remote paper sync performed in this revision; local PDF/archive is authoritative.",
+  "behavior_evidence": {
+    "manifest": "results/agent-workload/BEHAVIOR_MANIFEST.json",
+    "sha256": "60606fd37fa463844715cf586d824611c1b30587dd68c8811e87ccec7b6ccb59",
+    "claim": "No detected degeneration in10selectedtasktraces under explicitly limited diagnostic; prior positive retained"
+  },
+  "history_audit": {
+    "notes/comparator-git-history-2026-09-23.md": "15a48b02c0da4d584c4e2f2e373d1cba99aff27607ca3cb4167321e86279c8e7",
+    "notes/sglang-swe-recovered-evidence-2026-09-23.md": "ec962f8821eb3b2a4f442bd583d246d420f8140ad16bd4c8fd4924b794f7f818",
+    "notes/sglang16-metric-audit-2026-09-23.json": "6deeffa4ca83f4a864eb1a743f0272d14cb6557fbd1ad2809d9805a871ec4adb",
+    "notes/external-baseline-history-audit-2026-09-23.md": "3cd71b93c019a3bf5f7a3a34760bf47e17bc41ec5cfb8ab30926ec08b7cadf4b",
+    "notes/nvfp4-b1-stronger-history-audit-2026-09-24.md": "657d190e3179768b4fe5a4f8b000a019bd8d01358d55de2b62a18905b40dcbfb",
+    "notes/stronger-workload-comparison-2026-09-24.md": "05e09e15b43731c478e863f211981f2174637a0bb0c2d840f458f0c2b0fa8c74"
+  },
+  "pooled_decode": {
+    "formula": "(sum output tokens - completed requests) / (sum E2E request latency - sum TTFT)",
+    "best_recorded_shared_task_run": "Sr12",
+    "tree_tokens_per_s": 29.093442700158857,
+    "sglang_tokens_per_s": 26.893956024189762,
+    "tree_relative_percent": 8.178367935125518,
+    "shared_task_ids": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033"
+    ],
+    "tree_tasks": 2,
+    "sglang_tasks": 2,
+    "tree_requests": 41,
+    "sglang_requests": 45,
+    "later_shared_task_rates": {
+      "Cqc16": 28.28304686877344,
+      "Cqc15": 27.26800815027045
+    },
+    "full_Sr12_four_task_rate": 26.20536492791583,
+    "separate_Cqc10_ten_task_rate": 25.633622465853126,
+    "input_bindings": 81,
+    "original_task_input_files": 80,
+    "audit_path": "results/agent-workload/shared-task-rate-audit.json",
+    "audit_sha256": "dcc6f3fb69bdd01f7ff8bed0c920ea797c18c18418c06044bfa039a88a7b286a",
+    "reducer_sha256": "d007110971ed8d3d0b2829a4f1f8e617ff12faaf88ca6231263997cfff4881ca",
+    "speed_claims_audit_sha256": "67a93e5162f5c902dc7ce5aca9270ab9bb43c08b6285fe40d7deade17875dba7"
+  },
+  "shared_task_evidence": {
+    "raw_manifest": "results/agent-workload/raw/shared-tasks-20260924/MANIFEST.json",
+    "sha256": "2e20393e2fa238d489215a11d3b3315a08e9516609f341713ecd1ae62ed4dbd2",
+    "recovered_original_files": 32,
+    "safe_audit_projections": 3,
+    "best_scope": "Maximum of three recovered deployments on comparator-available shared task IDs; not the latest route or full campaign",
+    "tree_response_cap": 32768,
+    "sglang_response_cap": 24000
+  }
+}

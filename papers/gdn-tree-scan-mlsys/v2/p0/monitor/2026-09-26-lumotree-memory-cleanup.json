@@ -1,0 +1,33 @@
+{
+  "utc": "2026-09-26T19:40:13.905944+00:00",
+  "authorization": "User requested clean all RAM during LumoTree author-code preparation",
+  "before": {
+    "MemTotal": 126175309824,
+    "MemFree": 60213006336,
+    "MemAvailable": 69229060096,
+    "Buffers": 300167168,
+    "Cached": 10190237696,
+    "SwapTotal": 17179865088,
+    "SwapFree": 17179865088
+  },
+  "idle_before": {
+    "containers": 0,
+    "gpu_compute_processes": 0
+  },
+  "elapsed_s": 1.0486820368096232,
+  "after": {
+    "MemTotal": 126175309824,
+    "MemFree": 109500387328,
+    "MemAvailable": 109167894528,
+    "Buffers": 2777088,
+    "Cached": 1254125568,
+    "SwapTotal": 17179865088,
+    "SwapFree": 17179865088
+  },
+  "idle_after": {
+    "containers": 0,
+    "gpu_compute_processes": 0
+  },
+  "hook": "lumo_flywheel_serving.model_server.recover_host_memory",
+  "processes_terminated": 0
+}

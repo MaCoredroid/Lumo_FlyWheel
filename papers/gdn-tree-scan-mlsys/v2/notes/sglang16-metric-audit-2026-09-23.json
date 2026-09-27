@@ -1,0 +1,233 @@
+{
+  "schema": "sglang16-saved-evidence-audit-v1",
+  "source_commit": "c27f30207c8a136efb9f5f1f46c883fe767c584f",
+  "tasks": [
+    {
+      "run": "run1",
+      "task": "12907",
+      "verdict": "resolved",
+      "agent_elapsed_s": 426.131,
+      "evaluator_elapsed_s": 53.091,
+      "request_count_delta": 18.0,
+      "metric_delta": {
+        "sglang:prompt_tokens_total{engine_type=\"unified\",is_streaming=\"false\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+        "sglang:prompt_tokens_total{engine_type=\"unified\",is_streaming=\"true\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 598917.0,
+        "sglang:generation_tokens_total{engine_type=\"unified\",is_streaming=\"false\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+        "sglang:generation_tokens_total{engine_type=\"unified\",is_streaming=\"true\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 8314.0,
+        "sglang:num_requests_total{engine_type=\"unified\",is_streaming=\"false\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+        "sglang:num_requests_total{engine_type=\"unified\",is_streaming=\"true\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 18.0,
+        "sglang:time_to_first_token_seconds_sum{engine_type=\"unified\",is_streaming=\"false\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+        "sglang:time_to_first_token_seconds_count{engine_type=\"unified\",is_streaming=\"false\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+        "sglang:time_to_first_token_seconds_sum{engine_type=\"unified\",is_streaming=\"true\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 111.49299156968482,
+        "sglang:time_to_first_token_seconds_count{engine_type=\"unified\",is_streaming=\"true\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 18.0,
+        "sglang:e2e_request_latency_seconds_sum{engine_type=\"unified\",is_streaming=\"false\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+        "sglang:e2e_request_latency_seconds_count{engine_type=\"unified\",is_streaming=\"false\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+        "sglang:e2e_request_latency_seconds_sum{engine_type=\"unified\",is_streaming=\"true\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 403.9457656198647,
+        "sglang:e2e_request_latency_seconds_count{engine_type=\"unified\",is_streaming=\"true\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 18.0,
+        "sglang:inter_token_latency_seconds_sum{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 292.3417797149159,
+        "sglang:inter_token_latency_seconds_count{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 8296.0
+      },
+      "raw_inter_token_histogram_mean_ms": 35.238883765057366,
+      "raw_inter_token_histogram_inverse_mean_per_s": 28.377743366309268,
+      "caution": "inter-token histogram is not the saved Cqc10 request-mean TPOT; no per-request TPOT recovered; do not form cross-estimator speed ratio",
+      "input_sha256": {
+        "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt": "56e71021b747b98d7b667577d979632f5ee01725a1639c23f388002b5dcc678c",
+        "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt": "7e35034253ec0114076663fc9b8b76c412706ea46ae8cf14c929d2f7ae9c4909",
+        "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json": "78679842646c92cc927c0cc102836580b965ced7a7ab8d5d4a1f0d0a77d97f71",
+        "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json": "0c9aefa2d1f712a8108155687c4f3b003b40762aaf1f468658fe2e4060603cfa",
+        "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-12907/eval/normalized_eval.json": "76d86fbf5ff6d9b97c88e570f9340179ca3b15780f23acb85f522ec6aa34d4ed"
+      }
+    },
+    {
+      "run": "r1",
+      "task": "13033",
+      "verdict": "failed",
+      "agent_elapsed_s": 1617.769,
+      "evaluator_elapsed_s": 52.559,
+      "request_count_delta": 27.0,
+      "metric_delta": {
+        "sglang:prompt_tokens_total{engine_type=\"unified\",is_streaming=\"false\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+        "sglang:prompt_tokens_total{engine_type=\"unified\",is_streaming=\"true\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 1140879.0,
+        "sglang:generation_tokens_total{engine_type=\"unified\",is_streaming=\"false\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+        "sglang:generation_tokens_total{engine_type=\"unified\",is_streaming=\"true\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 39540.0,
+        "sglang:num_requests_total{engine_type=\"unified\",is_streaming=\"false\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+        "sglang:num_requests_total{engine_type=\"unified\",is_streaming=\"true\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 27.0,
+        "sglang:time_to_first_token_seconds_sum{engine_type=\"unified\",is_streaming=\"false\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+        "sglang:time_to_first_token_seconds_count{engine_type=\"unified\",is_streaming=\"false\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+        "sglang:time_to_first_token_seconds_sum{engine_type=\"unified\",is_streaming=\"true\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 124.45576960407197,
+        "sglang:time_to_first_token_seconds_count{engine_type=\"unified\",is_streaming=\"true\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 27.0,
+        "sglang:e2e_request_latency_seconds_sum{engine_type=\"unified\",is_streaming=\"false\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+        "sglang:e2e_request_latency_seconds_count{engine_type=\"unified\",is_streaming=\"false\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 0.0,
+        "sglang:e2e_request_latency_seconds_sum{engine_type=\"unified\",is_streaming=\"true\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 1609.6886568600312,
+        "sglang:e2e_request_latency_seconds_count{engine_type=\"unified\",is_streaming=\"true\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 27.0,
+        "sglang:inter_token_latency_seconds_sum{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 1484.7225807243958,
+        "sglang:inter_token_latency_seconds_count{engine_type=\"unified\",model_name=\"qwen3.8-27b-nvfp4-radixark\"}": 39513.0
+      },
+      "raw_inter_token_histogram_mean_ms": 37.57554680040482,
+      "raw_inter_token_histogram_inverse_mean_per_s": 26.61305250757459,
+      "caution": "inter-token histogram is not the saved Cqc10 request-mean TPOT; no per-request TPOT recovered; do not form cross-estimator speed ratio",
+      "input_sha256": {
+        "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_pre.txt": "bfd624fdfdf2a8359641e64e7d327b8477995f8fa77c4b47d00b376d9ab34475",
+        "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_post.txt": "b32016db90b22b8c4c9e6c596ead8a23a705a1321a466905e934b90cae534d6a",
+        "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json": "a8197a47470987fc87076b2163a02dcfac7f30a3652a56f1a4031a3ee9f89ff1",
+        "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json": "edbfc46aef05608155c175a271ff8ae6a78e0f08c46717c6c6d2c6f2abbbf99b",
+        "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13033/eval/normalized_eval.json": "8079325954d1f87da24f977fbdecb02ec0b0999287a555324893aca6bdb2980f"
+      }
+    }
+  ],
+  "history_disposition": {
+    "drop_commit": "5cfa282e54e0e8a69d9eda9fb590b4587302915d",
+    "pass": 238,
+    "result": "r2 explicitly dropped; two completed task verdicts retained. Available all-ref path and commit-message searches found no later completed remainder."
+  },
+  "source_bindings": {
+    "results/fr14_nvfp4_port_20260816/sglang16_fire.sh": "0e38df4823a7b117f5c6581db1430e22462c28914f86c748b087f9e4e9ebde9a",
+    "results/fr14_nvfp4_port_20260816/ablation_a_step2_sglang_boot.sh": "68c20121f4fdd6aeca68fb10dcea628e8edb50af24018166beaa5bba1f68be30",
+    "results/fr14_nvfp4_port_20260816/REDTEAM_20260816.md": "902814907c5642ce917fbda8f7ca955b3d859d4caae2d22570b448c4121d2736",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/sglang_cmdline.txt": "eb17eb2b7bf3afeeb7fdb8992160c7935b7b9112e937b20e0ad482b5b3da2aad",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/models.json": "028aed8817729e45c7fa06f809dca14073d78758469d8b933d45fc5cdb99b7c2",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/offload_proxy_env.txt": "79e7667a089531010c947fc94edeab8f474f7cd1aab049327bf3f603d97510ba",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_started_at.txt": "08f9a5f8adead2aac7e11ceb5d995b8c1bf4774a47ce711f50f5b763881bed33",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_ended_at.txt": "54a56c9470dc167b97a87ed48463597fa4ff2c59690d0542c1ff52a2e8dfd58f",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_rc.txt": "dfc286eb89ada505af411b1f7ebbf28856dce93f3d0148eb5516f2089dd04479",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/sglang_cmdline.txt": "eb17eb2b7bf3afeeb7fdb8992160c7935b7b9112e937b20e0ad482b5b3da2aad",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/models.json": "d8c9c6075ed9994510d9ebb1a4bd001e85ce0e71093ac02eff3bfabc7d62f5ea",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/offload_proxy_env.txt": "79e7667a089531010c947fc94edeab8f474f7cd1aab049327bf3f603d97510ba",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_started_at.txt": "909fc2d93293ac65915adea378cfdc3b89cb2ac1d66897692390193f2aced321",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_ended_at.txt": "160ce047217fb702057934de5068ef94bfa2d210adacb8acfbd3b9e90d371aac",
+    "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_rc.txt": "dfc286eb89ada505af411b1f7ebbf28856dce93f3d0148eb5516f2089dd04479"
+  },
+  "cqc10_itl_audit_only": {
+    "tasks": [
+      {
+        "task": "astropy__astropy-13977",
+        "metric_delta": {
+          "vllm:generation_tokens_total": 32483.0,
+          "vllm:inter_token_latency_seconds_count": 6602.0,
+          "vllm:inter_token_latency_seconds_sum": 1300.5103775449097,
+          "vllm:request_time_per_output_token_seconds_count": 32.0,
+          "vllm:fr13_decode_step_wall_attempts_total": 6602.0
+        }
+      },
+      {
+        "task": "astropy__astropy-14096",
+        "metric_delta": {
+          "vllm:generation_tokens_total": 34026.0,
+          "vllm:inter_token_latency_seconds_count": 6487.0,
+          "vllm:inter_token_latency_seconds_sum": 1264.919154248666,
+          "vllm:request_time_per_output_token_seconds_count": 26.0,
+          "vllm:fr13_decode_step_wall_attempts_total": 6487.0
+        }
+      },
+      {
+        "task": "astropy__astropy-14182",
+        "metric_delta": {
+          "vllm:generation_tokens_total": 9823.0,
+          "vllm:inter_token_latency_seconds_count": 1762.0,
+          "vllm:inter_token_latency_seconds_sum": 345.39677783171646,
+          "vllm:request_time_per_output_token_seconds_count": 35.0,
+          "vllm:fr13_decode_step_wall_attempts_total": 1762.0
+        }
+      },
+      {
+        "task": "astropy__astropy-14309",
+        "metric_delta": {
+          "vllm:generation_tokens_total": 2325.0,
+          "vllm:inter_token_latency_seconds_count": 398.0,
+          "vllm:inter_token_latency_seconds_sum": 75.58409361122176,
+          "vllm:request_time_per_output_token_seconds_count": 7.0,
+          "vllm:fr13_decode_step_wall_attempts_total": 398.0
+        }
+      },
+      {
+        "task": "astropy__astropy-14365",
+        "metric_delta": {
+          "vllm:generation_tokens_total": 8860.0,
+          "vllm:inter_token_latency_seconds_count": 1799.0,
+          "vllm:inter_token_latency_seconds_sum": 350.3772133344319,
+          "vllm:request_time_per_output_token_seconds_count": 18.0,
+          "vllm:fr13_decode_step_wall_attempts_total": 1799.0
+        }
+      },
+      {
+        "task": "astropy__astropy-14369",
+        "metric_delta": {
+          "vllm:generation_tokens_total": 36275.0,
+          "vllm:inter_token_latency_seconds_count": 7403.0,
+          "vllm:inter_token_latency_seconds_sum": 1471.5649461655412,
+          "vllm:request_time_per_output_token_seconds_count": 37.0,
+          "vllm:fr13_decode_step_wall_attempts_total": 7403.0
+        }
+      },
+      {
+        "task": "astropy__astropy-14508",
+        "metric_delta": {
+          "vllm:generation_tokens_total": 61099.0,
+          "vllm:inter_token_latency_seconds_count": 11672.0,
+          "vllm:inter_token_latency_seconds_sum": 2298.8653508333955,
+          "vllm:request_time_per_output_token_seconds_count": 28.0,
+          "vllm:fr13_decode_step_wall_attempts_total": 11672.0
+        }
+      },
+      {
+        "task": "astropy__astropy-14539",
+        "metric_delta": {
+          "vllm:generation_tokens_total": 24746.0,
+          "vllm:inter_token_latency_seconds_count": 4978.0,
+          "vllm:inter_token_latency_seconds_sum": 987.9724464623723,
+          "vllm:request_time_per_output_token_seconds_count": 34.0,
+          "vllm:fr13_decode_step_wall_attempts_total": 4978.0
+        }
+      },
+      {
+        "task": "astropy__astropy-14598",
+        "metric_delta": {
+          "vllm:generation_tokens_total": 31954.0,
+          "vllm:inter_token_latency_seconds_count": 6824.0,
+          "vllm:inter_token_latency_seconds_sum": 1359.6351365773007,
+          "vllm:request_time_per_output_token_seconds_count": 37.0,
+          "vllm:fr13_decode_step_wall_attempts_total": 6824.0
+        }
+      },
+      {
+        "task": "astropy__astropy-14995",
+        "metric_delta": {
+          "vllm:generation_tokens_total": 6751.0,
+          "vllm:inter_token_latency_seconds_count": 1143.0,
+          "vllm:inter_token_latency_seconds_sum": 223.0590138931293,
+          "vllm:request_time_per_output_token_seconds_count": 11.0,
+          "vllm:fr13_decode_step_wall_attempts_total": 1143.0
+        }
+      }
+    ],
+    "sum_seconds": 9677.884510502685,
+    "count": 49068.0,
+    "mean_ms": 197.23413447669938,
+    "inverse_mean_per_s": 5.070116299357588,
+    "generated_tokens": 248342,
+    "request_count": 265,
+    "comparison_limit": "Cqc10 ITL count equals decode-step attempt count, whereas SGLang ITL count equals generated tokens minus requests. Metric names do not establish equal supports. No cross-estimator or disjoint-cohort speed ratio.",
+    "source_sha256": {
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/vllm_metrics_pre.txt": "8cb4d76bc0abd1f53b5afaeab052f7bec1ff54be6ccb8eb4525125e5b6feeb8e",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-13977/vllm_metrics_post.txt": "c142af7ef3e626b719ac643d3a9592c2b9fdc1ff1418811b577be7b7adea1003",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/vllm_metrics_pre.txt": "df9cbb21fef7f22d18e4867347959e159b5b21d1d063156cf319a6459a620c7c",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14096/vllm_metrics_post.txt": "b301283cbd88d4688b1958911288b303561bd639c2456105f2a8f5b7a08e7b8f",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/vllm_metrics_pre.txt": "34f3b4c3849c631ae278714569f98a307e506195f5c4061300ac39796746b83b",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14182/vllm_metrics_post.txt": "ad9941d6895b8fb5707ee007a23627a6d7d3dc31b7bcbfe6fdfa989215075668",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/vllm_metrics_pre.txt": "87b09ae10b5302a0f447b29dedb2c970bbd4994c2091f1d19d98edf9b661759b",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14309/vllm_metrics_post.txt": "770d770d1100a2bcf078ca725a55699d4e1c59aa2689cc6e4524ac122acb7adf",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/vllm_metrics_pre.txt": "15a6a814d8edd65f7f6ea0bdba9c67689d9a9349e83160102019d66364b9fa2f",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14365/vllm_metrics_post.txt": "b0d4c9dec37017a2b973b6025b4f9847edbb2d08d3b74736023c60982c1d08d4",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/vllm_metrics_pre.txt": "8c50f5d863ff1743bd3afce48a2e7e1f451ca540aa2ab5d71f1448c1acc1706a",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14369/vllm_metrics_post.txt": "20362878f3dbe76c7c0bfd79dd1b49749f6bdcd9195c057b652ee4f710ab7be5",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/vllm_metrics_pre.txt": "5fd7219d3cda5a379b5a77abd96b57e3998bc041eabd27fc34ff13bb39be5355",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14508/vllm_metrics_post.txt": "e2bc098ca5540de6bb4889c247d202efb58a15a4255563e2f5d9807eed122038",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/vllm_metrics_pre.txt": "0330669c3a8ac42853e4903845c14cf0f81d687edfbbca1cb7177a5c08c7b7c8",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14539/vllm_metrics_post.txt": "b55f55099c1518adda38a4f2f4fb6bad673374219eca90cceed5f9c9c152cc6c",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/vllm_metrics_pre.txt": "e52049b3985a9607d714db6afa1f6942065c6e4482e61546c4a658a48746e530",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14598/vllm_metrics_post.txt": "7f5ac4212fbe54980150675ca675022454241b383c4ce15a2156f2658cc65795",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/vllm_metrics_pre.txt": "5348c2d09ca142855918854c258a4d432ee2d6cb9723f8700147fdb6ff77c390",
+      "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/swe_out/verified/per_task/astropy__astropy-14995/vllm_metrics_post.txt": "964bb69b2b02403ec1b21111edd997806e831439ce785aebd034142cf3bfd9a1"
+    }
+  }
+}

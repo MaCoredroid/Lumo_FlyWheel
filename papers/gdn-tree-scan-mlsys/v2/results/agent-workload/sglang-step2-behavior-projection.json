@@ -1,0 +1,791 @@
+{
+  "schema": "sglang-step2-trace-selected-fields-v1",
+  "scope": "No trace content copied; original source hash plus assistant finish/usage/block-type/count projections. Multiple assistant records may share one response ID; do not sum usage without grouping.",
+  "tasks": [
+    {
+      "task": "12907",
+      "source_path": "/home/mark/shared/tmp-scratch/fr14_ablation_a/step2/swe_out/verified/per_task/astropy__astropy-12907/qwen_trace.jsonl",
+      "source_sha256": "71eb17f34bf9a74b233407fcf2097b504594225b9c2bbbe7bc5e0c900b93b3e3",
+      "source_bytes": 55338,
+      "event_types": {
+        "system": 1,
+        "assistant": 32,
+        "user": 11,
+        "result": 1
+      },
+      "assistant_events": [
+        {
+          "line": 2,
+          "message_id": "3826dcb7-a3f8-4713-b72e-e3a7aae63df5",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "thinking"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 0,
+          "thinking_chars": 212
+        },
+        {
+          "line": 3,
+          "message_id": "584fb0fb-d342-46be-a203-df298d52d322",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "text"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 74,
+          "thinking_chars": 0
+        },
+        {
+          "line": 4,
+          "message_id": "da0c260a-0992-4756-8a2c-f37b1e9603f9",
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 22889,
+            "output_tokens": 98,
+            "cache_read_input_tokens": 0,
+            "total_tokens": 22987
+          },
+          "content_block_types": [
+            "tool_use"
+          ],
+          "tool_call_count": 1,
+          "text_chars": 0,
+          "thinking_chars": 0
+        },
+        {
+          "line": 6,
+          "message_id": "a03c0a86-7167-4324-acd9-014811719314",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "thinking"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 0,
+          "thinking_chars": 9627
+        },
+        {
+          "line": 7,
+          "message_id": "372220b3-c207-4a93-a9b9-584d19667b54",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "text"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 107,
+          "thinking_chars": 0
+        },
+        {
+          "line": 8,
+          "message_id": "e1bf0d91-d08f-408b-96d9-4f6fd80874ff",
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 25581,
+            "output_tokens": 2972,
+            "cache_read_input_tokens": 0,
+            "total_tokens": 28553
+          },
+          "content_block_types": [
+            "tool_use",
+            "tool_use"
+          ],
+          "tool_call_count": 2,
+          "text_chars": 0,
+          "thinking_chars": 0
+        },
+        {
+          "line": 11,
+          "message_id": "3a37d390-93cc-4c44-aecb-2e428ff1225c",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "thinking"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 0,
+          "thinking_chars": 39
+        },
+        {
+          "line": 12,
+          "message_id": "563808e4-6f99-4753-9f44-619a39119c51",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "text"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 35,
+          "thinking_chars": 0
+        },
+        {
+          "line": 13,
+          "message_id": "07a3e504-f4b7-43eb-a2d1-2e8759d79c62",
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 29165,
+            "output_tokens": 196,
+            "cache_read_input_tokens": 0,
+            "total_tokens": 29361
+          },
+          "content_block_types": [
+            "tool_use"
+          ],
+          "tool_call_count": 1,
+          "text_chars": 0,
+          "thinking_chars": 0
+        },
+        {
+          "line": 15,
+          "message_id": "5056cb0f-5953-4fb4-a254-ae3869cabfca",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "thinking"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 0,
+          "thinking_chars": 636
+        },
+        {
+          "line": 16,
+          "message_id": "9227aad3-40de-4dd2-89b0-208e46e92a68",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "text"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 363,
+          "thinking_chars": 0
+        },
+        {
+          "line": 17,
+          "message_id": "8a19a476-a434-4156-bebb-bc148be3a726",
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 29626,
+            "output_tokens": 481,
+            "cache_read_input_tokens": 0,
+            "total_tokens": 30107
+          },
+          "content_block_types": [
+            "tool_use"
+          ],
+          "tool_call_count": 1,
+          "text_chars": 0,
+          "thinking_chars": 0
+        },
+        {
+          "line": 19,
+          "message_id": "ee5602f3-b3fa-4c84-be05-3bf134925ee9",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "thinking"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 0,
+          "thinking_chars": 171
+        },
+        {
+          "line": 20,
+          "message_id": "2563277c-ed09-4d7e-a5e2-30cdb3d3abf8",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "text"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 81,
+          "thinking_chars": 0
+        },
+        {
+          "line": 21,
+          "message_id": "e27aa391-6e29-4408-a072-f06f9811f317",
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 30239,
+            "output_tokens": 498,
+            "cache_read_input_tokens": 0,
+            "total_tokens": 30737
+          },
+          "content_block_types": [
+            "tool_use"
+          ],
+          "tool_call_count": 1,
+          "text_chars": 0,
+          "thinking_chars": 0
+        },
+        {
+          "line": 23,
+          "message_id": "1985c4b9-ca67-444a-96c4-160bed5342f9",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "thinking"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 0,
+          "thinking_chars": 219
+        },
+        {
+          "line": 24,
+          "message_id": "bceea8ff-8abb-4f1e-9c16-5c1c4e453fd0",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "text"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 117,
+          "thinking_chars": 0
+        },
+        {
+          "line": 25,
+          "message_id": "001d51a5-75df-496e-b6d1-3a7ec7f1785a",
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 31362,
+            "output_tokens": 151,
+            "cache_read_input_tokens": 0,
+            "total_tokens": 31513
+          },
+          "content_block_types": [
+            "tool_use"
+          ],
+          "tool_call_count": 1,
+          "text_chars": 0,
+          "thinking_chars": 0
+        },
+        {
+          "line": 27,
+          "message_id": "14767260-564c-45a9-91ff-303a5e160d12",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "thinking"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 0,
+          "thinking_chars": 164
+        },
+        {
+          "line": 28,
+          "message_id": "1c79b35d-2cb5-4dc7-99ed-3a9bdfe9b2eb",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "text"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 106,
+          "thinking_chars": 0
+        },
+        {
+          "line": 29,
+          "message_id": "fd0b9de6-afe7-4f36-963f-7d3b273943fb",
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 32094,
+            "output_tokens": 136,
+            "cache_read_input_tokens": 0,
+            "total_tokens": 32230
+          },
+          "content_block_types": [
+            "tool_use"
+          ],
+          "tool_call_count": 1,
+          "text_chars": 0,
+          "thinking_chars": 0
+        },
+        {
+          "line": 31,
+          "message_id": "1aa0cbf6-e392-41df-a1d5-b51b722fbb9d",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "thinking"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 0,
+          "thinking_chars": 485
+        },
+        {
+          "line": 32,
+          "message_id": "917a7851-334d-4170-9e08-b7b246dc8bab",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "text"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 94,
+          "thinking_chars": 0
+        },
+        {
+          "line": 33,
+          "message_id": "84c621a3-afd6-40ca-b946-74082810fca2",
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 32483,
+            "output_tokens": 225,
+            "cache_read_input_tokens": 0,
+            "total_tokens": 32708
+          },
+          "content_block_types": [
+            "tool_use"
+          ],
+          "tool_call_count": 1,
+          "text_chars": 0,
+          "thinking_chars": 0
+        },
+        {
+          "line": 35,
+          "message_id": "c001298c-219b-447e-bbe0-78b9a428cf5e",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "thinking"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 0,
+          "thinking_chars": 1015
+        },
+        {
+          "line": 36,
+          "message_id": "c4eabb16-5ff2-46e6-9431-02e21a750bd1",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "text"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 157,
+          "thinking_chars": 0
+        },
+        {
+          "line": 37,
+          "message_id": "bab3598b-190f-46d6-9501-9a4d16cfaeb6",
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 33072,
+            "output_tokens": 431,
+            "cache_read_input_tokens": 0,
+            "total_tokens": 33503
+          },
+          "content_block_types": [
+            "tool_use"
+          ],
+          "tool_call_count": 1,
+          "text_chars": 0,
+          "thinking_chars": 0
+        },
+        {
+          "line": 39,
+          "message_id": "4cf83d1f-4c86-42b0-b677-1474d22f8e3f",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "thinking"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 0,
+          "thinking_chars": 642
+        },
+        {
+          "line": 40,
+          "message_id": "b7ff4f5b-adbe-4a0a-a1d4-ea2f248f49d5",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "text"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 75,
+          "thinking_chars": 0
+        },
+        {
+          "line": 41,
+          "message_id": "46fd281e-8feb-4d75-aee9-b93a753cd987",
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 33657,
+            "output_tokens": 218,
+            "cache_read_input_tokens": 0,
+            "total_tokens": 33875
+          },
+          "content_block_types": [
+            "tool_use"
+          ],
+          "tool_call_count": 1,
+          "text_chars": 0,
+          "thinking_chars": 0
+        },
+        {
+          "line": 43,
+          "message_id": "18cbb588-b2c5-4c6e-aba2-fc48c951da5d",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "thinking"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 0,
+          "thinking_chars": 925
+        },
+        {
+          "line": 44,
+          "message_id": "a1bd3402-8426-40b9-972c-0c72f014bd79",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 34120,
+            "output_tokens": 489,
+            "cache_read_input_tokens": 0,
+            "total_tokens": 34609
+          },
+          "content_block_types": [
+            "text"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 916,
+          "thinking_chars": 0
+        }
+      ]
+    },
+    {
+      "task": "13033",
+      "source_path": "/home/mark/shared/tmp-scratch/fr14_ablation_a/step2/swe_out/verified/per_task/astropy__astropy-13033/qwen_trace.jsonl",
+      "source_sha256": "530a506d88baa642cab2f66753da3011eb7011e4907f4081bc9cb98ee8a2c573",
+      "source_bytes": 193417,
+      "event_types": {
+        "system": 1,
+        "assistant": 16,
+        "user": 7,
+        "result": 1
+      },
+      "assistant_events": [
+        {
+          "line": 2,
+          "message_id": "3f4f9f77-890e-479b-8029-3b9b183fa82b",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "thinking"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 0,
+          "thinking_chars": 817
+        },
+        {
+          "line": 3,
+          "message_id": "e3ad54e3-368c-49ba-b408-10db9e5cb253",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "text"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 77,
+          "thinking_chars": 0
+        },
+        {
+          "line": 4,
+          "message_id": "23e49c03-0204-4dbd-a8ff-2f06935c28b6",
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 23296,
+            "output_tokens": 267,
+            "cache_read_input_tokens": 0,
+            "total_tokens": 23563
+          },
+          "content_block_types": [
+            "tool_use"
+          ],
+          "tool_call_count": 1,
+          "text_chars": 0,
+          "thinking_chars": 0
+        },
+        {
+          "line": 6,
+          "message_id": "d528766b-676f-4bcc-8d99-5c4ec259a85b",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "thinking"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 0,
+          "thinking_chars": 29823
+        },
+        {
+          "line": 7,
+          "message_id": "ac02f1c5-86a0-4cd4-a775-3199dc16f2ac",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "text"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 104,
+          "thinking_chars": 0
+        },
+        {
+          "line": 8,
+          "message_id": "47a93b24-afc5-420a-a29b-e7e662cb3eac",
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 24263,
+            "output_tokens": 7460,
+            "cache_read_input_tokens": 0,
+            "total_tokens": 31723
+          },
+          "content_block_types": [
+            "tool_use",
+            "tool_use"
+          ],
+          "tool_call_count": 2,
+          "text_chars": 0,
+          "thinking_chars": 0
+        },
+        {
+          "line": 11,
+          "message_id": "2e56b7fc-6c31-474e-a5e5-7b28f3c1c33f",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "thinking"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 0,
+          "thinking_chars": 258
+        },
+        {
+          "line": 12,
+          "message_id": "ab53f5c5-5bf1-4f26-b317-6e99080eeef8",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "text"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 72,
+          "thinking_chars": 0
+        },
+        {
+          "line": 13,
+          "message_id": "8edf3adf-8603-4db0-90b7-194839d087e3",
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 32982,
+            "output_tokens": 141,
+            "cache_read_input_tokens": 0,
+            "total_tokens": 33123
+          },
+          "content_block_types": [
+            "tool_use"
+          ],
+          "tool_call_count": 1,
+          "text_chars": 0,
+          "thinking_chars": 0
+        },
+        {
+          "line": 15,
+          "message_id": "ba758295-51d4-4a34-8f6d-13daf12a1458",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "thinking"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 0,
+          "thinking_chars": 36
+        },
+        {
+          "line": 16,
+          "message_id": "0c644d17-cd61-4db6-b5b9-ffdff3314b08",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "text"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 2,
+          "thinking_chars": 0
+        },
+        {
+          "line": 17,
+          "message_id": "ff9a82d8-3b32-4afa-bdf0-004e65ceeaa6",
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 33652,
+            "output_tokens": 78,
+            "cache_read_input_tokens": 0,
+            "total_tokens": 33730
+          },
+          "content_block_types": [
+            "tool_use"
+          ],
+          "tool_call_count": 1,
+          "text_chars": 0,
+          "thinking_chars": 0
+        },
+        {
+          "line": 19,
+          "message_id": "9fee428f-85d9-453e-a76c-606faf2621c0",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "thinking"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 0,
+          "thinking_chars": 4646
+        },
+        {
+          "line": 20,
+          "message_id": "116cf51f-5c89-4473-b141-91c12e83c26f",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          "content_block_types": [
+            "text"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 79,
+          "thinking_chars": 0
+        },
+        {
+          "line": 21,
+          "message_id": "d62a30db-d19a-4fb1-bad3-e11b08ed16e2",
+          "stop_reason": "tool_use",
+          "usage": {
+            "input_tokens": 34177,
+            "output_tokens": 1241,
+            "cache_read_input_tokens": 0,
+            "total_tokens": 35418
+          },
+          "content_block_types": [
+            "tool_use",
+            "tool_use"
+          ],
+          "tool_call_count": 2,
+          "text_chars": 0,
+          "thinking_chars": 0
+        },
+        {
+          "line": 24,
+          "message_id": "9e0d277b-9bd8-4fde-8693-050bcb4743cb",
+          "stop_reason": null,
+          "usage": {
+            "input_tokens": 36028,
+            "output_tokens": 32768,
+            "cache_read_input_tokens": 0,
+            "total_tokens": 68796
+          },
+          "content_block_types": [
+            "thinking"
+          ],
+          "tool_call_count": 0,
+          "text_chars": 0,
+          "thinking_chars": 136053
+        }
+      ]
+    }
+  ]
+}

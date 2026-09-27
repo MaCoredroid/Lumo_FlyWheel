@@ -1,0 +1,18 @@
+{
+  "files": [
+    {
+      "bytes": 45070,
+      "path": "cqc10-behavior-audit.json",
+      "sha256": "5c3c6501093cbebe6da8e6114cc548a7b2b748136d168478cad86653da0224a7"
+    },
+    {
+      "bytes": 3063,
+      "path": "cqc10_behavior_readonly.py",
+      "sha256": "7a84011f97598b5eeb1576f88f5ac082cf8f1c28f049db0865215d3da1815087"
+    }
+  ],
+  "prior_evidence_manifest_sha256": "75200c9ba4538ae8d1c9889ac798e1604dc6cbb8e98646568e2b9a741b00980c",
+  "remote_replay": "ssh mark@100.103.10.122 python3 -B - < cqc10_behavior_readonly.py > /tmp/cqc10-behavior-replay.json",
+  "schema": "cqc10-behavior-evidence-v1",
+  "scope": "Read-only replay of exact eyeball diagnostic on ten Cqc10 original traces plus earlier Cqc16/13236 positive control; source and original trace/metric hashes inside the audit. Does not certify absence of all degeneration modes."
+}

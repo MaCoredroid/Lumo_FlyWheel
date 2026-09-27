@@ -1,0 +1,218 @@
+{
+  "schema": "lumo.literature-mechanism-naming-review.v1",
+  "reviewed_on": "2026-09-26",
+  "scope": "Second literature pass focused on branch-local resident computation, inter-path handoffs, accepted-state commitment, and paper naming.",
+  "method": "Primary papers and selected pinned author code; secondary results used only for discovery. Targeted methods and evaluation sections rather than claiming every source was read in full.",
+  "new_inference_launched": false,
+  "author_implementations_executed": [],
+  "manuscript_edited": false,
+  "naming_recommendation": {
+    "system_name": "LumoTree",
+    "preferred_title": "LumoTree: Path-Parallel Speculative Verification for Hybrid Language Models",
+    "alternative_title": "LumoTree: State-Resident Tree Verification for Hybrid Language Models",
+    "status": "proposed, not applied",
+    "searchability": "No same-field LumoTree paper identified in returned results; unrelated commercial uses found. No claim of universal availability."
+  },
+  "searches": [
+    "Gated DeltaNet tree speculative verification on chip SRAM state resident branch 2026",
+    "linear attention speculative tree decoding recurrent state chain decomposition kernel 2026 September",
+    "\"SpecLA\" speculative decoding github",
+    "\"GDN\" \"tree\" \"verification\" \"September\"",
+    "\"OneLA\" \"linear\" attention decoding",
+    "\"Multi-Step\" \"RNN\" \"speculative\" decoding",
+    "\"Gated DeltaNet\" \"tree verification\" -site:reddit.com -site:rt.http3.lol",
+    "\"speculative\" \"linear attention\" \"tree\" \"2026\" \"state\" -site:reddit.com",
+    "\"Gated DeltaNet\" \"SRAM\" -SpecLA",
+    "\"tree verification\" \"recurrent\" -TreeWY -Bole -Scan",
+    "\"speculative\" \"branch\" \"register\" \"GDN\"",
+    "\"LumoTree\"",
+    "\"Lumo\" AI assistant Proton",
+    "\"BranchScan\" speculative decoding",
+    "\"PathSpec\" speculative decoding",
+    "\"LumoTree\" speculative OR decoding OR AI OR paper",
+    "\"BranchScan\" GPU OR decoding OR paper",
+    "\"LumoScan\" AI OR GPU OR paper",
+    "\"Pimba\" \"hybrid\" serving",
+    "\"HLX\" \"Transformer\" \"SSM\"",
+    "\"Gated DeltaNet\" \"tree\" \"verification\" -Bole -TreeWY -SpecLA -Marginals -Scan -site:reddit.com",
+    "\"FastTree\" \"Optimizing Attention Kernel\"",
+    "\"HLX: A Unified Pipelined Architecture\"",
+    "\"Pimba: A Processing-in-Memory Acceleration\"",
+    "\"SpecLA\" \"code\" \"github\" \"Wang\"",
+    "\"Bole\" \"2608.01651\" github",
+    "\"TreeWY\" github Ghantasala"
+  ],
+  "primary_sources": [
+    {
+      "id": "specla",
+      "url": "https://arxiv.org/html/2607.16673v1",
+      "read_scope": "Sections 4.1-4.3, 5, 7-8; current arXiv submission record",
+      "status": "direct comparison"
+    },
+    {
+      "id": "weaver",
+      "url": "https://arxiv.org/pdf/2607.06763v2",
+      "read_scope": "Section 3.4, current version record",
+      "status": "direct comparison; no new author-code execution"
+    },
+    {
+      "id": "bole",
+      "url": "https://arxiv.org/html/2608.01651v1",
+      "read_scope": "IV-A through IV-D, V and VI setup, agent replay, kernel evaluation",
+      "status": "direct comparison; author kernel not verified"
+    },
+    {
+      "id": "treewy",
+      "url": "https://arxiv.org/html/2608.20961v1",
+      "read_scope": "Sections 3-5 and author RFC",
+      "status": "direct comparison; pinned code inspected"
+    },
+    {
+      "id": "replayssm",
+      "url": "https://dao-lab.ai/blog/2026/replayssm/",
+      "read_scope": "Sections 3-5 and Appendix A GDN algorithms, device commit and graph integration",
+      "status": "direct state-policy comparison"
+    },
+    {
+      "id": "onela",
+      "url": "https://arxiv.org/html/2609.12399v1",
+      "read_scope": "Sections 2.3-3.4, evaluation setup",
+      "status": "new adjacent comparison: branching beam inference"
+    },
+    {
+      "id": "mamba_in_llama",
+      "url": "https://proceedings.neurips.cc/paper_files/paper/2024/file/723933067ad315269b620bc0d2c05cba-Paper-Conference.pdf",
+      "read_scope": "Section 4.2 multi-step recurrent speculation",
+      "status": "earlier mechanism foundation"
+    },
+    {
+      "id": "stree",
+      "url": "https://arxiv.org/html/2505.14969v1",
+      "read_scope": "Section 3 tree scan and activation replay",
+      "status": "earlier mechanism foundation"
+    },
+    {
+      "id": "deft",
+      "url": "https://arxiv.org/html/2404.00242v2",
+      "read_scope": "Section 3 and Appendix A.8 tree grouping and flattening",
+      "status": "attention comparison"
+    },
+    {
+      "id": "fasttree",
+      "url": "https://proceedings.mlsys.org/paper_files/paper/2025/file/96894468eb44631a32d7ebd56f9892c7-Paper-Conference.pdf",
+      "read_scope": "Sections 4-5, grouping and shared-memory reuse",
+      "status": "new adjacent attention comparison"
+    },
+    {
+      "id": "batch_invariance",
+      "url": "https://thinkingmachines.ai/blog/defeating-nondeterminism-in-llm-inference/",
+      "read_scope": "Batch-invariant attention section",
+      "status": "numerical/layout context"
+    },
+    {
+      "id": "hlx",
+      "url": "https://doi.org/10.1145/3725843.3756115",
+      "read_scope": "Primary abstract and publisher excerpts only",
+      "status": "screened adjacent hardware work, not treated as direct GDN tree comparator"
+    },
+    {
+      "id": "pimba",
+      "url": "https://arxiv.org/abs/2507.10178",
+      "read_scope": "Primary abstract and official repository description only",
+      "status": "screened adjacent hardware work, not treated as direct GDN tree comparator"
+    },
+    {
+      "id": "treewy_rfc",
+      "url": "https://github.com/vllm-project/vllm/issues/54080",
+      "read_scope": "Issue body and linked implementation",
+      "status": "author source provenance"
+    },
+    {
+      "id": "proton_lumo",
+      "url": "https://proton.me/lumo",
+      "read_scope": "Product identity only",
+      "status": "name searchability"
+    },
+    {
+      "id": "pathspec",
+      "url": "https://arxiv.org/abs/2606.10492",
+      "read_scope": "Abstract's method name only",
+      "status": "name collision"
+    }
+  ],
+  "treewy_code": {
+    "repository": "https://github.com/sneha5gsm/vllm",
+    "branch": "treewy-gdn-spec-decode",
+    "commit": "b073ed6cacfa1cf5ae23111854729e662a72a6d1",
+    "recorded_commit_time": "2026-08-08T23:17:09Z",
+    "provenance": "Author RFC implementation link; GitHub API resolved branch and inspected commit/files; raw source read at immutable commit.",
+    "files": [
+      {
+        "path": "vllm/third_party/flash_linear_attention/ops/tree_wy_triton.py",
+        "sha256": "c3dc8849249b3eef336a77aff50f2b7963d9cc2567a6e8e926257aac04a1f4f7",
+        "sections": "116-130,170-228,300-336,751-880"
+      },
+      {
+        "path": "vllm/model_executor/layers/mamba/gdn/qwen_gdn_linear_attn.py",
+        "sha256": "29544ebc7f2461828e844ccac01205ac9ed8978740ff9cf535316b05f56fbd8b",
+        "sections": "1396-1431,1574-1604; function/index scan"
+      },
+      {
+        "path": "vllm/v1/worker/mamba_utils.py",
+        "sections": "Commit diff lazy-commit migration branch"
+      }
+    ],
+    "limitations": "Source inspection only; test comments and claimed register/spill numbers were not independently run or profiled. Earlier documentation may contain stale launch-count comments."
+  },
+  "local_evidence": {
+    "current_checkout_head": "ae3dfbe99ff1ec0590b5435c738f1df92e5e5053",
+    "reported_deployment_source_commit": "e7af6b595a8b3a09b7e88d25a3653d381432b99c",
+    "rechecked_hashes_match_current_production_audit": true,
+    "files": [
+      {
+        "path": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+        "sha256": "d9dd0c697b466180ab5d834a52555c1516edb534e0a3d1bd3094e0d1489c24c8",
+        "locations": [
+          "6061-6112",
+          "6317-6341",
+          "10923-11080",
+          "14551-14693",
+          "17270-17335"
+        ]
+      },
+      {
+        "path": "scripts/fr13_fixed32_topology.py",
+        "sha256": "c02703b4bc777e5edfa01623b446a289cba8f1023e31d8efd7fc8126666b38bc"
+      },
+      {
+        "path": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+        "sha256": "c382ef22a5a8d4e84209e6723f8eea21c3819543c6e942c62951385b5c1c003e"
+      }
+    ],
+    "local_history": [
+      {
+        "commit": "bfd129089",
+        "date": "2026-07-25",
+        "scope": "Tracked introduction of path kernel and heavy-path decomposition"
+      },
+      {
+        "commit": "4a04999a2",
+        "date": "2026-07-31",
+        "scope": "Fixed32 two-launch batching"
+      }
+    ],
+    "chronology_limit": "Git dates are development records, not independently verified first-public disclosure; no copying inference."
+  },
+  "preserved_manuscript_hashes": {
+    "main.tex": "bcb973a5c6018a3399bb3d7cb7a62a57b33600c9dd7df7982be9854b1b8aab0e",
+    "abstract.tex": "10d502dfad6cf4b21ab97e6573d282e2f3ce7c439dd7124324d4465b7b3a3f63",
+    "main.pdf": "26ed7d2044b4a16f8c1c173c726c5dfb71de1c3be7dbd697f49db92c896b38ff"
+  },
+  "remaining_unknowns": [
+    "Uninspected or unindexed prior art",
+    "Current-route compiled resource usage and spill profile",
+    "Matched external verifier plus commitment costs",
+    "Public disclosure history beyond manuscript dates"
+  ],
+  "followup_experiments": "Proposed in the companion memo only; not launched."
+}

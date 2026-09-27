@@ -1,0 +1,20 @@
+id,type,claim,result_status,existing_evidence,proposed_work,execution_authorized
+H1,historical,C1,verified,FR13_REMAP_SHIP_RESULTS.md,Audit-only historical evidence; excluded from current manuscript quantitative results.,no
+H2,historical,C2,verified,FR13_SLOT_REORDER_ARTIFACTS/VERDICT_TABLE.md,Audit-only historical evidence; excluded from current manuscript quantitative results.,no
+H3,historical,C3,verified,output/fr13_kvremap_tail6/*/deploy_speed_kvr1.json,Audit-only historical evidence; excluded from current manuscript quantitative results.,no
+H4,historical,C3,verified,results/fr13_series_closeout_20260815/README.md,Audit-only historical evidence; excluded from current manuscript quantitative results.,no
+H5,historical,scope,verified,results/fr13_b4_exact16_qc_20260814/fr13_b4_exact16_qc.json,Audit-only historical evidence; excluded from current manuscript quantitative results.,no
+P0,provenance,all,audit_complete_with_historical_gaps,p0/P0-REPORT.md and hashed manifests; no model inference,Fresh runtime qualification before model experiments,yes_bounded_scope
+E1,main_comparison,C3,complete_audit_only_excluded_performance,18/18 initial cells; three paired blocks; frozen aggregate independently reconstructed,Internal-document workload; excluded from manuscript performance; preserve raw evidence.,complete_no_new_run
+E2,ablation,C1;C2,bounded_verified,Selected synchronous flat-slot B1/B4 evidence and source-bound helper controls,Complete for the selected eager cache-off greedy route; full-model sequential oracle and live conv/KV snapshots remain outside claim.,yes_bounded_scope
+E3,efficiency,C3,planned,Source implementations on fixed-shape / FA2 or stochastic routes; no fresh composition result,First qualify a compatible route. Do not treat fixed-shape scan or stochastic TAW as direct greedy Cat10 toggles.,conditional_if_promoted
+E4,serving,C3,planned,Historical cache and SGLang calibration,DEFERRED: Matched fixed-arrival cache capacity comparison,no
+E5,robustness,quality,planned,Limited same-task checks,DEFERRED: Held-out task quality and stochastic conditional-distribution evidence if claimed,no
+E6,extension,NVFP4,planned,Provisional B1 split-K observations,DEFERRED: Matched native baseline repeated composed NVFP4 tests,no
+E7c,competitive,scope,planned,Bole and TreeWY literature plus local arithmetic studies,DEFERRED: feasible matched authors-system comparison; no inference from local prototypes,no
+H6,historical,C2;scope,verified,WY failure and correction; diffuse/realization notes; August 28 reconciliation; kernel code,Audit-only historical evidence; excluded from current manuscript quantitative results.,no_new_run
+E7a,mechanism,C2;C3,verified_frozen_criteria_failed,2 kernel campaigns;8/8 fresh pilot;31/32 eligible confirmation prefixes; raw evidence retained,Complete numerical characterization; original freeze and retrospective audit failures retained. Neither compact candidate promoted.,yes_bounded_scope
+E7b,robustness,C1;C2,bounded_diagnostics_verified,3 verifier-only and3 commit-only boots on p072; offline fixed-input continuation,Complete bounded diagnostics. Original8/32 promotion concept was not run for compact candidates after E7a failure; these counts belong only to E7a. Broader integrated promotion remains deferred.,yes_bounded_scope
+E8,ablation,C3,complete_audit_only_excluded_performance,Two actual qualification boots and all six fixed B1 timing cells independently PASS; frozen aggregate reconstructed,Internal-document workload; excluded from manuscript performance; preserve raw evidence.,complete_no_new_run
+A0,agent_workload,pooled_decode_comparison,verified_existing_records,Common reducer and 48 hash-bound inputs; tree 25.63 versus SGLang EAGLE 26.89 tokens/s on ten versus two SWE Verified Astropy tasks,Complete descriptive comparison; different subsets and stacks; no causal speedup claim,no_new_inference
+A1,agent_workload,application_speed,proposed_not_launched,Cqc10 and SGLang descriptive pooled comparison complete; no matched current native/tree cohort,Conditional on task-completion speedup claim; review review-experiments.md before new campaign,await_manifest_review

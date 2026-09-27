@@ -1,0 +1,62 @@
+{
+  "created_utc": "2026-09-24T23:43:40.860280+00:00",
+  "status": "PASS",
+  "scope": "Primary-source novelty review, attributed overlapping mechanisms, scientific framing of design questions, unchanged workload evidence",
+  "pages": 10,
+  "latex_errors": 0,
+  "overfull_boxes": 0,
+  "latex_warnings": 0,
+  "underfull_boxes": 2,
+  "sources": {
+    "abstract.tex": "5bd67fda58efeb062a2f3fb13abb266b7d960c321f14312bc214de57f971f101",
+    "figures/pipeline.tikz": "aaf26c57b55eda1f2842501172043dc6e89f592d369edd4e076fe4297cbc8e84",
+    "figures/scan-replay.tikz": "19c984883a8b70cc5209c33fa4f62e98aba708ad2b025568d1b2d600a3e4ecd0",
+    "figures/state-contract.tikz": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898",
+    "main.tex": "fefd9fb1a07199dd7d085c415930db4ad1266b22c3de27786188c01c37ac196e",
+    "results/agent-workload/case-study.tex": "091f567a2dc1367c67a31947c11608c53457920983751a603a62df07773dab35",
+    "ref.bib": "2ad620c7496f093482d9beb43b123c5996a50784c72e48464cbcd8cb297ece8e",
+    "main.bbl": "b67cb44db8f1e74dc0f985efe2de41658f0a8fde2a17b8966d3c6699cc3c41af",
+    "main.pdf": "3ac708b96ad86d53c332d8cb3924a6b71ec1ca89105bebf086b46b7f24626c7d"
+  },
+  "current_documents": {
+    "README.md": "86bbf5442942e069c8ba7f1ca6ae4ca7f0de93406018b1647b6be0f2e90e8a93",
+    "FINAL-REVIEW.md": "346ce1f89bc09ed2ab7e6b5cd08c636e719859209f86075e3c0d4fb3f08197c0",
+    "paper.config.yaml": "5f50655f49be5d8e04fd82d47cadcf1b62f573e30fcbb5af0e8d6beaab8ca00f",
+    "notes/claim-evidence-ledger.md": "a4751e3a75d126cb244c6277f195d4ba9e0290bdbfe864c063007d0c2fbaa4a5",
+    "notes/design/optimization-evidence-map.md": "2aa379c86564b04f226bdf0afaacc7d71174d0164188de7072d3a655d730681e",
+    "notes/design/experiment-matrix.csv": "1685cd1e54924cb3b7b40672d660aaeb5e27e353662fbeb22d420a6b344b8fc2",
+    "notes/design/baselines.csv": "146f18673dbc891b5b8a01f96874d6aa944a8ec1b2fb198dc28635c019d2dacb",
+    "review-experiments.md": "14c4eee5d97fc88917c599cb13497e3412a58528b29518d4ffd380318af5850b",
+    "experiments/STATUS.md": "081714e70c70e1d7c0bde3e3d7765a11ab2534658ef8e1b6389f71f1faec99d7",
+    "p0/monitor/closure-ledger.md": "2aafbd0699d2e81f3fe317691b76cca91a09870c2748db5f9ce41cd5ef4b3252",
+    "artifacts/README.md": "60ccee8c3efbbc2b1c0cd8683c21c87c4aba29bb0b55ec2f05966e8e8c3342b1",
+    "scripts/build_review_bundle.py": "6d74804d6535b81a5e91023685ed90ad032090d0256ea839b53b9687ee7ac007",
+    "issues/2026-09-24-novelty.csv": "b97b2654929b15e5e7aaa01f8d54df8634265d34df564df589a9aa42598f859e",
+    "notes/novelty/novelty-review-2026-09-24.md": "eaf464309d8ff89efffb2550a375178500dcdc030213aba143b91a141bcc68a8",
+    "notes/novelty/source-register.json": "137d8c0b2228cab9dc9f474a83fbb650c8546ed30fd4fd9dc4b653445a249e23",
+    "notes/novelty/search-log.json": "0e7e10c5fcca3c29db408b6bec807def541f98b5ef2de8437ab37aed1c940297",
+    "notes/novelty/claim-matrix.csv": "4fcdb8ce4f3cafa8d9c9e182de605cd68046f4c82b00c0a754db3482a0488e68",
+    "plan/2026-09-24-novelty-review.md": "8eba7e3dbac7830e0c21f0bdc7c8fb925a8807bc5307bd01dd0245ac548f5355"
+  },
+  "citation_keys": 35,
+  "citation_keys_resolve": "PASS",
+  "issues_validation": "Empirical issues CSV validation passed\n  Total issues: 4",
+  "audits": {
+    "results/agent-workload/patch-producing-rate-audit.json": "279475d182ecd259790e2c57663d65c37205f2ee67c80aa46b0bd2e9b4e460c4",
+    "results/current-production/audit.json": "2d0904d5a6c77e0fa0f56a9850dbc0cce3cad4898227a3f78770758edc93c4c2",
+    "results/current-production/inputs.json": "8086b8aa2d682cf566f05daac044bc16280174d05b5fa4536a1830ca2ee43832"
+  },
+  "exact_replays": "PASS",
+  "workload_input_bindings": 94,
+  "projection_bindings": 5,
+  "production_input_bindings": 20,
+  "reviews": {
+    "notes/novelty/recurrent-prior-art-review-2026-09-24.md": "486e49a6f4e3e87e92507759e90904e10a32bf549f1de4263f1fa888f9837d8e",
+    "notes/novelty/serving-prior-art-review-2026-09-24.md": "9bbc9d9516b495690a59fbe30845a9fc33308fa9587a9e17ab1a65d0355f5e95",
+    "notes/novelty/final-serving-review-2026-09-24.md": "3e6feab597d890df65350337b473d16784d7973e9ec5caca1ac6989a9a8aad86"
+  },
+  "visual_qa": "All 10 pages inspected as rendered contact sheets. Final pages6 and10 individually checked after dataset-name typesetting and reference-column balancing. No clipping, overlap or table overflow.",
+  "superseded_route_results_removed": true,
+  "old_evidence_preserved": true,
+  "new_inference_launched": false
+}
