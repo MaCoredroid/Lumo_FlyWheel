@@ -1,0 +1,41 @@
+{
+  "utc": "2026-09-29T07:49:54.460789+00:00",
+  "checks": {
+    "local-worktree": {
+      "passed": true,
+      "tar_members": 72382,
+      "salt_bytes": 8,
+      "verification": "complete explicit saltlen8 decrypt+zstd+tar-list, pipefail exit0"
+    },
+    "remote-source": {
+      "passed": true,
+      "tar_members": 8743,
+      "salt_bytes": 8,
+      "verification": "complete explicit saltlen8 decrypt+zstd+tar-list, pipefail exit0"
+    },
+    "remote-runs-direct": {
+      "passed": true,
+      "tar_members": 95604,
+      "salt_bytes": 8
+    },
+    "source-update": {
+      "passed": true,
+      "tar_members": 68,
+      "salt_bytes": 8,
+      "verification": "complete explicit saltlen8 decrypt+zstd+tar-list, pipefail exit0"
+    },
+    "source-update2": {
+      "passed": true,
+      "tar_members": 117,
+      "salt_bytes": 8,
+      "verification": "Full explicit saltlen8 decrypt+zstd+tar-list, pipefail exit0; prearchive and postarchive member hashes matched."
+    }
+  },
+  "verification": "All five complete archive sets passed full decrypt, zstd decode and tar listing. All use salt8. Raw remote artifact archive verified on remote OpenSSL3.0; local archives explicitly saltlen8 on OpenSSL3.6.",
+  "historical_restore_command_failure": {
+    "set": "source-update",
+    "salt_bytes": 16,
+    "error": "bad decrypt / wrong final block length",
+    "resolution": "Explicit salt8 completed successfully; archive bytes unchanged."
+  }
+}
