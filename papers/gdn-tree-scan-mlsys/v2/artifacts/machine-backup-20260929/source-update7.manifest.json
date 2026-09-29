@@ -1,0 +1,788 @@
+{
+  "schema": "lumo.source-update-manifest.v1",
+  "utc": "2026-09-29T09:47:34.817747+00:00",
+  "files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/WORKLOG.md",
+      "bytes": 86462,
+      "sha256": "a0cc775cb4f6a0bee7f27c93d44fb63545fb16636df6a521fa0483d22e15add1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/launcher-diagnostic.v3_7-from-v3_2.diff",
+      "bytes": 3121,
+      "sha256": "fde5bed39d11f181d080c637cb4d059ff4a1279a2f2680b0918f88e42684582a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/RECEIPT.json",
+      "bytes": 118451,
+      "sha256": "9cc92281a9babfc57cadd1678d3de06aa63f688714fd2fe7e03a039568697c41"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/RECEIPT.preliminary.json",
+      "bytes": 116910,
+      "sha256": "9c704affcef23dd37106ef3e40bcbd7715eaaeff202718b5cba5ccb237f80fee"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/after-meminfo.txt",
+      "bytes": 1507,
+      "sha256": "772b6eb66c97084cee6ebdefb74edbe294f8d8839802f91566166d4e9dd06cb1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/after-vmstat.txt",
+      "bytes": 4175,
+      "sha256": "a1a94df1ad7b37b8dc1d212c957486a78d9ccb82fb23c84a90c37f638ebb9ebb"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/after10s-meminfo.txt",
+      "bytes": 1507,
+      "sha256": "549ad55f12b2f16ea8b5164db609ec4dc516ca0bca0eabfb863e944b2e1d3dab"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/after10s-vmstat.txt",
+      "bytes": 4175,
+      "sha256": "8709cadb52ffa4ba3e6900f1f0c713922a655ea56659a8a3118cfbd130f71e8e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/authorization.copy.json",
+      "bytes": 1347,
+      "sha256": "f3658be2652986cde01b786918a07cf58737f1ee3baeebd3d26f793e346fe2e0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/before-meminfo.txt",
+      "bytes": 1505,
+      "sha256": "66b2b11cd552e95001eefef192450f2276e889c7fb8e0111360089528981c95f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/before-vmstat.txt",
+      "bytes": 4181,
+      "sha256": "d65e4cac37e477c233b37cbf834aba1966809b59417da50f92fca75af7a4194d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-01-uname-r.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-01-uname-r.stdout.txt",
+      "bytes": 19,
+      "sha256": "c733324a73fee684aecd35ce6a7a8e54d5b9142381737751b44303505379118b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-02-nvidia-smi-driver.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-02-nvidia-smi-driver.stdout.txt",
+      "bytes": 10,
+      "sha256": "eb4a23418e3f083bc3f79c488143534b5a591b429cf059ca797f6b277715de2a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-03-docker-image-inspect.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-03-docker-image-inspect.stdout.txt",
+      "bytes": 72,
+      "sha256": "60dac37c4d1eea7014a78c815c30b1d5229f497029c838d9243ebaab00b428dd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-04-docker-ps.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-04-docker-ps.stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-05-pgrep-engine.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-05-pgrep-engine.stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-06-nvidia-smi-compute-apps.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-06-nvidia-smi-compute-apps.stdout.txt",
+      "bytes": 41,
+      "sha256": "cae79969ce448872401f5d9bcd1d52bbefa1a5450cf3a5658f62f068ab59294b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-07-before-fuser-nvidia.stderr.txt",
+      "bytes": 802,
+      "sha256": "c016204e188cff73c3b6f8a963045d7ea9642cac2231c50bc68ee1fe24b2bc3c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-07-before-fuser-nvidia.stdout.txt",
+      "bytes": 90,
+      "sha256": "11660c9f946f55e5d09810404907376769c762d0c95c2bbe442e5148a99ba139"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-08-before-ps-identity-4178.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-08-before-ps-identity-4178.stdout.txt",
+      "bytes": 38,
+      "sha256": "ee8326caa9ef9361abab816c663b1be5f4078236fc060362ae600cdaa7bc8836"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-09-before-ps-identity-4354.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-09-before-ps-identity-4354.stdout.txt",
+      "bytes": 45,
+      "sha256": "7a9a5f9bd03f75993d451be9d5fd5b0985bb3b7cbcf1ab42f3ce45349db9bb6c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-10-before-ps-identity-4383.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-10-before-ps-identity-4383.stdout.txt",
+      "bytes": 49,
+      "sha256": "cee2240f2b114be9ffc2da48e1663d3c408193627292bd3c8119a4ca2c4b99c3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-11-before-ps-identity-4849.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-11-before-ps-identity-4849.stdout.txt",
+      "bytes": 49,
+      "sha256": "6cc53036452fd4156e74541752428a901e58c9994b7bc6bc68c3c9c74263aa04"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-12-before-ps-identity-5132.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-12-before-ps-identity-5132.stdout.txt",
+      "bytes": 49,
+      "sha256": "dae27dbb0f40d7a4cb931bd3c306aab5a8c587fa07c1f092971f0ed22794ecca"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-13-before-lsmod.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-13-before-lsmod.stdout.txt",
+      "bytes": 7330,
+      "sha256": "deb83b7fe929a1e17f6b2399004073bce1d8082a8a2fb1a8abe770d282fbcd01"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-14-before-ps-list.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-14-before-ps-list.stdout.txt",
+      "bytes": 52514,
+      "sha256": "329026b0a8840191bba36c22266df5157e983c5859c975c26ce51c7a54d2a538"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-15-docker-ps.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-15-docker-ps.stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-16-pgrep-engine.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-16-pgrep-engine.stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-17-nvidia-smi-compute-apps.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-17-nvidia-smi-compute-apps.stdout.txt",
+      "bytes": 41,
+      "sha256": "cae79969ce448872401f5d9bcd1d52bbefa1a5450cf3a5658f62f068ab59294b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-18-prewrite-fuser-nvidia.stderr.txt",
+      "bytes": 802,
+      "sha256": "c016204e188cff73c3b6f8a963045d7ea9642cac2231c50bc68ee1fe24b2bc3c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-18-prewrite-fuser-nvidia.stdout.txt",
+      "bytes": 90,
+      "sha256": "11660c9f946f55e5d09810404907376769c762d0c95c2bbe442e5148a99ba139"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-19-prewrite-ps-identity-4178.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-19-prewrite-ps-identity-4178.stdout.txt",
+      "bytes": 38,
+      "sha256": "ee8326caa9ef9361abab816c663b1be5f4078236fc060362ae600cdaa7bc8836"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-20-prewrite-ps-identity-4354.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-20-prewrite-ps-identity-4354.stdout.txt",
+      "bytes": 45,
+      "sha256": "7a9a5f9bd03f75993d451be9d5fd5b0985bb3b7cbcf1ab42f3ce45349db9bb6c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-21-prewrite-ps-identity-4383.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-21-prewrite-ps-identity-4383.stdout.txt",
+      "bytes": 49,
+      "sha256": "cee2240f2b114be9ffc2da48e1663d3c408193627292bd3c8119a4ca2c4b99c3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-22-prewrite-ps-identity-4849.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-22-prewrite-ps-identity-4849.stdout.txt",
+      "bytes": 49,
+      "sha256": "6cc53036452fd4156e74541752428a901e58c9994b7bc6bc68c3c9c74263aa04"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-23-prewrite-ps-identity-5132.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-23-prewrite-ps-identity-5132.stdout.txt",
+      "bytes": 49,
+      "sha256": "dae27dbb0f40d7a4cb931bd3c306aab5a8c587fa07c1f092971f0ed22794ecca"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-24-drop-caches-write.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-24-drop-caches-write.stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-25-after-lsmod.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-25-after-lsmod.stdout.txt",
+      "bytes": 7330,
+      "sha256": "deb83b7fe929a1e17f6b2399004073bce1d8082a8a2fb1a8abe770d282fbcd01"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-26-after-ps-list.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-26-after-ps-list.stdout.txt",
+      "bytes": 52600,
+      "sha256": "3a1ea961e5edda91a5a408606bfd343011d0af613e19568f064d5a43925d0f16"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-27-after-fuser-nvidia.stderr.txt",
+      "bytes": 802,
+      "sha256": "c016204e188cff73c3b6f8a963045d7ea9642cac2231c50bc68ee1fe24b2bc3c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-27-after-fuser-nvidia.stdout.txt",
+      "bytes": 90,
+      "sha256": "11660c9f946f55e5d09810404907376769c762d0c95c2bbe442e5148a99ba139"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-28-after-ps-identity-4178.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-28-after-ps-identity-4178.stdout.txt",
+      "bytes": 38,
+      "sha256": "ee8326caa9ef9361abab816c663b1be5f4078236fc060362ae600cdaa7bc8836"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-29-after-ps-identity-4354.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-29-after-ps-identity-4354.stdout.txt",
+      "bytes": 45,
+      "sha256": "7a9a5f9bd03f75993d451be9d5fd5b0985bb3b7cbcf1ab42f3ce45349db9bb6c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-30-after-ps-identity-4383.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-30-after-ps-identity-4383.stdout.txt",
+      "bytes": 49,
+      "sha256": "cee2240f2b114be9ffc2da48e1663d3c408193627292bd3c8119a4ca2c4b99c3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-31-after-ps-identity-4849.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-31-after-ps-identity-4849.stdout.txt",
+      "bytes": 49,
+      "sha256": "6cc53036452fd4156e74541752428a901e58c9994b7bc6bc68c3c9c74263aa04"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-32-after-ps-identity-5132.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-32-after-ps-identity-5132.stdout.txt",
+      "bytes": 49,
+      "sha256": "dae27dbb0f40d7a4cb931bd3c306aab5a8c587fa07c1f092971f0ed22794ecca"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-33-journalctl-k.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-33-journalctl-k.stdout.txt",
+      "bytes": 63,
+      "sha256": "e363840fb7a0c08131f91f657a8c63870d13aa9c98c1c111a9e5870df9ab8c1d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-34-query-docker-create.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-34-query-docker-create.stdout.txt",
+      "bytes": 65,
+      "sha256": "178a98964bdd6401a1acec2e1108a878c18f309d511f5069cef09f8d845e0f0c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-35-query-inspect-owned.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-35-query-inspect-owned.stdout.txt",
+      "bytes": 170,
+      "sha256": "4801c78224e91326520b8c25a3aebed3755ee5103f19dc4b032c60853542b78d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-36-query-docker-start.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-36-query-docker-start.stdout.txt",
+      "bytes": 124,
+      "sha256": "f9ef79229eebca920c75fcaab328d837d18cb0ff213edfb275b78a07a3bf5187"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-37-query-inspect-before-rm.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-37-query-inspect-before-rm.stdout.txt",
+      "bytes": 169,
+      "sha256": "558e4426828041c0381782c9a93ba985668e3cda808388460d753f33900f5d07"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-38-query-docker-rm-cid.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-38-query-docker-rm-cid.stdout.txt",
+      "bytes": 65,
+      "sha256": "178a98964bdd6401a1acec2e1108a878c18f309d511f5069cef09f8d845e0f0c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-39-query-inspect-after-rm.stderr.txt",
+      "bytes": 112,
+      "sha256": "4622e142023c98a2748f12420d0d3f4cee16cd1fc020273096aeb3a31071007a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/cmd-39-query-inspect-after-rm.stdout.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/operational-config.json",
+      "bytes": 3284,
+      "sha256": "4256a2259df6f8961cfac7d5ff4404fccfc4d9480def63c33f9ca09c3face03c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/prewrite-meminfo.txt",
+      "bytes": 1505,
+      "sha256": "98a9c95aaddb2dedeb17cdf978c525aa0f2ad0082db6817907b8b4967ec09d37"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-candidate-stage1-20260929T092706Z-20260929T092728Z/query-container.cid",
+      "bytes": 64,
+      "sha256": "44480ce2f638a089d819c113aecc5d0c61f0701ef1aaa0c6e6e97d0cc6f77a78"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/status.json",
+      "bytes": 33711,
+      "sha256": "f409ff876671c69e59fc0597ed53249decf93fa066093c8a022692b15d7ad0a0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/generated/fr14_leg3_launch_nomiddleware.q1diag.v3_7.sh",
+      "bytes": 497652,
+      "sha256": "96a4f8b4885349f1d4516d8458884efe388cc924a496021c61baa12d58656c0d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_cycle0_gate_v5.py",
+      "bytes": 4097,
+      "sha256": "11db2a6cb6fb171a12209aeedd5520a859db0d57a039bd38b3c8f90c5aebc1a1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_cycle0_seal_auth_v1.py",
+      "bytes": 2254,
+      "sha256": "d6372f7f60545fcab54f079f0aef06a97f201821d16e5bce6815e19e680e1038"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_driver_v2_2.py",
+      "bytes": 8956,
+      "sha256": "5dc50063bc6d53b0f743de9631723f37037980a6b006a78bdba518340a2eee35"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_hooks_v7.py",
+      "bytes": 53055,
+      "sha256": "47ca4d0e725ad3941296439ba593008e2c0add57e4508f154530cc4e6e8b147d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_hooks_v8.py",
+      "bytes": 60399,
+      "sha256": "8db9041940802723cffeadca60e0d72c6752a81c04742d677568300d68231621"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_job_v7.py",
+      "bytes": 2072,
+      "sha256": "de201a8cb6efaf888a9799d41fd7c8ae1ffb1a54773d130628b8e410c575bd59"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_raw_audit_v6.py",
+      "bytes": 18274,
+      "sha256": "254d036e4ad62bc3491775993dfc65004c9bcca8d90301f620ac818d612a0637"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_hidden_publication_live_v1.py",
+      "bytes": 6136,
+      "sha256": "e634c349434f29cbc5d5045fdd2098144a56871a4a66721a1ff85dfd0bab3eae"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_make_diag_launcher_v3_7.py",
+      "bytes": 1982,
+      "sha256": "f5e04b70f37db2fc2e080a32eca9b38affb74c4ead6a03b6c9d6e789f1a6f913"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_patch_candidate_v7.py",
+      "bytes": 8050,
+      "sha256": "9a6fbd26869a89427c34e62265cc152c3bc3fa28dabb8a9c3fc934933b113937"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_patch_candidate_v8.py",
+      "bytes": 9914,
+      "sha256": "48fd70e3bc19acc81c02d5a37409679d2b176813a4bb64a377c2608771e9cbd2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/run_q1_candidate_cycle0_v5.sh",
+      "bytes": 23215,
+      "sha256": "305d860710188a5d6bf969fcd4a600962d5d5984b501fd74e15d4bc6186c7104"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.q1_patch_candidate_v7.json",
+      "bytes": 2253,
+      "sha256": "d07f20cd0dd2034a2eee5403f86da65b0deea30ffacbad14d3145af53cc27810"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.test_q1_candidate_cycle0_gate_v5.py.txt",
+      "bytes": 102,
+      "sha256": "9813ed1bc3546437b1a1351846d32368b90bb7c263d3aa3da0893de4239c41e3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.test_q1_cycle0_rng_request_v2_2.py.txt",
+      "bytes": 372,
+      "sha256": "c2f909c6daa5d5cc9a9f4a5c890e7e0db467debd334801010d9552bb0519ea59"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_candidate_cycle0_gate_v5.py",
+      "bytes": 5651,
+      "sha256": "bad112838025f87aa1c0be2efbc2d729201fa316f9c3e41dbb285f8714515dec"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_cycle0_rng_request_v2_2.py",
+      "bytes": 1550,
+      "sha256": "6ea505dad9ce85c275583316f7c17fb029bba6f025668991811bec47ccf0e792"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-candidate-cycle0-v7-propagation-review.md",
+      "bytes": 5672,
+      "sha256": "0626aad07b808b374a4d9de3bda6ffb9bfe58245856242a8f3e20806a6787e85"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-hidden-publication-live-v1-review.md",
+      "bytes": 5871,
+      "sha256": "83ee1613b1d8ee13a470ac5b6781b9cda4cf11f082c5fbc13ef80771c43f117d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-publication-source-progress-20260929T0938Z.md",
+      "bytes": 675,
+      "sha256": "37f98ed0c48c24fa0b967f4a716df18f62b3408b56558f5315cada9bd0b828ef"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/root-stage1-result-review-092706.md",
+      "bytes": 4317,
+      "sha256": "9643e7af12cb42051caa4421a20f874c9e5a63cd4a3e50678f6509ba3056f70c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/ACTIVE.json",
+      "bytes": 47089,
+      "sha256": "5642d41cf4635bd911219435f261e48244d8eeddc5f5cf1d5a14568a277aabd1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/AUTH-GLOBAL-20260929T092706Z.json",
+      "bytes": 1347,
+      "sha256": "f3658be2652986cde01b786918a07cf58737f1ee3baeebd3d26f793e346fe2e0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GATE-Q1-CANDIDATE-20260929T092706Z.json",
+      "bytes": 8721,
+      "sha256": "c4a31e0e68c0fbe61ff32b3f685d6583e9921d8569ac573144049409016b7fc5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GIT-BACKUP-VERIFIED-20260929-update6.json",
+      "bytes": 41926,
+      "sha256": "1042d2468843573409241afda1e46ec80f1bd4c025aa5a7ba8d3a555a1363e3c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GLOBAL-CONFIG-20260929T092706Z.json",
+      "bytes": 3824,
+      "sha256": "d1d165370f58c7929dc43f964883c55e78966f323c12da1f394eaac238b8cf3a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GLOBAL-LAUNCH-20260929T092706Z.json",
+      "bytes": 2051,
+      "sha256": "5d3e1093da19e3f09bba86e3d14ee0fac5c63d6d77bcfa0525adcab2521df13b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/Q1-CANDIDATE-STAGE1-RESULT-092706.json",
+      "bytes": 2098,
+      "sha256": "cc759978ad89587a0c3232852943e2ae1623b5e6f54179f79b0034b7af853393"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/ROOT092706-DIAGNOSTICS.json",
+      "bytes": 53955,
+      "sha256": "4e7972e5c5f71f29c604278941c423690b2b0c95a0cde4b1796fcea3e670eea1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/ROOT092706-RAW-AUDIT.json",
+      "bytes": 3271,
+      "sha256": "9fb8a131467b6b745047a5e39e257b8f0a871909e01bacd2aefe6298e66fa6e3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v7-propagation-review/CONTROLS.json",
+      "bytes": 750,
+      "sha256": "3018d0392faf0843e19e272e4b7eb4ea6a5e0f0b20f1683daa8d71e4628068fd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v7-propagation-review/REVIEW-SEAL.json",
+      "bytes": 1878,
+      "sha256": "b5e33f43928e1a91cc2c41df5ce99d42b2a74922fd771f46e0109ea0d1317f28"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v7-propagation-review/SOURCES.json",
+      "bytes": 1440,
+      "sha256": "c7592d83e8463a497d4709c84e0c13e9d72b47c57d6004e6d29e64e0db2ad25e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v7-propagation-review/control-harness-attempt1.txt",
+      "bytes": 234,
+      "sha256": "15825394d84e0f0246f4dbb55608fc33d617765fd6a53ae5517981230a517bef"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v7-propagation-review/controls.py",
+      "bytes": 9990,
+      "sha256": "e2212045487aa173284ee5e0063146553d6ca3a9d6e02e57efe5e55cfa394386"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v7-propagation-review/gate-controls.txt",
+      "bytes": 682,
+      "sha256": "7e84bf02efbad6b538eb6841b35619c2a46795451c52dede7480304caed745bb"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v7-propagation-review/source/generated/fr14_leg3_launch_nomiddleware.q1diag.v3_7.sh",
+      "bytes": 497652,
+      "sha256": "96a4f8b4885349f1d4516d8458884efe388cc924a496021c61baa12d58656c0d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v7-propagation-review/source/q1_candidate_cycle0_gate_v5.py",
+      "bytes": 4097,
+      "sha256": "11db2a6cb6fb171a12209aeedd5520a859db0d57a039bd38b3c8f90c5aebc1a1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v7-propagation-review/source/q1_candidate_cycle0_seal_auth_v1.py",
+      "bytes": 2254,
+      "sha256": "d6372f7f60545fcab54f079f0aef06a97f201821d16e5bce6815e19e680e1038"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v7-propagation-review/source/q1_candidate_driver_v2_2.py",
+      "bytes": 8956,
+      "sha256": "5dc50063bc6d53b0f743de9631723f37037980a6b006a78bdba518340a2eee35"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v7-propagation-review/source/q1_candidate_hooks_v7.py",
+      "bytes": 53055,
+      "sha256": "47ca4d0e725ad3941296439ba593008e2c0add57e4508f154530cc4e6e8b147d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v7-propagation-review/source/q1_candidate_job_v7.py",
+      "bytes": 2072,
+      "sha256": "de201a8cb6efaf888a9799d41fd7c8ae1ffb1a54773d130628b8e410c575bd59"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v7-propagation-review/source/q1_candidate_raw_audit_v6.py",
+      "bytes": 18274,
+      "sha256": "254d036e4ad62bc3491775993dfc65004c9bcca8d90301f620ac818d612a0637"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v7-propagation-review/source/q1_make_diag_launcher_v3_7.py",
+      "bytes": 1982,
+      "sha256": "f5e04b70f37db2fc2e080a32eca9b38affb74c4ead6a03b6c9d6e789f1a6f913"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v7-propagation-review/source/q1_patch_candidate_v7.py",
+      "bytes": 8050,
+      "sha256": "9a6fbd26869a89427c34e62265cc152c3bc3fa28dabb8a9c3fc934933b113937"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v7-propagation-review/source/run_q1_candidate_cycle0_v5.sh",
+      "bytes": 23215,
+      "sha256": "305d860710188a5d6bf969fcd4a600962d5d5984b501fd74e15d4bc6186c7104"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-live-binding-independent-20260929/MANIFEST.json",
+      "bytes": 1416,
+      "sha256": "df8d6847037803281ba2720e5ac26245edb10651a1a8202b8e2e492d9204128b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-live-binding-independent-20260929/RESULTS.json",
+      "bytes": 3354,
+      "sha256": "b51047b8b040f6a748e6d5bfffda0bd359a3cbfa95c3787dc45ced01e27dc363"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-live-binding-independent-20260929/SOURCE-BINDINGS.json",
+      "bytes": 1607,
+      "sha256": "920ef4663dc35ef85bf5f644eb403a735c5a93266d98f0d127c1dbe264d19831"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-live-binding-independent-20260929/before-final-owner-closure/RESULTS.json",
+      "bytes": 3178,
+      "sha256": "eddb54b8e2d46e86eb9d54b1651cca66128b2bef470bc6b4e6ee843f09d80565"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-live-binding-independent-20260929/before-final-owner-closure/controls.py",
+      "bytes": 5200,
+      "sha256": "6027c669e9adcb4e31d05ff0e2c2e8971dc2ab07494a97d6c5a7555eb3d32273"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-live-binding-independent-20260929/before-final-owner-closure/live-reviewed.py",
+      "bytes": 6027,
+      "sha256": "cce75164d144e49478e5672d5bbb098d44b18934841db5e0101d60b3bdb17ac1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-live-binding-independent-20260929/controls.py",
+      "bytes": 5282,
+      "sha256": "62a18a9b7d4b9430e3d18c95e769a588bbc953c5bd1bc98e69e93f50da4d1b8b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-live-binding-independent-20260929/live-reviewed.py",
+      "bytes": 6136,
+      "sha256": "e634c349434f29cbc5d5045fdd2098144a56871a4a66721a1ff85dfd0bab3eae"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/root-stage1-result-review-092706/MEMBERS.json",
+      "bytes": 26643,
+      "sha256": "c4114c757d7658eed5c5e2095f7e4c16915f1cd7ba201311fbd3c0f255a1d143"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/root-stage1-result-review-092706/OBJECTS.json",
+      "bytes": 2824258,
+      "sha256": "fd4d23a0fe82df737757a6876059de621f0d43c16668ce854e1e7abf0d361f45"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/root-stage1-result-review-092706/PROVENANCE-READINESS.json",
+      "bytes": 1981,
+      "sha256": "cccebbe8b67559b6f3a4b3e952d10aabc670023c64f3157a44498d0155e5fe30"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/root-stage1-result-review-092706/RAW-AUDIT.json",
+      "bytes": 3316,
+      "sha256": "7039b30c1d71ec8a782355b2a8709487712f8da8467c5fc0338fb0c0e4e9b944"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/root-stage1-result-review-092706/RAW-SUMMARY.json",
+      "bytes": 495,
+      "sha256": "7e14b8a5f24f4cb9a30cd9c692c81d8f39829f76203c9557d348b03dab360f35"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/root-stage1-result-review-092706/REVIEW-SEAL.json",
+      "bytes": 966,
+      "sha256": "733b46bd9d002144de5f7ea416b3daefdbb9d3886b251b6b73a432188eeba690"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/root-stage1-result-review-092706/close_review.py",
+      "bytes": 9683,
+      "sha256": "599feaedb5db542e07d5dda42c709c122d6936dd2a3265daee7992a451fbea85"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/root-stage1-result-review-092706/raw_review.py",
+      "bytes": 2524,
+      "sha256": "a7480d3577170014347ab42be63bdd78e0cc1360186c42eb6f439aeae205d6ac"
+    }
+  ],
+  "scope": "source-update7",
+  "restore_order": "after source-update3; this later snapshot wins"
+}

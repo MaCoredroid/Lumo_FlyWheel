@@ -1,0 +1,25 @@
+{
+  "bytes": 2023035088,
+  "chunks": [
+    {
+      "file": "root-success-092706.tar.zst.0000.enc",
+      "bytes": 536870912,
+      "sha256": "cb9f6b66bb98383ecec5d606e6e9193d9b03d164fdb8ef4cbb398da5b55fc5c3"
+    },
+    {
+      "file": "root-success-092706.tar.zst.0001.enc",
+      "bytes": 536870912,
+      "sha256": "647f5e0b7d4d3f128e31bd1cd649779a7f1ed1da36c9796e721f591bf85cfe54"
+    },
+    {
+      "file": "root-success-092706.tar.zst.0002.enc",
+      "bytes": 536870912,
+      "sha256": "9ed41b6f3b3c8a9431b8132b9ababf0f37368298d1847e8d3cc92f3872ea34e0"
+    },
+    {
+      "file": "root-success-092706.tar.zst.0003.enc",
+      "bytes": 412422352,
+      "sha256": "77a65f6203e4677295cfa1bdb3a0f5b2f42474e8823c37d3c5da8a0cb9b82da4"
+    }
+  ]
+}
