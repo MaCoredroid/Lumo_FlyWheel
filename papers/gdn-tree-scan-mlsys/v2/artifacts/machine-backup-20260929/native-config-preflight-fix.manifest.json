@@ -1,0 +1,23 @@
+{
+  "schema": "lumo.source-update-manifest.v1",
+  "utc": "2026-09-29T09:54:52.102245+00:00",
+  "files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/inspections/codex-worker-binding-20260928T225042Z/config.json",
+      "bytes": 72904,
+      "sha256": "08abd8e204ecae324108f41acc1bac10549a3cd0728737ecfa0fc94b21bbac73"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/NATIVE-EXECUTION-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A.log",
+      "bytes": 2062,
+      "sha256": "a2f75d1c746ed67e269b2616ba20dc5d577897463e17e2b1d36f035165e2389d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/Q1-CANDIDATE-STAGE1-RESULT-092706.json",
+      "bytes": 2098,
+      "sha256": "cc759978ad89587a0c3232852943e2ae1623b5e6f54179f79b0034b7af853393"
+    }
+  ],
+  "scope": "native-config-preflight-fix",
+  "restore_order": "after source-update3; this later snapshot wins"
+}

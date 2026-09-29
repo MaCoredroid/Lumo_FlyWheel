@@ -1,0 +1,10 @@
+{
+  "bytes": 5664,
+  "chunks": [
+    {
+      "file": "native-config-preflight-fix.tar.zst.0000.enc",
+      "bytes": 5664,
+      "sha256": "1b9eec8de3108c06aab2f7f08afae0819aaf6ec3074ed6dfde46238613e8fc5c"
+    }
+  ]
+}
