@@ -1,0 +1,15 @@
+{
+  "bytes": 839762080,
+  "chunks": [
+    {
+      "file": "root-failure-080536.tar.zst.0000.enc",
+      "bytes": 536870912,
+      "sha256": "b10bb4cd7612e4f7b966ed8f87e2365b2175f6b00e8ff4319e4342180dd40cc2"
+    },
+    {
+      "file": "root-failure-080536.tar.zst.0001.enc",
+      "bytes": 302891168,
+      "sha256": "b1123c2454a85b04fed6cfd89f953b8e898d2eac14704da11d133f02f1a03a02"
+    }
+  ]
+}
