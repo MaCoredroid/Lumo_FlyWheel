@@ -1,0 +1,25 @@
+{
+  "bytes": 1829412464,
+  "chunks": [
+    {
+      "file": "root-driver-failure-090507.tar.zst.0000.enc",
+      "bytes": 536870912,
+      "sha256": "d8ad0d567f37da1b5c3db51635a011c0e7c5332c7fc6a466ff793a6039391732"
+    },
+    {
+      "file": "root-driver-failure-090507.tar.zst.0001.enc",
+      "bytes": 536870912,
+      "sha256": "d63cc54482bb8dbd52c47b12748344cfc9945598c831f583431b7a3e469105a2"
+    },
+    {
+      "file": "root-driver-failure-090507.tar.zst.0002.enc",
+      "bytes": 536870912,
+      "sha256": "2022ee29aa71b014a8422c16a7b5e487644bfacec8ef7d0a180e4babb5f926d5"
+    },
+    {
+      "file": "root-driver-failure-090507.tar.zst.0003.enc",
+      "bytes": 218799728,
+      "sha256": "ef645b9a29b11e84df038dd24f7e135f61d8488d517e8c93fcc94ff6be7f0036"
+    }
+  ]
+}
