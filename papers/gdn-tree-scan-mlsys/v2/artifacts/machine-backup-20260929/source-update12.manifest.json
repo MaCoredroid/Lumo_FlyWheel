@@ -1,0 +1,2108 @@
+{
+  "schema": "lumo.source-update-manifest.v1",
+  "utc": "2026-09-29T12:01:23.017773+00:00",
+  "files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/RENDER-REVIEW.json",
+      "bytes": 629,
+      "sha256": "1ede0dfa94267433ac7b9b509de07ad6ac3d855581db4a79c3ad2bfc9ee4bf44"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/VERIFICATION.json",
+      "bytes": 816,
+      "sha256": "a8edd357fdb16d0f9e24d917ef5accee082c9c3aa538c6f2c5685002cc9181dd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build.stdout.txt",
+      "bytes": 58109,
+      "sha256": "9a799b6608c4ef7b1667c79ae34a8a3fe256ce69fd8a141aefe335aa084dcf1e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/BUILD.txt",
+      "bytes": 454,
+      "sha256": "bafb036fb0ce9c8c0585d24e84fdbd26f3a5b2d97c7a92238a9f67b28452ed19"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/IEEEtran.cls",
+      "bytes": 281789,
+      "sha256": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/README.md",
+      "bytes": 7991,
+      "sha256": "94a8fe3583dbc2091472d7f19c3794fed7c4f61efc9e5f800229085be50d99e0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/SOURCE-MANIFEST.json",
+      "bytes": 24644,
+      "sha256": "9eaea55823de62ca86e9239858b9590532bf461e08e1dd848ee6ba2d97a44140"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/abstract.tex",
+      "bytes": 1091,
+      "sha256": "bce4fc01561b3fdf2d1cff0e14acf0cef00e2bd6f8581a360361b9a61015b2ea"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/figures/pipeline.tikz",
+      "bytes": 4669,
+      "sha256": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/figures/scan-replay.tikz",
+      "bytes": 1035,
+      "sha256": "19c984883a8b70cc5209c33fa4f62e98aba708ad2b025568d1b2d600a3e4ecd0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/figures/state-contract.tikz",
+      "bytes": 1056,
+      "sha256": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/main.aux",
+      "bytes": 20851,
+      "sha256": "f4f87422c0400b954fcc24d72beec67001a167b5411e562e62ef6e740a9fcb7e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/main.bbl",
+      "bytes": 12055,
+      "sha256": "88b288c16d0cd76a0eda28774cee4ae2b9f5ab57ffd61925a91b33047b6bdfb3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/main.blg",
+      "bytes": 1403,
+      "sha256": "bdb340463866b0b6887daa7cce29e444b48fdc0ba0408c5d576e92e57edc2943"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/main.fdb_latexmk",
+      "bytes": 35879,
+      "sha256": "7c1a8ac4ce96282317ecc17d8677ce7e0559975b89cff064c0c9e011ac41167f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/main.fls",
+      "bytes": 96427,
+      "sha256": "c2f3a2bf80c509683d3280e27ba8554008f26d5291e4ac3b0a17c980c27fbca0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/main.log",
+      "bytes": 44291,
+      "sha256": "a75fc29e4ee549d339091308643ed7efc7fd5f076eb1947ff5a36cae3b2836ec"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/main.out",
+      "bytes": 6951,
+      "sha256": "d4490e79538047ff71571f24a6814de161ae16e1aafa85ae8e374cc4ee51a4a3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/main.pdf",
+      "bytes": 307780,
+      "sha256": "436be1d5c5297bac016002b91b2e25bf0062ea5aaa4a41b9a8d75942c90aa8bd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/main.tex",
+      "bytes": 45801,
+      "sha256": "c305380324fdf5eca32556a839ac04969724a4d3e78a1ffc2bb92cf30b4ad3a2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/ref.bib",
+      "bytes": 13687,
+      "sha256": "45ff04659e08f46a5591ca42dc624ed15521eb0f043d54098a27e7e8d55eb981"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/results/agent-workload/case-study.tex",
+      "bytes": 12316,
+      "sha256": "798470a439c2bebad6956a779803d459a2d8572217d446b1f794b855296e87c3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/results/agent-workload/review-configuration.tex",
+      "bytes": 2343,
+      "sha256": "aba40eb0e68052d81a6f69744af16267d3a3cb5f6c0e65c4419e3447457f895f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/results/agent-workload/review-outcomes.tex",
+      "bytes": 2091,
+      "sha256": "80004d9296fab1bbe8ce29cefae6bdc79bb1ff1ceebf843b8ec39694fced7c75"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/results/agent-workload/review-telemetry.tex",
+      "bytes": 2736,
+      "sha256": "52e88906abe944fff0ac74e636256faf5ec783a7ba685ec4142d425d9ed72d6d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/results/review-response-20260927/all-attempts-table.tex",
+      "bytes": 679,
+      "sha256": "3ceea0a4e0e5c3180d1525dfeffd2813bf93bcb34364f4fee06a88a29aa8aeaf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/results/review-response-20260927/component-qualification.tex",
+      "bytes": 2229,
+      "sha256": "dbdb81ffb279923c2cc7ace1cbf5bc6cb11c3921338457e8dbd85c350979c57d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/results/review-response-20260927/m1-qualification.tex",
+      "bytes": 3570,
+      "sha256": "a47d54a8e55a2cda867c9494a59c74adf0e44399991356d7c9241571a21570df"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/results/review-response-20260927/native-reference.tex",
+      "bytes": 1294,
+      "sha256": "f1667f646203d851f15ee3c1864defe84a5075ed35e1e6843bc2b27a932c59a5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/clean-build/results/review-response-20260927/paired-task-outcomes.tex",
+      "bytes": 855,
+      "sha256": "94790ae1870f19a3db62d534ec39f2d126a59429ca1a54a7e058c39023f104ec"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/lumotree-working-source.tar.gz",
+      "bytes": 112519,
+      "sha256": "b977520cfe022a981b66e255d2cbc05eabd8079f9e6415f8ac1b00d98a243503"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/page-11.png",
+      "bytes": 389764,
+      "sha256": "c4c07baae33f59c500e380c932ee0d989828d069682820e0115405331b0f4f06"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/page-12.png",
+      "bytes": 440897,
+      "sha256": "5cd1540b4163d3d86fe9d968093c98bfb7896a8dae3210fe155f5478331fa760"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/BUILD.txt",
+      "bytes": 454,
+      "sha256": "bafb036fb0ce9c8c0585d24e84fdbd26f3a5b2d97c7a92238a9f67b28452ed19"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/IEEEtran.cls",
+      "bytes": 281789,
+      "sha256": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/README.md",
+      "bytes": 7991,
+      "sha256": "94a8fe3583dbc2091472d7f19c3794fed7c4f61efc9e5f800229085be50d99e0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/SOURCE-MANIFEST.json",
+      "bytes": 24644,
+      "sha256": "9eaea55823de62ca86e9239858b9590532bf461e08e1dd848ee6ba2d97a44140"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/abstract.tex",
+      "bytes": 1091,
+      "sha256": "bce4fc01561b3fdf2d1cff0e14acf0cef00e2bd6f8581a360361b9a61015b2ea"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/figures/pipeline.tikz",
+      "bytes": 4669,
+      "sha256": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/figures/scan-replay.tikz",
+      "bytes": 1035,
+      "sha256": "19c984883a8b70cc5209c33fa4f62e98aba708ad2b025568d1b2d600a3e4ecd0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/figures/state-contract.tikz",
+      "bytes": 1056,
+      "sha256": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/main.bbl",
+      "bytes": 12055,
+      "sha256": "88b288c16d0cd76a0eda28774cee4ae2b9f5ab57ffd61925a91b33047b6bdfb3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/main.tex",
+      "bytes": 45801,
+      "sha256": "c305380324fdf5eca32556a839ac04969724a4d3e78a1ffc2bb92cf30b4ad3a2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/ref.bib",
+      "bytes": 13687,
+      "sha256": "45ff04659e08f46a5591ca42dc624ed15521eb0f043d54098a27e7e8d55eb981"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/results/agent-workload/case-study.tex",
+      "bytes": 12316,
+      "sha256": "798470a439c2bebad6956a779803d459a2d8572217d446b1f794b855296e87c3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/results/agent-workload/review-configuration.tex",
+      "bytes": 2343,
+      "sha256": "aba40eb0e68052d81a6f69744af16267d3a3cb5f6c0e65c4419e3447457f895f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/results/agent-workload/review-outcomes.tex",
+      "bytes": 2091,
+      "sha256": "80004d9296fab1bbe8ce29cefae6bdc79bb1ff1ceebf843b8ec39694fced7c75"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/results/agent-workload/review-telemetry.tex",
+      "bytes": 2736,
+      "sha256": "52e88906abe944fff0ac74e636256faf5ec783a7ba685ec4142d425d9ed72d6d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/results/review-response-20260927/all-attempts-table.tex",
+      "bytes": 679,
+      "sha256": "3ceea0a4e0e5c3180d1525dfeffd2813bf93bcb34364f4fee06a88a29aa8aeaf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/results/review-response-20260927/component-qualification.tex",
+      "bytes": 2229,
+      "sha256": "dbdb81ffb279923c2cc7ace1cbf5bc6cb11c3921338457e8dbd85c350979c57d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/results/review-response-20260927/m1-qualification.tex",
+      "bytes": 3570,
+      "sha256": "a47d54a8e55a2cda867c9494a59c74adf0e44399991356d7c9241571a21570df"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/results/review-response-20260927/native-reference.tex",
+      "bytes": 1294,
+      "sha256": "f1667f646203d851f15ee3c1864defe84a5075ed35e1e6843bc2b27a932c59a5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/working-source-20260929T115700Z/source/results/review-response-20260927/paired-task-outcomes.tex",
+      "bytes": 855,
+      "sha256": "94790ae1870f19a3db62d534ec39f2d126a59429ca1a54a7e058c39023f104ec"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/WORKLOG.md",
+      "bytes": 89602,
+      "sha256": "386c57c897675fee8f9902eeaeae04226eb8b8ea30a165ea533c7d23f434a38b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-B-20260929T111250Z/RECEIPT.json",
+      "bytes": 119091,
+      "sha256": "c4e5f2b500721c7a9d2b2603b4ff67b2799046fbcff48d977fdb6f55c503cb38"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-B-20260929T111250Z/RECEIPT.preliminary.json",
+      "bytes": 117434,
+      "sha256": "43e911cd741d2c3ea4bf405ee5769038f2cfc20dc47809a7c358d241ed17d8f8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-B-20260929T111250Z/authorization.copy.json",
+      "bytes": 1405,
+      "sha256": "ac1e9681ee60d3e6e9be63e5643cfd8071b678a55d05cd9a92dfedb9d5fbc42c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-B-20260929T111250Z/operational-config.json",
+      "bytes": 3284,
+      "sha256": "4256a2259df6f8961cfac7d5ff4404fccfc4d9480def63c33f9ca09c3face03c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/status.json",
+      "bytes": 35224,
+      "sha256": "aaca3c76c92de9489e4ad1926db78e7ac22f11af5bf7949d709034e4b28f88c8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_native_mtp_history_v1.py",
+      "bytes": 10796,
+      "sha256": "d531fea5376ec263217c45636fb1661bfaf000792d9a18db8512c407adfa2d13"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_native_mtp_history_v2.py",
+      "bytes": 11731,
+      "sha256": "83dc891ca4200cbd3dfb77a92269574105dca1ee2569a919c63367f0214b066c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_native_mtp_owner_v2.py",
+      "bytes": 13039,
+      "sha256": "77edbafbd9ff34813d1a866c5ab8c8c7c620da0c3ce1e532d4b41fa1e61cde7e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_native_mtp_program_v2.py",
+      "bytes": 708,
+      "sha256": "d3c60ba6cebb3cdb4fe07e1185cbd6e291e4ca7be5998177624a3a6b50df729c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_native_mtp_raw_audit_v1.py",
+      "bytes": 10648,
+      "sha256": "d7ca5a80415f00c27acdbd4e44b94cbe6f00cac3b231992dfc400691cc87393c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_native_mtp_same_input_v1.py",
+      "bytes": 4347,
+      "sha256": "d3f3d2793c27993cf2380a46ec16aaed2bc7cacbbef9afba172d1aefb59d2560"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_patch_native_mtp_worker_v2.py",
+      "bytes": 5025,
+      "sha256": "cbd48dbf3846821c39a77f258f614109e6ac9c68861d676d3cd42300cb9564b5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_patch_native_mtp_worker_v3.py",
+      "bytes": 5025,
+      "sha256": "fa087168ab302a596f5227010ad3289bc87946c7410cd3e5ca60720f5e70e107"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_reference_driver_v3_mtp.py",
+      "bytes": 10863,
+      "sha256": "c9c1343adc6e162f55fb5bdea402b1ba7035e09538c6f23b6d2c2a69ff2429b9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_reference_hooks_v2_3_mtp.py",
+      "bytes": 5115,
+      "sha256": "94234ad678f995ec68c29299494ba9421e775a367b8281db20440b710ead0f8f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_reference_hooks_v2_4_mtp.py",
+      "bytes": 5115,
+      "sha256": "3184550f37a6aabd6777753f1632e6f192a7fdd87b3d621cc7bf62c22eb8aac6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_native_mtp_history_v1.py",
+      "bytes": 8107,
+      "sha256": "98331e090e429796c46c7182e1c7217c899248a36ddc6cd57c9fed1baee30aed"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_native_mtp_history_v2.py",
+      "bytes": 1701,
+      "sha256": "7a908b2a110049895cb87adf7652458daa69ec33d35492ce66bac7ee031c1c47"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_native_mtp_hooks_v1.py",
+      "bytes": 2343,
+      "sha256": "6a946ae0d424244fc6adb252f5b16a53b35611991cebb8b26f5fc85a5de27bad"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_native_mtp_owner_v2.py",
+      "bytes": 3629,
+      "sha256": "81a34a6bb32f377096082a1402af736a42f60c58be1be7a30d5cc3c7a6b173a7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_native_mtp_same_input_v1.py",
+      "bytes": 2973,
+      "sha256": "42fb6987e435c93759e627e35eabdf28c4d75175e9248962300d9783ac92bbfa"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_reference_driver_v3_mtp.py",
+      "bytes": 3778,
+      "sha256": "dde1e51b76863b74ab79971a9caa7100411024ac24bfbf5f5c728f19a57c2d7f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/inspections/cpu-completion-renderer-20260929T113000Z/MANIFEST.json",
+      "bytes": 359,
+      "sha256": "d272f64eaefe56c88f64357af5e591b9096a421478a05084805860d83136eceb"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/inspections/cpu-completion-renderer-20260929T113000Z/renderers/base.py",
+      "bytes": 35720,
+      "sha256": "862254b0b801b09c30a3073eab9bdd2f097a75b4b894d993cefd34ecb4aba0c5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/inspections/cpu-completion-salt-20260929T112500Z/MANIFEST.json",
+      "bytes": 903,
+      "sha256": "a896d152cb6bd8e7b889a7de1f2cf27190dbaf0724ed464e188431b3855c1054"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/inspections/cpu-completion-salt-20260929T112500Z/entrypoints/openai/completion/protocol.py",
+      "bytes": 19383,
+      "sha256": "d529d72221c54beb3b2ddd54aa431b6bb6f9c7f0553db57768d8a1bf5f8d9b20"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/inspections/cpu-completion-salt-20260929T112500Z/entrypoints/openai/completion/serving.py",
+      "bytes": 26021,
+      "sha256": "ffb08a4e5113ed2bf2f23b5389f4f01f1b3393a7b3a5028e26e4c91ce3831bc5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/inspections/cpu-completion-salt-20260929T112500Z/entrypoints/openai/engine/serving.py",
+      "bytes": 28125,
+      "sha256": "2132293166071cebafa04479532467d07f9c970c2912542fa3fe66d94ed4a3fa"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/inspections/cpu-completion-salt-20260929T112500Z/entrypoints/serve/render/serving.py",
+      "bytes": 23224,
+      "sha256": "c51ac877a01a72f2e5d7362bf88a6fac5130eb4006d6daba44e894fcab1db379"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/main.pdf",
+      "bytes": 307780,
+      "sha256": "921f43acc25fa5dbf8f125904f234fe0a2e80e83359c8d97d4e4896b928be5b0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/main.tex",
+      "bytes": 45801,
+      "sha256": "c305380324fdf5eca32556a839ac04969724a4d3e78a1ffc2bb92cf30b4ad3a2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/native-corpus-aligned-b-and-ab-raw-review-20260929.md",
+      "bytes": 9424,
+      "sha256": "18440b44c368db5a37e97c05f8b31209031f438089352ba440e9b6e00449ad2c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/native-reference-paper-claim-review-20260929.md",
+      "bytes": 2870,
+      "sha256": "ee1aef50c9324af1c01a6332b323081e7372ab5c8fd3e02b04a4633c390c928b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-native-ab-source-diagnosis-20260929.md",
+      "bytes": 14279,
+      "sha256": "4ebdb66cb36479f7b73952131a6073a7a5f4bedde3b65a27a136ffc1e7ea32d3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-native-mtp-driver-v3-connection-review.md",
+      "bytes": 4113,
+      "sha256": "ec8d3be0134fd5e46b3b75d50677442855dd1d9e62c1169c67e54d8125e9a8ac"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-native-mtp-history-design-review.md",
+      "bytes": 8211,
+      "sha256": "8ba73737540faa4a6193f099ae7dbd673ed72646ecc7f37eae3636d898552afd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-native-mtp-history-v1-implementation-review.md",
+      "bytes": 7281,
+      "sha256": "0a0d5ba8d0b1670895b044cfd9b73647e4be9de72dd0b96354d34786febb0bb2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-native-mtp-history-v1-repair-review.md",
+      "bytes": 6625,
+      "sha256": "2e09a463821c5912dabcc9375262eec6dc6f9493a4d4938d50d1cf1549d70899"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-native-mtp-raw-audit-v1-repair-review.md",
+      "bytes": 3345,
+      "sha256": "53fcc1ae14ae9cad1a3df0920eddce1eb51655ba1a0d8a20dd7ea1b3afd6d690"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-native-mtp-raw-audit-v1-review.md",
+      "bytes": 7275,
+      "sha256": "0c4eb3ebd44347e69989bb607ed474cf87d9cc01d7e6c21114c464197f2a21c4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-native-mtp-same-input-v1-review.md",
+      "bytes": 6652,
+      "sha256": "8962bee274c3e2c64cf182630c1649b5e9295a1d23e294088a8dd3b6d1b978db"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-native-mtp-worker-connection-review.md",
+      "bytes": 7309,
+      "sha256": "09d13734f16c9fc5da22cf4a858db2a2d88d9fbcf66c8336aba44801e2e4712e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/ACTIVE.before-native-AB-result-20260929T1154Z.json",
+      "bytes": 47911,
+      "sha256": "cc82790293d2b2e59f7a1dce7acb603869b8621e17241b09e843765fc2330cd4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/ACTIVE.before-native-B-20260929T1113Z.json",
+      "bytes": 47871,
+      "sha256": "606685498f7551d7b410ea922e244d6639b823e18d5ea77b0f766fc2101de525"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/ACTIVE.json",
+      "bytes": 48687,
+      "sha256": "89dfd4c4367cd9fd693f9800d5cf702e4afa1fb515e75ea218d2126e286bfadd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/AUTH-NATIVE-20260929T111228Z.json",
+      "bytes": 1405,
+      "sha256": "ac1e9681ee60d3e6e9be63e5643cfd8071b678a55d05cd9a92dfedb9d5fbc42c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/CONFIG-NATIVE-20260929T111228Z.json",
+      "bytes": 3824,
+      "sha256": "d1d165370f58c7929dc43f964883c55e78966f323c12da1f394eaac238b8cf3a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GATE-NATIVE-20260929T111228Z.json",
+      "bytes": 7267,
+      "sha256": "436c6cb3ead7607d101557b3b272d09ad162d725e8a4edd1864cea743cc01959"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GIT-BACKUP-VERIFIED-20260929-update9.json",
+      "bytes": 53399,
+      "sha256": "d0502304112fddb154e3e30ac04dc427101487874c209e770700289014c50cc9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LAUNCH-NATIVE-20260929T111228Z.json",
+      "bytes": 2273,
+      "sha256": "186b52dc8839b39a704e724a98d41fe2564cd929bfac86cbe772be1e833e4093"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/NATIVE-ALIGNED-B-LFS-UPLOAD.attempt1-20260929T114428Z.json",
+      "bytes": 662,
+      "sha256": "2a8f8e1f44231332f9b7408583aba8b3579c2f21152f4fbdc0cd98953200310b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/NATIVE-ALIGNED-B-LFS-UPLOAD.attempt1-owned-stop.json",
+      "bytes": 471,
+      "sha256": "c4843bd28d1cc01e71692b08c4fe2eeb22bf49c07ff41851ac0518040d04f9fe"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/NATIVE-ALIGNED-B-LFS-UPLOAD.attempt2-20260929T115455Z.json",
+      "bytes": 839,
+      "sha256": "6252464131a0cb0233438332cc927b86ddecf0d91c804c3650aa9fd9077b02dc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/NATIVE-EXECUTION-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-B.log",
+      "bytes": 2369,
+      "sha256": "9ebc9cd90682832168b586dfdb7da55d503acf1a873b3cefb5b4448e119725cb"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/RECOVERY-NATIVE-B-20260929T111228Z.log",
+      "bytes": 614,
+      "sha256": "7139e6d6724a97ec4a4e39371f25ecc8e57b39c81c994f7930b774816ba20a7d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/before-native-ab-paper-20260929T115200Z/main.tex",
+      "bytes": 45743,
+      "sha256": "a99e869d8af56353ec4b74d9f8feacb20053affb5ac3da7104abe5c8a459af82"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/execute-native-aligned-B-20260929T111228Z.py",
+      "bytes": 745,
+      "sha256": "9ef211b8d88978ab560bebe043faa415dc2b9801d47f711dc3fc564f1ad70c65"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-ab-first-layer-metadata-20260929.json",
+      "bytes": 160914,
+      "sha256": "351e9b0f432fce6ac355b29c7f78b081d760074eada93302bc3e73599b99dee9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-ab-prefill-trace-comparison-20260929.json",
+      "bytes": 25954,
+      "sha256": "3121ec89ba15ce0ef7aed530c54a101051007fa55d63b44707651902207f5536"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-ab-source-diagnosis-20260929.json",
+      "bytes": 323603,
+      "sha256": "ae972eb1a316b1aa806da525a83ce327b039edd5ed8c5ac70fe0075ece658b3d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-ab-source-inspection-20260929/MANIFEST.json",
+      "bytes": 4631,
+      "sha256": "f13ff1bc3749efbb404ef297fc3624d9dcc3bb2ad850422705fcfb206baaa174"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-ab-source-inspection-20260929/flashinfer/_build_meta.py",
+      "bytes": 134,
+      "sha256": "83d7e0e4c3cc4cc778e652d2d1aa0e84ad5ad66dcfad077e1439565dda5e86b0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-ab-source-inspection-20260929/flashinfer/autotuner.py",
+      "bytes": 58240,
+      "sha256": "68e4860cd09c7d73ceecf2da7d9e5d3166702826282115b624c54d68fda9921b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-ab-source-inspection-20260929/flashinfer/gemm/gemm_base.py",
+      "bytes": 249980,
+      "sha256": "99fc985248ab1467d857d42f5c27b1f4c1a985933e43a41d86ccc69c7b3845fe"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-ab-source-inspection-20260929/flashinfer/jit/gemm/__init__.py",
+      "bytes": 1788,
+      "sha256": "35dc47f950065c8f2213592e8d32ce4400e0310f33c02c6554df4dd41767f25c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-ab-source-inspection-20260929/flashinfer/version.py",
+      "bytes": 850,
+      "sha256": "16a9c0838806f01a878c745819ea7e9fa340372e7b229fac0d0521a900dd5242"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-ab-source-inspection-20260929/vllm/model_executor/kernels/linear/nvfp4/flashinfer.py",
+      "bytes": 6787,
+      "sha256": "cb3280b0620f246b8be5763424c5c205ab38556c93e14e9e8f51c7222c01f117"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-ab-source-inspection-20260929/vllm/model_executor/kernels/linear/scaled_mm/flashinfer.py",
+      "bytes": 10938,
+      "sha256": "910a4cdd7efd7443d49e82558aacdbf9c99fabb7b355b0e62a3546089ba555f8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-ab-source-inspection-20260929/vllm/model_executor/model_loader/default_loader.py",
+      "bytes": 15325,
+      "sha256": "0557f6a5d37bd5f3bd109380853f8247f1d6828b9e3a28f9b70316fc69776793"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-ab-source-inspection-20260929/vllm/model_executor/warmup/kernel_warmup.py",
+      "bytes": 4036,
+      "sha256": "5522f410819c639f4d42381e7d8338bb951b82a4b7c739abd65675498c28d9fa"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-ab-source-inspection-20260929/vllm/utils/flashinfer.py",
+      "bytes": 25784,
+      "sha256": "681711ac5d1580dfe48a62db4f99e1e378b127a14344e1636a55632d6e3f81e6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-ab-source-inspection-20260929/vllm/v1/worker/gpu_worker.py",
+      "bytes": 44870,
+      "sha256": "3b2fc4e3a2610c67e7c7d2017d04b4f50a8560aec8b85a486a5451f9db97744a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-ab-source-inspection-20260929/vllm/v1/worker/worker_base.py",
+      "bytes": 12606,
+      "sha256": "e6017acf80e442405f09f99413c0227515ae097d3e1dc79005b0b5c266932f12"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/IDENTIFIER-ONLY.diff",
+      "bytes": 8812,
+      "sha256": "2231587bebf12f3617130229e76bb08bff8b567c4eb225b70dccb08cc1f000be"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/PREPARATION-MANIFEST.json",
+      "bytes": 1079,
+      "sha256": "e3486bacef2e2ebb48c670b17fcad251619e9e827adcdb4afa02f81d070ca049"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/PREPARATION.json",
+      "bytes": 2449,
+      "sha256": "d8f86622a1d6d3b69095d150fb06d7294b64e62c871c24566e9a95f4cfa5fa21"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/READY.md",
+      "bytes": 2440,
+      "sha256": "c1d426df65a16393783ccb448337051a977ff183e3809de0c7a8b5ccaa6b19de"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/REVIEW-MANIFEST.json",
+      "bytes": 5012,
+      "sha256": "8931aa6df651c2168040a2fed6c3b409eafc4fb99b19dc52c6ea2785c638019d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/audit-after-terminal/ALIGNED-AB-COMPARISON.json",
+      "bytes": 268512,
+      "sha256": "01b9fe92697ed4d5d38b0b957d06f31a745ff4d2169fe14eabdb04d4d9908ac5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/audit-after-terminal/ALIGNED-AB-DIAGNOSTICS.json",
+      "bytes": 48043,
+      "sha256": "17bcc10f63570b17a720b70ce7701f64e3a408ba7b3bf2ade5dc31d06f3cb162"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/audit-after-terminal/AST-SCOPE.json",
+      "bytes": 2896,
+      "sha256": "0134fe0dd0c254d0d3f64f4d8929cff3c4207f74d6e792fc7fc5bd253c9400c0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/audit-after-terminal/DECISION-DIFFERENCES-WITH-LOGIT-ERRORS.csv",
+      "bytes": 3295,
+      "sha256": "d2776110664144865fc034f2ec73c66ddc11a4397599df263e744c56d1daf2e9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/audit-after-terminal/DECISION-DIFFERENCES.csv",
+      "bytes": 937,
+      "sha256": "f2f44241f582956b6b4bb18d0f20243a9263083b03d5a01738ce099337a1e67a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/audit-after-terminal/MANIFEST.json",
+      "bytes": 2146,
+      "sha256": "cb7f477dcf84add6077690c930d11471cc7155ce3951907cf9c733b099487e10"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/audit-after-terminal/RESULT.json",
+      "bytes": 39759,
+      "sha256": "d6f93b7a58825972b8c5aa82ad74362455f9f740d47bd45cea1847f9c1185900"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/audit-after-terminal/RETAINED-METADATA.json",
+      "bytes": 6552,
+      "sha256": "45ec16910c31b2d64771c8adbc365c830e70ab59659b1ff89995375c41586af7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/audit-after-terminal/ROWS.json",
+      "bytes": 112081,
+      "sha256": "a3f3a38c8f20a6810209bcf3b5483246f1ce970af8aa10947c484bb2935ecd86"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/audit_one_run.py",
+      "bytes": 8095,
+      "sha256": "9649ebae89df7c02846a0b4b7cd4f526eb614d04379b4c0c8a164ea64f304998"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/compare_aligned_ab.py",
+      "bytes": 4797,
+      "sha256": "20abc8f72194320832097c493b8a177b4b373ee0e538441e180c6613e832aaf4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/decision-table.md",
+      "bytes": 1449,
+      "sha256": "c58fcc4cbac02c71cb073786dd9ffe63bb0a96f14f9d452c33b30dd968fb60f1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/diagnose_aligned_ab.py",
+      "bytes": 7028,
+      "sha256": "eebcb164a99bb434e164d1f8cee34a436c847a777359d6a5c0b170c829ce55ff"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/q1_native_corpus_v1.frozen.py",
+      "bytes": 28196,
+      "sha256": "d4502b7f47ab1ac6ed8cd295aa5565726fad486c4a1ff1bda6a13fe24e4ea770"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/retained_metadata.py",
+      "bytes": 3434,
+      "sha256": "b611d357946aa1e46fdfe720b80b4b97ae08ae3b089dce125b8fb67aaa19ea8d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-driver-v3-review/INDEPENDENT-CONTROLS.json",
+      "bytes": 2542,
+      "sha256": "cf9deddbced8d78b46e594b577efe7339a9fd1193d640a16e0f68f8ed8da88b9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-driver-v3-review/REVIEW-SEAL.json",
+      "bytes": 3386,
+      "sha256": "03e0c334dbe9d60e58e70dc77321e4f31f35137951cce865595ba665b09ded77"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-driver-v3-review/SOURCE-SNAPSHOT.json",
+      "bytes": 1205,
+      "sha256": "012959e25837ac9430640570f14d355ddb845c67f67e158a9d89ac1d2fd66989"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-driver-v3-review/SUPPLEMENT.json",
+      "bytes": 926,
+      "sha256": "cce8fe24896eb1be4dbfd38295859505451e9531af274f861e8569bf6073cf89"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-driver-v3-review/independent_controls.py",
+      "bytes": 4849,
+      "sha256": "26e526d7b0959820f4e07e8c38f205a39ce3da9e56e98c170b315aed88ebbd35"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-driver-v3-review/q1_native_mtp_raw_audit_v1.py",
+      "bytes": 10648,
+      "sha256": "d7ca5a80415f00c27acdbd4e44b94cbe6f00cac3b231992dfc400691cc87393c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-driver-v3-review/q1_reference_driver_v2.py",
+      "bytes": 9817,
+      "sha256": "47314063eaa46b59eaa4fa60978353caef570bd8b39ebe5f127c56ff94702159"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-driver-v3-review/q1_reference_driver_v3_mtp.py",
+      "bytes": 10863,
+      "sha256": "c9c1343adc6e162f55fb5bdea402b1ba7035e09538c6f23b6d2c2a69ff2429b9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-driver-v3-review/supplement/experiments/review-response-20260927/tools/tests/test_q1_reference_driver_v3_mtp.py",
+      "bytes": 3778,
+      "sha256": "dde1e51b76863b74ab79971a9caa7100411024ac24bfbf5f5c728f19a57c2d7f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-driver-v3-review/supplement/p0/monitor/review-response-20260927/test_log.native_mtp_driver_v3.attempt1.txt",
+      "bytes": 7997,
+      "sha256": "32dd6a5325a54d50455ab98778e264fef28468c733f0406e74b21448d40074d0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-design-review/REFERENCES.json",
+      "bytes": 1683,
+      "sha256": "8c0a386d55a08110ad99eecaf56009044c2f6c975a0dd9b3c48dced08f79707c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-design-review/REVIEW-SEAL.json",
+      "bytes": 2113,
+      "sha256": "002b57cb1e4ab57355b8dc4b3724626f937b85464718b5b0e7275d1d4f3f8c51"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-design-review/SOURCE-SNAPSHOT.json",
+      "bytes": 799,
+      "sha256": "fdb2060606da6004e385f0f8e55a3450672af3d3a05d46ca403fae3f4e8f0070"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-design-review/q1_native_mtp_owner_v1.py",
+      "bytes": 11428,
+      "sha256": "edf4f60b769f9a92ac138633e620ec554995451414be7cc5192a1ce8ef602690"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-design-review/q1_native_mtp_program_v1.py",
+      "bytes": 6138,
+      "sha256": "f325ec24e6d212b70cdabbbe81f4ef4d58565ccb8e7f736f747f016cb0c90cef"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-design-review/q1_patch_native_mtp_worker_v1.py",
+      "bytes": 3577,
+      "sha256": "54e92de927008f6bfa559428974c243e2d158a746fe788b88277d6589ca8fd0a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-design-review/q1_reference_driver_v2.py",
+      "bytes": 9817,
+      "sha256": "47314063eaa46b59eaa4fa60978353caef570bd8b39ebe5f127c56ff94702159"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-design-review/q1_reference_hooks_v2_2_mtp.py",
+      "bytes": 44946,
+      "sha256": "7347dae3add8653b4f1beaf90255a605560876ee5108579de89893e8e37fbea1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-implementation-review/COMPLETION-SALT-SOURCES.json",
+      "bytes": 1179,
+      "sha256": "edf81f331fed0c719cb4564c8fe8692c0ab4a038897c929e9089a652cd17fa66"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-implementation-review/INDEPENDENT-CONTROLS.json",
+      "bytes": 988,
+      "sha256": "50fc97eabcbd0e325cf53bd4e8582396ce4d2bc5afa90ed7a13ebe2a936d9a5e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-implementation-review/REVIEW-SEAL.json",
+      "bytes": 3574,
+      "sha256": "a832168fc9cc809d9df5277c2b534f377fd4e7fff490b6af98f237d5a74ba33d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-implementation-review/SOURCE-SNAPSHOT.json",
+      "bytes": 1236,
+      "sha256": "7d4cbd7a68a4a6ad3427e97723273a4aa5725eee820a461c0c5941540f52893c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-implementation-review/independent_controls.py",
+      "bytes": 4203,
+      "sha256": "37d7028b80eec99524074c2b4c44f899371533f60275e34db0abef9f0545cd74"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-implementation-review/q1_native_mtp_history_v1.py",
+      "bytes": 10140,
+      "sha256": "95856dc824cdd7207d85d8cc64c3694388a65caa5c3fd5c61298cfb72b1cba7d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-implementation-review/q1_native_mtp_owner_v2.py",
+      "bytes": 12753,
+      "sha256": "cde48a325666a6abfa77a45ac614d793e6080d8f3a5b23cbcd1bb559f0912ec9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-implementation-review/q1_native_mtp_program_v1.py",
+      "bytes": 6138,
+      "sha256": "f325ec24e6d212b70cdabbbe81f4ef4d58565ccb8e7f736f747f016cb0c90cef"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-implementation-review/q1_native_mtp_program_v2.py",
+      "bytes": 708,
+      "sha256": "d3c60ba6cebb3cdb4fe07e1185cbd6e291e4ca7be5998177624a3a6b50df729c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-implementation-review/q1_patch_native_mtp_worker_v2.py",
+      "bytes": 4804,
+      "sha256": "cdcdf33835f0ba3ed181ceade051ed471509484aaa3208bcb7375598a96837d8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-implementation-review/q1_patch_reference_runner_v2_1.py",
+      "bytes": 6010,
+      "sha256": "ee61c5d779cc39dce9757bae944f51d991bf2b15ef89b04bf69e9a58c91b315a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-implementation-review/q1_reference_hooks_v2_2_mtp.py",
+      "bytes": 44946,
+      "sha256": "7347dae3add8653b4f1beaf90255a605560876ee5108579de89893e8e37fbea1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-implementation-review/q1_reference_hooks_v2_3_mtp.py",
+      "bytes": 4774,
+      "sha256": "061e5204b0cf8d0306c54041de20ddf6960fe2590a4f91e4ffe3954aba1b0bb9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/INDEPENDENT-CONTROLS.json",
+      "bytes": 2131,
+      "sha256": "3281495e66d0be16cacc542baeb530e0981ded18cf9ce5add85ae102f47b7529"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/PATCH-CONTROL.json",
+      "bytes": 499,
+      "sha256": "c9cc6a464b42e21c968ff1bc5bfb586af6ad993f265b62159d9e435126255e54"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/REVIEW-SEAL.json",
+      "bytes": 7855,
+      "sha256": "4d2fe6125996dfadb7cafa170aa389af6773167d4670540dac29a17a7d392a17"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/SOURCE-SNAPSHOT.json",
+      "bytes": 2820,
+      "sha256": "8a594b8efa8738878df76e2dadb0c461d4590f2e11a3da6751d6cd78c33db2e0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/SUPPLEMENT.json",
+      "bytes": 5686,
+      "sha256": "483b5255825b902649ea8cd333cc5e38e7c5930200260b619c7bfa366e76ae90"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/independent_controls.py",
+      "bytes": 8072,
+      "sha256": "9f89049a8d6cedbd19a75147305d614e9132fe8103f98eef46fa255dc07ab411"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/q1_native_mtp_history_v1.py",
+      "bytes": 10796,
+      "sha256": "d531fea5376ec263217c45636fb1661bfaf000792d9a18db8512c407adfa2d13"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/q1_native_mtp_owner_v2.py",
+      "bytes": 13039,
+      "sha256": "77edbafbd9ff34813d1a866c5ab8c8c7c620da0c3ce1e532d4b41fa1e61cde7e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/q1_native_mtp_program_v2.py",
+      "bytes": 708,
+      "sha256": "d3c60ba6cebb3cdb4fe07e1185cbd6e291e4ca7be5998177624a3a6b50df729c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/q1_patch_native_mtp_worker_v2.py",
+      "bytes": 5025,
+      "sha256": "cbd48dbf3846821c39a77f258f614109e6ac9c68861d676d3cd42300cb9564b5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/q1_reference_hooks_v2_3_mtp.py",
+      "bytes": 5115,
+      "sha256": "94234ad678f995ec68c29299494ba9421e775a367b8281db20440b710ead0f8f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/supplement/experiments/review-response-20260927/tools/q1_native_mtp_program_v1.py",
+      "bytes": 6138,
+      "sha256": "f325ec24e6d212b70cdabbbe81f4ef4d58565ccb8e7f736f747f016cb0c90cef"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/supplement/experiments/review-response-20260927/tools/q1_patch_reference_runner_v2_1.py",
+      "bytes": 6010,
+      "sha256": "ee61c5d779cc39dce9757bae944f51d991bf2b15ef89b04bf69e9a58c91b315a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/supplement/experiments/review-response-20260927/tools/q1_reference_hooks_v2_2_mtp.py",
+      "bytes": 44946,
+      "sha256": "7347dae3add8653b4f1beaf90255a605560876ee5108579de89893e8e37fbea1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/supplement/experiments/review-response-20260927/tools/tests/test_q1_native_mtp_history_v1.py",
+      "bytes": 8107,
+      "sha256": "98331e090e429796c46c7182e1c7217c899248a36ddc6cd57c9fed1baee30aed"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/supplement/experiments/review-response-20260927/tools/tests/test_q1_native_mtp_hooks_v1.py",
+      "bytes": 2343,
+      "sha256": "6a946ae0d424244fc6adb252f5b16a53b35611991cebb8b26f5fc85a5de27bad"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/supplement/experiments/review-response-20260927/workload-plan/inspections/cpu-completion-renderer-20260929T113000Z/MANIFEST.json",
+      "bytes": 359,
+      "sha256": "d272f64eaefe56c88f64357af5e591b9096a421478a05084805860d83136eceb"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/supplement/experiments/review-response-20260927/workload-plan/inspections/cpu-completion-renderer-20260929T113000Z/renderers/base.py",
+      "bytes": 35720,
+      "sha256": "862254b0b801b09c30a3073eab9bdd2f097a75b4b894d993cefd34ecb4aba0c5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/supplement/p0/monitor/review-response-20260927/test_log.native_mtp_history_v1.attempt3.txt",
+      "bytes": 884,
+      "sha256": "fe6ce7abdb009100187f7cecefa52a0ad80bd85e0597595ed514509ce995fffc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/supplement/p0/monitor/review-response-20260927/test_log.native_mtp_hooks_v1.attempt2.txt",
+      "bytes": 1343,
+      "sha256": "bd13956e1a427e462627b188784f360cc04a0a1aa550749667d9bbcb655c8ad9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/supplement/p0/monitor/review-response-20260927/test_log.native_mtp_hooks_v1.attempt3.txt",
+      "bytes": 248,
+      "sha256": "e4e1ab97538bf0484e33160528c0b8d7a6d70a0f242a91753635d5c61fb0787f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/supplement/p0/monitor/review-response-20260927/test_log.native_mtp_owner_v2.attempt2.txt",
+      "bytes": 648,
+      "sha256": "444b6a64af2b57c845f125fdc498382af6b2c0b052a880a871a33175f25365cf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/supplement/p0/monitor/review-response-20260927/test_log.native_mtp_worker_patch_v2.attempt2.json",
+      "bytes": 499,
+      "sha256": "c9cc6a464b42e21c968ff1bc5bfb586af6ad993f265b62159d9e435126255e54"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/tests/test_q1_native_mtp_history_v1.py",
+      "bytes": 8045,
+      "sha256": "b2349ac3c4037f0ee7828fb2317e099be31bf2c3264a5b1ea3756e3f58bb1a01"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-history-v1-repair-review/tests/test_q1_native_mtp_owner_v2.py",
+      "bytes": 3629,
+      "sha256": "81a34a6bb32f377096082a1402af736a42f60c58be1be7a30d5cc3c7a6b173a7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/BOUNDARY-RESULTS.json",
+      "bytes": 1440,
+      "sha256": "0ea3a8d825b24c802e707e63b7f4636f37e7510984a9472f6a2277abb7491c26"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/MANIFEST.json",
+      "bytes": 9455,
+      "sha256": "3bf328d20e984b145038409893891256c1471d9a81b2a497e46d398efd68e05a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/RESULTS.json",
+      "bytes": 6692,
+      "sha256": "f8d92398a615382e4f1c54a920b758b7a6b7bc383c1f1c067b1417f118117981"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/REVIEW.md",
+      "bytes": 3345,
+      "sha256": "53fcc1ae14ae9cad1a3df0920eddce1eb51655ba1a0d8a20dd7ea1b3afd6d690"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/SOURCE.json",
+      "bytes": 284,
+      "sha256": "323fb010f2f7caa99670c4d64d77f0a04141da1b0db5abb2d11ccf3bf3652ed0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/allocation_count_columns_mismatch.json",
+      "bytes": 26644,
+      "sha256": "40ab3d508e2c4b5c3d4c5817d54e612900ac7d2741ffeb14de163cb07dae0867"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/allocation_generation_mismatch.json",
+      "bytes": 26644,
+      "sha256": "ae4d2d999a0e958f5895e26011811cef311ce3c0f1294f1c44672a470157ef6f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/allocation_slot_wrong.json",
+      "bytes": 26644,
+      "sha256": "bd39f7af2e9ffbffc59dd513dfa82cb6976ba3fc2aec79d237e82237e9f6f85e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/boundary_controls.py",
+      "bytes": 2396,
+      "sha256": "f11ca903c4a3fa08a3ac881d5deb03b94410d19511ed0466866c5d0037874c68"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/controls.py",
+      "bytes": 10784,
+      "sha256": "847bd6f78865f877696a5ed53314cdfcc222f74d3041b17f0059d377304060e7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/follow_allocation_absent.json",
+      "bytes": 26366,
+      "sha256": "e7c67a86a80176a3211d77ae2c1228a7d44029fe9c71991d9f91a2602c857cc7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/kv_nonfinite_rehashed.json",
+      "bytes": 26644,
+      "sha256": "826ae3ee7a4f233c9be3df20475efaeed34672598dc68879da36835bf2a2adc9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/logical_index_wrong.json",
+      "bytes": 26645,
+      "sha256": "1365132386bdbee89022f011ed0e5ffcef773b0965c852c954b57c1a2e5a51d9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/materialized_prefix_changed_rehashed.json",
+      "bytes": 26644,
+      "sha256": "53e4a99783c0708f1fb7ebac495715405147355bca20f17b608da72b41790eac"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/missing_all_kv_payloads.json",
+      "bytes": 25106,
+      "sha256": "38cdb19de4afa0dfdd22b561aa107b64c3d132b23556986305f62a120194aa42"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/new_allocation_column_may_append.json",
+      "bytes": 26674,
+      "sha256": "5da98f81af5e0e93575fda174211f13c3a855bc0bea0c5f32f17c1fb9afa1b7b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/new_full_block_must_preserve_prior_tail.json",
+      "bytes": 26291,
+      "sha256": "bb660b5d7a9c0d8ab4beba937416fc17e62b6c1c59070792ff0167959a224024"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/new_suffix_may_change.json",
+      "bytes": 26291,
+      "sha256": "be989907d8e75c51073b5e85a6a9821e985e48fa53d6cb1e59c9080e9b2a289d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/045ad01d502fc9de7069fd37169060ce79a14a289444ffcd9881ec367a554644.bin",
+      "bytes": 4096,
+      "sha256": "045ad01d502fc9de7069fd37169060ce79a14a289444ffcd9881ec367a554644"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/05921287ac8087b87a95fe8879ec1fb12adf023de7278d9c7ce16d9d28cd64c5.bin",
+      "bytes": 129024,
+      "sha256": "05921287ac8087b87a95fe8879ec1fb12adf023de7278d9c7ce16d9d28cd64c5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/10e645893dfecebc27309fb8f143a952e3e64654bec969a7bbb4c19713ca48e3.bin",
+      "bytes": 2048,
+      "sha256": "10e645893dfecebc27309fb8f143a952e3e64654bec969a7bbb4c19713ca48e3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/3e077a35d3504461650e590a11902e5dff7c04b1d8829438ce4d985e3cb301b5.bin",
+      "bytes": 993280,
+      "sha256": "3e077a35d3504461650e590a11902e5dff7c04b1d8829438ce4d985e3cb301b5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/57419092d74f268ded4e01b4acf1e81154a07c6508fbc5d33b75ad65a895b30a.bin",
+      "bytes": 655360,
+      "sha256": "57419092d74f268ded4e01b4acf1e81154a07c6508fbc5d33b75ad65a895b30a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/58244dcacbb6c50dafd5f3bec9acfb6acffb5b27cec19dd9caa17b6cc0f20788.bin",
+      "bytes": 131072,
+      "sha256": "58244dcacbb6c50dafd5f3bec9acfb6acffb5b27cec19dd9caa17b6cc0f20788"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/5caaef3f5a62c5c335985da5a23f489326465e2335f01f05584be1092cfa9bf3.bin",
+      "bytes": 10240,
+      "sha256": "5caaef3f5a62c5c335985da5a23f489326465e2335f01f05584be1092cfa9bf3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/670bc27e4643f42704aa818e0fa509b6151cff9447a3fd69d6087c1a6890d2aa.bin",
+      "bytes": 131072,
+      "sha256": "670bc27e4643f42704aa818e0fa509b6151cff9447a3fd69d6087c1a6890d2aa"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/676cc2774d549f90364a7b63083b1f9bc4a17c200d6c7e8eb931434e6565e9a0.bin",
+      "bytes": 645120,
+      "sha256": "676cc2774d549f90364a7b63083b1f9bc4a17c200d6c7e8eb931434e6565e9a0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/6af48e011a47482a5179c901b07f37d45185dacbc3456dcb5eddbf8df2ba7dbc.bin",
+      "bytes": 10240,
+      "sha256": "6af48e011a47482a5179c901b07f37d45185dacbc3456dcb5eddbf8df2ba7dbc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/6d199634f552e521e855609e6b9b95b9b3cf0e1dc4a8c229d2ccc4f0eb041822.bin",
+      "bytes": 131072,
+      "sha256": "6d199634f552e521e855609e6b9b95b9b3cf0e1dc4a8c229d2ccc4f0eb041822"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/888e390c528a84a92e19aa17d9361e2b42d80cfb5f5dd3aa8c3276e6b6369926.bin",
+      "bytes": 4096,
+      "sha256": "888e390c528a84a92e19aa17d9361e2b42d80cfb5f5dd3aa8c3276e6b6369926"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/8df2b5f8c010e9eb846f083437b0ecc933e3ec20abc070623645eb416a9bf023.bin",
+      "bytes": 131072,
+      "sha256": "8df2b5f8c010e9eb846f083437b0ecc933e3ec20abc070623645eb416a9bf023"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/95fbbe9f3324b7d9f3a3550109772b0060170636c8aabc21e00aebae78594b7e.bin",
+      "bytes": 2048,
+      "sha256": "95fbbe9f3324b7d9f3a3550109772b0060170636c8aabc21e00aebae78594b7e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/9ec072b5b15c7d14ae448958312aa7d68c703b20fa91141c1aa77fdf67e041e6.bin",
+      "bytes": 129024,
+      "sha256": "9ec072b5b15c7d14ae448958312aa7d68c703b20fa91141c1aa77fdf67e041e6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/b8e3ae949570669199c923810a2d99af134c9ea14a8496caf36ab7b2c1b249d2.bin",
+      "bytes": 993280,
+      "sha256": "b8e3ae949570669199c923810a2d99af134c9ea14a8496caf36ab7b2c1b249d2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/ccc9922ed938ecf8ebb076d0c52131b05bd86d96dcfe228d894d1b9d0cf3deba.bin",
+      "bytes": 2048,
+      "sha256": "ccc9922ed938ecf8ebb076d0c52131b05bd86d96dcfe228d894d1b9d0cf3deba"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/objects/d2e3f3709d10c5371cb39ddce17284b91d531b6d53a7e7d007f42ecf93d141e1.bin",
+      "bytes": 131072,
+      "sha256": "d2e3f3709d10c5371cb39ddce17284b91d531b6d53a7e7d007f42ecf93d141e1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/physical_block_alias.json",
+      "bytes": 26644,
+      "sha256": "3dcfaef93ae0a097906309548608350a5abbb20cb36ce6258dcb1dba24d5a614"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/physical_block_not_allocation.json",
+      "bytes": 26644,
+      "sha256": "5caf57799b0ca5b2c8d8acf77e61a0d59bdcf9568868fbf7050c04168827f453"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/physical_block_out_of_range.json",
+      "bytes": 26645,
+      "sha256": "338414fbb9538a76e1f58612be71bb4fb3170f9413ea5ede2d2a7524808a08c3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/positive-fixture.json",
+      "bytes": 26644,
+      "sha256": "14363d99afe6a7a6bae011a289d6e9d77ef182f3b20a260320da52dfb12ec3b4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/q1_native_mtp_raw_audit_v1.py",
+      "bytes": 10648,
+      "sha256": "d7ca5a80415f00c27acdbd4e44b94cbe6f00cac3b231992dfc400691cc87393c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/q1_reference_hooks_v2.py",
+      "bytes": 42736,
+      "sha256": "78ebde8de667f53e012db41597f6e4ab5970fd8b7c126a0c88f55ac62e6187dd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/same_input_dtype_wrong.json",
+      "bytes": 26642,
+      "sha256": "8ca796a46517adf8d0ab1a3a4c6d58a6c768d8b6cf4618c4a33b1840731a1a06"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/same_input_greedy_wrong.json",
+      "bytes": 26639,
+      "sha256": "613d25f93406bfb7610078f2f52ff265061ca39bc44eb6695a176d655d1f61e5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/same_input_rows_alias.json",
+      "bytes": 26644,
+      "sha256": "0a7156f1b4ca9f92e45c4762fbfdd5250443ebb6d78737e1f1e25b9449715c3a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/same_input_schema_and_api_wrong.json",
+      "bytes": 26608,
+      "sha256": "f60e6fa60f1526c7d7c47e4804cbd6dac156474b754ba6a5b9d7119a4f3f0d98"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/scratch_slot_wrong.json",
+      "bytes": 26646,
+      "sha256": "14033c9a59302b5b3e01d2179fd414c8097a21c196d04f0ccb4aeba49fdc0df8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/snapshot_pointer_changed.json",
+      "bytes": 26640,
+      "sha256": "5d970a1333ade2c6ef9e3800acb4d98a7efd1c659f0519bfb2ed7bb315b3cc68"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/unused_old_allocation_column_may_not_change.json",
+      "bytes": 26704,
+      "sha256": "6ef3fd28c9f466d7dc42fbcc6283f2a24558471be63f74b9c01c475278f75ad0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/wrong_kv_dtype.json",
+      "bytes": 26643,
+      "sha256": "dc5542af384204dd0ed161e5ad86b46bf3b0d88d7d9a8cbdbc555debdf4f549e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/wrong_kv_head_geometry_same_product.json",
+      "bytes": 26644,
+      "sha256": "ddef8cac1ea21f21f504aff3ee27e3ce6364a264bc7d55a825a4f4d0fd76ad73"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/wrong_kv_physical_block_dimension.json",
+      "bytes": 26646,
+      "sha256": "8941c0ea1c81c880b126b6288c4bbaff23b286dd38636b250cd714a3d9734029"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-final-review-20260929/wrong_logical_digest.json",
+      "bytes": 26644,
+      "sha256": "ba66655cb5da05c5a4b8d9fdc9ad47bfc3f452e34ffb5ab37e2ba0d5b90ab6f2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/FOLLOW-ALLOCATION-RESULT.json",
+      "bytes": 398,
+      "sha256": "221496eaa5a602f4739471db610c591f6683f3b9ef10affd7d73540f1e1f69fc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/MANIFEST.json",
+      "bytes": 8218,
+      "sha256": "fced06ccb183373d53df823f34cde7d035647c1de848faced4bb0fa2b327c1fd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/RESULTS.json",
+      "bytes": 6880,
+      "sha256": "41d5258189e7449be84fbba4a89d1c798ab16a7a69886a021e870bdd1df2812a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/SOURCE.json",
+      "bytes": 331,
+      "sha256": "934f221c4fd64d033b29d8ef6fdf5062d5aad1e969ce2256c39d36665129c234"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/allocation_count_columns_mismatch.json",
+      "bytes": 26644,
+      "sha256": "40ab3d508e2c4b5c3d4c5817d54e612900ac7d2741ffeb14de163cb07dae0867"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/allocation_generation_mismatch.json",
+      "bytes": 26644,
+      "sha256": "ae4d2d999a0e958f5895e26011811cef311ce3c0f1294f1c44672a470157ef6f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/allocation_slot_wrong.json",
+      "bytes": 26644,
+      "sha256": "bd39f7af2e9ffbffc59dd513dfa82cb6976ba3fc2aec79d237e82237e9f6f85e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/controls.py",
+      "bytes": 10823,
+      "sha256": "bf60545cd6474b1c0f6b828775d2ee791495d267142f5d1c5179914c79945b44"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/follow_allocation_absent.json",
+      "bytes": 26366,
+      "sha256": "e7c67a86a80176a3211d77ae2c1228a7d44029fe9c71991d9f91a2602c857cc7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/follow_unused_allocated_column_remapped.json",
+      "bytes": 26704,
+      "sha256": "6ef3fd28c9f466d7dc42fbcc6283f2a24558471be63f74b9c01c475278f75ad0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/kv_nonfinite_rehashed.json",
+      "bytes": 26644,
+      "sha256": "826ae3ee7a4f233c9be3df20475efaeed34672598dc68879da36835bf2a2adc9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/logical_index_wrong.json",
+      "bytes": 26645,
+      "sha256": "1365132386bdbee89022f011ed0e5ffcef773b0965c852c954b57c1a2e5a51d9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/materialized_prefix_changed_rehashed.json",
+      "bytes": 26644,
+      "sha256": "53e4a99783c0708f1fb7ebac495715405147355bca20f17b608da72b41790eac"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/missing_all_kv_payloads.json",
+      "bytes": 25106,
+      "sha256": "38cdb19de4afa0dfdd22b561aa107b64c3d132b23556986305f62a120194aa42"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/objects/045ad01d502fc9de7069fd37169060ce79a14a289444ffcd9881ec367a554644.bin",
+      "bytes": 4096,
+      "sha256": "045ad01d502fc9de7069fd37169060ce79a14a289444ffcd9881ec367a554644"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/objects/05921287ac8087b87a95fe8879ec1fb12adf023de7278d9c7ce16d9d28cd64c5.bin",
+      "bytes": 129024,
+      "sha256": "05921287ac8087b87a95fe8879ec1fb12adf023de7278d9c7ce16d9d28cd64c5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/objects/10e645893dfecebc27309fb8f143a952e3e64654bec969a7bbb4c19713ca48e3.bin",
+      "bytes": 2048,
+      "sha256": "10e645893dfecebc27309fb8f143a952e3e64654bec969a7bbb4c19713ca48e3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/objects/3e077a35d3504461650e590a11902e5dff7c04b1d8829438ce4d985e3cb301b5.bin",
+      "bytes": 993280,
+      "sha256": "3e077a35d3504461650e590a11902e5dff7c04b1d8829438ce4d985e3cb301b5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/objects/57419092d74f268ded4e01b4acf1e81154a07c6508fbc5d33b75ad65a895b30a.bin",
+      "bytes": 655360,
+      "sha256": "57419092d74f268ded4e01b4acf1e81154a07c6508fbc5d33b75ad65a895b30a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/objects/58244dcacbb6c50dafd5f3bec9acfb6acffb5b27cec19dd9caa17b6cc0f20788.bin",
+      "bytes": 131072,
+      "sha256": "58244dcacbb6c50dafd5f3bec9acfb6acffb5b27cec19dd9caa17b6cc0f20788"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/objects/5caaef3f5a62c5c335985da5a23f489326465e2335f01f05584be1092cfa9bf3.bin",
+      "bytes": 10240,
+      "sha256": "5caaef3f5a62c5c335985da5a23f489326465e2335f01f05584be1092cfa9bf3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/objects/676cc2774d549f90364a7b63083b1f9bc4a17c200d6c7e8eb931434e6565e9a0.bin",
+      "bytes": 645120,
+      "sha256": "676cc2774d549f90364a7b63083b1f9bc4a17c200d6c7e8eb931434e6565e9a0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/objects/6af48e011a47482a5179c901b07f37d45185dacbc3456dcb5eddbf8df2ba7dbc.bin",
+      "bytes": 10240,
+      "sha256": "6af48e011a47482a5179c901b07f37d45185dacbc3456dcb5eddbf8df2ba7dbc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/objects/888e390c528a84a92e19aa17d9361e2b42d80cfb5f5dd3aa8c3276e6b6369926.bin",
+      "bytes": 4096,
+      "sha256": "888e390c528a84a92e19aa17d9361e2b42d80cfb5f5dd3aa8c3276e6b6369926"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/objects/8df2b5f8c010e9eb846f083437b0ecc933e3ec20abc070623645eb416a9bf023.bin",
+      "bytes": 131072,
+      "sha256": "8df2b5f8c010e9eb846f083437b0ecc933e3ec20abc070623645eb416a9bf023"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/objects/95fbbe9f3324b7d9f3a3550109772b0060170636c8aabc21e00aebae78594b7e.bin",
+      "bytes": 2048,
+      "sha256": "95fbbe9f3324b7d9f3a3550109772b0060170636c8aabc21e00aebae78594b7e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/objects/9ec072b5b15c7d14ae448958312aa7d68c703b20fa91141c1aa77fdf67e041e6.bin",
+      "bytes": 129024,
+      "sha256": "9ec072b5b15c7d14ae448958312aa7d68c703b20fa91141c1aa77fdf67e041e6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/objects/b8e3ae949570669199c923810a2d99af134c9ea14a8496caf36ab7b2c1b249d2.bin",
+      "bytes": 993280,
+      "sha256": "b8e3ae949570669199c923810a2d99af134c9ea14a8496caf36ab7b2c1b249d2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/objects/ccc9922ed938ecf8ebb076d0c52131b05bd86d96dcfe228d894d1b9d0cf3deba.bin",
+      "bytes": 2048,
+      "sha256": "ccc9922ed938ecf8ebb076d0c52131b05bd86d96dcfe228d894d1b9d0cf3deba"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/objects/d2e3f3709d10c5371cb39ddce17284b91d531b6d53a7e7d007f42ecf93d141e1.bin",
+      "bytes": 131072,
+      "sha256": "d2e3f3709d10c5371cb39ddce17284b91d531b6d53a7e7d007f42ecf93d141e1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/physical_block_alias.json",
+      "bytes": 26644,
+      "sha256": "3dcfaef93ae0a097906309548608350a5abbb20cb36ce6258dcb1dba24d5a614"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/physical_block_not_allocation.json",
+      "bytes": 26644,
+      "sha256": "5caf57799b0ca5b2c8d8acf77e61a0d59bdcf9568868fbf7050c04168827f453"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/physical_block_out_of_range.json",
+      "bytes": 26645,
+      "sha256": "338414fbb9538a76e1f58612be71bb4fb3170f9413ea5ede2d2a7524808a08c3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/positive-fixture.json",
+      "bytes": 26644,
+      "sha256": "14363d99afe6a7a6bae011a289d6e9d77ef182f3b20a260320da52dfb12ec3b4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/q1_native_mtp_raw_audit_v1.py",
+      "bytes": 10234,
+      "sha256": "5ceb514e27931fb6715ba6a0a1deccca9e1822ca606d224423b49c612849024b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/q1_reference_hooks_v2.py",
+      "bytes": 42736,
+      "sha256": "78ebde8de667f53e012db41597f6e4ab5970fd8b7c126a0c88f55ac62e6187dd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/same_input_dtype_wrong.json",
+      "bytes": 26642,
+      "sha256": "8ca796a46517adf8d0ab1a3a4c6d58a6c768d8b6cf4618c4a33b1840731a1a06"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/same_input_greedy_wrong.json",
+      "bytes": 26639,
+      "sha256": "613d25f93406bfb7610078f2f52ff265061ca39bc44eb6695a176d655d1f61e5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/same_input_rows_alias.json",
+      "bytes": 26644,
+      "sha256": "0a7156f1b4ca9f92e45c4762fbfdd5250443ebb6d78737e1f1e25b9449715c3a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/same_input_schema_and_api_wrong.json",
+      "bytes": 26608,
+      "sha256": "f60e6fa60f1526c7d7c47e4804cbd6dac156474b754ba6a5b9d7119a4f3f0d98"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/scratch_slot_wrong.json",
+      "bytes": 26646,
+      "sha256": "14033c9a59302b5b3e01d2179fd414c8097a21c196d04f0ccb4aeba49fdc0df8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/snapshot_pointer_changed.json",
+      "bytes": 26640,
+      "sha256": "5d970a1333ade2c6ef9e3800acb4d98a7efd1c659f0519bfb2ed7bb315b3cc68"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/wrong_kv_dtype.json",
+      "bytes": 26643,
+      "sha256": "dc5542af384204dd0ed161e5ad86b46bf3b0d88d7d9a8cbdbc555debdf4f549e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/wrong_kv_head_geometry_same_product.json",
+      "bytes": 26644,
+      "sha256": "ddef8cac1ea21f21f504aff3ee27e3ce6364a264bc7d55a825a4f4d0fd76ad73"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/wrong_kv_physical_block_dimension.json",
+      "bytes": 26646,
+      "sha256": "8941c0ea1c81c880b126b6288c4bbaff23b286dd38636b250cd714a3d9734029"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-repair-review-20260929/wrong_logical_digest.json",
+      "bytes": 26644,
+      "sha256": "ba66655cb5da05c5a4b8d9fdc9ad47bfc3f452e34ffb5ab37e2ba0d5b90ab6f2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/MANIFEST.json",
+      "bytes": 8832,
+      "sha256": "5d53cd850c0d13b479cf428096d7abcd37bb5f4da342eb95d86ce7932eaf4e46"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/RESULTS.json",
+      "bytes": 10885,
+      "sha256": "a6b66f1940097547d8a2b5a8b32f28b9a45e6f211498bcbe63218a6600fbb3a4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/REVIEW.md",
+      "bytes": 7275,
+      "sha256": "0c4eb3ebd44347e69989bb607ed474cf87d9cc01d7e6c21114c464197f2a21c4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/SOURCE.json",
+      "bytes": 1063,
+      "sha256": "80a195b080431e899cd14f3815984eb3889eadc9e1954cbfedc72fc0f083c52d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/allocation_count_columns_mismatch.json",
+      "bytes": 26644,
+      "sha256": "40ab3d508e2c4b5c3d4c5817d54e612900ac7d2741ffeb14de163cb07dae0867"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/allocation_generation_mismatch.json",
+      "bytes": 26644,
+      "sha256": "ae4d2d999a0e958f5895e26011811cef311ce3c0f1294f1c44672a470157ef6f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/allocation_slot_wrong.json",
+      "bytes": 26644,
+      "sha256": "bd39f7af2e9ffbffc59dd513dfa82cb6976ba3fc2aec79d237e82237e9f6f85e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/controls.py",
+      "bytes": 10693,
+      "sha256": "939fa5b4df4cdb85c62924ad00d2f6f77e59cfc853cf48a1f9c1d0a3caade342"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/follow_allocation_absent.json",
+      "bytes": 26366,
+      "sha256": "e7c67a86a80176a3211d77ae2c1228a7d44029fe9c71991d9f91a2602c857cc7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/kv_nonfinite_rehashed.json",
+      "bytes": 26644,
+      "sha256": "826ae3ee7a4f233c9be3df20475efaeed34672598dc68879da36835bf2a2adc9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/logical_index_wrong.json",
+      "bytes": 26645,
+      "sha256": "1365132386bdbee89022f011ed0e5ffcef773b0965c852c954b57c1a2e5a51d9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/materialized_prefix_changed_rehashed.json",
+      "bytes": 26644,
+      "sha256": "53e4a99783c0708f1fb7ebac495715405147355bca20f17b608da72b41790eac"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/missing_all_kv_payloads.json",
+      "bytes": 25106,
+      "sha256": "38cdb19de4afa0dfdd22b561aa107b64c3d132b23556986305f62a120194aa42"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/objects/045ad01d502fc9de7069fd37169060ce79a14a289444ffcd9881ec367a554644.bin",
+      "bytes": 4096,
+      "sha256": "045ad01d502fc9de7069fd37169060ce79a14a289444ffcd9881ec367a554644"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/objects/05921287ac8087b87a95fe8879ec1fb12adf023de7278d9c7ce16d9d28cd64c5.bin",
+      "bytes": 129024,
+      "sha256": "05921287ac8087b87a95fe8879ec1fb12adf023de7278d9c7ce16d9d28cd64c5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/objects/10e645893dfecebc27309fb8f143a952e3e64654bec969a7bbb4c19713ca48e3.bin",
+      "bytes": 2048,
+      "sha256": "10e645893dfecebc27309fb8f143a952e3e64654bec969a7bbb4c19713ca48e3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/objects/3e077a35d3504461650e590a11902e5dff7c04b1d8829438ce4d985e3cb301b5.bin",
+      "bytes": 993280,
+      "sha256": "3e077a35d3504461650e590a11902e5dff7c04b1d8829438ce4d985e3cb301b5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/objects/57419092d74f268ded4e01b4acf1e81154a07c6508fbc5d33b75ad65a895b30a.bin",
+      "bytes": 655360,
+      "sha256": "57419092d74f268ded4e01b4acf1e81154a07c6508fbc5d33b75ad65a895b30a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/objects/58244dcacbb6c50dafd5f3bec9acfb6acffb5b27cec19dd9caa17b6cc0f20788.bin",
+      "bytes": 131072,
+      "sha256": "58244dcacbb6c50dafd5f3bec9acfb6acffb5b27cec19dd9caa17b6cc0f20788"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/objects/5caaef3f5a62c5c335985da5a23f489326465e2335f01f05584be1092cfa9bf3.bin",
+      "bytes": 10240,
+      "sha256": "5caaef3f5a62c5c335985da5a23f489326465e2335f01f05584be1092cfa9bf3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/objects/676cc2774d549f90364a7b63083b1f9bc4a17c200d6c7e8eb931434e6565e9a0.bin",
+      "bytes": 645120,
+      "sha256": "676cc2774d549f90364a7b63083b1f9bc4a17c200d6c7e8eb931434e6565e9a0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/objects/6af48e011a47482a5179c901b07f37d45185dacbc3456dcb5eddbf8df2ba7dbc.bin",
+      "bytes": 10240,
+      "sha256": "6af48e011a47482a5179c901b07f37d45185dacbc3456dcb5eddbf8df2ba7dbc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/objects/888e390c528a84a92e19aa17d9361e2b42d80cfb5f5dd3aa8c3276e6b6369926.bin",
+      "bytes": 4096,
+      "sha256": "888e390c528a84a92e19aa17d9361e2b42d80cfb5f5dd3aa8c3276e6b6369926"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/objects/8df2b5f8c010e9eb846f083437b0ecc933e3ec20abc070623645eb416a9bf023.bin",
+      "bytes": 131072,
+      "sha256": "8df2b5f8c010e9eb846f083437b0ecc933e3ec20abc070623645eb416a9bf023"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/objects/95fbbe9f3324b7d9f3a3550109772b0060170636c8aabc21e00aebae78594b7e.bin",
+      "bytes": 2048,
+      "sha256": "95fbbe9f3324b7d9f3a3550109772b0060170636c8aabc21e00aebae78594b7e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/objects/9ec072b5b15c7d14ae448958312aa7d68c703b20fa91141c1aa77fdf67e041e6.bin",
+      "bytes": 129024,
+      "sha256": "9ec072b5b15c7d14ae448958312aa7d68c703b20fa91141c1aa77fdf67e041e6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/objects/b8e3ae949570669199c923810a2d99af134c9ea14a8496caf36ab7b2c1b249d2.bin",
+      "bytes": 993280,
+      "sha256": "b8e3ae949570669199c923810a2d99af134c9ea14a8496caf36ab7b2c1b249d2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/objects/ccc9922ed938ecf8ebb076d0c52131b05bd86d96dcfe228d894d1b9d0cf3deba.bin",
+      "bytes": 2048,
+      "sha256": "ccc9922ed938ecf8ebb076d0c52131b05bd86d96dcfe228d894d1b9d0cf3deba"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/objects/d2e3f3709d10c5371cb39ddce17284b91d531b6d53a7e7d007f42ecf93d141e1.bin",
+      "bytes": 131072,
+      "sha256": "d2e3f3709d10c5371cb39ddce17284b91d531b6d53a7e7d007f42ecf93d141e1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/physical_block_alias.json",
+      "bytes": 26644,
+      "sha256": "3dcfaef93ae0a097906309548608350a5abbb20cb36ce6258dcb1dba24d5a614"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/physical_block_not_allocation.json",
+      "bytes": 26644,
+      "sha256": "5caf57799b0ca5b2c8d8acf77e61a0d59bdcf9568868fbf7050c04168827f453"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/physical_block_out_of_range.json",
+      "bytes": 26645,
+      "sha256": "338414fbb9538a76e1f58612be71bb4fb3170f9413ea5ede2d2a7524808a08c3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/positive-fixture.json",
+      "bytes": 26644,
+      "sha256": "14363d99afe6a7a6bae011a289d6e9d77ef182f3b20a260320da52dfb12ec3b4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/q1_native_corpus_v1.py",
+      "bytes": 28196,
+      "sha256": "d4502b7f47ab1ac6ed8cd295aa5565726fad486c4a1ff1bda6a13fe24e4ea770"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/q1_native_mtp_history_v2.py",
+      "bytes": 11731,
+      "sha256": "83dc891ca4200cbd3dfb77a92269574105dca1ee2569a919c63367f0214b066c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/q1_native_mtp_owner_v2.py",
+      "bytes": 13039,
+      "sha256": "77edbafbd9ff34813d1a866c5ab8c8c7c620da0c3ce1e532d4b41fa1e61cde7e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/q1_native_mtp_raw_audit_v1.py",
+      "bytes": 5995,
+      "sha256": "decf0d2d865307913fe3a1617f1549775b6819a371e70d8b69e3d8dbf112fa72"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/q1_native_mtp_same_input_v1.py",
+      "bytes": 4347,
+      "sha256": "d3f3d2793c27993cf2380a46ec16aaed2bc7cacbbef9afba172d1aefb59d2560"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/q1_reference_hooks_v2.py",
+      "bytes": 42736,
+      "sha256": "78ebde8de667f53e012db41597f6e4ab5970fd8b7c126a0c88f55ac62e6187dd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/q1_reference_hooks_v2_4_mtp.py",
+      "bytes": 5115,
+      "sha256": "3184550f37a6aabd6777753f1632e6f192a7fdd87b3d621cc7bf62c22eb8aac6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/same_input_dtype_wrong.json",
+      "bytes": 26642,
+      "sha256": "8ca796a46517adf8d0ab1a3a4c6d58a6c768d8b6cf4618c4a33b1840731a1a06"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/same_input_greedy_wrong.json",
+      "bytes": 26639,
+      "sha256": "613d25f93406bfb7610078f2f52ff265061ca39bc44eb6695a176d655d1f61e5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/same_input_rows_alias.json",
+      "bytes": 26644,
+      "sha256": "0a7156f1b4ca9f92e45c4762fbfdd5250443ebb6d78737e1f1e25b9449715c3a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/same_input_schema_and_api_wrong.json",
+      "bytes": 26608,
+      "sha256": "f60e6fa60f1526c7d7c47e4804cbd6dac156474b754ba6a5b9d7119a4f3f0d98"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/scratch_slot_wrong.json",
+      "bytes": 26646,
+      "sha256": "14033c9a59302b5b3e01d2179fd414c8097a21c196d04f0ccb4aeba49fdc0df8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/snapshot_pointer_changed.json",
+      "bytes": 26640,
+      "sha256": "5d970a1333ade2c6ef9e3800acb4d98a7efd1c659f0519bfb2ed7bb315b3cc68"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/wrong_kv_dtype.json",
+      "bytes": 26643,
+      "sha256": "dc5542af384204dd0ed161e5ad86b46bf3b0d88d7d9a8cbdbc555debdf4f549e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/wrong_kv_head_geometry_same_product.json",
+      "bytes": 26644,
+      "sha256": "ddef8cac1ea21f21f504aff3ee27e3ce6364a264bc7d55a825a4f4d0fd76ad73"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/wrong_kv_physical_block_dimension.json",
+      "bytes": 26646,
+      "sha256": "8941c0ea1c81c880b126b6288c4bbaff23b286dd38636b250cd714a3d9734029"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-raw-audit-v1-review-20260929/wrong_logical_digest.json",
+      "bytes": 26644,
+      "sha256": "ba66655cb5da05c5a4b8d9fdc9ad47bfc3f452e34ffb5ab37e2ba0d5b90ab6f2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/INDEPENDENT-CONTROLS.json",
+      "bytes": 3613,
+      "sha256": "d779eb9180e40e750d5edfbd6e235c0cd2e1a6c6ccd7c3bb8d902b72c787fd10"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/PATCH-CONTROL.json",
+      "bytes": 499,
+      "sha256": "8e47d57c5defd401d5b67d99618936df83e68f9b7153f6ad45a82ee965deda23"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/REVIEW-SEAL.json",
+      "bytes": 5824,
+      "sha256": "b8708e8e90ba33af42707c937cd0d67c21db70ec8f0892ce180dd92445e08255"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/SOURCE-SNAPSHOT.json",
+      "bytes": 2430,
+      "sha256": "b7f4757877da45575900272373b138e3a004bde5ae97bfec8368642165f7eb44"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/SUPPLEMENT.json",
+      "bytes": 3220,
+      "sha256": "b9839c193dbd20f844e9ce30badfc6cfe42235793bf4fce2459765ab1b4f2c77"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/independent_controls.py",
+      "bytes": 7681,
+      "sha256": "ab1d625febebf8044162819dc5a5a39c4d2acd37dd03572579ba047774db9256"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/q1_native_mtp_history_v2.py",
+      "bytes": 11731,
+      "sha256": "83dc891ca4200cbd3dfb77a92269574105dca1ee2569a919c63367f0214b066c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/q1_native_mtp_same_input_v1.py",
+      "bytes": 4347,
+      "sha256": "d3f3d2793c27993cf2380a46ec16aaed2bc7cacbbef9afba172d1aefb59d2560"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/q1_patch_native_mtp_worker_v3.py",
+      "bytes": 5025,
+      "sha256": "fa087168ab302a596f5227010ad3289bc87946c7410cd3e5ca60720f5e70e107"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/q1_reference_hooks_v2_4_mtp.py",
+      "bytes": 5115,
+      "sha256": "3184550f37a6aabd6777753f1632e6f192a7fdd87b3d621cc7bf62c22eb8aac6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/supplement/experiments/review-response-20260927/tools/q1_native_mtp_history_v1.py",
+      "bytes": 10796,
+      "sha256": "d531fea5376ec263217c45636fb1661bfaf000792d9a18db8512c407adfa2d13"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/supplement/experiments/review-response-20260927/tools/q1_native_mtp_owner_v2.py",
+      "bytes": 13039,
+      "sha256": "77edbafbd9ff34813d1a866c5ab8c8c7c620da0c3ce1e532d4b41fa1e61cde7e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/supplement/experiments/review-response-20260927/tools/q1_native_mtp_program_v1.py",
+      "bytes": 6138,
+      "sha256": "f325ec24e6d212b70cdabbbe81f4ef4d58565ccb8e7f736f747f016cb0c90cef"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/supplement/experiments/review-response-20260927/tools/q1_native_mtp_program_v2.py",
+      "bytes": 708,
+      "sha256": "d3c60ba6cebb3cdb4fe07e1185cbd6e291e4ca7be5998177624a3a6b50df729c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/supplement/experiments/review-response-20260927/workload-plan/inspections/cpu-native-mtp-config-20260929T104500Z/v1/spec_decode/eagle.py",
+      "bytes": 80617,
+      "sha256": "2c569fd2b60e81b897360071fe433b259575c74b4c7a2a7832560abe2c7cc4b3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/supplement/p0/monitor/review-response-20260927/test_log.native_mtp_history_v2.attempt1.txt",
+      "bytes": 248,
+      "sha256": "f5f07d60446e75c458356651cec5223da0abd5fe9daa46b46a7a14be65c08140"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/supplement/p0/monitor/review-response-20260927/test_log.native_mtp_same_input_v1.attempt1.txt",
+      "bytes": 449,
+      "sha256": "83d7a8afe9a86966705c2e9bcbcaea6837a96473caf9b5b5a0d89cd038965c27"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/tests/test_q1_native_mtp_history_v2.py",
+      "bytes": 1701,
+      "sha256": "7a908b2a110049895cb87adf7652458daa69ec33d35492ce66bac7ee031c1c47"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-same-input-v1-review/tests/test_q1_native_mtp_same_input_v1.py",
+      "bytes": 2973,
+      "sha256": "42fb6987e435c93759e627e35eabdf28c4d75175e9248962300d9783ac92bbfa"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-worker-connection-review/CONTROLS.json",
+      "bytes": 12778,
+      "sha256": "48eee352f0a70b3a87be3cf6cb12ef653795496d9d9f903a6de7d3cc572c061e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-worker-connection-review/PLANNER-CONTROLS.json",
+      "bytes": 11131,
+      "sha256": "2454e799d289d28d91f8dd1fe5ae05fc1594fb4d9d7de6d5851bbd1e88e4d39e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-worker-connection-review/REFERENCES.json",
+      "bytes": 1895,
+      "sha256": "beb457d532e19c671dcce892c80440ef9dbdfde203c9f3c545a8644ce9c5c750"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-worker-connection-review/REVIEW-SEAL.json",
+      "bytes": 3181,
+      "sha256": "2c2c15f2996bbef23a4b5cb65fdaead7850edbe32a73e307cb96e6c968c3c995"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-worker-connection-review/controls.py",
+      "bytes": 5107,
+      "sha256": "0fb0944b7e8b0767cf9e631e85336d55df394503f4806cc6f3cb6402d24c426e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-worker-connection-review/planner_controls.py",
+      "bytes": 4872,
+      "sha256": "906f809e066ee1568cc81554f69a68b6419f38cf4e97714aeedd69b6f1e1251e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-reference-paper-independent-20260929/AUDIT.json",
+      "bytes": 1506,
+      "sha256": "fa59ee37d6a2628aa756ae60d504295729c7d81d6958c081df95b9ba56ca5382"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/paper-native-ab-build-20260929T1155Z.log",
+      "bytes": 40506,
+      "sha256": "c274d9886798560164d74878092d809c0aec357c8038f882f9d3ec43d1e57d6e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/paper-native-ab-source-check-20260929T1157Z.log",
+      "bytes": 816,
+      "sha256": "a8edd357fdb16d0f9e24d917ef5accee082c9c3aa538c6f2c5685002cc9181dd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/status.before-native-AB-result-20260929T1154Z.json",
+      "bytes": 34448,
+      "sha256": "0390e5531d0b7bfc31914b36fa0050bc597ff8df261e7d35f9c6822aae67aab7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/status.before-native-B-20260929T1113Z.json",
+      "bytes": 34438,
+      "sha256": "0e5b33321152988e6e1e902ae72490ae3036e178a731d3a08e2ab91531405a2d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/test_log.native_mtp_driver_v3.attempt1.txt",
+      "bytes": 7997,
+      "sha256": "32dd6a5325a54d50455ab98778e264fef28468c733f0406e74b21448d40074d0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/test_log.native_mtp_history_v1.attempt1.txt",
+      "bytes": 743,
+      "sha256": "ef6826810e1023bae86580914fb47cd737504e329805e9058582583cd5943d7d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/test_log.native_mtp_history_v1.attempt2.txt",
+      "bytes": 743,
+      "sha256": "0bf85be200f18833aecff1d556a141db0e561e95dc8b34b1f3e000ecfcb934c6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/test_log.native_mtp_history_v1.attempt3.txt",
+      "bytes": 884,
+      "sha256": "fe6ce7abdb009100187f7cecefa52a0ad80bd85e0597595ed514509ce995fffc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/test_log.native_mtp_history_v2.attempt1.txt",
+      "bytes": 248,
+      "sha256": "f5f07d60446e75c458356651cec5223da0abd5fe9daa46b46a7a14be65c08140"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/test_log.native_mtp_hooks_v1.attempt1.txt",
+      "bytes": 248,
+      "sha256": "2711d0e5be3b4f99d358704258e09502c0e19297d1ab61737054991fa3bccd2b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/test_log.native_mtp_hooks_v1.attempt2.txt",
+      "bytes": 1343,
+      "sha256": "bd13956e1a427e462627b188784f360cc04a0a1aa550749667d9bbcb655c8ad9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/test_log.native_mtp_hooks_v1.attempt3.txt",
+      "bytes": 248,
+      "sha256": "e4e1ab97538bf0484e33160528c0b8d7a6d70a0f242a91753635d5c61fb0787f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/test_log.native_mtp_owner_v2.attempt1.txt",
+      "bytes": 496,
+      "sha256": "59c25390529eb5e0b0c3e4f0b994c4e0673505e2fd5da7f75f8d75cc7d9b6ecd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/test_log.native_mtp_owner_v2.attempt2.txt",
+      "bytes": 648,
+      "sha256": "444b6a64af2b57c845f125fdc498382af6b2c0b052a880a871a33175f25365cf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/test_log.native_mtp_same_input_v1.attempt1.txt",
+      "bytes": 449,
+      "sha256": "83d7a8afe9a86966705c2e9bcbcaea6837a96473caf9b5b5a0d89cd038965c27"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/test_log.native_mtp_worker_patch_v2.attempt1.json",
+      "bytes": 499,
+      "sha256": "0c1c78802e85ecd01265e1029637405eb173e26d7e91ce316b30ed150bf3ae80"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/test_log.native_mtp_worker_patch_v2.attempt2.json",
+      "bytes": 499,
+      "sha256": "c9cc6a464b42e21c968ff1bc5bfb586af6ad993f265b62159d9e435126255e54"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/MANIFEST.json",
+      "bytes": 3242,
+      "sha256": "6d18fb6e6a1178bb73a220d1687f106eed64b92bf2b50549a2bfdaae660e8955"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/P0-REPORT.md",
+      "bytes": 13853,
+      "sha256": "af14c0ff7aaf7d55874e368df168966421f39c451bd6f6dd66a48f099a840fe7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/additional-attempt-ledger.json",
+      "bytes": 31261,
+      "sha256": "cf3864e4894bb6a170f3f5cecf048ea3fe8ea5b12f13d5b3bf97b2ed0b1caec5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/all-attempts-table.tex",
+      "bytes": 679,
+      "sha256": "3ceea0a4e0e5c3180d1525dfeffd2813bf93bcb34364f4fee06a88a29aa8aeaf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/all-attempts.csv",
+      "bytes": 4914,
+      "sha256": "0e1cbf9fc1bfe07e4e8f48d9f4282b792ced9abc6dffe50b3fb69ef3f585008e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/cohort-summary.csv",
+      "bytes": 692,
+      "sha256": "f7e708c1579e3bf922984b6dd173ff921d2ed04051ea7d642a708ef76fe6e1dd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/component-qualification.json",
+      "bytes": 2133,
+      "sha256": "a97661e2756c62e356d16c01183d312d661f465ed2886612e07c537aa22f1ea9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/component-qualification.tex",
+      "bytes": 2229,
+      "sha256": "dbdb81ffb279923c2cc7ace1cbf5bc6cb11c3921338457e8dbd85c350979c57d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/gap-register.json",
+      "bytes": 3896,
+      "sha256": "2ffa6d7f5ee5fe9f99d95007908ad15e04994eb3b621489c7c3141688aa49959"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/m1-qualification.json",
+      "bytes": 3091,
+      "sha256": "ba93cfae27ac922c4635f696d6a720d2c6f1c3ca05160ecd65a40542c00d1afd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/m1-qualification.tex",
+      "bytes": 3570,
+      "sha256": "a47d54a8e55a2cda867c9494a59c74adf0e44399991356d7c9241571a21570df"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/native-reference.json",
+      "bytes": 777,
+      "sha256": "48a692fcbc860912ddabf73af01fe0c36204ed22b398709815c48c9b5f91e269"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/native-reference.tex",
+      "bytes": 1294,
+      "sha256": "f1667f646203d851f15ee3c1864defe84a5075ed35e1e6843bc2b27a932c59a5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/output-acceptance-histograms.csv",
+      "bytes": 20288,
+      "sha256": "bad7132cda48da5b4d003fdbd84e8416f522d619e1a88f78939079f0e92f4c57"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/p0-evidence.json",
+      "bytes": 182977,
+      "sha256": "f4bd35518a34b2f2f142b2de67f30998d484aa940b9c078ebbafcbb18004f1d8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/paired-task-outcomes.tex",
+      "bytes": 855,
+      "sha256": "94790ae1870f19a3db62d534ec39f2d126a59429ca1a54a7e058c39023f104ec"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/phase-counters.csv",
+      "bytes": 7087,
+      "sha256": "72e6b65e195b2696036ed142d36ec3598e0a373b0ab660905f772dcbc81bf2d2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/reduce_p0.py",
+      "bytes": 27274,
+      "sha256": "31d2bd3a3facd96bfc526f46a383fd6a2a761d58c68dd1b52a35e57a48b3641e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/source-semantics/current-deployment-image/image-identity.json",
+      "bytes": 711,
+      "sha256": "f109334fdfc48e4802cc0702fef2c10cfde3dd767938fb373ca7426655e68652"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/source-semantics/current-deployment-image/vllm/v1/core/sched/scheduler.py",
+      "bytes": 105525,
+      "sha256": "a0d34894ff51d2fa56f48cd47d5d9db9567a5d265f846d3f4834d912f78e246d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/source-semantics/current-deployment-image/vllm/v1/spec_decode/metrics.py",
+      "bytes": 7661,
+      "sha256": "acf306f1b453f33f9cebd13abfa6547dea5dff4a1dc92d4e9b701daf526746ee"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/source-semantics/image-identity.json",
+      "bytes": 664,
+      "sha256": "3b75def9809501462acdd3477622d293a621fee588d8eb5cbcdef393ff4fef5a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/source-semantics/vllm/v1/core/sched/scheduler.py",
+      "bytes": 106038,
+      "sha256": "9f3da2dfce94963e1e1cefc156e4239120f79c6eaf824b2829cac0ee7736b58a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/source-semantics/vllm/v1/spec_decode/metrics.py",
+      "bytes": 7661,
+      "sha256": "acf306f1b453f33f9cebd13abfa6547dea5dff4a1dc92d4e9b701daf526746ee"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/review-response-20260927/test_reduce_p0.py",
+      "bytes": 3279,
+      "sha256": "2b71e56e178c8a1caf8fc050fded90a2789c8fdb6eab43633b3aa90d5e1cfb53"
+    }
+  ],
+  "scope": "source-update12",
+  "restore_order": "after source-update3; this later snapshot wins"
+}
