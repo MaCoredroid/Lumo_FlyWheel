@@ -1,0 +1,458 @@
+{
+  "schema": "lumo.source-update-manifest.v1",
+  "utc": "2026-09-29T21:41:31.465527+00:00",
+  "files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/WORKLOG.md",
+      "bytes": 103169,
+      "sha256": "c7ff8417be16721d6fbe1998e163227ece86221bda54c41216d756499751381e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/status.json",
+      "bytes": 46931,
+      "sha256": "322e7a61df58b79c4386c1500bb68d6d778efd91598ff287d0b5e20f5d100951"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_sequence_graphs_v1.py",
+      "bytes": 17073,
+      "sha256": "9a0d6249c62566a64ab35f39684b2c32bf002ab6dc093f457997bd92a8ece89e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_sequence_runtime_v1.py",
+      "bytes": 13826,
+      "sha256": "f8735399464c6f71ce400c7d13cba7c0fbdb6a082a71630ba1fe34e153b598d8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_candidate_sequence_graphs_v1.py",
+      "bytes": 7796,
+      "sha256": "9d2fc81066a5b6f413fc85762988140626dd11e159081d8cb1b38a84d0de9522"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_candidate_sequence_runtime_v1.py",
+      "bytes": 5120,
+      "sha256": "52d9e5bf144109f59a2ea039e4499bf9013322ca39c15ac4d81850f0e2355510"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-candidate-sequence-graph-position-repair-review.md",
+      "bytes": 5360,
+      "sha256": "2ff6f69720c7dd9ce8d5bfeea7ab4de3ab0a3e0aac51891d8afdfa535527e96a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-candidate-sequence-runtime-v1-initial-review.md",
+      "bytes": 4132,
+      "sha256": "b9eabcb5d2d58742eb9f10ece6275cef03d6eb2cc610cc5530b927ca9dee9c15"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/ACTIVE.json",
+      "bytes": 60381,
+      "sha256": "01744cc5ff8177401ead8d63a1fac78a789d8f9d8d9de638a271f4bcb2775e51"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/CHECK-20260929T214114Z.json",
+      "bytes": 3683,
+      "sha256": "87bb4e1c875f967bf2f3c32e12dc8193746ff322928d5dd0c49d57617d98b8b9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PARENT-SEQUENCE-GRAPH-POSITION-ACCEPTED-20260929T214400Z.json",
+      "bytes": 5960,
+      "sha256": "ee9e976c2f3899c586e40e6d6b24f906b133d42683074bfbad50a66f1ea49531"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/historical-status-20260929T214114Z/ACTIVE.json",
+      "bytes": 60798,
+      "sha256": "7145b2e6a661b44fa035d0a11b944a871956c2d8c05c57577a772688102e0ee6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/historical-status-20260929T214114Z/status.json",
+      "bytes": 47348,
+      "sha256": "48841b3ce0900e47699aad0eb39686417dd928a9cc0a2bf5335ef3d6142a4a01"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/B-TERMINAL-INDEPENDENT.json",
+      "bytes": 348,
+      "sha256": "4ec061f9c9c4f98285678968f2e7194b25da5ddc77e0b1ad126915a825a36b59"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/B-cleanup-metadata.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/B-cleanup-metadata.stdout.json",
+      "bytes": 39857,
+      "sha256": "86e273dad3a738020932c2c13db1cc338bb0139b4f15a09deead6f3570d4d48f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/reduction.jsonl",
+      "bytes": 21825,
+      "sha256": "c4692563e5e297f6f4b07fa70263c87a6265e0a3b4a33dd9dca6034c69953873"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-020.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-020.stdout.json",
+      "bytes": 100,
+      "sha256": "bf750c4cad4345c88ccc685c2d8a74dfb6573ae2f723287820cd8250c766dc2c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-021.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-021.stdout.json",
+      "bytes": 100,
+      "sha256": "5dc813120b9a92a04e1d4fcc999655fdc4aa83b55232d01f7568a947bf2bb9d2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-022.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-022.stdout.json",
+      "bytes": 100,
+      "sha256": "3ea57bac74f41aa9a9e3445f2963e8fa1d534f34cfb387c0d1e62844a10524fd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-023.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-023.stdout.json",
+      "bytes": 100,
+      "sha256": "29655cf64a2b58345f461fb3a25096c96b234302bb6d0d19b7679b7242249cc9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-024.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-024.stdout.json",
+      "bytes": 100,
+      "sha256": "ca02f9419afc787527b6e7284d6ef49054aaeb9e53eb89c281e3c5b9951a78ed"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-025.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-025.stdout.json",
+      "bytes": 100,
+      "sha256": "bc52a592d8161566363af03251a3c44f8e690caa178774d2fc6f989188d11eac"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-026.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-026.stdout.json",
+      "bytes": 100,
+      "sha256": "ca93e78731f9a7c506afbe1e0c32bc6e71a68ea27776f66ffef271dee207326a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-027.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-027.stdout.json",
+      "bytes": 100,
+      "sha256": "e93e348d371aa05f56ca219d34f1047433588f9bd6c59f572694a43ae71d7b4b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-028.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-028.stdout.json",
+      "bytes": 100,
+      "sha256": "ccdf0b4737dd8cfb786362a48194407069f5e6db48ccf2e46914fcb4ebf53662"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-029.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/terminal-poll-029.stdout.json",
+      "bytes": 176178,
+      "sha256": "cfb61324647b639c45480d101b57c6c9e392611439ed07c3b7656f2c91654a80"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-graph-callbacks-parent-controls/POSITION-FINDING.json",
+      "bytes": 662,
+      "sha256": "4381ff2d18cce9455f6ebdcf23a0f962179de10100f09196d14e96aa103b7f1f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-graph-callbacks-parent-controls/position-finding-source.py",
+      "bytes": 17071,
+      "sha256": "04e7d11e8da4cf85797be226a06f5cd9451586fe3e2951c1daa4c4742a837258"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-graph-callbacks-parent-controls/position-finding-test.py",
+      "bytes": 7461,
+      "sha256": "ed16731ab183fb53621f7ccdc0c64d1cee84640d44a59d5053d2208cbdcf93d2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-graph-position-review/CONTROLS.json",
+      "bytes": 27426,
+      "sha256": "6ff27608334b2e42ee2b1d27e5e86039b177e927aaf3cdd0cbf10ca581b7a600"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-graph-position-review/CONTROLS.log",
+      "bytes": 767,
+      "sha256": "885a731765d79e2b1c411d57d489079c683926410b43eb0830703d16cec12c5c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-graph-position-review/REVIEW-SEAL.json",
+      "bytes": 6176,
+      "sha256": "64ac4c9afcf97e7fa16a777ec510600e3df8d5a82e6f1df1d0cc75fed7e13d72"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-graph-position-review/SOURCES.json",
+      "bytes": 2559,
+      "sha256": "5444d3a3d60abe5cc135e44de303665a455765869639af23b0e46fe9253b6e45"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-graph-position-review/attempt1/CONTROLS.json",
+      "bytes": 4311,
+      "sha256": "3731dd7ca73391e74ae1aee24cc46a880a87e6e2786d9732b7b5162d7399e237"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-graph-position-review/attempt1/CONTROLS.log",
+      "bytes": 2145,
+      "sha256": "194c0b006744c8816def9caa150ec54b7b24687c6dd4d917816c92f8ee0f2adc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-graph-position-review/attempt1/position_controls.py",
+      "bytes": 6330,
+      "sha256": "89ee74bad9006bf3bf7e8b942f993ec5c4407de6e4a08ef1af430144bb9d3236"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-graph-position-review/bootstrap.py",
+      "bytes": 1648,
+      "sha256": "c877760b08e5ea2288af14ee11137a814e32739111ed92dcb8181b6a4d643560"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-graph-position-review/position_controls.py",
+      "bytes": 6382,
+      "sha256": "30e8f864485299e453c6432710732d279b40a627f51103630ba610f1780ad442"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-graph-position-review/repaired/q1_candidate_sequence_graphs_v1.py",
+      "bytes": 17073,
+      "sha256": "9a0d6249c62566a64ab35f39684b2c32bf002ab6dc093f457997bd92a8ece89e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-graph-position-review/repaired/tests/test_q1_candidate_sequence_graphs_v1.py",
+      "bytes": 7796,
+      "sha256": "9d2fc81066a5b6f413fc85762988140626dd11e159081d8cb1b38a84d0de9522"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-graph-position-review/semantic-source.diff",
+      "bytes": 651,
+      "sha256": "c0111b40021ec00a839785cdf649241fb6a70d770140cf3dc0ce19a110025d7a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-parent-controls/attempt1-source.py",
+      "bytes": 11741,
+      "sha256": "1fb7585ad4b7395ebd1ec072cc042472efcca6ea59c8b883f9104097409c1b11"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-parent-controls/attempt1-test.py",
+      "bytes": 4243,
+      "sha256": "1a5f72d50eeefac1163bd1f6eae8b463ce9aabbb7efcc6e3c3845f8258e1d56c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-parent-controls/attempt1.log",
+      "bytes": 11191,
+      "sha256": "f9a79c49084e61d5facd356731e8991d3f50ab08e33eeaf5067e64500360c7d0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-parent-controls/attempt2-test.py",
+      "bytes": 4303,
+      "sha256": "98199a4f359f7339f5ef948661cf1c00634fabe4cab12da95a5ca5ef9eface2b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-parent-controls/attempt2.log",
+      "bytes": 4961,
+      "sha256": "ddda1d6babb72ed452b3e31192a4b09dd5d93fe3545ee2b509f0734f77de6971"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-parent-controls/attempt3/RECEIPT.json",
+      "bytes": 490,
+      "sha256": "b328988cd7e94df17f672d311822a3feb13fa0d1f34e0fa45eef1be617b28fbf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-parent-controls/attempt3/lumo-sequence-runtime-attempt3.log",
+      "bytes": 643,
+      "sha256": "ab478b84ae54283eccd6cf50e95ff64358834b5e0f7af2033924176313c4b4e0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-parent-controls/attempt3/q1_candidate_sequence_runtime_v1.py",
+      "bytes": 11741,
+      "sha256": "1fb7585ad4b7395ebd1ec072cc042472efcca6ea59c8b883f9104097409c1b11"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-parent-controls/attempt3/test_q1_candidate_sequence_runtime_v1.py",
+      "bytes": 4391,
+      "sha256": "192975f6846a75f3fddb6db33bddfd2806d19fef091fad0eb9e99d6eb2969902"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-parent-controls/attempt4/RECEIPT.json",
+      "bytes": 499,
+      "sha256": "a789dfbae4c9b9db7b2d30e9ef2d9fff03a5b69d2701d9c5211752d3c28333f3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-parent-controls/attempt4/lumo-sequence-runtime-attempt4.log",
+      "bytes": 211817,
+      "sha256": "9dbe2b591e583dcad013857b2cae663ceaa53aa8207265ed4988bdc7884bcb49"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-parent-controls/attempt4/q1_candidate_sequence_runtime_v1.py",
+      "bytes": 13826,
+      "sha256": "f8735399464c6f71ce400c7d13cba7c0fbdb6a082a71630ba1fe34e153b598d8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-parent-controls/attempt4/test_q1_candidate_sequence_runtime_v1.py",
+      "bytes": 5120,
+      "sha256": "52d9e5bf144109f59a2ea039e4499bf9013322ca39c15ac4d81850f0e2355510"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/INITIAL-SOURCES.json",
+      "bytes": 756,
+      "sha256": "e7f5f2f8e41f1f143e7aea079261313ddea648814463a1245b54681ab34c3c6d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/PREFORWARD-EXTENDED-RESULTS.json",
+      "bytes": 4564,
+      "sha256": "eb3089313c9e038c38b50ac3f6c959d86cbaa123d49c8e6276aa327634ab6559"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/PREFORWARD-RESULTS.json",
+      "bytes": 2529,
+      "sha256": "22dfc1e2a942f11f4946e56bedc60a271c674aad40946e11887ce42b7c2970e4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/RECEIPT-RESULTS.json",
+      "bytes": 2060,
+      "sha256": "de974cfd0a75f98ae4157fca739c331d361897eeadc1610c6a134210f5ba499d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/REVIEW-SEAL.initial.json",
+      "bytes": 4159,
+      "sha256": "2f5fb8c34cd44745ae46a5294ed1b282a7acd681bf9202ac9ce73210ee2f92d6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/preforward-controls.log",
+      "bytes": 1933,
+      "sha256": "8d2bb613f85cce3cabf73e8838442079bcd608252dca78180230bd69ee29a754"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/preforward-extended-controls.log",
+      "bytes": 3620,
+      "sha256": "1e695ff7f6c42883e5bf5c9d0f4a15ca695ec24e5468bd6bab9168295eb336e4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/preforward_controls.py",
+      "bytes": 6352,
+      "sha256": "955d9171c8f843962eb506168a2b68252b036defd8f9646a672f98e830d8ded1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/preforward_controls_extended.py",
+      "bytes": 7773,
+      "sha256": "445935a1c8a12bf38c67c5c57806d67cf8278274ac18017f88a34c9760b23376"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/q1_candidate_continuous_maps_v1.py.initial",
+      "bytes": 11671,
+      "sha256": "c169b0b990dddc872e196057fc45b61644996b7b55d1334b9afa36041a05771e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/q1_candidate_sequence_forcing_v1.py.initial",
+      "bytes": 13903,
+      "sha256": "93db3462d89a643a590482c55796eadc9041023896cdde217e31a1c18e108f22"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/q1_candidate_sequence_graphs_v1.py.initial",
+      "bytes": 17073,
+      "sha256": "9a0d6249c62566a64ab35f39684b2c32bf002ab6dc093f457997bd92a8ece89e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/q1_candidate_sequence_runtime_v1.py.initial",
+      "bytes": 11741,
+      "sha256": "1fb7585ad4b7395ebd1ec072cc042472efcca6ea59c8b883f9104097409c1b11"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/receipt-controls-py39-attempt2.log",
+      "bytes": 424,
+      "sha256": "2c88e540bb740f13005604e73816d0e5e42f50c9034b4be55c5964b54beb2fd7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/receipt-controls-py39-attempt3.log",
+      "bytes": 424,
+      "sha256": "2c88e540bb740f13005604e73816d0e5e42f50c9034b4be55c5964b54beb2fd7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/receipt-controls-py39-attempt4.log",
+      "bytes": 1293,
+      "sha256": "1f626f24f338321cb34a21b605dc443f673ec0aa57d8c1125f001c8d6280970d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/receipt-controls-py39.log",
+      "bytes": 522,
+      "sha256": "4645a9bf9977cb0fbf1c57a739737307c43388b297f1929e308e9f261ea35433"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/receipt-controls-traceback.log",
+      "bytes": 4255,
+      "sha256": "105548f2071a2eb11976dcacd21756c490b62851ec911cfbc05e6b8893982ef2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/receipt-controls.log",
+      "bytes": 1916,
+      "sha256": "1d49800d9384ff94455c9bda3c57f3cee482e285823cf6a830ba6b2dd4d64d28"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/receipt_controls.py",
+      "bytes": 2112,
+      "sha256": "9c0dcc0dc6d9522b148e85e6b950475c6d8496112696aa4bbec50bb0a4445d0c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/receipt_controls_py39.py",
+      "bytes": 2990,
+      "sha256": "52a8842be93160f2e9b8de13f13f7d1c460f8171fcaebbaa23469ca2435f9540"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/receipt_controls_py39_v2.py",
+      "bytes": 3515,
+      "sha256": "1090e294eedb3919ebaab5edf7bc31253c60976385231c09e8c82226a3be2d61"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/receipt_controls_py39_v3.py",
+      "bytes": 4560,
+      "sha256": "4d8783ce730cf5be455ca037567707d945ed53696eafb97fe653c5f345494aa2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/receipt_controls_traceback.py",
+      "bytes": 3557,
+      "sha256": "671107a57f8954bd6c7140a8bfa45e94a41f198b91a22eecddf387d743a01058"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/sequence-runtime-review/test_q1_candidate_sequence_runtime_v1.py.initial",
+      "bytes": 4391,
+      "sha256": "192975f6846a75f3fddb6db33bddfd2806d19fef091fad0eb9e99d6eb2969902"
+    }
+  ],
+  "scope": "source-update24",
+  "restore_order": "after source-update3; this later snapshot wins"
+}

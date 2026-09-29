@@ -1,0 +1,75 @@
+{
+  "bytes": 7386614000,
+  "chunks": [
+    {
+      "file": "native-joint-common-o0-B.tar.zst.0000.enc",
+      "bytes": 536870912,
+      "sha256": "9314355bea14c6a1c99da35e6285c5b60afd3475eff6b0b2dcb62bc24653580d"
+    },
+    {
+      "file": "native-joint-common-o0-B.tar.zst.0001.enc",
+      "bytes": 536870912,
+      "sha256": "2c8126bf11886b1cb615bc894c859fe4b5a71d69bd4437862a0a4fdb25f422a9"
+    },
+    {
+      "file": "native-joint-common-o0-B.tar.zst.0002.enc",
+      "bytes": 536870912,
+      "sha256": "ca24212b645854e612fa2f7eec2a4a69cf532e108db6c8c18a7c019e28a85c31"
+    },
+    {
+      "file": "native-joint-common-o0-B.tar.zst.0003.enc",
+      "bytes": 536870912,
+      "sha256": "1dd984bc0d38b9ebc222900f9bacb47da84e316c7a589a364498d5a86e3553ad"
+    },
+    {
+      "file": "native-joint-common-o0-B.tar.zst.0004.enc",
+      "bytes": 536870912,
+      "sha256": "d9d908a9ef8dee14a172ad6c3d21465fdaeecb7ab7e2c64fc101f042cb40bfe2"
+    },
+    {
+      "file": "native-joint-common-o0-B.tar.zst.0005.enc",
+      "bytes": 536870912,
+      "sha256": "5aad4da203b00804e1ddb22fc7fb9b6c7f00df9d5e0f84a85e2fa232cdd93ef6"
+    },
+    {
+      "file": "native-joint-common-o0-B.tar.zst.0006.enc",
+      "bytes": 536870912,
+      "sha256": "77b7387dd2f19f78eeb5f8ef238de3ba099c80ced372977fb5db652bf6d57811"
+    },
+    {
+      "file": "native-joint-common-o0-B.tar.zst.0007.enc",
+      "bytes": 536870912,
+      "sha256": "50a93cea7b880a073edefb75f097fe94e558b2eeb3cef66acd70d65df4bd87a7"
+    },
+    {
+      "file": "native-joint-common-o0-B.tar.zst.0008.enc",
+      "bytes": 536870912,
+      "sha256": "e4837e5f2b583fd6cd034374b4bc9aab87e77a92ac130c06c221c3ee0a05be61"
+    },
+    {
+      "file": "native-joint-common-o0-B.tar.zst.0009.enc",
+      "bytes": 536870912,
+      "sha256": "dc5aafc00fc425a03a8a3fd4fba8b3e0c1ded3bf65d0a0a8289ba39bafe5b715"
+    },
+    {
+      "file": "native-joint-common-o0-B.tar.zst.0010.enc",
+      "bytes": 536870912,
+      "sha256": "47620f9e18b4d2a013cd26926d936563861a7d304d0f64641531e49f41bac4b7"
+    },
+    {
+      "file": "native-joint-common-o0-B.tar.zst.0011.enc",
+      "bytes": 536870912,
+      "sha256": "0d1de7b1195959bbfc54e084093f31c202c7ede6ef62a2a364825f797555ea22"
+    },
+    {
+      "file": "native-joint-common-o0-B.tar.zst.0012.enc",
+      "bytes": 536870912,
+      "sha256": "cecb427ccf08c24bd24b182343ecb48c9823a96f801ca1991bf41a49edf9b0a5"
+    },
+    {
+      "file": "native-joint-common-o0-B.tar.zst.0013.enc",
+      "bytes": 407292144,
+      "sha256": "9a68438388d90702c2526fc0aa1acff8ff35dbc95bd8f768ae5a582c1defbc18"
+    }
+  ]
+}
