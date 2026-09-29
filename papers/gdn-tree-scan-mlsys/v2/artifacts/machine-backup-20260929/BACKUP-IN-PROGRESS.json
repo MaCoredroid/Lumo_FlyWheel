@@ -1,0 +1,9 @@
+{
+  "utc": "2026-09-29T06:07:45.463384+00:00",
+  "status": "STREAMING_NOT_YET_PUSHED",
+  "encryption": "openssl AES-256-CBC PBKDF2 SHA256 200000 iterations; random256bit passphrase held outside repo",
+  "local_key_path": "/Users/zhiyuanma/.codex/private-backups/lumotree-20260929.key",
+  "remote_git_head": "984f613d7885d9bf7898866827552b68a3199d0c",
+  "local_git_head": "470a589d4948e274278b861ff2a85157409976cd",
+  "note": "No RAM recovery permitted until push verified. No key material in Git."
+}

@@ -1,0 +1,10 @@
+{
+  "bytes": 201232128,
+  "chunks": [
+    {
+      "file": "remote-source.tar.zst.0000.enc",
+      "bytes": 201232128,
+      "sha256": "4fbabe3b9d351d07e8a3099815d558aeffc567966e3485056132a99a93e6f87a"
+    }
+  ]
+}

@@ -1,0 +1,345 @@
+{
+  "utc": "2026-09-29T06:31:49.560728+00:00",
+  "source_files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/FREEZE-Q1-ROOT-REGISTRY-REPAIR-v1.json",
+      "bytes": 10975,
+      "sha256": "c27a5cf59b6e44cdd562fb0acbacfaff40feee33fbfce2b5e79d741b47506ae1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/WORKLOG.md",
+      "bytes": 76402,
+      "sha256": "31329fb9192479f181826c27f299b7d075a4180cb4f6f46e029444fd0d068210"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/status.json",
+      "bytes": 30243,
+      "sha256": "8598a47a0bd339b7c747b9b35778d50e8f60bee83f0fec483275636bd2693e41"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_raw_audit_v2.py",
+      "bytes": 16124,
+      "sha256": "6e7db114b7f0bcfb5282f8880175e146e344d2213faf85e5aa1b19c3258c78c8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.q1_candidate_layer_registry_v1.txt",
+      "bytes": 624,
+      "sha256": "a8039e0a6a16b49579d28516f26e3cd311bf5d4b007b692f5eb4fdbf291bfcea"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.q1_candidate_raw_audit_v2.binding_closure.txt",
+      "bytes": 1359,
+      "sha256": "8fa274477b79f48050a616bfb6ed9286ceab52443ed3ac8351edee3198c42af1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.q1_target_kv_witness_closure_v1.temporary-view-lifetime-failure.txt",
+      "bytes": 1957,
+      "sha256": "efc0cdda6ea85babffd74bacb55adcc1b35269c999517a0b605a00be69524bab"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.q1_target_kv_witness_closure_v1.txt",
+      "bytes": 1287,
+      "sha256": "6a430471ff7a6494b1972a8c71755f66dc036e766808b2edf00e711515e9e060"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.q1_witness_o1_binding_v2.txt",
+      "bytes": 485,
+      "sha256": "dff2525c09c32d035d25bf993ad23a5e31baa1240eaf410b4a03b0406be3a5a6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/check_q1_candidate_raw_audit_v2_binding_closure.py",
+      "bytes": 5288,
+      "sha256": "c3b533a5a8b16970f63469fb1a5a206d4a942a0b8b39c063921ca6ae38300fd5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_candidate_layer_registry_v1.py",
+      "bytes": 4807,
+      "sha256": "056e5c7a60990f9855518dc9133088dd9a559a5b7a8d1d2ce4aefc175dc114dd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_target_kv_witness_v1.py",
+      "bytes": 7521,
+      "sha256": "40e0ec7bb8c29dd19c1009f305d5460f0f85416f6ef9382c4f2b69cc85f2853e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_witness_o1_binding_v2.py",
+      "bytes": 2803,
+      "sha256": "f8f51fefaa85a14222d9be3cd68138df9cfd7a368a645b25aa8000366def3827"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/candidate-target-registry-root-repair-cpu-audit.json",
+      "bytes": 1327,
+      "sha256": "d868049d8b10ea77d1e4ca12f8c29015151ac786499f675682c5d103198f4927"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/candidate-target-registry-root-repair-integration-cpu-audit.json",
+      "bytes": 2057,
+      "sha256": "53e5ea5503bd18f9cef639d428af4d29893b205be8a5c567be16f8bc7147e431"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/candidate-target-registry-root-repair-review.md",
+      "bytes": 5959,
+      "sha256": "a36497eb82ddbfc50006f06b933011f88761f10f8de97bd698965cf56b20b0f2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-candidate-raw-audit-v2-binding-closure-review.md",
+      "bytes": 2899,
+      "sha256": "ad768ebafa080618e3d5eb8dd717d0d2ec6561870f32e5a315f8c20e1b84cc38"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-candidate-raw-audit-v2-source-review.md",
+      "bytes": 5384,
+      "sha256": "a76242796cda218fad9b2e213e06e0dcd9b629b79d6debb96313448ca46a9e4a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-target-kv-witness-identity-closure-review.md",
+      "bytes": 2992,
+      "sha256": "18b49b4f3140267a3390fb6f3a216068352c695414bcdb685e5434f75962136d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/ACTIVE.json",
+      "bytes": 43386,
+      "sha256": "1439a4b8b6281dab8cb8a06d5c2b940d58b81ab00b4295a15349a0fabfaa643f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/ACTIVE.json.before-standing-authority-20260929T063034Z.json",
+      "bytes": 42487,
+      "sha256": "c54c4231015e7b2498f8e448af38ffc0aae7c6caed98dd6f1ed3b5f90ce92659"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/BINDING-CONTROLS.json",
+      "bytes": 1359,
+      "sha256": "f94b93b00aa171b1c0217b4cb18d4edc9b430e6e3856841bd81bcb73cb255a5f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/JOIN-EDGE-CONTROLS.json",
+      "bytes": 690,
+      "sha256": "485cef591dc6e0b93378d7a6ad6e1e752e64f26fa9cd3b7dd964ad01cd0f4bba"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/REVIEW-SEAL.json",
+      "bytes": 5411,
+      "sha256": "f3e6b9093d3da4194e949b23c1e11c77c59712d69caa2fabaee8a3619b4bcaec"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/SNAPSHOT.json",
+      "bytes": 1955,
+      "sha256": "7f20cdb1fb691ce54345185d3b335d6fb7a42e4c728b7dc1bcaa95015c6e4ea5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/check_binding.py",
+      "bytes": 5225,
+      "sha256": "d938ece93d62022fa089011c28a322815c6b0e016a2e4f40219705c86888f1ad"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/check_join_edges.py",
+      "bytes": 2169,
+      "sha256": "d46064da32d36e7d4219321571ecb664dde1a80756171aaec1fb92ab19f80061"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/independent-join-edges.log",
+      "bytes": 690,
+      "sha256": "485cef591dc6e0b93378d7a6ad6e1e752e64f26fa9cd3b7dd964ad01cd0f4bba"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/parent-binding-closure.log",
+      "bytes": 1359,
+      "sha256": "ef0e1c940d078f8262d6a5359782dfc9c8f6938930ab7b411ca6e29bdbf6663d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/parent-byte-layout.log",
+      "bytes": 485,
+      "sha256": "ebe5ab4ba8d2e6a761036451c631cb2329b5c95fec99a6c6f76bbfa1d571b626"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/snapshot/tools/q1_candidate_case_binding_v2.py",
+      "bytes": 6599,
+      "sha256": "5876f349cbe8126c40d27e70a61d60d208978e5464fe732c76769fe835364882"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/snapshot/tools/q1_candidate_hooks_v3.py",
+      "bytes": 43031,
+      "sha256": "72a399fcddb80255d7eff9b650cc3deb88a1a48d4ee1f814721a3b297fb5bdf2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/snapshot/tools/q1_candidate_job.py",
+      "bytes": 8734,
+      "sha256": "1c77f84c57c3bcfc38a14947483ae04bf6e6465c01092f338c01418645a65485"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/snapshot/tools/q1_candidate_job_v3.py",
+      "bytes": 1523,
+      "sha256": "e72f32260a790dee192cad95a3c80bbd0c7b137a4fb6c57608ee22cff4e450fd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/snapshot/tools/q1_candidate_layer_registry_v1.py",
+      "bytes": 1152,
+      "sha256": "3c6c4c06cffbc41a7ff7d6755b623cb01450f3fa66040b50e6c044ecdf269783"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/snapshot/tools/q1_candidate_raw_audit_v1.py",
+      "bytes": 12421,
+      "sha256": "8478b62cd8d8caceb3451566963ae74094025d3ec88ccb063dd9565e00b21f42"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/snapshot/tools/q1_candidate_raw_audit_v2.py",
+      "bytes": 16124,
+      "sha256": "6e7db114b7f0bcfb5282f8880175e146e344d2213faf85e5aa1b19c3258c78c8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/snapshot/tools/q1_native_corpus_v1.py",
+      "bytes": 28196,
+      "sha256": "d4502b7f47ab1ac6ed8cd295aa5565726fad486c4a1ff1bda6a13fe24e4ea770"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/snapshot/tools/q1_target_kv_witness_v1.py",
+      "bytes": 10558,
+      "sha256": "311b047bcc1bc59809d89f71baf27dc0f178c065d20d48358e408332a081d0d8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/snapshot/tools/tests/check_q1_candidate_raw_audit_v2_binding_closure.py",
+      "bytes": 5288,
+      "sha256": "c3b533a5a8b16970f63469fb1a5a206d4a942a0b8b39c063921ca6ae38300fd5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/snapshot/tools/tests/test_q1_candidate_raw_audit_v1.py",
+      "bytes": 10148,
+      "sha256": "9f33daf87d6114c50f7b5ee11760d1b9ca22f89333f26dfb7c796c4447478416"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/snapshot/tools/tests/test_q1_native_corpus_v1.py",
+      "bytes": 9878,
+      "sha256": "ee4e8459678bd06c3bc0c0320487bada0d25fafc0e5761f420d5394c6206c30b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-binding-closure-review/snapshot/tools/tests/test_q1_witness_o1_binding_v2.py",
+      "bytes": 2803,
+      "sha256": "f8f51fefaa85a14222d9be3cd68138df9cfd7a368a645b25aa8000366def3827"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-independent-review/BINDING-CONTROLS.json",
+      "bytes": 1345,
+      "sha256": "b90068ef30760e7b108ccf46c1267fc625d6832cc694ffb0cbf7f49273ab8bfc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-independent-review/REVIEW-SEAL.json",
+      "bytes": 3647,
+      "sha256": "721c849f15fdf937a6cb3cc2965686c858b5496a7fed22cf7c2f582d43ea31b6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-independent-review/SNAPSHOT.json",
+      "bytes": 1623,
+      "sha256": "5f953a9f3104e759084d301e69d89b69aa43a7ccffaa7779ce9e260f9c57100f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-independent-review/check_binding.py",
+      "bytes": 5225,
+      "sha256": "d938ece93d62022fa089011c28a322815c6b0e016a2e4f40219705c86888f1ad"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-independent-review/snapshot/tools/q1_candidate_case_binding_v2.py",
+      "bytes": 6599,
+      "sha256": "5876f349cbe8126c40d27e70a61d60d208978e5464fe732c76769fe835364882"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-independent-review/snapshot/tools/q1_candidate_hooks_v3.py",
+      "bytes": 43031,
+      "sha256": "72a399fcddb80255d7eff9b650cc3deb88a1a48d4ee1f814721a3b297fb5bdf2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-independent-review/snapshot/tools/q1_candidate_job.py",
+      "bytes": 8734,
+      "sha256": "1c77f84c57c3bcfc38a14947483ae04bf6e6465c01092f338c01418645a65485"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-independent-review/snapshot/tools/q1_candidate_job_v3.py",
+      "bytes": 1523,
+      "sha256": "e72f32260a790dee192cad95a3c80bbd0c7b137a4fb6c57608ee22cff4e450fd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-independent-review/snapshot/tools/q1_candidate_layer_registry_v1.py",
+      "bytes": 1152,
+      "sha256": "3c6c4c06cffbc41a7ff7d6755b623cb01450f3fa66040b50e6c044ecdf269783"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-independent-review/snapshot/tools/q1_candidate_raw_audit_v1.py",
+      "bytes": 12421,
+      "sha256": "8478b62cd8d8caceb3451566963ae74094025d3ec88ccb063dd9565e00b21f42"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-independent-review/snapshot/tools/q1_candidate_raw_audit_v2.py",
+      "bytes": 13687,
+      "sha256": "eafb4183fa683a2456530a53a57210f6c0d94ccab5699150da9cb57867b4b9fb"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-independent-review/snapshot/tools/q1_native_corpus_v1.py",
+      "bytes": 28196,
+      "sha256": "d4502b7f47ab1ac6ed8cd295aa5565726fad486c4a1ff1bda6a13fe24e4ea770"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-independent-review/snapshot/tools/q1_target_kv_witness_v1.py",
+      "bytes": 10558,
+      "sha256": "311b047bcc1bc59809d89f71baf27dc0f178c065d20d48358e408332a081d0d8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-independent-review/snapshot/tools/tests/test_q1_candidate_raw_audit_v1.py",
+      "bytes": 10148,
+      "sha256": "9f33daf87d6114c50f7b5ee11760d1b9ca22f89333f26dfb7c796c4447478416"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-raw-audit-v2-independent-review/snapshot/tools/tests/test_q1_native_corpus_v1.py",
+      "bytes": 9878,
+      "sha256": "ee4e8459678bd06c3bc0c0320487bada0d25fafc0e5761f420d5394c6206c30b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/prepare_standing_authority_root_recovery_v1.py",
+      "bytes": 4816,
+      "sha256": "61b2cd1e10d11a008b491e9f68871b05556ea7c9ef637dcb1127e0b8f640dba0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/status.json.before-standing-authority-20260929T063034Z.json",
+      "bytes": 29303,
+      "sha256": "68885a899817e043b1ed0e9162db4fc47a407b418e9fbf589321b1ed1df5b374"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/target-kv-witness-identity-closure-review/IDENTITY-CONTROLS.json",
+      "bytes": 968,
+      "sha256": "a7d5cea81a982f6c1bf2b33e599dceab64227a7d54a8a05c97df177d7bafceac"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/target-kv-witness-identity-closure-review/REVIEW-SEAL.json",
+      "bytes": 1946,
+      "sha256": "2dfe9cb64c25c569f3f2e37b9bcf517e91f3fb19986e1ab44a8187c2574e0767"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/target-kv-witness-identity-closure-review/SNAPSHOT.json",
+      "bytes": 305,
+      "sha256": "a81b907100d88e0d7d22ec6eab14e40105d8244a248aa562a03bf2304de81172"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/target-kv-witness-identity-closure-review/STDLIB-CONTROLS.json",
+      "bytes": 1601,
+      "sha256": "de2a28871dffb3498a678893a92f54340a6e69aa86541b0279c57cad98d309e9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/target-kv-witness-identity-closure-review/check_identity_closure.py",
+      "bytes": 1749,
+      "sha256": "ce2c1c0674a73821537b3e667394b957b155f996e00fb4d12f3a99dc7b140394"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/target-kv-witness-identity-closure-review/check_stdlib.py",
+      "bytes": 5949,
+      "sha256": "41f082a1e0c3f0ed804e259cf2135e8b3bea861a1abeb70857f91c8fe20103e7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/target-kv-witness-identity-closure-review/snapshot/tools/q1_target_kv_witness_v1.py",
+      "bytes": 10558,
+      "sha256": "311b047bcc1bc59809d89f71baf27dc0f178c065d20d48358e408332a081d0d8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/target-kv-witness-identity-closure-review/snapshot/tools/tests/test_q1_target_kv_witness_v1.py",
+      "bytes": 7406,
+      "sha256": "28b9b1973ff53495d1705dc85e81c0138285e7b1b152e90c6e5b257c1f2f8278"
+    }
+  ]
+}

@@ -1,0 +1,180 @@
+{
+  "bytes": 18294886736,
+  "chunks": [
+    {
+      "file": "local-worktree.tar.zst.0000.enc",
+      "bytes": 536870912,
+      "sha256": "e270c04b142cc1e2c81c5c7fdb99edde54f3d34bf589ce558ac95056905dce33"
+    },
+    {
+      "file": "local-worktree.tar.zst.0001.enc",
+      "bytes": 536870912,
+      "sha256": "cc5ac4f57ee4a76b7fdf73891d68fd2ab45b8566afb3cfbbd21b86e1dab752fa"
+    },
+    {
+      "file": "local-worktree.tar.zst.0002.enc",
+      "bytes": 536870912,
+      "sha256": "98d71093d7b201f114cef75201cffad281436e57045429fb2a176acb8903d9c6"
+    },
+    {
+      "file": "local-worktree.tar.zst.0003.enc",
+      "bytes": 536870912,
+      "sha256": "44fd1ed9f6e922e21c2add20168fb94d88f610851548f4015267de9342671275"
+    },
+    {
+      "file": "local-worktree.tar.zst.0004.enc",
+      "bytes": 536870912,
+      "sha256": "fbc389e93acd0f49f2f87ef7ee0fbc8a5121b78aa74716831bc75d6556c418ef"
+    },
+    {
+      "file": "local-worktree.tar.zst.0005.enc",
+      "bytes": 536870912,
+      "sha256": "a138a15cfc6879174decd94405d1d8fef9d1cbc6a80695e994a0ef61a9880b50"
+    },
+    {
+      "file": "local-worktree.tar.zst.0006.enc",
+      "bytes": 536870912,
+      "sha256": "58b303409efd9d479003939843eec1d5b22c7f760f68bf0efc29afda22b2f5ac"
+    },
+    {
+      "file": "local-worktree.tar.zst.0007.enc",
+      "bytes": 536870912,
+      "sha256": "ecffc0ed3ca70521da60e4aa582466a9820de7ff074453ce82087370b7e89a4f"
+    },
+    {
+      "file": "local-worktree.tar.zst.0008.enc",
+      "bytes": 536870912,
+      "sha256": "351ce6547da31fbb5a5f1da5bd2e4627f9b24701216012208c59ffadc0418b00"
+    },
+    {
+      "file": "local-worktree.tar.zst.0009.enc",
+      "bytes": 536870912,
+      "sha256": "2dc5f52f31130515c8ae18d63ae1c762bb8998175f38a7b1ee3f9053623853e8"
+    },
+    {
+      "file": "local-worktree.tar.zst.0010.enc",
+      "bytes": 536870912,
+      "sha256": "309ff5f96a54fffdf129498421d54370a1dff6be18b1b4a42202623d0ff22098"
+    },
+    {
+      "file": "local-worktree.tar.zst.0011.enc",
+      "bytes": 536870912,
+      "sha256": "a6cd8d6d2fb03cabb36a39eed982ce612083f88ec93336b2615ffff0cfe8f785"
+    },
+    {
+      "file": "local-worktree.tar.zst.0012.enc",
+      "bytes": 536870912,
+      "sha256": "249960a669cda730a7269159865ce3fcab9ffe4a4f78451a296152a2b8b36223"
+    },
+    {
+      "file": "local-worktree.tar.zst.0013.enc",
+      "bytes": 536870912,
+      "sha256": "4ff093890a8fe8a074b5acf21a2813b7c0ec771fb8f12e1b4d2725c42f0f3c9d"
+    },
+    {
+      "file": "local-worktree.tar.zst.0014.enc",
+      "bytes": 536870912,
+      "sha256": "0ceed0df78ed04b101d926566febc19b4fe3e8d374555c78fab12ead6c8ef0a7"
+    },
+    {
+      "file": "local-worktree.tar.zst.0015.enc",
+      "bytes": 536870912,
+      "sha256": "0cd8ba59cfc9fcd8b8536bfb50bc0bcc6c12d602098983e0de732b14baf3ab04"
+    },
+    {
+      "file": "local-worktree.tar.zst.0016.enc",
+      "bytes": 536870912,
+      "sha256": "2399aa5aaebfc8684a111bc0c6a8880d02959b4963148d69344c82a9747e8de8"
+    },
+    {
+      "file": "local-worktree.tar.zst.0017.enc",
+      "bytes": 536870912,
+      "sha256": "3db0f54cf75bdc155a473e9ebbdac259dc12a726c6b0c9f48cc173f955f7c6f1"
+    },
+    {
+      "file": "local-worktree.tar.zst.0018.enc",
+      "bytes": 536870912,
+      "sha256": "d9d287c6279808ae04055d7fdf3f18c2a893ffc64cd874ed7eba0c4e890cdb9f"
+    },
+    {
+      "file": "local-worktree.tar.zst.0019.enc",
+      "bytes": 536870912,
+      "sha256": "af3e6f911852dc3befe446cdeeeeb96d04a4dfc5e0bcb1bf2ac7bd01a891b6c4"
+    },
+    {
+      "file": "local-worktree.tar.zst.0020.enc",
+      "bytes": 536870912,
+      "sha256": "26bb0e10359c11e7310195deba677d9806aee779fbaf3d0955ff31697f8e7d2b"
+    },
+    {
+      "file": "local-worktree.tar.zst.0021.enc",
+      "bytes": 536870912,
+      "sha256": "582a3212b228096a2d27b8f0c7ace7a4570e864a0c7e529881f579b9adc244bf"
+    },
+    {
+      "file": "local-worktree.tar.zst.0022.enc",
+      "bytes": 536870912,
+      "sha256": "f2d99866c881fc27ae8d48575c69c07d724efdc58d7f6e90d73c02c2ef36d096"
+    },
+    {
+      "file": "local-worktree.tar.zst.0023.enc",
+      "bytes": 536870912,
+      "sha256": "39fc4edb29f9a284099aa39f52e8f955b4b412ea92bca05c82c342abfc4f2e96"
+    },
+    {
+      "file": "local-worktree.tar.zst.0024.enc",
+      "bytes": 536870912,
+      "sha256": "69479d5916cd1b493d6882b16ff727bce736ad5c56ce0c1f8c3f642cce315932"
+    },
+    {
+      "file": "local-worktree.tar.zst.0025.enc",
+      "bytes": 536870912,
+      "sha256": "178cc1bdc11b6083eb2370f5f6379e1063110f81d01d2ca76f050b33c4270293"
+    },
+    {
+      "file": "local-worktree.tar.zst.0026.enc",
+      "bytes": 536870912,
+      "sha256": "88495a517759e5614174d29e85fbe25227b841a85e4b9ed1433b7cbc06195564"
+    },
+    {
+      "file": "local-worktree.tar.zst.0027.enc",
+      "bytes": 536870912,
+      "sha256": "e3e2b68b8e28673407d560427f4136db0c84439cba6b39a4af0e84f2d83a3b61"
+    },
+    {
+      "file": "local-worktree.tar.zst.0028.enc",
+      "bytes": 536870912,
+      "sha256": "1bf1626ce14748f90dbd0974b8a2bcd6199f02bfb6ab7e5278500b59076559f3"
+    },
+    {
+      "file": "local-worktree.tar.zst.0029.enc",
+      "bytes": 536870912,
+      "sha256": "caba48f53e9f0f9de31257f283352cfbc33537219f6e0fafe37751c2b9e875b0"
+    },
+    {
+      "file": "local-worktree.tar.zst.0030.enc",
+      "bytes": 536870912,
+      "sha256": "36048d67dc37c8e22f0c7bc508b5aade70193225e15167291b2b77665dfbb5c6"
+    },
+    {
+      "file": "local-worktree.tar.zst.0031.enc",
+      "bytes": 536870912,
+      "sha256": "84cef13c33a1efee0913679a839c27c8584ef3ca7b6be8d7109e34f5a7db3fc1"
+    },
+    {
+      "file": "local-worktree.tar.zst.0032.enc",
+      "bytes": 536870912,
+      "sha256": "393acd9b701fa207d921f6e842c12991bfafeac7082a6e5f79b4e39e03c17c19"
+    },
+    {
+      "file": "local-worktree.tar.zst.0033.enc",
+      "bytes": 536870912,
+      "sha256": "f58633d7327ca73bc5846bb9981b70cf07d9191ecde9a04174b5bba70ce7c36c"
+    },
+    {
+      "file": "local-worktree.tar.zst.0034.enc",
+      "bytes": 41275728,
+      "sha256": "923b00321c589c2a073477567bab255c7d58dffd08fce777f98d107d17d8bc89"
+    }
+  ]
+}
