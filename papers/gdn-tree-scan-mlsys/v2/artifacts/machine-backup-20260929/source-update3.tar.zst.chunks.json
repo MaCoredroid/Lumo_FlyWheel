@@ -1,0 +1,10 @@
+{
+  "bytes": 270352,
+  "chunks": [
+    {
+      "file": "source-update3.tar.zst.0000.enc",
+      "bytes": 270352,
+      "sha256": "690a08e930ac841d0ce688eb1395ae1fcd429d7dc7e2fd5567c2575aae6ca530"
+    }
+  ]
+}

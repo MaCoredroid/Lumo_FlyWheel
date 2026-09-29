@@ -1,0 +1,107 @@
+{
+  "schema": "lumo.source-update-manifest.v1",
+  "utc": "2026-09-29T07:57:34.150385+00:00",
+  "files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/WORKLOG.md",
+      "bytes": 81607,
+      "sha256": "f9f3a4aa1a89cfc246e9f7a5ec244707a0a593f31c6135c5b4ee8006497bed0d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/status.json",
+      "bytes": 33024,
+      "sha256": "2e57d7d02f56b2da8b8b54b5c88c5d6c02fb3da1456ed606cd40686c6c14736f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.q1_hidden_publication_source_v1.attempt1.txt",
+      "bytes": 252,
+      "sha256": "4df33336ebaa327f09719d1ef73545bae28aa4be95443987e0f6d2c59b79616a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_hidden_publication_source_v1.py",
+      "bytes": 3948,
+      "sha256": "cf1a691aab9835aec112368b709402f3451560e9fbddd33a056a705d4bb905a2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-hidden-publication-witness-v1-review.md",
+      "bytes": 8146,
+      "sha256": "a3f8151eed24d071fcb1629d77f07e4b1fce231fa94255d4863c4506b4b0882e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/ACTIVE.json",
+      "bytes": 46187,
+      "sha256": "d5496385bcb57073375c7ea69d446030ffc92d801771f8d517725a962c2f826f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-witness-independent-20260929T0420Z/MANIFEST.json",
+      "bytes": 2259,
+      "sha256": "bac6037c135affd4fbae44de16ede3a6e2bd9c79d595c7528f9a521c5e72c003"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-witness-independent-20260929T0420Z/REVIEW.md",
+      "bytes": 8146,
+      "sha256": "a3f8151eed24d071fcb1629d77f07e4b1fce231fa94255d4863c4506b4b0882e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-witness-independent-20260929T0420Z/SOURCE-BINDINGS.json",
+      "bytes": 2689,
+      "sha256": "d2d64cb361238148deafc423b69a20d015a0a0a37668c3383e083083b25e1715"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-witness-independent-20260929T0420Z/controls.json",
+      "bytes": 2745,
+      "sha256": "e644cc2b338ce9ddcb6c1c3dc51d3d545526c3c5159133956496cadace02c3bb"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-witness-independent-20260929T0420Z/controls.py",
+      "bytes": 4330,
+      "sha256": "8e835bfe00252fc5d54522bf962a0f52b844203f3295c9fef6f37d7706cdb240"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-witness-independent-20260929T0420Z/parent-stdlib-tests.txt",
+      "bytes": 487,
+      "sha256": "de2d7808a0ff7cf99e623dbec20b0b695c1fbc9f1f4dd81a53f2a43951d479d2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-witness-independent-20260929T0420Z/sources/eagle.patched.py",
+      "bytes": 399863,
+      "sha256": "8b22dd4fb15044813c8da28afa43b90f178709f7ed3111b3925b28abea717d62"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-witness-independent-20260929T0420Z/sources/gpu_model_runner.patched.py",
+      "bytes": 618896,
+      "sha256": "3d9df101ebb1b2d5e8bc0ca844451b47a935f4adf48f7c6ab4ef81438ce21b79"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-witness-independent-20260929T0420Z/sources/q1_hidden_publication_witness_v1.py",
+      "bytes": 4952,
+      "sha256": "92ac01369e8e337716183172ec8f64ec266b6601bca21384abef834361f2cd18"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-witness-independent-20260929T0420Z/sources/q1_target_kv_witness_v1.py",
+      "bytes": 10558,
+      "sha256": "311b047bcc1bc59809d89f71baf27dc0f178c065d20d48358e408332a081d0d8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-witness-independent-20260929T0420Z/sources/test_log.q1_hidden_publication_source_v1.attempt1.txt",
+      "bytes": 252,
+      "sha256": "4df33336ebaa327f09719d1ef73545bae28aa4be95443987e0f6d2c59b79616a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-witness-independent-20260929T0420Z/sources/test_log.q1_hidden_publication_witness_v1.attempt1.txt",
+      "bytes": 487,
+      "sha256": "de2d7808a0ff7cf99e623dbec20b0b695c1fbc9f1f4dd81a53f2a43951d479d2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-witness-independent-20260929T0420Z/sources/test_q1_hidden_publication_source_v1.py",
+      "bytes": 3948,
+      "sha256": "cf1a691aab9835aec112368b709402f3451560e9fbddd33a056a705d4bb905a2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-witness-independent-20260929T0420Z/sources/test_q1_hidden_publication_witness_v1.py",
+      "bytes": 4173,
+      "sha256": "f7ff19ca7ddd7d9ca4f54b3d7a6d6dfe8a372dc42fd8cb08adf56bcf8da90f26"
+    }
+  ],
+  "purpose": "Preserve final hidden observer CPU/source review and current monitor records before authorized RAM recovery."
+}

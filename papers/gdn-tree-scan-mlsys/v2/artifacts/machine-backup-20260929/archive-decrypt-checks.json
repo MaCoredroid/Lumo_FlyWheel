@@ -1,5 +1,5 @@
 {
-  "utc": "2026-09-29T07:49:54.460789+00:00",
+  "utc": "2026-09-29T07:58:20.107818+00:00",
   "checks": {
     "local-worktree": {
       "passed": true,
@@ -28,10 +28,18 @@
       "passed": true,
       "tar_members": 117,
       "salt_bytes": 8,
-      "verification": "Full explicit saltlen8 decrypt+zstd+tar-list, pipefail exit0; prearchive and postarchive member hashes matched."
+      "verification": "Full explicit saltlen8 decrypt+zstd+tar-list, pipefail exit0; prearchive and postarchive member hashes matched.",
+      "member_content_sha256_verified": 117
+    },
+    "source-update3": {
+      "passed": true,
+      "tar_members": 20,
+      "salt_bytes": 8,
+      "member_content_sha256_verified": 20,
+      "verification": "Full decrypt+zstd+tar content SHA256 verification against snapshot manifest"
     }
   },
-  "verification": "All five complete archive sets passed full decrypt, zstd decode and tar listing. All use salt8. Raw remote artifact archive verified on remote OpenSSL3.0; local archives explicitly saltlen8 on OpenSSL3.6.",
+  "verification": "All six complete archives passed full decrypt, zstd decode and tar listing. Latest source-update2/3 additionally authenticated every decrypted member against its SHA256 manifest. All streams use salt8.",
   "historical_restore_command_failure": {
     "set": "source-update",
     "salt_bytes": 16,
