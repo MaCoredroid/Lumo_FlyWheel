@@ -1,0 +1,113 @@
+{
+  "schema": "lumo.source-update-manifest.v1",
+  "utc": "2026-09-29T22:22:22.739677+00:00",
+  "files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-mtp-interference/q1-native-mtp-interference-20260929T222000Z-A/DIAGNOSTIC-PLAN.json",
+      "bytes": 11561,
+      "sha256": "4c3b2c65da0d16b44aa295520c9e1bc8d34c8842669f66a97dd873221e414dac"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-mtp-interference/q1-native-mtp-interference-20260929T222000Z-A/engine-config.json",
+      "bytes": 15591,
+      "sha256": "544423c922cddf126deebb3876b24ff174a4b534134b7e11de1497b92540c603"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-mtp-interference/q1-native-mtp-interference-20260929T222000Z-A/q1_ref_hooks_job.json",
+      "bytes": 51205,
+      "sha256": "67703d0aec278750c93790d8d0e35991e41137e69ca6b0b0ad283b11629c66bc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_native_mtp_interference_patch_v1.py",
+      "bytes": 1197,
+      "sha256": "e8eca29a67872ae70328618038fcbb92464b975ba6a7fa725feafb3aedff4ce4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_native_mtp_interference_run_v1.py",
+      "bytes": 11138,
+      "sha256": "d6376ab9bd92528df3d262c5d5f98ce2716a78aa9d9482ec89c495050feca338"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_native_mtp_interference_trace_v1.py",
+      "bytes": 4088,
+      "sha256": "d39339049fb2e3fdb982c27572c5d407b6533e3580ed6b248b0c8162209c5fe3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/native-target-vs-joint-route-discrepancy-diagnostic.md",
+      "bytes": 7088,
+      "sha256": "7f131ed1888b37d8dcafeffffc89297360c92227cbd4480634ae3a354f4520a6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-native-joint-common-o0-AB-divergence-diagnosis.md",
+      "bytes": 8081,
+      "sha256": "8090f6cbe81a68eacf2522382f07b9f6c3f29a0860839c46d37ca29b340847b9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/AUTH-NATIVE-MTP-INTERFERENCE-20260929T222000Z.json",
+      "bytes": 1365,
+      "sha256": "476e1793b247184ffef480a9ce405887eee2186931b6e834889eff12f275d607"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/CONFIG-NATIVE-MTP-INTERFERENCE-20260929T222000Z.json",
+      "bytes": 3824,
+      "sha256": "d1d165370f58c7929dc43f964883c55e78966f323c12da1f394eaac238b8cf3a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GATE-NATIVE-MTP-INTERFERENCE-20260929T222000Z.json",
+      "bytes": 1020,
+      "sha256": "c6757308d5b97a2888d28a0b5676222669824fb4b3774309e846e308bb8e8636"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GIT-BACKUP-VERIFIED-20260929-update21.json",
+      "bytes": 90657,
+      "sha256": "bf3276bf6ca14dddf907c7a9d68a7f27fd642ae4689330ddb0735b720f7535cc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LAUNCH-NATIVE-MTP-INTERFERENCE-20260929T222000Z.json",
+      "bytes": 1541,
+      "sha256": "2ef5e225977eb258a49a550ac458cd9565e69574743af4afc4dcdb5fdce18f7b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-20260929T220800Z.json",
+      "bytes": 336,
+      "sha256": "aed30d604dee2e71dea35270855d13b50df8a2288b53faf2f59888d9493743b0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-20260929T220800Z.progress.jsonl",
+      "bytes": 252,
+      "sha256": "0834d195677460d4cac2f45dd176574d233ee73d6e123568dd1307e2e060dc47"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-diagnostic-20260929/RAW-COMPARISONS.json",
+      "bytes": 6285,
+      "sha256": "5fb52017b82b0036c4b4f032b19fca65f7b0a5dec5c85343c49c04ec166ee282"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-diagnostic-20260929/raw-comparisons.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-joint-common-o0-AB-diagnostic-20260929/raw_comparisons_remote.py",
+      "bytes": 5430,
+      "sha256": "b4988c7d2047c2f4d405be627fbbb66fd6b846d898acb9ed9f443e707d0940b7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-target-vs-joint-route-diagnostic/remote-metadata.json",
+      "bytes": 137239,
+      "sha256": "65c7fa07dfdede412c8fc77f80f574ce9ff6d75b877aff57f6a2be45b53ce1a8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-target-vs-joint-route-diagnostic/remote-metadata.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-target-vs-joint-route-diagnostic/source-identities.json",
+      "bytes": 1913,
+      "sha256": "266e6a06eeb701965f6ff1b286f2c0b94ed75f9fdf35136f0f9fda46bb94caf4"
+    }
+  ],
+  "scope": "source-update26",
+  "restore_order": "after source-update3; this later snapshot wins"
+}
