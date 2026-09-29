@@ -1,0 +1,43 @@
+{
+  "schema": "lumo.source-update-manifest.v1",
+  "utc": "2026-09-29T15:55:04.048764+00:00",
+  "files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_candidate_after_z_binding_v1.py",
+      "bytes": 8311,
+      "sha256": "bb9d6bb8b368fae523cbf0610633651a94ea8d6c1ed5cbb0d92263194d32d340"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-20260929T154800Z.json",
+      "bytes": 2397,
+      "sha256": "55f9b4284ad8c093357aa536aa5b680f7dd34cfa02fd511d8bae48573a15fb4d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PUSH-NATIVE-JOINT-SOURCE-20260929T154800Z.log",
+      "bytes": 2898,
+      "sha256": "ec408e848170a9ee04fcfcb285d1a87d8778c0521f1eb2d2f850bd2e8ab82219"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-after-z-binding-cpu/attempt2.log",
+      "bytes": 12814,
+      "sha256": "55506017af196b79457bcce328393b23f80cbb0f30b837db09ce42ae5dd839e4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-after-z-binding-cpu/attempt3.log",
+      "bytes": 11542,
+      "sha256": "85d73c2df274ce01c23400ae9ee1d0063d046cfdf04597ffb62f134403390766"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-after-z-binding-cpu/attempt4-remote-python312.log",
+      "bytes": 2649,
+      "sha256": "9e392a9ccac0f0bd585299f33df7f8da45f746274659e9e59dd70cb2e829a8cd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/candidate-after-z-binding-cpu/initial-test.py",
+      "bytes": 4657,
+      "sha256": "74a3cdd23a73d72e2d32d8615c30eed2fa52baaeb0cb38ba39144eef28359cb1"
+    }
+  ],
+  "scope": "source-update19",
+  "restore_order": "after source-update3; this later snapshot wins"
+}
