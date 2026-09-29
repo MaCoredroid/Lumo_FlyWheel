@@ -1,0 +1,45 @@
+{
+  "bytes": 3970616896,
+  "chunks": [
+    {
+      "file": "native-interference-v1-failed-20260929.tar.zst.0000.enc",
+      "bytes": 536870912,
+      "sha256": "0ce47628c656720e36b6ceeb6234d73d5bc347a8f061f6b9a3a4e866545b1819"
+    },
+    {
+      "file": "native-interference-v1-failed-20260929.tar.zst.0001.enc",
+      "bytes": 536870912,
+      "sha256": "06e1489327be4a35d3d204e23d8e2f2aa9ad70444e80e5bd6bd37cfef4ba85f5"
+    },
+    {
+      "file": "native-interference-v1-failed-20260929.tar.zst.0002.enc",
+      "bytes": 536870912,
+      "sha256": "10072ab77067a89fa499419ffb6c63d864accb58a07d41e53c027d20f4f87de1"
+    },
+    {
+      "file": "native-interference-v1-failed-20260929.tar.zst.0003.enc",
+      "bytes": 536870912,
+      "sha256": "b40804bc1da2b219cc05aeae6b6512d9e4a6316096b45a02e447e95fa80b8bf4"
+    },
+    {
+      "file": "native-interference-v1-failed-20260929.tar.zst.0004.enc",
+      "bytes": 536870912,
+      "sha256": "1f483ffbf46c7d890502d736a103a0b2a045b2321bb288340c7d726487c7af6a"
+    },
+    {
+      "file": "native-interference-v1-failed-20260929.tar.zst.0005.enc",
+      "bytes": 536870912,
+      "sha256": "e974f48f75ead93c335176648f5a322426dae56c11f2f6bb45cbdf90ca5b6690"
+    },
+    {
+      "file": "native-interference-v1-failed-20260929.tar.zst.0006.enc",
+      "bytes": 536870912,
+      "sha256": "457bf14310313775a039f8243ad59d956ce3cee729610c1954cf9c5705fcabac"
+    },
+    {
+      "file": "native-interference-v1-failed-20260929.tar.zst.0007.enc",
+      "bytes": 212520512,
+      "sha256": "4e6e5537cf7c9f1b307f66d2d6d92a808b24ebcc110d4ccbde7edda6c92054b0"
+    }
+  ]
+}
