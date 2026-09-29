@@ -1,0 +1,1188 @@
+{
+  "schema": "lumo.source-update-manifest.v1",
+  "utc": "2026-09-29T10:29:10.703157+00:00",
+  "files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/WORKLOG.md",
+      "bytes": 88308,
+      "sha256": "733cc3619b33798efeba90256fed676dd4cd7f193c5560388add406b2578b188"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/launcher-diagnostic.v3_8-from-v3_2.diff",
+      "bytes": 6021,
+      "sha256": "c1adf4574fb977806310c023468d1853d995e10eb524fbcf1fc5b014cccbe4f6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/launcher-diagnostic.v3_9-from-v3_2.diff",
+      "bytes": 6021,
+      "sha256": "3bf6f6c3fc8f7f67404558d8a4178d9f852dea0b7cf61288a315821f32f78cee"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/AUTH-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A.consumed.json",
+      "bytes": 966,
+      "sha256": "7efc53658e92c6dfa69cc6755cf1b646a85614436ba66e297d4da2cc91661499"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/RECEIPT.json",
+      "bytes": 119115,
+      "sha256": "62be09ed00e1e3d1f262f1ee2f5adc19d7748a574c6cdf559114bd73b0ae7f41"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/RECEIPT.preliminary.json",
+      "bytes": 117458,
+      "sha256": "89f3956636d98ece555ebe1b7b8328e5b4ee6aa4aac890e83fe9db2d8acb45a4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/after-meminfo.txt",
+      "bytes": 1507,
+      "sha256": "2c9ae4dacc14ab744d16c172a10415b4bcfa49caf7930560b41fa97d3c70a5a4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/after-vmstat.txt",
+      "bytes": 4174,
+      "sha256": "0a10a5e07c49fc43419aaf84d0d0a66d890443b5ddeeeb57642beead109c8a7f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/after10s-meminfo.txt",
+      "bytes": 1507,
+      "sha256": "0a406c589edad3758744827885884a3b1fbca27d4d555460f9b2d44644fd9746"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/after10s-vmstat.txt",
+      "bytes": 4175,
+      "sha256": "3f904ff0ecab762d9c587a85d0fc00de73fa5ef535a7f6213729abebfb6d455c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/authorization.copy.json",
+      "bytes": 1405,
+      "sha256": "55e9e724d7cfaed7fe8fd828fc39e2547c4a69ec5a75fde8d15f97354bca0c50"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/before-meminfo.txt",
+      "bytes": 1505,
+      "sha256": "6a8e813763accbe6f44e7395ad5342bc1c3c11275ba8292906f56439ee63aeec"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/before-vmstat.txt",
+      "bytes": 4181,
+      "sha256": "ff20ab2b18e369dafc6b561e69149ed6213576ecfc293e02f587dfc5b4811988"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-01-uname-r.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-01-uname-r.stdout.txt",
+      "bytes": 19,
+      "sha256": "c733324a73fee684aecd35ce6a7a8e54d5b9142381737751b44303505379118b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-02-nvidia-smi-driver.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-02-nvidia-smi-driver.stdout.txt",
+      "bytes": 10,
+      "sha256": "eb4a23418e3f083bc3f79c488143534b5a591b429cf059ca797f6b277715de2a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-03-docker-image-inspect.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-03-docker-image-inspect.stdout.txt",
+      "bytes": 72,
+      "sha256": "60dac37c4d1eea7014a78c815c30b1d5229f497029c838d9243ebaab00b428dd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-04-docker-ps.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-04-docker-ps.stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-05-pgrep-engine.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-05-pgrep-engine.stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-06-nvidia-smi-compute-apps.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-06-nvidia-smi-compute-apps.stdout.txt",
+      "bytes": 41,
+      "sha256": "cae79969ce448872401f5d9bcd1d52bbefa1a5450cf3a5658f62f068ab59294b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-07-before-fuser-nvidia.stderr.txt",
+      "bytes": 802,
+      "sha256": "c016204e188cff73c3b6f8a963045d7ea9642cac2231c50bc68ee1fe24b2bc3c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-07-before-fuser-nvidia.stdout.txt",
+      "bytes": 90,
+      "sha256": "11660c9f946f55e5d09810404907376769c762d0c95c2bbe442e5148a99ba139"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-08-before-ps-identity-4178.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-08-before-ps-identity-4178.stdout.txt",
+      "bytes": 38,
+      "sha256": "ee8326caa9ef9361abab816c663b1be5f4078236fc060362ae600cdaa7bc8836"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-09-before-ps-identity-4354.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-09-before-ps-identity-4354.stdout.txt",
+      "bytes": 45,
+      "sha256": "7a9a5f9bd03f75993d451be9d5fd5b0985bb3b7cbcf1ab42f3ce45349db9bb6c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-10-before-ps-identity-4383.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-10-before-ps-identity-4383.stdout.txt",
+      "bytes": 49,
+      "sha256": "cee2240f2b114be9ffc2da48e1663d3c408193627292bd3c8119a4ca2c4b99c3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-11-before-ps-identity-4849.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-11-before-ps-identity-4849.stdout.txt",
+      "bytes": 49,
+      "sha256": "6cc53036452fd4156e74541752428a901e58c9994b7bc6bc68c3c9c74263aa04"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-12-before-ps-identity-5132.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-12-before-ps-identity-5132.stdout.txt",
+      "bytes": 49,
+      "sha256": "dae27dbb0f40d7a4cb931bd3c306aab5a8c587fa07c1f092971f0ed22794ecca"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-13-before-lsmod.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-13-before-lsmod.stdout.txt",
+      "bytes": 7330,
+      "sha256": "deb83b7fe929a1e17f6b2399004073bce1d8082a8a2fb1a8abe770d282fbcd01"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-14-before-ps-list.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-14-before-ps-list.stdout.txt",
+      "bytes": 52777,
+      "sha256": "e24a882ea4f8b3817762eeb4b2e60ae8aa1303d3d957666b54324855578440cc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-15-docker-ps.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-15-docker-ps.stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-16-pgrep-engine.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-16-pgrep-engine.stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-17-nvidia-smi-compute-apps.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-17-nvidia-smi-compute-apps.stdout.txt",
+      "bytes": 41,
+      "sha256": "cae79969ce448872401f5d9bcd1d52bbefa1a5450cf3a5658f62f068ab59294b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-18-prewrite-fuser-nvidia.stderr.txt",
+      "bytes": 802,
+      "sha256": "c016204e188cff73c3b6f8a963045d7ea9642cac2231c50bc68ee1fe24b2bc3c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-18-prewrite-fuser-nvidia.stdout.txt",
+      "bytes": 90,
+      "sha256": "11660c9f946f55e5d09810404907376769c762d0c95c2bbe442e5148a99ba139"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-19-prewrite-ps-identity-4178.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-19-prewrite-ps-identity-4178.stdout.txt",
+      "bytes": 38,
+      "sha256": "ee8326caa9ef9361abab816c663b1be5f4078236fc060362ae600cdaa7bc8836"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-20-prewrite-ps-identity-4354.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-20-prewrite-ps-identity-4354.stdout.txt",
+      "bytes": 45,
+      "sha256": "7a9a5f9bd03f75993d451be9d5fd5b0985bb3b7cbcf1ab42f3ce45349db9bb6c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-21-prewrite-ps-identity-4383.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-21-prewrite-ps-identity-4383.stdout.txt",
+      "bytes": 49,
+      "sha256": "cee2240f2b114be9ffc2da48e1663d3c408193627292bd3c8119a4ca2c4b99c3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-22-prewrite-ps-identity-4849.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-22-prewrite-ps-identity-4849.stdout.txt",
+      "bytes": 49,
+      "sha256": "6cc53036452fd4156e74541752428a901e58c9994b7bc6bc68c3c9c74263aa04"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-23-prewrite-ps-identity-5132.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-23-prewrite-ps-identity-5132.stdout.txt",
+      "bytes": 49,
+      "sha256": "dae27dbb0f40d7a4cb931bd3c306aab5a8c587fa07c1f092971f0ed22794ecca"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-24-drop-caches-write.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-24-drop-caches-write.stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-25-after-lsmod.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-25-after-lsmod.stdout.txt",
+      "bytes": 7330,
+      "sha256": "deb83b7fe929a1e17f6b2399004073bce1d8082a8a2fb1a8abe770d282fbcd01"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-26-after-ps-list.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-26-after-ps-list.stdout.txt",
+      "bytes": 53008,
+      "sha256": "292099fc3e38f16fcd496753ada817c68cb7b70898c16b98d58bc5ec6985cca9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-27-after-fuser-nvidia.stderr.txt",
+      "bytes": 802,
+      "sha256": "c016204e188cff73c3b6f8a963045d7ea9642cac2231c50bc68ee1fe24b2bc3c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-27-after-fuser-nvidia.stdout.txt",
+      "bytes": 90,
+      "sha256": "11660c9f946f55e5d09810404907376769c762d0c95c2bbe442e5148a99ba139"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-28-after-ps-identity-4178.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-28-after-ps-identity-4178.stdout.txt",
+      "bytes": 38,
+      "sha256": "ee8326caa9ef9361abab816c663b1be5f4078236fc060362ae600cdaa7bc8836"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-29-after-ps-identity-4354.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-29-after-ps-identity-4354.stdout.txt",
+      "bytes": 45,
+      "sha256": "7a9a5f9bd03f75993d451be9d5fd5b0985bb3b7cbcf1ab42f3ce45349db9bb6c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-30-after-ps-identity-4383.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-30-after-ps-identity-4383.stdout.txt",
+      "bytes": 49,
+      "sha256": "cee2240f2b114be9ffc2da48e1663d3c408193627292bd3c8119a4ca2c4b99c3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-31-after-ps-identity-4849.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-31-after-ps-identity-4849.stdout.txt",
+      "bytes": 49,
+      "sha256": "6cc53036452fd4156e74541752428a901e58c9994b7bc6bc68c3c9c74263aa04"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-32-after-ps-identity-5132.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-32-after-ps-identity-5132.stdout.txt",
+      "bytes": 49,
+      "sha256": "dae27dbb0f40d7a4cb931bd3c306aab5a8c587fa07c1f092971f0ed22794ecca"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-33-journalctl-k.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-33-journalctl-k.stdout.txt",
+      "bytes": 63,
+      "sha256": "c3c2ebf60cb60c7db09e31fee418f180b54bf8e125a64b28e9b6f1497dfb222c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-34-query-docker-create.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-34-query-docker-create.stdout.txt",
+      "bytes": 65,
+      "sha256": "8fda725ffb6a417cf39e18f569ab1882fa5d463d3a348b943bb0400233cf0cdc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-35-query-inspect-owned.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-35-query-inspect-owned.stdout.txt",
+      "bytes": 170,
+      "sha256": "77a54a4b34a5129bb90e974febadeb890c1f3f9eb23ddb3e70d11bcd824a4bf3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-36-query-docker-start.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-36-query-docker-start.stdout.txt",
+      "bytes": 124,
+      "sha256": "85c325d7e0f5875e613add1d3d7b706887d7f627afc2663ce404a5c842d03dd1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-37-query-inspect-before-rm.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-37-query-inspect-before-rm.stdout.txt",
+      "bytes": 169,
+      "sha256": "77b1b265c62554059fa59c5ea51cfa91a2c2543ace0730f812a39f28c1cf8105"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-38-query-docker-rm-cid.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-38-query-docker-rm-cid.stdout.txt",
+      "bytes": 65,
+      "sha256": "8fda725ffb6a417cf39e18f569ab1882fa5d463d3a348b943bb0400233cf0cdc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-39-query-inspect-after-rm.stderr.txt",
+      "bytes": 112,
+      "sha256": "2d24ef08760c8118569a0a609a35d98a1c7d1675004375ccff1c726273a1af1b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/cmd-39-query-inspect-after-rm.stdout.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/operational-config.json",
+      "bytes": 3284,
+      "sha256": "4256a2259df6f8961cfac7d5ff4404fccfc4d9480def63c33f9ca09c3face03c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/prewrite-meminfo.txt",
+      "bytes": 1505,
+      "sha256": "1da59b2d83cead41cf76c5e574cf2ecede455fa6e677fab24ea6666f34feba83"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A-20260929T095002Z/query-container.cid",
+      "bytes": 64,
+      "sha256": "850f3dc1ea1d6450e9402a62c012547185d397b2a9213206e342afbddd25e618"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/status.json",
+      "bytes": 34438,
+      "sha256": "0e5b33321152988e6e1e902ae72490ae3036e178a731d3a08e2ab91531405a2d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/generated/fr14_leg3_launch_nomiddleware.q1diag.v3_8.sh",
+      "bytes": 497863,
+      "sha256": "194539c6382730d3b967445aefc1ce39045b4eb3bb0a8463749da1638fbed717"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/generated/fr14_leg3_launch_nomiddleware.q1diag.v3_9.sh",
+      "bytes": 497863,
+      "sha256": "2fd766f3b4e82d1bd50d6972f17de2aaf0c235c23869c2b6c240287fe60e5480"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_cycle0_gate_v6.py",
+      "bytes": 4097,
+      "sha256": "0f21f3df5e9e304fbf9ce901972915b70421cbec1d94d840397b6f03b135b049"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_cycle0_gate_v7.py",
+      "bytes": 4097,
+      "sha256": "ae4dc6524a2cba8e27a23ce4726a34d03a891d97ebb23c2eb6e66d01e1979eb1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_cycle0_seal_auth_v2.py",
+      "bytes": 2254,
+      "sha256": "05dcb82296764c3fea4b9e3f1b7cc39fb572d7d20c7dd32ca131e2285271749e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_cycle0_seal_auth_v3.py",
+      "bytes": 2254,
+      "sha256": "1299c8882ee58d487fa18392f60445941b8188f226d604b9bbb95c0b06219da5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_driver_v2_3.py",
+      "bytes": 8956,
+      "sha256": "059c223453c4434cba10128abd6bf4cc2a1fa6cdd3e6d3689c5f7f6d244c686e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_driver_v2_4.py",
+      "bytes": 8956,
+      "sha256": "a84e57c8801dc14ab52d25680cd51324cb6525454a937f55992c12194e9306f7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_hooks_v8.py",
+      "bytes": 61018,
+      "sha256": "d6977ec69324c68fd82492da18472430c268808ea062b5608255cd03390638d3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_hooks_v9.py",
+      "bytes": 67683,
+      "sha256": "905e35898a504357b8a96f2315395e0bec37d5b2509d2ae0a0709b827271317c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_job_v8.py",
+      "bytes": 2560,
+      "sha256": "f80d2544765552aaf5331dd3afbe468023b9c279cafa235b0001f549e8f83420"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_job_v9.py",
+      "bytes": 2815,
+      "sha256": "881232bc8934d6a99879ea909d69c3f9bd1255ddea80ed648c48abe258f8376e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_raw_audit_v7.py",
+      "bytes": 19890,
+      "sha256": "d65225715f06d0d80855e1af46e41192df5559a7f44d967266848d0962bc01e4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_raw_audit_v8.py",
+      "bytes": 20255,
+      "sha256": "85e7e0aad47ed850e7edb3c742af06eaf72d153bc8a3aa732f312eb5748f8753"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_hidden_event_binding_v1.py",
+      "bytes": 1641,
+      "sha256": "9ea8e10f4eb290840a908f4b78f38c5f29c0144d0e40dcab5b3750650c1550e4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_make_diag_launcher_v3_8.py",
+      "bytes": 3155,
+      "sha256": "55250ae275abbfd69bd73b68b2add9b04072a4bded7e7283b7efbf9f27f59232"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_make_diag_launcher_v3_9.py",
+      "bytes": 3155,
+      "sha256": "2277a14620e6218318eddeac975543d6e7f3cdbddbfd16008526876c5575fe06"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_mtp_kv_publication_witness_v1.py",
+      "bytes": 5990,
+      "sha256": "9239e35fa10395cd01e7e2a9a7c4a34b42fea753b1f0b064ac16909937ace976"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_patch_candidate_v8.py",
+      "bytes": 11318,
+      "sha256": "73ea046c8fa32eef3af919c3ce22890c26822df1267cb5335fed88ac0e0349d2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_patch_candidate_v9.py",
+      "bytes": 11891,
+      "sha256": "93894ce2758c8283f60dd90f64b364fd1efd6f310ab63ff3f5e25814928ab202"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/run_q1_candidate_cycle0_v6.sh",
+      "bytes": 23607,
+      "sha256": "b1a3f2dac1f45240fc0c71b934e1c2dc49233a117d33c5bab4c87bdf1b9ec0c7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/run_q1_candidate_cycle0_v7.sh",
+      "bytes": 23671,
+      "sha256": "b76e650491b5ac6d4eed5e5275316347ddade8a96f767ec8ef8cb793afc44c61"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.q1_candidate_cycle0_gate_v6.txt",
+      "bytes": 730,
+      "sha256": "4d4508beab5550d10af179c00512f5567bce561c29e6bb643cc20aed7bea564a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.q1_candidate_cycle0_gate_v7.attempt2.txt",
+      "bytes": 102,
+      "sha256": "e6a0fc179d94d4d1693c7c490589a64abdbe7a9a20e62e844b92985833b69e42"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.q1_cycle0_rng_request_v2_3.txt",
+      "bytes": 418,
+      "sha256": "2b0d7a11652f36a60c22c27588536f44a41b7e6b2f24640f91d29ccb29ee4308"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.q1_hidden_v8_connected.attempt1.txt",
+      "bytes": 9793,
+      "sha256": "700a6faa1fc81dfc9b583f07bb908f932a03c75876421fb328b743d4df530df5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.q1_mtp_kv_publication_witness_v1.attempt1.txt",
+      "bytes": 675,
+      "sha256": "bec02dc712992f085945394ec4bf893eeb78697cd3f3d5ef82dd313f7b336d2c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.q1_mtp_v9_connected.attempt1.txt",
+      "bytes": 533,
+      "sha256": "cc8ba38075ac2f3c8bea2537112e6de5cd19d8e6c01c60f866b0138021ab8013"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.q1_mtp_v9_connected.attempt2.txt",
+      "bytes": 44379,
+      "sha256": "9ca64edb72368488c127eaed8bdaaca5bf2d5d2804e200952bb88cbf2997069c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.q1_mtp_v9_connected.attempt3.txt",
+      "bytes": 33478,
+      "sha256": "4264526eba65b3b1cd933cb9958cfdd6e21b600f295733b52e11663acdad838d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.q1_mtp_v9_consumers.attempt1.txt",
+      "bytes": 2742,
+      "sha256": "a28180c1e1231a4e918cb45569f4851c5b2bb764cdd3b3450332580e55b19de3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/test_log.q1_patch_candidate_v8.attempt1.json",
+      "bytes": 1805,
+      "sha256": "96852bbdea79030908dfeb17b9d8364836b188a37c0b9a3aa942c8a21755fb96"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_candidate_cycle0_gate_v6.py",
+      "bytes": 5651,
+      "sha256": "d8d44558f766861533f38759d9c1bf711f31f0e5dd034305edaae959d2ec397d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_candidate_cycle0_gate_v7.py",
+      "bytes": 5651,
+      "sha256": "f438e504e5faa3d66d101c02697ad6c27fc93dce2b3d82f4208f68c6ab55fec8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_cycle0_rng_request_v2_3.py",
+      "bytes": 1550,
+      "sha256": "465b934c7cf5d756289a1de820bba49f6f637b54c8744d730ad573c0a5492433"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_cycle0_rng_request_v2_4.py",
+      "bytes": 1550,
+      "sha256": "b5d45b2a17fecbc5ab015060f0f98524f5b9ae00150b578297884705f099dba5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_hidden_v8_connected.py",
+      "bytes": 9926,
+      "sha256": "7e22f608e5b7443740251789ac0b943373b8438095641eeedce695969ad37816"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_mtp_kv_publication_witness_v1.py",
+      "bytes": 4264,
+      "sha256": "ad85e645f159d0ae0982f9a99c58e7d41df411dd723da664046f69792786b6d9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_mtp_v9_connected.py",
+      "bytes": 15537,
+      "sha256": "695fea33cde57da3b22610204f7c0df45a9596586cd2dfb33a7076febb0d66f3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/native-corpus-a-prelaunch-config-retry-review.md",
+      "bytes": 4241,
+      "sha256": "81a1956c64e8113f7e4a2ee9d1c8b8aa1e78615eabe4663ee294f125abae06e6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/native-corpus-aligned-a-raw-review-20260929.md",
+      "bytes": 5612,
+      "sha256": "5f43448d787ef30bce01fd1ae35129dc990a7d6bdf81d6a2051056e4004fa280"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-candidate-cycle0-v8-propagation-review.md",
+      "bytes": 7967,
+      "sha256": "32bc56f7b13d7aaecd6acf6bbc4d0545c03b281d4eebc74778a66f4197183a5d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-candidate-cycle0-v9-propagation-review.md",
+      "bytes": 6878,
+      "sha256": "354436bb6f00370f36901e737bb1745d8a1ea533a354a328e358fecbf2dbc864"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-hidden-publication-v8-connection-closure-review.md",
+      "bytes": 6477,
+      "sha256": "9a26b618b5c051fc0cccb424465e72b76999ffa248d0ad10a07d498ef2e976be"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-hidden-publication-v8-connection-review.md",
+      "bytes": 5529,
+      "sha256": "0d396ab6fafb866cefe132ca565910f61e1843c4f8d743a23e3641614717bc88"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-mtp-kv-publication-source-map.md",
+      "bytes": 9290,
+      "sha256": "221f0b556e6a9606019de13b7cbfc34887afba782e12ae38344a01aa3fe0d240"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-mtp-kv-publication-witness-v1-review.md",
+      "bytes": 5543,
+      "sha256": "467f92d7b9a02d84f42ce13dd23a1bf6c76bf5f2681f33fd7d80c090e13b5e2d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-mtp-kv-v9-connection-independent-audit.json",
+      "bytes": 1464,
+      "sha256": "aaf641e692f31547a2e5d9224a1db44f8af755247bdf8f34271fc098fedc7526"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-mtp-kv-v9-connection-review.md",
+      "bytes": 5409,
+      "sha256": "10102666da1aac807ba15203255af8d79d04c3574d7cbcba6a21c8de27ae4e8f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/ACTIVE.historical-before-native-A-audit-20260929.json",
+      "bytes": 47417,
+      "sha256": "658c8fc61455e9e02c8105b3443199bd0ddcbe23187476effc999a132bf2dcef"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/ACTIVE.json",
+      "bytes": 47871,
+      "sha256": "606685498f7551d7b410ea922e244d6639b823e18d5ea77b0f766fc2101de525"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/AUTH-NATIVE-20260929T094930Z.json",
+      "bytes": 1405,
+      "sha256": "55e9e724d7cfaed7fe8fd828fc39e2547c4a69ec5a75fde8d15f97354bca0c50"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/CONFIG-NATIVE-20260929T094930Z.json",
+      "bytes": 3824,
+      "sha256": "d1d165370f58c7929dc43f964883c55e78966f323c12da1f394eaac238b8cf3a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GATE-NATIVE-20260929T094930Z.json",
+      "bytes": 7179,
+      "sha256": "1b19ed6b092662489305a46fc8ed792b2ddfade89d3d7fe38eba4042a28f3149"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GIT-BACKUP-VERIFIED-20260929-update7.json",
+      "bytes": 43256,
+      "sha256": "fb8064202b7df3ef2ba3da79e3280809bff094cbe329aa2bd37d4f5a2256ca56"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GIT-BACKUP-VERIFIED-20260929-update8.json",
+      "bytes": 43514,
+      "sha256": "ecfa7f99c903c9f3342398bc1cd2ad03911aea811929bbdf5f531b0ef0128499"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LAUNCH-NATIVE-20260929T094930Z.json",
+      "bytes": 2273,
+      "sha256": "7211d27cf257b694d7e21432eb26a4340f64c70b833337a3692c3f1573b16028"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/NATIVE-ALIGNED-A-PROGRESS-20260929T1005Z.json",
+      "bytes": 502,
+      "sha256": "be9d1f47e27bba5a301ed5b06785a01ed6902059ba6c242e9220689cda0b36bf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/NATIVE-EXECUTION-q1-native-corpus-calibration-20260929T045821Z-aligned_nonpacked-A.preflight-retry1.log",
+      "bytes": 2369,
+      "sha256": "e30d9951e8d8c4edaa44b440e2f1c301a6c92a6c4a8bc2bd485c782198fcde9d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/Q1-PUBLICATION-v9-SOURCE-READINESS.json",
+      "bytes": 3701,
+      "sha256": "0b1d29b4147a3c58935023b5fdb18f811b4ce91cac899eaeb269d8ec0256c4a0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/CONTROLS.json",
+      "bytes": 1222,
+      "sha256": "57a78ff4402b9e6d2c7d2e037d33afa13f2b5c7b39aa17f387f9332668bb2008"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/INTERMEDIATE.json",
+      "bytes": 2828,
+      "sha256": "8b5a25d80664daa83dddd6860cbdb9ac87372e839e00910ff17940d4cb68932a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/PROBE.json",
+      "bytes": 3435,
+      "sha256": "32262907a36919bdc7f539bc5542ae73a8cb5066558e49bd5a93c23250923d3a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/REVIEW-SEAL.json",
+      "bytes": 6705,
+      "sha256": "517e1a023bc80e89f5ce2c45d565d44d389c970da9d0ad7b991a521ebd8cf562"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/SOURCES.json",
+      "bytes": 2359,
+      "sha256": "3de6c310ecf9ab5280e222d5316379d70f2385773b814e24c3b97bdecad2868f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/controls.attempt1.txt",
+      "bytes": 134,
+      "sha256": "829b44ec5b0c45e5f8d58eefc3c2cba4110d44831dd082e4b4ba121991523fec"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/controls.attempt2.txt",
+      "bytes": 448,
+      "sha256": "0a7b316e37b4c9e90f8a0277615eb444f3cedaf964ee0265d8ea82f3afef89b8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/controls.final.txt",
+      "bytes": 3602,
+      "sha256": "7366d95d09a1c8915b1c80cf4fbbe24a999fb328c8659340626fff644c0e8a20"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/controls.py",
+      "bytes": 16215,
+      "sha256": "15c6585379efc5f386acf8e4955037fe6b29936a0d3c1300d5773f1fa1320136"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/gate-controls.txt",
+      "bytes": 682,
+      "sha256": "e6bda1e4b4bd265433dda8d43fd3e62e31b0023a13b166a6140d62f3de8dcb53"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/launcher.diff",
+      "bytes": 6021,
+      "sha256": "c1adf4574fb977806310c023468d1853d995e10eb524fbcf1fc5b014cccbe4f6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/source/generated/fr14_leg3_launch_nomiddleware.q1diag.v3_8.sh",
+      "bytes": 497863,
+      "sha256": "194539c6382730d3b967445aefc1ce39045b4eb3bb0a8463749da1638fbed717"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/source/q1_candidate_cycle0_gate_v6.py",
+      "bytes": 4097,
+      "sha256": "0f21f3df5e9e304fbf9ce901972915b70421cbec1d94d840397b6f03b135b049"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/source/q1_candidate_cycle0_seal_auth_v2.py",
+      "bytes": 2254,
+      "sha256": "05dcb82296764c3fea4b9e3f1b7cc39fb572d7d20c7dd32ca131e2285271749e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/source/q1_candidate_driver_v2_3.py",
+      "bytes": 8956,
+      "sha256": "059c223453c4434cba10128abd6bf4cc2a1fa6cdd3e6d3689c5f7f6d244c686e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/source/q1_candidate_hooks_v8.py",
+      "bytes": 61018,
+      "sha256": "d6977ec69324c68fd82492da18472430c268808ea062b5608255cd03390638d3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/source/q1_candidate_job_v8.py",
+      "bytes": 2560,
+      "sha256": "f80d2544765552aaf5331dd3afbe468023b9c279cafa235b0001f549e8f83420"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/source/q1_candidate_raw_audit_v7.py",
+      "bytes": 19890,
+      "sha256": "d65225715f06d0d80855e1af46e41192df5559a7f44d967266848d0962bc01e4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/source/q1_hidden_event_binding_v1.py",
+      "bytes": 1641,
+      "sha256": "9ea8e10f4eb290840a908f4b78f38c5f29c0144d0e40dcab5b3750650c1550e4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/source/q1_hidden_publication_bridge_v1.py",
+      "bytes": 9775,
+      "sha256": "00d30bc67e34027b09eae5a0386017ffc7f8766d0a7399218abb5920a15622b8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/source/q1_hidden_publication_live_v1.py",
+      "bytes": 6136,
+      "sha256": "e634c349434f29cbc5d5045fdd2098144a56871a4a66721a1ff85dfd0bab3eae"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/source/q1_hidden_publication_witness_v1.py",
+      "bytes": 4952,
+      "sha256": "92ac01369e8e337716183172ec8f64ec266b6601bca21384abef834361f2cd18"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/source/q1_make_diag_launcher_v3_8.py",
+      "bytes": 3155,
+      "sha256": "55250ae275abbfd69bd73b68b2add9b04072a4bded7e7283b7efbf9f27f59232"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/source/q1_patch_candidate_v8.py",
+      "bytes": 11318,
+      "sha256": "73ea046c8fa32eef3af919c3ce22890c26822df1267cb5335fed88ac0e0349d2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v8-propagation-review/source/run_q1_candidate_cycle0_v6.sh",
+      "bytes": 23607,
+      "sha256": "b1a3f2dac1f45240fc0c71b934e1c2dc49233a117d33c5bab4c87bdf1b9ec0c7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/CONNECTION-REVIEW.md",
+      "bytes": 5409,
+      "sha256": "10102666da1aac807ba15203255af8d79d04c3574d7cbcba6a21c8de27ae4e8f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/CONTROLS.json",
+      "bytes": 1115,
+      "sha256": "c1618d9c5f6c18553f947dcb73a720593387b9504a87a744a681b298fea8bdbe"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/REVIEW-SEAL.json",
+      "bytes": 6960,
+      "sha256": "5acdde23c9a5ead693befa359f126f02fd193615eacca025ca497186f1a66c9f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/SOURCES.json",
+      "bytes": 2489,
+      "sha256": "4ec108086dfdbc0fe4b0f9b1dbf19d1c5732addee7fa65047b8270494c519265"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/controls.attempt1.txt",
+      "bytes": 3620,
+      "sha256": "2f99accc779b26733837659d8e18cb8f317ee53a98f9729855330ab355cb7f58"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/controls.py",
+      "bytes": 17046,
+      "sha256": "abcab0ab8ffcc5b3f4316e9903ec82e4b3fe0102c232e81252e0279883e8e74f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/gate-controls.txt",
+      "bytes": 682,
+      "sha256": "0eda0098f1d2c3b7ee9c1404d501b92291d49b89b7acc63573a6fe1dcdaa8df9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/launcher.diff",
+      "bytes": 6021,
+      "sha256": "3bf6f6c3fc8f7f67404558d8a4178d9f852dea0b7cf61288a315821f32f78cee"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/parent-connected-attempt3.txt",
+      "bytes": 33478,
+      "sha256": "4264526eba65b3b1cd933cb9958cfdd6e21b600f295733b52e11663acdad838d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/prepare_native_corpus_recovery_v2.py",
+      "bytes": 5782,
+      "sha256": "95de54e3dbb12ea2c57313e312aa0fb6b57dc2d83e06703e9b8bd217de4f6bc5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/source/generated/fr14_leg3_launch_nomiddleware.q1diag.v3_9.sh",
+      "bytes": 497863,
+      "sha256": "2fd766f3b4e82d1bd50d6972f17de2aaf0c235c23869c2b6c240287fe60e5480"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/source/q1_candidate_cycle0_gate_v7.py",
+      "bytes": 4097,
+      "sha256": "ae4dc6524a2cba8e27a23ce4726a34d03a891d97ebb23c2eb6e66d01e1979eb1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/source/q1_candidate_cycle0_seal_auth_v3.py",
+      "bytes": 2254,
+      "sha256": "1299c8882ee58d487fa18392f60445941b8188f226d604b9bbb95c0b06219da5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/source/q1_candidate_driver_v2_4.py",
+      "bytes": 8956,
+      "sha256": "a84e57c8801dc14ab52d25680cd51324cb6525454a937f55992c12194e9306f7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/source/q1_candidate_hooks_v9.py",
+      "bytes": 67683,
+      "sha256": "905e35898a504357b8a96f2315395e0bec37d5b2509d2ae0a0709b827271317c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/source/q1_candidate_job_v9.py",
+      "bytes": 2815,
+      "sha256": "881232bc8934d6a99879ea909d69c3f9bd1255ddea80ed648c48abe258f8376e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/source/q1_candidate_raw_audit_v8.py",
+      "bytes": 20255,
+      "sha256": "85e7e0aad47ed850e7edb3c742af06eaf72d153bc8a3aa732f312eb5748f8753"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/source/q1_hidden_event_binding_v1.py",
+      "bytes": 1641,
+      "sha256": "9ea8e10f4eb290840a908f4b78f38c5f29c0144d0e40dcab5b3750650c1550e4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/source/q1_hidden_publication_bridge_v1.py",
+      "bytes": 9775,
+      "sha256": "00d30bc67e34027b09eae5a0386017ffc7f8766d0a7399218abb5920a15622b8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/source/q1_hidden_publication_live_v1.py",
+      "bytes": 6136,
+      "sha256": "e634c349434f29cbc5d5045fdd2098144a56871a4a66721a1ff85dfd0bab3eae"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/source/q1_hidden_publication_witness_v1.py",
+      "bytes": 4952,
+      "sha256": "92ac01369e8e337716183172ec8f64ec266b6601bca21384abef834361f2cd18"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/source/q1_make_diag_launcher_v3_9.py",
+      "bytes": 3155,
+      "sha256": "2277a14620e6218318eddeac975543d6e7f3cdbddbfd16008526876c5575fe06"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/source/q1_mtp_kv_publication_witness_v1.py",
+      "bytes": 5990,
+      "sha256": "9239e35fa10395cd01e7e2a9a7c4a34b42fea753b1f0b064ac16909937ace976"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/source/q1_patch_candidate_v9.py",
+      "bytes": 11891,
+      "sha256": "93894ce2758c8283f60dd90f64b364fd1efd6f310ab63ff3f5e25814928ab202"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/cycle0-v9-propagation-review/source/run_q1_candidate_cycle0_v7.sh",
+      "bytes": 23671,
+      "sha256": "b76e650491b5ac6d4eed5e5275316347ddade8a96f767ec8ef8cb793afc44c61"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/execute-native-aligned-A-20260929T094930Z-preflight-retry1.py",
+      "bytes": 762,
+      "sha256": "a7a5d18d2aae4eb1ca1ed117d4fc19ba78db17ca28e8387f4cc96980a724e1ad"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/execute-native-aligned-A-20260929T094930Z.py",
+      "bytes": 745,
+      "sha256": "8aca262780214981df685587940544d0fbbfa513039c30f8bc8072f9b1e701b0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/INITIAL-RESULTS.json",
+      "bytes": 1632,
+      "sha256": "821bc474a18d4995d4e5f7bcbe961ed7a5f1781ae440a60b4f55ec242d550435"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/MANIFEST-initial.json",
+      "bytes": 1068,
+      "sha256": "ff29f3a99e3830c7c143825ab44ca4a55bf7ac8e10301e78a276eeec39e89fc2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/SOURCE-BINDINGS.json",
+      "bytes": 2069,
+      "sha256": "8f7adb44ab6e6479ddbdf9412ec23b0c47b28cb5f7f1bc2206753e76465bfed0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/closure/MANIFEST.json",
+      "bytes": 3472,
+      "sha256": "c8904338e86b1359cdd69b0ba7621c9c8370d144ec92c4bb1ac60a55bd1c5a67"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/closure/RESULTS.json",
+      "bytes": 9463,
+      "sha256": "b69023ad1e8906d35980b04e1f2084fad5d3342eabdbe40d75b72501243adb5c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/closure/controls.py",
+      "bytes": 14036,
+      "sha256": "d0399aa72c06b5020fe07a7a65d562983bfe790e16db032b9aa615df2d805fd6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/closure/q1_candidate_hooks_v8.py",
+      "bytes": 61018,
+      "sha256": "d6977ec69324c68fd82492da18472430c268808ea062b5608255cd03390638d3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/closure/q1_candidate_raw_audit_v7.py",
+      "bytes": 19890,
+      "sha256": "d65225715f06d0d80855e1af46e41192df5559a7f44d967266848d0962bc01e4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/closure/q1_hidden_event_binding_v1.py",
+      "bytes": 1641,
+      "sha256": "9ea8e10f4eb290840a908f4b78f38c5f29c0144d0e40dcab5b3750650c1550e4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/closure/q1_hidden_publication_bridge_v1.py",
+      "bytes": 9775,
+      "sha256": "00d30bc67e34027b09eae5a0386017ffc7f8766d0a7399218abb5920a15622b8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/closure/q1_hidden_publication_live_v1.py",
+      "bytes": 6136,
+      "sha256": "e634c349434f29cbc5d5045fdd2098144a56871a4a66721a1ff85dfd0bab3eae"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/closure/q1_hidden_publication_witness_v1.py",
+      "bytes": 4952,
+      "sha256": "92ac01369e8e337716183172ec8f64ec266b6601bca21384abef834361f2cd18"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/closure/q1_patch_candidate_v8.py",
+      "bytes": 11318,
+      "sha256": "73ea046c8fa32eef3af919c3ce22890c26822df1267cb5335fed88ac0e0349d2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/closure/test_log.q1_hidden_v8_connected.attempt1.txt",
+      "bytes": 9793,
+      "sha256": "700a6faa1fc81dfc9b583f07bb908f932a03c75876421fb328b743d4df530df5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/closure/test_q1_hidden_v8_connected.py",
+      "bytes": 9926,
+      "sha256": "7e22f608e5b7443740251789ac0b943373b8438095641eeedce695969ad37816"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/hooks-initial.py",
+      "bytes": 60399,
+      "sha256": "8db9041940802723cffeadca60e0d72c6752a81c04742d677568300d68231621"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/initial-controls.py",
+      "bytes": 7068,
+      "sha256": "1bed73f150e21da8eded32ba4deb99a39cd9f0477e400821cb33a140792c529f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/hidden-v8-connection-independent-20260929/patcher-initial.py",
+      "bytes": 10189,
+      "sha256": "c0d1cf74cd6e443cb433d5add0ac6447b911b26a28351e3e57a4934e83d5591b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-a-independent-20260929/REVIEW-MANIFEST.json",
+      "bytes": 2284,
+      "sha256": "31914e51980faa00ed15d6b72a866b6599f5219afdb1e866b53ed46e800e1529"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-a-independent-20260929/audit-20260929T102500Z/AST-SCOPE.json",
+      "bytes": 2896,
+      "sha256": "0134fe0dd0c254d0d3f64f4d8929cff3c4207f74d6e792fc7fc5bd253c9400c0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-a-independent-20260929/audit-20260929T102500Z/MANIFEST.json",
+      "bytes": 2146,
+      "sha256": "85e147d3ce61d325fe7c58a5d09b891e7151428f5aaa973314ca446f21c39742"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-a-independent-20260929/audit-20260929T102500Z/RESULT.json",
+      "bytes": 39765,
+      "sha256": "dcf6b46712b3e9c17c6b4291bd465169ba0f949aaace5fd9fbba7fc28f65aa74"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-a-independent-20260929/audit-20260929T102500Z/RETAINED-METADATA.json",
+      "bytes": 6553,
+      "sha256": "78fe68c1d450dbacf5708c4977d7be800a18a0e782eaa4fa5c18774cf9a4209b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-a-independent-20260929/audit-20260929T102500Z/ROWS.json",
+      "bytes": 112087,
+      "sha256": "be3bb439a841cc5a4d3bb28de5a33d774586c6b41068e9a3d640aa0e5e61170b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-a-independent-20260929/audit_one_run.py",
+      "bytes": 8095,
+      "sha256": "2cfa89ec003fbe0aafabba937fc3f7a172411d4b2ce2f4a1fa0ac41fa34bc235"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-a-independent-20260929/q1_native_corpus_v1.frozen.py",
+      "bytes": 28196,
+      "sha256": "d4502b7f47ab1ac6ed8cd295aa5565726fad486c4a1ff1bda6a13fe24e4ea770"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-aligned-a-independent-20260929/retained_metadata.py",
+      "bytes": 3434,
+      "sha256": "085bf4d720ae34d257ef6ef7ecaeeea458f07405e898509265aea32d8d9341b5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/prepare_native_corpus_recovery_v2.py",
+      "bytes": 5782,
+      "sha256": "95de54e3dbb12ea2c57313e312aa0fb6b57dc2d83e06703e9b8bd217de4f6bc5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/status.historical-before-native-A-audit-20260929.json",
+      "bytes": 34039,
+      "sha256": "66d5881f2faed5410e45713240577e289d24bcfa5a73d560b8a2820da409dad2"
+    }
+  ],
+  "scope": "source-update9",
+  "restore_order": "after source-update3; this later snapshot wins"
+}

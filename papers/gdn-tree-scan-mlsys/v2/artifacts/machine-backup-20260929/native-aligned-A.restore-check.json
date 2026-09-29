@@ -1,0 +1,8 @@
+{
+  "utc": "2026-09-29T10:26:10.956685+00:00",
+  "passed": true,
+  "members": 58954,
+  "bytes": 20667434986,
+  "manifest_sha256": "8a81bfad1eca1f512f1127388af4a33fc14520ec949719ff14f533b8240836e6",
+  "complete_decrypt_and_every_member_hash_verified": true
+}

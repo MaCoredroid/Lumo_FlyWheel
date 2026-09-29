@@ -1,0 +1,63 @@
+{
+  "schema": "lumo.source-update-manifest.v1",
+  "utc": "2026-09-29T11:07:27.374449+00:00",
+  "files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/inspections/cpu-native-kv-planner-20260929T110700Z/MANIFEST.json",
+      "bytes": 570,
+      "sha256": "3d2ab0eb3770432e3788029c5065ee5cca9e3d9e51cf3962b590f9e1c39fa6aa"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/inspections/cpu-native-kv-planner-20260929T110700Z/v1/core/kv_cache_utils.py",
+      "bytes": 66954,
+      "sha256": "4d3475bd1515cf1cbd43199bc3dc2d811482f71f046acf8fc0b678a70405a40e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/inspections/cpu-native-kv-planner-20260929T110700Z/v1/kv_cache_interface.py",
+      "bytes": 22161,
+      "sha256": "0db7ff3efa74e29a53a4a921d4ac4446fef3999f78747186796ee68f58cc8a79"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/NATIVE-ALIGNED-A-LFS-UPLOAD.attempt3-20260929T105625Z.json",
+      "bytes": 6014,
+      "sha256": "b5cf4e5f21ff0b212db9ad929592ffb4583ff26bd6f5ac6b12c72e9103221324"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/NATIVE-ALIGNED-A-LFS-UPLOAD.json",
+      "bytes": 6014,
+      "sha256": "b5cf4e5f21ff0b212db9ad929592ffb4583ff26bd6f5ac6b12c72e9103221324"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-worker-connection-review/SOURCE-SNAPSHOT.json",
+      "bytes": 777,
+      "sha256": "239ec8792f93616091a0e4b236fea5bdaeeb60aa1e43d9be79d1392ff38df967"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-worker-connection-review/q1_native_mtp_owner_v1.py",
+      "bytes": 11428,
+      "sha256": "edf4f60b769f9a92ac138633e620ec554995451414be7cc5192a1ce8ef602690"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-worker-connection-review/q1_patch_native_mtp_worker_v1.py",
+      "bytes": 3577,
+      "sha256": "54e92de927008f6bfa559428974c243e2d158a746fe788b88277d6589ca8fd0a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-worker-connection-review/q1_patch_reference_runner_v2_1.py",
+      "bytes": 6010,
+      "sha256": "ee61c5d779cc39dce9757bae944f51d991bf2b15ef89b04bf69e9a58c91b315a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-worker-connection-review/q1_reference_hooks_v2_1.py",
+      "bytes": 44520,
+      "sha256": "1ac939405de01a4c22e5d73decb9994cfb3a3214fd838ed2a734b39110b2b8cf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/native-mtp-worker-connection-review/q1_reference_hooks_v2_2_mtp.py",
+      "bytes": 44946,
+      "sha256": "7347dae3add8653b4f1beaf90255a605560876ee5108579de89893e8e37fbea1"
+    }
+  ],
+  "scope": "source-update11",
+  "restore_order": "after source-update3; this later snapshot wins"
+}
