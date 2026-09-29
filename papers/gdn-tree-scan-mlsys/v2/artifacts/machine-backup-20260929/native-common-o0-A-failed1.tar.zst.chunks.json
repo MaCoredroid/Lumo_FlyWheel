@@ -1,0 +1,15 @@
+{
+  "bytes": 839185360,
+  "chunks": [
+    {
+      "file": "native-common-o0-A-failed1.tar.zst.0000.enc",
+      "bytes": 536870912,
+      "sha256": "732816d4cfff3fcacbf38d2128642144744f0910ec31204e0b76174b52718e57"
+    },
+    {
+      "file": "native-common-o0-A-failed1.tar.zst.0001.enc",
+      "bytes": 302314448,
+      "sha256": "ab6a20830d05ad6aeac5d68fffd43f270432eba0917cb140da5f1600734abf0d"
+    }
+  ]
+}
