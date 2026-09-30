@@ -1,0 +1,53 @@
+{
+  "schema": "lumo.source-update-manifest.v1",
+  "utc": "2026-09-30T07:18:02.388825+00:00",
+  "files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/artifacts/FINAL-DELIVERY.json",
+      "bytes": 6524,
+      "sha256": "e439624af67f00901644725f51664c9f03c6705a027875a895501c54135cd4e0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/WORKLOG.md",
+      "bytes": 129019,
+      "sha256": "d375ea54f0afbadd5ce9987b73bd63e5da5450d3f348b31dcf3f3de2749a2391"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/status.json",
+      "bytes": 50148,
+      "sha256": "15dbf154ab3ad5b3a9431d2836915aec943e97bb94063d0759bdb3a7d6983f78"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/ACTIVE.json",
+      "bytes": 63598,
+      "sha256": "cf9c125b9466763b0069c8ebe2dea5688c6318a0fecd1e3e92f53cb352329c4f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GIT-BACKUP-VERIFIED-20260930-update41.json",
+      "bytes": 112029,
+      "sha256": "1b402b3c8457bd63b68368d7f3f0f1eb0ed34a3d7f68795484eedf2327451188"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-20260930-update41.json",
+      "bytes": 336,
+      "sha256": "db463f05e846ff3f87e828e2aeb717091c0058fa9412c56246f91e090ef65876"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-20260930-update41.progress.jsonl",
+      "bytes": 252,
+      "sha256": "9f4d42c9a62e6c63a08269bab87ff822afd4953deaa0d85c13ff7e59bb351d0c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/backup-update41-receipt-path-failure.log",
+      "bytes": 3612,
+      "sha256": "139253809fefabab23361a401b837148c47e603fecd66082d90c08d3c225dd23"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/finalize_delivery_20260930.py",
+      "bytes": 9043,
+      "sha256": "309652c2c955f3c8ff79e0e7a61e329c3db7ef9c29985e587903250cb3723dda"
+    }
+  ],
+  "scope": "source-update44",
+  "restore_order": "after source-update3; this later snapshot wins"
+}
