@@ -1,0 +1,5 @@
+LumoTree manuscript source delivery. Scientific scope and campaign disposition are recorded in the adjacent delivery receipt.
+Compile with a TeX installation providing IEEEtran bibliography style and latexmk:
+latexmk -pdf -interaction=nonstopmode -halt-on-error -file-line-error -no-shell-escape main.tex
+This archive contains the manuscript dependency closure, not the private raw experiment archive.
+See SOURCE-MANIFEST.json and the adjacent checkpoint receipt for exact identities and build checks.

@@ -1,0 +1,32 @@
+[
+  {
+    "key": "flashinfer",
+    "url": "https://proceedings.mlsys.org/paper_files/paper/2025/hash/dbf02b21d77409a2db30e56866a8ab3a-Abstract-Conference.html",
+    "status": "saved",
+    "bibtex_url": "https://proceedings.mlsys.org/paper_files/paper/643-/bibtex"
+  },
+  {
+    "key": "flashattention",
+    "url": "https://proceedings.iclr.cc/paper_files/paper/2024/hash/98ed250b203d1ac6b24bbcf263e3d4a7-Abstract-Conference.html",
+    "status": "saved",
+    "bibtex_url": "https://proceedings.iclr.cc/paper_files/paper/5724-/bibtex"
+  },
+  {
+    "key": "swebench",
+    "url": "https://proceedings.iclr.cc/paper_files/paper/2024/hash/edac78c3e300629acfe6cbe9ca88fb84-Abstract-Conference.html",
+    "status": "saved",
+    "bibtex_url": "https://proceedings.iclr.cc/paper_files/paper/5227-/bibtex"
+  },
+  {
+    "key": "gateddelta",
+    "url": "https://proceedings.iclr.cc/paper_files/paper/2025/hash/4904fad153f6434a7bcf04465d4be2cc-Abstract-Conference.html",
+    "status": "saved",
+    "bibtex_url": "https://proceedings.iclr.cc/paper_files/paper/1959-/bibtex"
+  },
+  {
+    "key": "deft",
+    "url": "https://proceedings.iclr.cc/paper_files/paper/2025/hash/a6df53f082619d02b9fad64a022e5de3-Abstract-Conference.html",
+    "status": "saved",
+    "bibtex_url": "https://proceedings.iclr.cc/paper_files/paper/213-/bibtex"
+  }
+]

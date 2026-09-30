@@ -1,0 +1,25 @@
+{
+  "scope": "12 venue replacements and FastTree URL cleanup",
+  "verified_sources": {
+    "leviathan2023fast": "https://proceedings.mlr.press/v202/leviathan23a.html",
+    "miao2023specinfer": "https://api.crossref.org/works/10.1145/3620666.3651335",
+    "chen2024sequoia": "https://proceedings.neurips.cc/paper_files/paper/2024/hash/ea1f5f0878d43ff4fb8bf64ef4a2326c-Abstract-Conference.html",
+    "li2024eagle": "https://aclanthology.org/2024.emnlp-main.422/",
+    "kwon2023efficient": "https://api.crossref.org/works/10.1145/3600006.3613165",
+    "zheng2024sglang": "https://proceedings.neurips.cc/paper_files/paper/2024/hash/724be4472168f31ba1c9ac630f15dec8-Abstract-Conference.html",
+    "dao2023flashattention": "https://proceedings.iclr.cc/paper_files/paper/2024/hash/98ed250b203d1ac6b24bbcf263e3d4a7-Abstract-Conference.html",
+    "jimenez2024swe": "https://proceedings.iclr.cc/paper_files/paper/2024/hash/edac78c3e300629acfe6cbe9ca88fb84-Abstract-Conference.html",
+    "yang2024gated": "https://proceedings.iclr.cc/paper_files/paper/2025/hash/4904fad153f6434a7bcf04465d4be2cc-Abstract-Conference.html",
+    "yao2024deft": "https://proceedings.iclr.cc/paper_files/paper/2025/hash/a6df53f082619d02b9fad64a022e5de3-Abstract-Conference.html",
+    "ye2025flashinfer": "https://proceedings.mlsys.org/paper_files/paper/2025/hash/dbf02b21d77409a2db30e56866a8ab3a-Abstract-Conference.html",
+    "yang2024delta": "https://proceedings.neurips.cc/paper_files/paper/2024/hash/d13a3eae72366e61dfdc7eea82eeb685-Abstract-Conference.html",
+    "pan2025fasttree": "https://proceedings.mlsys.org/paper_files/paper/2025/hash/96894468eb44631a32d7ebd56f9892c7-Abstract-Conference.html"
+  },
+  "notes": [
+    "Publisher pages and deposited DOI metadata confirm the publication metadata.",
+    "Sequoia venue title omits Hardware-aware; year is 2024. SpecInfer venue title omits Generative.",
+    "MLSys records for FlashInfer and FastTree contain no pages or DOI; neither is invented. Their long publisher links are kept here rather than in the printed bibliography.",
+    "unrelated-record-rejected.txt is a rejected retrieval and is not used as citation evidence.",
+    "Blocked OpenReview API and ACM HTML endpoints were replaced by accessible official venue records or publisher-deposited Crossref metadata."
+  ]
+}

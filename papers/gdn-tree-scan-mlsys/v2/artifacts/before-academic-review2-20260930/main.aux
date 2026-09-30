@@ -1,0 +1,196 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldcontentsline\contentsline
+\gdef\contentsline#1#2#3#4{\oldcontentsline{#1}{#2}{#3}}
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\contentsline\oldcontentsline
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{leviathan2023fast,chen2023sampling,miao2023specinfer}
+\citation{yang2024gated,wu2025stree}
+\citation{lumo2026archive,lumo2026stateless}
+\citation{wang2026specla,oda2026marginals}
+\citation{jimenez2024swe}
+\citation{leviathan2023fast,chen2023sampling}
+\citation{miao2023specinfer,chen2024sequoia,li2024eagle,wang2024opt}
+\citation{li2025eagle3,chen2026dflash}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {II}Background and Related Work}{1}{section.2}\protected@file@percent }
+\newlabel{sec:related}{{II}{1}{Background and Related Work}{section.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-A}}Drafting, verification, and serving}{1}{subsection.2.1}\protected@file@percent }
+\citation{kwon2023efficient,zheng2024sglang}
+\citation{pan2024marconi}
+\citation{pytorch2025sglang,sglang2026qwen}
+\citation{dao2023flashdecoding,ye2025flashinfer,yao2024deft}
+\citation{pan2025fasttree}
+\citation{dao2023flashattention,lumo2026archive}
+\citation{yang2024gated}
+\citation{yang2024delta}
+\citation{wu2024snakes,wu2025stree}
+\citation{wu2025stree,zhong2025specmamba,borobia2026component}
+\citation{oda2026marginals}
+\citation{wang2026specla}
+\citation{wang2026bole}
+\citation{wang2026bole}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Tree verification and accepted-path commitment. (a) Drafting provides a candidate tree and proposal probabilities $q$. (b) Branch-local computation produces target probabilities $p$ and retains temporary state. (c) Sampling selects a materialized path (here $a,d$); recurrent replay, convolution gathering, and KV remapping publish $\mathcal  {S}(mad)$. The newly sampled token $b^*$ remains pending. One descriptor keeps logical ancestry and physical storage aligned.}}{2}{figure.1}\protected@file@percent }
+\newlabel{fig:pipeline}{{1}{2}{Tree verification and accepted-path commitment. (a) Drafting provides a candidate tree and proposal probabilities $q$. (b) Branch-local computation produces target probabilities $p$ and retains temporary state. (c) Sampling selects a materialized path (here $a,d$); recurrent replay, convolution gathering, and KV remapping publish $\mathcal {S}(mad)$. The newly sampled token $b^*$ remains pending. One descriptor keeps logical ancestry and physical storage aligned}{figure.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}Recurrent and hybrid speculation}{2}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-C}}Direct GDN comparisons}{2}{subsection.2.3}\protected@file@percent }
+\citation{ghantasala2026treewy,ghantasala2026treewycode}
+\citation{replayssm2026}
+\citation{yang2026onela}
+\citation{oda2026marginals}
+\citation{wang2026specla}
+\citation{wang2026bole}
+\citation{ghantasala2026treewycode}
+\citation{replayssm2026}
+\citation{yang2026onela}
+\citation{he2025determinism}
+\citation{lumo2026stateless,lumo2026archive}
+\citation{yang2024gated}
+\citation{lumo2026archive,lumo2026stateless}
+\citation{oliaro2025suffix,arctic2026suffix}
+\citation{hu2024sam}
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Recurrent verification and continuation policies. These mechanism comparisons do not rank the systems by performance.}}{3}{table.1}\protected@file@percent }
+\newlabel{tab:related}{{I}{3}{Recurrent verification and continuation policies. These mechanism comparisons do not rank the systems by performance}{table.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-D}}Design focus}{3}{subsection.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {III}Tree-Verifier Architecture}{3}{section.3}\protected@file@percent }
+\newlabel{sec:contract}{{III}{3}{Tree-Verifier Architecture}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}State and the execution boundary}{3}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}The recurrence and path locality}{3}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}A descriptor shared by verification and commitment}{3}{subsection.3.3}\protected@file@percent }
+\citation{lumo2026archive,lumo2026stateless}
+\citation{wang2026specla}
+\citation{lumo2026archive}
+\citation{lumo2026archive}
+\citation{wang2026specla}
+\citation{oda2026marginals}
+\citation{wang2026bole}
+\citation{ghantasala2026treewycode}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces The accepted-prefix interface. Recurrent, convolution, and attention-KV state must all describe the same materialized prefix. A newly sampled correction or bonus token can remain pending until the next forward.}}{4}{figure.2}\protected@file@percent }
+\newlabel{fig:contract}{{2}{4}{The accepted-prefix interface. Recurrent, convolution, and attention-KV state must all describe the same materialized prefix. A newly sampled correction or bonus token can remain pending until the next forward}{figure.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {IV}GPU Scan and Accepted-Path Replay}{4}{section.4}\protected@file@percent }
+\newlabel{sec:kernel}{{IV}{4}{GPU Scan and Accepted-Path Replay}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Path-parallel verification and state lifetime}{4}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Sequential arithmetic and accepted-path replay}{4}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Temporary state versus recomputation}{4}{subsection.4.3}\protected@file@percent }
+\citation{lumo2026archive}
+\citation{he2025determinism}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Tree verification and native continuation}}{5}{algorithm.1}\protected@file@percent }
+\newlabel{alg:verify}{{1}{5}{A descriptor shared by verification and commitment}{algorithm.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces State lifetime in the path-scan verifier. Temporary cut states connect path groups; recorded operands support selected-path replay. Only the accepted frontier becomes native persistent state.}}{5}{figure.3}\protected@file@percent }
+\newlabel{fig:scan-replay}{{3}{5}{State lifetime in the path-scan verifier. Temporary cut states connect path groups; recorded operands support selected-path replay. Only the accepted frontier becomes native persistent state}{figure.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {V}Optimizing the LumoTree Verification Cycle}{5}{section.5}\protected@file@percent }
+\newlabel{sec:optimization}{{V}{5}{Optimizing the LumoTree Verification Cycle}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}One device-selected path drives native continuation}{5}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}One slot map governs attention and publication}{5}{subsection.5.2}\protected@file@percent }
+\newlabel{sec:reconstruction-numerics}{{\mbox  {V-B}}{5}{One slot map governs attention and publication}{subsection.5.2}{}}
+\citation{lumo2026archive}
+\citation{yao2024deft,pan2025fasttree}
+\citation{lumo2026archive}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {2}{\ignorespaces Path-parallel scan and accepted-path replay}}{6}{algorithm.2}\protected@file@percent }
+\newlabel{alg:scan-replay}{{2}{6}{Path-parallel verification and state lifetime}{algorithm.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Concrete implementation changes around the path verifier. The third column identifies the coordination or numerical constraint that makes each change nontrivial. Workload rates measure their combined execution.}}{6}{table.2}\protected@file@percent }
+\newlabel{tab:optimization-map}{{II}{6}{Concrete implementation changes around the path verifier. The third column identifies the coordination or numerical constraint that makes each change nontrivial. Workload rates measure their combined execution}{table.2}{}}
+\citation{lumo2026archive}
+\citation{lumo2026archive,jimenez2024swe}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Precompute branch histories while preserving arithmetic}{7}{subsection.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-D}}Fuse draft selection without changing proposals}{7}{subsection.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Evaluation Setup}{7}{section.6}\protected@file@percent }
+\newlabel{sec:protocol}{{VI}{7}{Evaluation Setup}{section.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Results}{7}{section.7}\protected@file@percent }
+\newlabel{sec:results}{{VII}{7}{Results}{section.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}SWE-bench Verified coding-agent workload}{7}{subsection.7.1}\protected@file@percent }
+\newlabel{sec:agent-workload}{{\mbox  {VII-A}}{7}{SWE-bench Verified coding-agent workload}{subsection.7.1}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VII-A}0a}Task outcomes}{7}{paragraph.7.1.0.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VII-A}0b}Decode throughput}{7}{paragraph.7.1.0.2}\protected@file@percent }
+\newlabel{eq:pooled-decode}{{5}{7}{Decode throughput}{equation.7.5}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VII-A}0c}Selection and comparison limits}{7}{paragraph.7.1.0.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Pooled decode rates on GB10. Builds A--C and SGLang use the same two Astropy tasks, 12907 and 13033, and produce nonempty patches on both. The final row covers a separate ten-task subset. Builds A--C are development revisions, not statistical replicates.}}{8}{table.3}\protected@file@percent }
+\newlabel{tab:pooled-decode}{{III}{8}{Pooled decode rates on GB10. Builds A--C and SGLang use the same two Astropy tasks, 12907 and 13033, and produce nonempty patches on both. The final row covers a separate ten-task subset. Builds A--C are development revisions, not statistical replicates}{table.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-B}}Acceptance and execution costs}{8}{subsection.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-C}}Numerical and candidate-selection validation}{8}{subsection.7.3}\protected@file@percent }
+\newlabel{sec:current-validation}{{\mbox  {VII-C}}{8}{Numerical and candidate-selection validation}{subsection.7.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Accepted drafts per event and mean GPU span durations (ms). Dispatch covers acceptance, path handling, and state commitment. These observational measurements do not isolate optimization effects or sum to a verified critical-path decomposition.}}{8}{table.4}\protected@file@percent }
+\newlabel{tab:recovered-telemetry}{{IV}{8}{Accepted drafts per event and mean GPU span durations (ms). Dispatch covers acceptance, path handling, and state commitment. These observational measurements do not isolate optimization effects or sum to a verified critical-path decomposition}{table.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces GDN component checks on GB10. Bitwise columns compare with the native chain; the paired rule compares both implementations with a float64 reference. Counts are per block and process.}}{8}{table.5}\protected@file@percent }
+\newlabel{tab:gdn-component}{{V}{8}{GDN component checks on GB10. Bitwise columns compare with the native chain; the paired rule compares both implementations with a float64 reference. Counts are per block and process}{table.5}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {VII-C}0a}Full-model native reference}{8}{paragraph.7.3.0.1}\protected@file@percent }
+\citation{lumo2026archive}
+\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Cross-process native-reference agreement, in paths out of 84. State/logits requires identical published target state and full target logits. Joint choices requires the next target decision and the actual MTP spine and ordered top-three selections at every tested phase. A dash denotes an untested joint MTP condition.}}{9}{table.6}\protected@file@percent }
+\newlabel{tab:native-continuation}{{VI}{9}{Cross-process native-reference agreement, in paths out of 84. State/logits requires identical published target state and full target logits. Joint choices requires the next target decision and the actual MTP spine and ordered top-three selections at every tested phase. A dash denotes an untested joint MTP condition}{table.6}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {VII}{\ignorespaces Untimed recurrent-component comparison on GB10. Failed cells per repeat comprise 64,512 output cells and 6,912 state cells per configuration. Both repeats give the same counts. Each implementation is tested against its specified comparator, as described below.}}{9}{table.7}\protected@file@percent }
+\newlabel{tab:m1-qualification}{{VII}{9}{Untimed recurrent-component comparison on GB10. Failed cells per repeat comprise 64,512 output cells and 6,912 state cells per configuration. Both repeats give the same counts. Each implementation is tested against its specified comparator, as described below}{table.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-D}}Recurrent verification and publication comparison}{9}{subsection.7.4}\protected@file@percent }
+\newlabel{sec:m1-qualification}{{\mbox  {VII-D}}{9}{Recurrent verification and publication comparison}{subsection.7.4}{}}
+\citation{yang2024delta,chen2023sampling,lumo2026archive}
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Discussion}{10}{section.8}\protected@file@percent }
+\newlabel{sec:discussion}{{VIII}{10}{Discussion}{section.8}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {IX}Conclusion}{10}{section.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{Appendix\nobreakspace  A: Serving Configuration and Measurement}{10}{section*.1}\protected@file@percent }
+\newlabel{app:audit}{{A}{10}{\appendixname \nobreakspace \thesectiondis \\* Serving Configuration and Measurement}{section*.1}{}}
+\newlabel{app:settings}{{A}{10}{\appendixname \nobreakspace \thesectiondis \\* Serving Configuration and Measurement}{section*.1}{}}
+\citation{leviathan2023fast,chen2023sampling}
+\@writefile{lot}{\contentsline {table}{\numberline {VIII}{\ignorespaces Serving configurations for the exploratory workload experiments. Builds A--C share the tree geometry but differ in implementation revision. The configurations are not a controlled same-stack comparison. Exact software and kernel versions are provided with the artifact.}}{11}{table.8}\protected@file@percent }
+\newlabel{tab:serving-config}{{VIII}{11}{Serving configurations for the exploratory workload experiments. Builds A--C share the tree geometry but differ in implementation revision. The configurations are not a controlled same-stack comparison. Exact software and kernel versions are provided with the artifact}{table.8}{}}
+\@writefile{toc}{\contentsline {section}{Appendix\nobreakspace  B: Additional Workload Results}{11}{section*.2}\protected@file@percent }
+\newlabel{app:workload}{{B}{11}{\appendixname \nobreakspace \thesectiondis \\* Additional Workload Results}{section*.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {IX}{\ignorespaces Ten-task LumoTree{} deployment. Task IDs have prefix \texttt  {astropy\_\_astropy-}. Agent time includes model service and tools; evaluation occurs subsequently. There is one attempt per task and no matched native arm.}}{11}{table.9}\protected@file@percent }
+\newlabel{tab:swe-tasks}{{IX}{11}{Ten-task \sys {} deployment. Task IDs have prefix \texttt {astropy\_\_astropy-}. Agent time includes model service and tools; evaluation occurs subsequently. There is one attempt per task and no matched native arm}{table.9}{}}
+\bibstyle{IEEEtran}
+\bibdata{ref}
+\bibcite{leviathan2023fast}{1}
+\bibcite{chen2023sampling}{2}
+\bibcite{miao2023specinfer}{3}
+\bibcite{yang2024gated}{4}
+\bibcite{wu2025stree}{5}
+\bibcite{lumo2026archive}{6}
+\bibcite{lumo2026stateless}{7}
+\bibcite{wang2026specla}{8}
+\bibcite{oda2026marginals}{9}
+\bibcite{jimenez2024swe}{10}
+\bibcite{chen2024sequoia}{11}
+\bibcite{li2024eagle}{12}
+\bibcite{wang2024opt}{13}
+\bibcite{li2025eagle3}{14}
+\bibcite{chen2026dflash}{15}
+\bibcite{kwon2023efficient}{16}
+\bibcite{zheng2024sglang}{17}
+\bibcite{pan2024marconi}{18}
+\bibcite{pytorch2025sglang}{19}
+\bibcite{sglang2026qwen}{20}
+\bibcite{dao2023flashdecoding}{21}
+\bibcite{ye2025flashinfer}{22}
+\@writefile{lot}{\contentsline {table}{\numberline {X}{\ignorespaces Complete recorded workload groups, including unsuccessful attempts. Agent minutes sum task durations, not elapsed experiment wall time. Rates use Eq.\nobreakspace  {}\ref  {eq:pooled-decode}. The excluded SGLang pair ($^*$) contains an empty patch; the Build A pair overlaps its four-task row. Different task populations are not ranked against one another.}}{12}{table.10}\protected@file@percent }
+\newlabel{tab:all-attempts}{{X}{12}{Complete recorded workload groups, including unsuccessful attempts. Agent minutes sum task durations, not elapsed experiment wall time. Rates use Eq.~\ref {eq:pooled-decode}. The excluded SGLang pair ($^*$) contains an empty patch; the Build A pair overlaps its four-task row. Different task populations are not ranked against one another}{table.10}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {XI}{\ignorespaces Shared-task outcomes, including the excluded SGLang run. Astropy task suffixes identify instances 12907 and 13033. Agent seconds include model service and tools, but exclude evaluation. Different output lengths are system outcomes and do not isolate kernel cost.}}{12}{table.11}\protected@file@percent }
+\newlabel{tab:paired-agent-time}{{XI}{12}{Shared-task outcomes, including the excluded SGLang run. Astropy task suffixes identify instances 12907 and 13033. Agent seconds include model service and tools, but exclude evaluation. Different output lengths are system outcomes and do not isolate kernel cost}{table.11}{}}
+\newlabel{ReferencesStart}{{B}{12}{\appendixname \nobreakspace \thesectiondis \\* Additional Workload Results}{table.11}{}}
+\@writefile{toc}{\contentsline {section}{References}{12}{section*.3}\protected@file@percent }
+\bibcite{yao2024deft}{23}
+\bibcite{pan2025fasttree}{24}
+\bibcite{dao2023flashattention}{25}
+\bibcite{yang2024delta}{26}
+\bibcite{wu2024snakes}{27}
+\bibcite{zhong2025specmamba}{28}
+\bibcite{borobia2026component}{29}
+\bibcite{wang2026bole}{30}
+\bibcite{ghantasala2026treewy}{31}
+\bibcite{ghantasala2026treewycode}{32}
+\bibcite{replayssm2026}{33}
+\bibcite{yang2026onela}{34}
+\bibcite{he2025determinism}{35}
+\bibcite{oliaro2025suffix}{36}
+\bibcite{arctic2026suffix}{37}
+\bibcite{hu2024sam}{38}
+\gdef \@abspage@last{13}

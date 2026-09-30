@@ -1,0 +1,101 @@
+{
+  "created_at": "2026-09-30T21:53:34.597099+00:00",
+  "scope": "prior manuscript source closure and PDF before second academic edit",
+  "members": [
+    {
+      "path": "IEEEtran.cls",
+      "bytes": 281789,
+      "sha256": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b"
+    },
+    {
+      "path": "README.md",
+      "bytes": 11724,
+      "sha256": "4220b5ee92c5f6743088dbca70a73e657d8eed87db6ccf9bb01f724fc44bef3b"
+    },
+    {
+      "path": "abstract.tex",
+      "bytes": 1255,
+      "sha256": "9495a4264d1ca506f8b10df5685d957fc5ce42614259fca0920962b58ac2e5b5"
+    },
+    {
+      "path": "figures/pipeline.tikz",
+      "bytes": 4669,
+      "sha256": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c"
+    },
+    {
+      "path": "figures/scan-replay.tikz",
+      "bytes": 1035,
+      "sha256": "19c984883a8b70cc5209c33fa4f62e98aba708ad2b025568d1b2d600a3e4ecd0"
+    },
+    {
+      "path": "figures/state-contract.tikz",
+      "bytes": 1056,
+      "sha256": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898"
+    },
+    {
+      "path": "main.bbl",
+      "bytes": 11941,
+      "sha256": "acf2ebcdd0e74d2ac3f45657b58baa7d005aba51bcd8bab7097237f18b790e36"
+    },
+    {
+      "path": "main.tex",
+      "bytes": 44260,
+      "sha256": "43108c5d2ca40e54b1015fd5661bcb2bcbd8470b95d416a58612f72a986c5b7b"
+    },
+    {
+      "path": "ref.bib",
+      "bytes": 13568,
+      "sha256": "f08fcf4920f0e11dbf84d8cea692e231f40d1c05f8430d0847c51cf0a14d4def"
+    },
+    {
+      "path": "results/review-response-20260927/component-qualification.tex",
+      "bytes": 2229,
+      "sha256": "dbdb81ffb279923c2cc7ace1cbf5bc6cb11c3921338457e8dbd85c350979c57d"
+    },
+    {
+      "path": "sections/execution-costs.tex",
+      "bytes": 1653,
+      "sha256": "04099ec4d9494ee3ae6f1173ca3a537e6b84cbc2552209528daf10afbc682c54"
+    },
+    {
+      "path": "sections/native-continuation.tex",
+      "bytes": 2951,
+      "sha256": "2cd8936bdc52ed5df5661100990976ff8b042ebacd1cd3c052b185ebe28a367f"
+    },
+    {
+      "path": "sections/recurrent-comparison.tex",
+      "bytes": 2977,
+      "sha256": "1cfdd7f09ec546824196abcf622f049333d9853b5a4dfb37a3d8f3764b61dbae"
+    },
+    {
+      "path": "sections/workload-configuration.tex",
+      "bytes": 2652,
+      "sha256": "81ba4596826647f98aff7d91a1c0b7fa1147f30fe2fbdb315b2926bb6e5b275a"
+    },
+    {
+      "path": "sections/workload-details.tex",
+      "bytes": 4628,
+      "sha256": "32b4be79cac7e55ec736b53ede6af03a13196c141ca7821df993f0813a081bef"
+    },
+    {
+      "path": "sections/workload.tex",
+      "bytes": 4287,
+      "sha256": "ca3584d4191b91c46b3fd07938b8d0e73bd2103ecc9f082558a9e1255e2a13ed"
+    },
+    {
+      "path": "main.pdf",
+      "bytes": 295881,
+      "sha256": "cd045d8791fc0204b874f20edef7e69f638b362214abbdd14bd49f820edca373"
+    },
+    {
+      "path": "main.aux",
+      "bytes": 20056,
+      "sha256": "51d0897a0afc4fd25d1c79378c19b5c2a25d98a2c5e1747db83411b8d07f9bf3"
+    },
+    {
+      "path": "paper.config.yaml",
+      "bytes": 2115,
+      "sha256": "051525906f1806c1ad309f7e1a5e4656488c0f1e54be7ea1f0f93f36fa01bff7"
+    }
+  ]
+}

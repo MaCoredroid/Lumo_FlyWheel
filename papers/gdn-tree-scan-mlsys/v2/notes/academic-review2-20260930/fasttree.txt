@@ -1,0 +1,11 @@
+@inproceedings{MLSYS2025_96894468,
+ author = {Pan, Zaifeng and Ding, Yitong and Guan, Yue and Wang, Zheng and Yu, Zhongkai and Tang, Xulong and Wang, Yida and Ding, Yufei},
+ booktitle = {Proceedings of Machine Learning and Systems},
+ editor = {M. Zaharia and G. Joshi and Y. Lin},
+ pages = {},
+ publisher = {MLSys},
+ title = {FastTree: Optimizing Attention Kernel and Runtime for Tree-Structured LLM Inference},
+ url = {https://proceedings.mlsys.org/paper_files/paper/2025/file/96894468eb44631a32d7ebd56f9892c7-Paper-Conference.pdf},
+ volume = {7},
+ year = {2025}
+}

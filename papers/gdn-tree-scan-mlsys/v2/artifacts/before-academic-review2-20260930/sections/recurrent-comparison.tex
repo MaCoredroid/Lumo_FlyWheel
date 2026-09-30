@@ -1,0 +1,29 @@
+\begin{table}[t]
+\centering
+\caption{Untimed recurrent-component comparison on GB10. Failed cells per repeat comprise 64,512 output cells and 6,912 state cells per configuration. Both repeats give the same counts. Each implementation is tested against its specified comparator, as described below.}
+\label{tab:m1-qualification}
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Configuration & Output failures & State failures \\
+\midrule
+\sys{} / native & 0 & 0 \\
+Weaver author-default & 53,745 & 1,154 \\
+Weaver aligned-local & 57,707 & 388 \\
+TreeWY author-default & 37,528 & 6,912 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+We compare recurrent verification and accepted-state publication using held-out synthetic operands spanning 48 recurrent instances and 48 value heads. Verification covers the tree's 28 active nodes. Three accepted-path publications produce a history of 1, 6, and 11 updates, including Weaver's accepted replay and TreeWY's final deferred commit. Each configuration is evaluated twice in one process, with a fresh initial state for each cycle. A numerical cell fixes the recurrent instance, output node or publication, and value head; errors are reduced over the remaining vector or matrix entries. There are 71,424 distinct cells per configuration.
+
+Each cell must satisfy both root-mean-square and maximum absolute error bounds,
+\begin{equation}
+ E_{\mathrm{method}} \leq 1.10 E_{\mathrm{seq}} + 2^{-24}M_{64}+2^{-149},
+\end{equation}
+where errors are measured against the specified float64 recurrence and $M_{64}$ is its corresponding root-mean-square or maximum magnitude. The bounds are fixed before evaluating candidate outputs. For \sys{}, the sequential comparator is the native GPU recurrence. The other implementations use predeclared sequential software comparators that do not emulate every tensor-core rounding operation.
+
+TreeWY retains the author implementation's normalization floor of $10^{-12}$ and BF16 dot products. Weaver uses TF32 verification, FP32 elementwise accepted replay, and an additive normalization constant of $10^{-6}$. We report both its author-default preparation and a separately labeled local FP32-preparation variant. These preprocessing and arithmetic choices remain distinct rather than being silently aligned.
+
+\sys{} satisfies every output and publication bound. The three comparator configurations fail their specified bounds, while all configurations produce finite tensors and reproduce bitwise between repeats. TreeWY's BF16 compact commit and the sequential comparator's FP32 outer-product updates, for example, are different floating-point computations. These results characterize agreement with the specified references; they do not establish algorithmic incorrectness or a task-quality ranking. We consequently report no timing ranking from these configurations. The experiment covers recurrent computation, not full-model convolution, attention-cache, or drafter continuation.
