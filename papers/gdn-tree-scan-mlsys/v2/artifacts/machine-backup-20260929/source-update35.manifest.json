@@ -1,0 +1,223 @@
+{
+  "schema": "lumo.source-update-manifest.v1",
+  "utc": "2026-09-30T02:31:27.559099+00:00",
+  "files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/INPUTS.json",
+      "bytes": 33483,
+      "sha256": "894174545a9a57b3cffced962ca114744be14a65d0b9675a1deb888b3401d12c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-long_available__F2-S1-longest-root-offspine.u32le",
+      "bytes": 240332,
+      "sha256": "205af5e04ce42ea9e8ecc8ab2493c0d681faf3e904437a8d867507026d0af936"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-long_available__F2-S2-longest-then-shortest.u32le",
+      "bytes": 240332,
+      "sha256": "205af5e04ce42ea9e8ecc8ab2493c0d681faf3e904437a8d867507026d0af936"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-long_available__F2-S3-frozen-walk-8.u32le",
+      "bytes": 240332,
+      "sha256": "205af5e04ce42ea9e8ecc8ab2493c0d681faf3e904437a8d867507026d0af936"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-long_available__F3-P1-correction-pending.u32le",
+      "bytes": 240332,
+      "sha256": "205af5e04ce42ea9e8ecc8ab2493c0d681faf3e904437a8d867507026d0af936"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-long_available__F3-P2-full-accept-bonus.u32le",
+      "bytes": 240332,
+      "sha256": "205af5e04ce42ea9e8ecc8ab2493c0d681faf3e904437a8d867507026d0af936"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-long_available__F4-B3-kv-block-boundary-minus1.u32le",
+      "bytes": 241660,
+      "sha256": "fa9abcd303acb5ce5d190287ac80431e649224d9d85569f322ffc6193008a974"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-long_available__F4-B3-kv-block-boundary-minus11.u32le",
+      "bytes": 241620,
+      "sha256": "b2a8dbb125e1e6f713776ffca249bc2b46245e7ba8f9c6aa38dcb57791e03aee"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-long_available__F4-B3-kv-block-boundary-minus3.u32le",
+      "bytes": 241652,
+      "sha256": "b1b2df1980d0b34a4f4d018b8e9b74c9a8c98f090a0434459791cd03cf84054a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-medium_available__F2-S1-longest-root-offspine.u32le",
+      "bytes": 115764,
+      "sha256": "6ecc4d36ae5afd93558cc1971517d98a4fcc014e2035e5ad793150e34c907624"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-medium_available__F2-S2-longest-then-shortest.u32le",
+      "bytes": 115764,
+      "sha256": "6ecc4d36ae5afd93558cc1971517d98a4fcc014e2035e5ad793150e34c907624"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-medium_available__F2-S3-frozen-walk-8.u32le",
+      "bytes": 115764,
+      "sha256": "6ecc4d36ae5afd93558cc1971517d98a4fcc014e2035e5ad793150e34c907624"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-medium_available__F3-P1-correction-pending.u32le",
+      "bytes": 115764,
+      "sha256": "6ecc4d36ae5afd93558cc1971517d98a4fcc014e2035e5ad793150e34c907624"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-medium_available__F3-P2-full-accept-bonus.u32le",
+      "bytes": 115764,
+      "sha256": "6ecc4d36ae5afd93558cc1971517d98a4fcc014e2035e5ad793150e34c907624"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-medium_available__F4-B3-kv-block-boundary-minus1.u32le",
+      "bytes": 118780,
+      "sha256": "fcd05ccf8cec2091d5d6eebe359eb450e7f61f0d8b07148f13e4e3f35ef5f363"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-medium_available__F4-B3-kv-block-boundary-minus11.u32le",
+      "bytes": 118740,
+      "sha256": "441f43281282888b172f81427e3aa389f69d7d8b55841c4d89d7d756f4dce0d1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-medium_available__F4-B3-kv-block-boundary-minus3.u32le",
+      "bytes": 118772,
+      "sha256": "bfd843b9906ef057dc18d2fd23acafb003004cc6471a3db00025c32cd6aa2999"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-short_available__F2-S1-longest-root-offspine.u32le",
+      "bytes": 53948,
+      "sha256": "20321ed78102db81290634bab97cd0e97fd096343aeec7c2ab036d9605a6315c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-short_available__F2-S2-longest-then-shortest.u32le",
+      "bytes": 53948,
+      "sha256": "20321ed78102db81290634bab97cd0e97fd096343aeec7c2ab036d9605a6315c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-short_available__F2-S3-frozen-walk-8.u32le",
+      "bytes": 53948,
+      "sha256": "20321ed78102db81290634bab97cd0e97fd096343aeec7c2ab036d9605a6315c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-short_available__F3-P1-correction-pending.u32le",
+      "bytes": 53948,
+      "sha256": "20321ed78102db81290634bab97cd0e97fd096343aeec7c2ab036d9605a6315c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-short_available__F3-P2-full-accept-bonus.u32le",
+      "bytes": 53948,
+      "sha256": "20321ed78102db81290634bab97cd0e97fd096343aeec7c2ab036d9605a6315c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-short_available__F4-B3-kv-block-boundary-minus1.u32le",
+      "bytes": 57340,
+      "sha256": "2bc4f52e1fbf7aa70ad7cca53661a40ff9500671f1af571dac8240db66f27fcc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-short_available__F4-B3-kv-block-boundary-minus11.u32le",
+      "bytes": 57300,
+      "sha256": "67d0839916644157a46b107c8b80d979b47112ccaf5e19205b2f414b0c39d013"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/continuous-calibration-v1/prefixes/calibration-short_available__F4-B3-kv-block-boundary-minus3.u32le",
+      "bytes": 57332,
+      "sha256": "89c03b44b5dc6f74e2e54c538f554a1f7cacdd220202a6fc5f13625f138912a0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/continuous-request-pre-route-repair-20260930T022000Z/REPAIR.json",
+      "bytes": 1219,
+      "sha256": "18df40334fba7d423621c78b1fa7f8c994467697a4ac790a89b966e752459ee6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/continuous-request-pre-route-repair-20260930T022000Z/q1_candidate_driver_sequences_v1.py",
+      "bytes": 6331,
+      "sha256": "0ad37c5deb0c8c1063fe3230c2a4b3ef19723009cf549d747d9d6c86d607cf61"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/continuous-request-pre-route-repair-20260930T022000Z/q1_candidate_hooks_sequences_v1.py",
+      "bytes": 14352,
+      "sha256": "3f8aadf9d90820f377b10c1c4b1dff9bb1516f8074718f8e0bb6025a307dc9f4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/continuous-request-pre-route-repair-20260930T022000Z/q1_candidate_sequence_binding_v1.py",
+      "bytes": 7184,
+      "sha256": "6bd4a2fe5efd71f69fedbc320236a841de14fa2bf19c04ed9a309e92c5c7f021"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_continuous_gate_v1.py",
+      "bytes": 3579,
+      "sha256": "6130505de1da673dd262a80239046868972881576da93f8a38be0a87d59ab1c6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_continuous_job_v1.py",
+      "bytes": 9634,
+      "sha256": "dcc22a5c2afb8cc3e5344b3126f38c36bf0ffd2ff9b381e7c58025d175c85292"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_driver_sequences_v1.py",
+      "bytes": 6331,
+      "sha256": "4df37e2dd343dae22c340c87ad43ce708eab209035f72b487963bb87b700b256"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_hooks_sequences_v1.py",
+      "bytes": 14352,
+      "sha256": "3fa48ccba0e3a0a6e1f0ef72e331246f9945d2bc934538c165d6d457ac618d8f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_sequence_binding_v1.py",
+      "bytes": 7184,
+      "sha256": "484e6ae38a8c53ec29d858113e8aed1d5a3170e176573c01dbc14b7f8d3e3df2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_continuous_sources_merge_v1.py",
+      "bytes": 7512,
+      "sha256": "2ba3f6425a9d325c2bfa169ffbd3c8a65d55b6fa62ee61588c16e739c6038dad"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_native_continuous_plan_v1.py",
+      "bytes": 10283,
+      "sha256": "6d403c5b02b2d6e08d8d18e17bedf5338ebe87652881e43ed7c1f1292c07aed1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_native_continuous_reduce_v1.py",
+      "bytes": 16631,
+      "sha256": "f02e5039f8f1aa0a34d913619a2fdf17cd7b26f3fd544f4e5e82b92f54cd631f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/run_q1_candidate_continuous_v1.sh",
+      "bytes": 32858,
+      "sha256": "3e79434f468c8176449d050c3b5d7d025bae1d0188fe57ec0e3e35a41b063e50"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/run_q1_native_continuous_v1.sh",
+      "bytes": 21458,
+      "sha256": "94be4d348860a98941ca74f76118bc6ba634ff0974f4a167855028cc6c946b25"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GIT-BACKUP-VERIFIED-20260930-update30.json",
+      "bytes": 101735,
+      "sha256": "e3599884013f6ff70ccafd59adaceffbb6cfb0375c414d83457bc0bcfce318fa"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-source34-20260930T021200Z.json",
+      "bytes": 335,
+      "sha256": "40b1e6a2a957aaf08658a6d197a8002a39bf9310cec0e585899c212f44a67712"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-source34-20260930T021200Z.progress.jsonl",
+      "bytes": 251,
+      "sha256": "5a005d4616c23a35215749654b77c52f94d0d68fa30048abca441457b1261a20"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/prune_pushed_lfs_cache_v1.py",
+      "bytes": 3083,
+      "sha256": "dd13e407bb4fc20376a2b78501190c73533a5bb32986fbbb2fabe91d2e35c38a"
+    }
+  ],
+  "scope": "source-update35",
+  "restore_order": "after source-update3; this later snapshot wins"
+}
