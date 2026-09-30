@@ -1,0 +1,48 @@
+{
+  "schema": "lumo.source-update-manifest.v1",
+  "utc": "2026-09-30T02:37:16.751763+00:00",
+  "files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_continuous_pair_reduce_v1.py",
+      "bytes": 11936,
+      "sha256": "fbf655d9e9e19096db288906ccddcf2a67293def889244f31cf53d1c5aec61e6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_continuous_parent_plan_v1.py",
+      "bytes": 7271,
+      "sha256": "826eccfc1890b31045a00fba092e65e1327c1945e83b03033c67c5460fc31d77"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/continuous-pipeline-source-review-20260930.md",
+      "bytes": 1420,
+      "sha256": "6462a758d38510fa3f3469e7af7f6a4ccc298246faf111e9ecf503bf91cf56e8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GIT-BACKUP-VERIFIED-20260930-update31.json",
+      "bytes": 101997,
+      "sha256": "c06083a7545e72aab8cec2d68333ec5fccd1672337cde7088be8d7a10929a8ce"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-source35-20260930T023400Z.json",
+      "bytes": 335,
+      "sha256": "3e95ef82f2359e667685812a23091a051b5c8cfcdfad1facda84a31b2f35a205"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-source35-20260930T023400Z.progress.jsonl",
+      "bytes": 251,
+      "sha256": "1eaa2d189b425fc15f59a463bdc8f2455b368adc5755e6aef6ab163350ccc872"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PARENT-CONTINUOUS-PIPELINE-SOURCE-ACCEPTED-20260930T023700Z.json",
+      "bytes": 3141,
+      "sha256": "707f2646693c764a6f77c3322eea3340f3a28230e805e589bf255c86d85b474b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/prune_pushed_archive_staging_v1.py",
+      "bytes": 3198,
+      "sha256": "cabce565dfc7dbd094783779758c369e195dcf5b1d7167b0b559060f95cb9800"
+    }
+  ],
+  "scope": "source-update36",
+  "restore_order": "after source-update3; this later snapshot wins"
+}
