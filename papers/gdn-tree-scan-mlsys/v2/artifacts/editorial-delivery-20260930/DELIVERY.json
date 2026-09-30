@@ -1,0 +1,62 @@
+{
+  "schema": "lumotree-academic-editorial-delivery-v1",
+  "created_at_utc": "2026-09-30T21:02:08.686685+00:00",
+  "published": false,
+  "scope": "Editorial manuscript revision; no inference, new tests, changed scientific criteria, or expanded workloads",
+  "pdf_pages": 13,
+  "prior_pdf_pages": 16,
+  "pdf_sha256": "cd045d8791fc0204b874f20edef7e69f638b362214abbdd14bd49f820edca373",
+  "source_archive_sha256": "8b5c0e080c7c4bdcec907076b3f43591a782a9979cbc33a77cb1a1e86c7652f0",
+  "standalone_source_verification": {
+    "schema": "lumotree-manuscript-source-delivery-verification-v1",
+    "published": false,
+    "archive_sha256": "8b5c0e080c7c4bdcec907076b3f43591a782a9979cbc33a77cb1a1e86c7652f0",
+    "source_manifest_sha256": "4341d2f308b90cc0f0835255efd98c5f8445695590ba81cba56d9adfdb24e321",
+    "command": [
+      "latexmk",
+      "-pdf",
+      "-interaction=nonstopmode",
+      "-halt-on-error",
+      "-file-line-error",
+      "-no-shell-escape",
+      "main.tex"
+    ],
+    "returncode": 0,
+    "source_members_verified": 16,
+    "build_log_sha256": "bde33d9db7702eb66d39cf359917ee30aa39cd1655f25b32431dd7c9b0fb6a14",
+    "campaign_disposition": "SEPARATE_DELIVERY_RECEIPT_NOT_INFERRED_FROM_COMPILATION",
+    "unresolved_or_horizontal_overflow": [],
+    "pdf_sha256": "a740b96522f7f15f9df1ff09a338488c8b3c47e999e2cb59dc5e776ab632cec0",
+    "pdf_bytes": 295881,
+    "original_workspace_inputs": [],
+    "status": "PASS"
+  },
+  "working_and_clean_pdf_text_equal": true,
+  "inline_hashes_internal_cohort_names_and_history_sections_absent": true,
+  "build_warnings": [],
+  "scientific_claims_strengthened": false,
+  "raw_evidence_changed": false,
+  "current_reference_counts": {
+    "target_o0_identical": 84,
+    "target_o1_identical": 65,
+    "target_logits_identical": 65,
+    "target_greedy_stable": 84,
+    "target_baseline_eligible": 84,
+    "joint_baseline_eligible": 68
+  },
+  "complete_workload_attempts_preserved": 22,
+  "prior_snapshot_manifest_sha256": "1d4b14f2c8b314d507a2ec4cd163412a5b18e89e68c06ac0718a65be02b241f6",
+  "editorial_report_sha256": "85974b9d0bb19164edf144fbfa2973d3cc3c39776daf84ce6eb9050a162420b3",
+  "visual_review": {
+    "all_page_contact_review": true,
+    "detail_pages": [
+      8,
+      9,
+      10,
+      11,
+      12,
+      13
+    ],
+    "status": "PASS_NO_CLIPPING_OR_OVERLAP"
+  }
+}

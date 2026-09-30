@@ -1,0 +1,25 @@
+The \sys{} engine is a patched vLLM development build. It serves a RadixArk Qwen3.8-27B NVFP4 checkpoint with ModelOpt mixed quantization and bfloat16 execution. SGLang serves its recorded as-shipped NVFP4 model. The artifact identifies the evaluated builds and available weight/tokenizer metadata; identical model names do not establish identical checkpoint tensors or conversion policies.
+
+\begin{table*}[t]
+\caption{Serving configurations for the exploratory workload experiments. Builds A--C share the tree geometry but differ in implementation revision. The configurations are not a controlled same-stack comparison. Exact software and kernel versions are provided with the artifact.}
+\label{tab:serving-config}
+\centering\footnotesize
+\renewcommand{\arraystretch}{1.12}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.21\textwidth}YY@{}}
+\toprule
+Setting & \sys{} / patched vLLM & SGLang EAGLE \\
+\midrule
+Target & Qwen3.8-27B NVFP4, RadixArk conversion; bf16 execution & Qwen3.8-27B NVFP4, recorded as-shipped checkpoint \\
+Weight/tokenizer identity & Model/configuration metadata recorded; cross-stack byte identity unverified & Loaded weight/tokenizer hashes incomplete \\
+Proposal configuration & 27 drafts; root plus drafts padded to 32 rows; maximum depth 11 & Steps/top-$k$/draft tokens: 3/1/4 \\
+Attention & Patched FlashAttention-2; head grouping 2, split-K 4 & FlashInfer \\
+Graphs/cache & Prefix caching; full/piecewise target graphs; separate drafter and committer graphs & Exact execution-mode parity not established \\
+Context/scheduling & 131,072 context; 4,096 scheduled tokens; one active sequence & 262,144 context; 8,192-token prefill chunks; up to three observed requests in the excluded run \\
+Response cap & 32,768 for Builds A--C; 24,000 for ten-task cohort & 32,768 for excluded run; 24,000 for included run \\
+Requested sampling & \multicolumn{2}{l}{Temperature 0.6; top-$p$ 0.95; top-$k$ 20; min-$p$ 0; presence penalty 1.0} \\
+Agent protocol & \multicolumn{2}{l}{Qwen Code 0.19.4; one task at a time; proxy auto-continuation disabled} \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+The ten-task deployment uses engine seed zero, a 20,000-token compaction cap, and a 9,000-second agent timeout. Tasks run in repository images on an internal network that permits the model proxy and blocks external egress. The included SGLang pair uses the same agent harness and requested sampling settings. Build A's 41 responses and the included SGLang run's 45 responses are all at most 20,000 tokens, below both output caps. This observation does not resolve the other differences between the serving configurations.

@@ -60,8 +60,9 @@ Y.~Wu, Z.~Qin, A.~Wong, and S.~Soatto, ``Stree: Speculative tree decoding for
 
 \bibitem{lumo2026archive}
 Z.~Ma, ``{Lumo FlyWheel implementation and experiment archive},''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel}, 2026, source versions and
-  experiment records are specified in the accompanying artifact.
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/tree/984f613d7885d9bf7898866827552b68a3199d0c},
+  2026, revision evidence snapshot; individual campaigns retain their own run
+  identities.
 
 \bibitem{lumo2026stateless}
 ------, ``{Stateless Tree Speculative Decoding: A Branched Verifier That Caches
@@ -244,7 +245,8 @@ S.~M. Ghantasala, ``{TreeWY: Speculative Verification for Gated DeltaNet
 \bibitem{ghantasala2026treewycode}
 ------, ``{TreeWY: Tree Speculative Decoding for Hybrid GDN Models},''
   \url{https://github.com/vllm-project/vllm/issues/54080}, 2026, author
-  implementation RFC; accessed September 26, 2026.
+  implementation RFC; linked source revision
+  b073ed6cacfa1cf5ae23111854729e662a72a6d1; accessed September 26, 2026.
 
 \bibitem{replayssm2026}
 {Dao AI Lab and NVIDIA}, ``{ReplaySSM: Cache SSM Inputs Instead of State},''

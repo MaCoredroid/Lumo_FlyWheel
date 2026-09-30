@@ -1,0 +1,38 @@
+The agent uses Qwen Code to inspect repositories, edit files, execute tools, and produce patches for Astropy tasks from SWE-bench Verified. Model serving runs on GB10; task execution and evaluation use x86-64 workers. We distinguish a shared two-task comparison from a separate ten-task deployment. Appendix~\ref{app:workload} reports the complete recorded outcomes, including unsuccessful attempts and runs excluded from the shared comparison.
+
+\paragraph{Task outcomes}
+The ten-task deployment resolves six tasks; four patches fail tests. All ten attempts use tools and produce nonempty patches. Agent durations range from 1.67 to 41.24 minutes and sum to 181.15 minutes, excluding server startup and subsequent evaluation. These selected tasks have one attempt each and no matched native-decoding control, so their resolution count is not a benchmark-wide success estimate or evidence of quality preservation.
+
+The shared comparison uses Astropy tasks 12907 and 13033. Each of the three \sys{} builds and the included SGLang EAGLE run resolves the first task and fails the second. Their different token trajectories and agent durations do not isolate verification cost. For example, Build A accumulates 17.31 agent minutes across the pair, compared with 34.07 for the included SGLang run. One recorded pair per build cannot establish a general task-completion speedup.
+
+\paragraph{Decode throughput}
+For completed request $r$, let $n_r$ be the output-token count, $\ell_r$ the server-recorded end-to-end latency, and $f_r$ the time to first output. We report
+\begin{equation}
+ D_{\mathrm{pool}} =
+ \frac{\sum_{r=1}^{R}(n_r-1)}{\sum_{r=1}^{R}(\ell_r-f_r)}.
+ \label{eq:pooled-decode}
+\end{equation}
+Counts and durations are pooled over the same completed requests before division. The numerator counts output intervals; the denominator excludes first-output latency and between-request agent/tool work. Overlapping requests contribute their durations separately, so this estimator is not aggregate throughput per elapsed wall-clock second or a measure of isolated GPU utilization. All completed engine requests, including internal compaction traffic, are included.
+
+\begin{table}[t]
+\caption{Pooled decode rates on GB10. Builds A--C and SGLang use the same two Astropy tasks, 12907 and 13033, and produce nonempty patches on both. The final row covers a separate ten-task subset. Builds A--C are development revisions, not statistical replicates.}
+\label{tab:pooled-decode}
+\centering\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Deployment & Tasks & Requests & Tokens/s \\
+\midrule
+SGLang EAGLE & 2 & 45 & 26.89 \\
+\sys{} Build A & 2 & 41 & 29.09 \\
+\sys{} Build B & 2 & 35 & 28.28 \\
+\sys{} Build C & 2 & 53 & 27.27 \\
+\midrule
+\sys{} ten-task cohort & 10 & 265 & 25.63 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Selection and comparison limits}
+We selected the shared tasks retrospectively because both had completed SGLang records, then included every recorded \sys{} run on that pair. The performance subset requires both agent attempts to finish normally without a timeout or terminal budget cap and produce nonempty patches; patches that fail tests remain included. Three \sys{} pairs and one of two SGLang pairs satisfy this rule. The excluded SGLang pair has an unfiltered rate of 30.70 tokens/s, but its second task produces an empty patch after a thinking-only response reaches the output cap. Appendix~\ref{app:workload} retains this failure and its rate. The selected rates therefore describe patch-producing runs, rather than performance over all attempts.
+
+The systems share the requested sampling settings and agent harness, but differ in checkpoint conversion, attention implementation, scheduling, context limits, and proposal budgets (Appendix~\ref{app:settings}). Cross-stack weight and tokenizer identity is not verified. Builds A--C also differ in implementation revision, so their spread does not estimate within-build uncertainty. The ten-task cohort is a completed segment of an interrupted development campaign; other segments include degeneration, incomplete output, and budget-capped attempts. These observations demonstrate execution of real coding-agent work, but do not establish a same-stack speed advantage or general task-quality preservation.

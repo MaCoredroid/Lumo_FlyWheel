@@ -17,7 +17,6 @@
 \usepackage[hidelinks]{hyperref}
 \usepackage{microtype}
 \usepackage{balance}
-\usepackage{placeins}
 \usetikzlibrary{arrows.meta,positioning,calc}
 \pgfplotsset{compat=1.17}
 \definecolor{inkblue}{RGB}{42,97,130}
@@ -26,6 +25,7 @@
 \definecolor{mutedred}{RGB}{153,77,82}
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
 \newcommand{\sys}{LumoTree}
+\newcommand{\pending}[1]{\textit{Planned; results pending: #1.}}
 \begin{document}
 \title{LumoTree: Path-Parallel Speculative Verification for Hybrid Language Models}
 \author{\IEEEauthorblockN{Zhiyuan Ma}
@@ -51,7 +51,7 @@ The central execution choice is to verify branches in temporary state and replay
 \label{fig:pipeline}
 \end{figure*}
 
-The paper studies three coupled design questions in recurrent-hybrid tree verification. \textit{First}, how can branch-local computation produce one coherent continuation across recurrent, convolution, and attention state? We define a shared logical tree and coordinate state publication through its logical-to-physical mapping. \textit{Second}, how should verification trade temporary state storage against repeated computation? We use path-parallel scans with shared boundary states and replay the accepted path into persistent state, building on established chain-scheduling and replay mechanisms~\cite{wang2026specla,oda2026marginals}. \textit{Third}, how can this organization reduce serving overhead? We combine fused candidate selection, device-resident acceptance, and grouped split-K attention with a spine-contiguous KV layout. Component experiments and exploratory coding-agent deployments characterize the implementation. Cross-process differences in the native reference prevent establishing full-model continuation correctness; the workload observations do not establish a same-stack performance advantage.
+The paper studies three coupled design questions in recurrent-hybrid tree verification. \textit{First}, how can branch-local computation produce one coherent continuation across recurrent, convolution, and attention state? We define a shared logical tree and coordinate state publication through its logical-to-physical mapping. \textit{Second}, how should verification trade temporary state storage against repeated computation? We use path-parallel scans with shared boundary states and replay the accepted path into persistent state, building on established chain-scheduling and replay mechanisms~\cite{wang2026specla,oda2026marginals}. \textit{Third}, how can this organization reduce serving overhead? We combine fused candidate selection, device-resident acceptance, and grouped split-K attention with a spine-contiguous KV layout. Component validation and exploratory coding-agent deployments characterize parts of the implementation. The current full-model reference fails a required repeatability check, so these results do not establish qualified end-to-end continuation or a same-stack performance advantage.
 
 The target workload is a long-running coding agent: generation alternates with repository inspection, tool execution, and tests, and a task can require many model requests. Performance therefore depends on useful completed work as well as token production. Our workload evaluation uses explicitly identified Astropy tasks from SWE-bench Verified~\cite{jimenez2024swe}. We report the model, serving route, task cohort, and measurement definition together; a decode-rate change is not a task-completion speedup. Candidate-selection and attention tests complement the agent-workload measurements.
 
@@ -280,39 +280,70 @@ The subtlety is that argmax and top-k do not have interchangeable tie behavior. 
 
 \section{Evaluation Setup}
 \label{sec:protocol}
-We evaluate Qwen3.8-27B NVFP4 on a single GB10/DGX Spark using exploratory coding-agent deployments on SWE-bench Verified Astropy tasks~\cite{lumo2026archive,jimenez2024swe}. Three \sys{} builds and two SGLang EAGLE runs share a two-task subset; a separate \sys{} deployment covers ten tasks. The builds differ in implementation revision and are not statistical replicates. We report complete recorded outcomes and distinguish the shared-task comparison from the larger deployment. All decode rates pool token counts and decode durations over the same completed-request population, excluding time to first output. Agent duration additionally includes tools and repository operations; server startup and subsequent evaluation are separate.
+Performance evidence comes from exploratory coding-agent deployments, with the task subset and serving configuration attached to every reported rate. The Qwen3.8-27B NVFP4 records use SWE-bench Verified Astropy tasks on a single GB10/DGX Spark: three tree revisions and two SGLang EAGLE run-pairs on shared tasks, plus a separate ten-task tree deployment~\cite{lumo2026archive,jimenez2024swe}. The outcome ledger retains all recovered completed brackets and identifies additional incomplete or unbracketed records. The three tree revisions are development observations, not repeated trials of one fixed build. These selected subsets are not the full benchmark. Every decode-rate result uses the pooled completed-request estimator in Eq.~\ref{eq:pooled-decode}, excluding first-output latency. Recorded agent duration includes the agent loop, model service, tools, and repository operations; server startup and subsequent evaluator time are separate.
 
-The evaluated tree has 27 draft candidates and one root, padded to 32 verification rows. A five-depth MTP head supplies 15 candidates; suffix prediction adds a six-token principal tail and rescue branches of four and two tokens. Maximum draft depth is eleven, and four post-root MTP forwards construct the head. Attention groups query heads in pairs and divides the context into four partitions. The model has 48 GDN layers and sixteen full-attention layers. All \sys{} workload deployments use this geometry and the patched FlashAttention-2 path. Appendix~\ref{app:settings} gives the serving configuration; the accompanying artifact identifies each source and kernel version.
+The evaluated NVFP4 tree has 27 draft candidates and one root, padded to 32 verification rows. A five-depth MTP head supplies 15 candidates; suffix prediction adds a six-token principal tail and rescue branches of four and two tokens. Maximum draft depth is eleven, and four post-root MTP forwards construct the head. Attention groups query heads in pairs and divides the context into four partitions. The model has 48 GDN layers and sixteen full-attention layers. All NVFP4 tree deployments in Section~\ref{sec:agent-workload} use this geometry and the patched FlashAttention-2 path; exact source and kernel versions are retained in the artifact. Appendix~\ref{app:history} separately records recovered cohorts from superseded implementations.
+
+\input{results/agent-workload/review-configuration}
 
 \section{Results}
 \label{sec:results}
 \subsection{SWE-bench Verified coding-agent workload}
 \label{sec:agent-workload}
-\input{sections/workload}
+\input{results/agent-workload/case-study.tex}
 
-\subsection{Acceptance and execution costs}
-\input{sections/execution-costs}
+\subsection{Recovered acceptance and phase measurements}
+\input{results/agent-workload/review-telemetry}
 
 \subsection{Numerical and candidate-selection validation}
 \label{sec:current-validation}
 \input{results/review-response-20260927/component-qualification}
-\input{sections/native-continuation}
+\input{results/review-response-20260927/native-reference}
+\input{results/review-response-20260927/native-common-o0-paired-v1}
+
+\input{results/review-response-20260927/native-joint-AB-v1}
+
+The joint prerequisite is not met. All sixteen ineligible paths use the long
+prefix: the two repetitions within each process agree, but secondary top-three
+membership or order differs between processes. Every MTP spine remains stable.
+Thus identical imported state and stable greedy tokens do not establish
+repeatable proposal trees under this criterion. We retain these outcomes and
+do not admit the planned candidate comparison on the remaining subset.
+The common imported state and matched token/position controls do not guarantee
+identical intermediate hidden states. These observations characterize the
+native continuation route; they do not isolate an MTP kernel supplied with
+identical hidden and cache operands.
+
+\input{results/review-response-20260927/native-joint-pinned-AB-v1}
+
+The follow-up retains the same 65 kernel-selection cache entries across both
+processes. It still misses the joint prerequisite on sixteen long-prefix
+paths. Its aggregate eligible-path count matches the earlier cohort, but this
+does not identify the cause of the disagreement or isolate kernel selection as
+a causal factor. We report both complete cohorts and retain the downstream
+qualification boundary.
+
+An untimed diagnostic on one of these long-prefix paths observes no change to
+the target recurrent state, materialized attention cache, or captured attention
+metadata across three native MTP first passes and one deferred follow-up.
+This localizes the investigation; it does not establish cross-process
+reproducibility or qualify the candidate route.
 
 The fused full-vocabulary selection test compares the two output tensors against the reference argmax and top-k operations. Across 1,368 input cases and five block-count settings (6,840 configurations), it records zero byte mismatches; planted negative controls fire. A separate captured four-level selection graph completes 24 replays with zero mismatches. These results validate candidate-selection outputs for the tested inputs and graph behavior, not end-to-end task equivalence~\cite{lumo2026archive}.
 
 Attention tests use the same kernel build as the ten-task deployment. They show bit-identical repeated output and log-sum-exp values within each of sixteen determinism cases, with matching digests across two processes. On synthetic query/key/value tensors drawn at scales measured from banked model operands, 93.31\% of output elements agree with the reference kernel within two ULP, the maximum absolute output difference is 0.00390625, and maximum log-sum-exp disagreement is four ULP. All nine declared checks pass, including comparisons against a float64 dense reference and checks for non-finite disagreements. These are attention-component bounds; split-K changes rounding and is not claimed to be byte-identical to the reference kernel or to preserve every downstream token.
 
-Runtime traces confirm execution of the specialized kernel in all sixteen attention layers, fused selection, device acceptance, and captured state publication during the workload runs. Kernel execution and observed task outcomes do not establish full-model numerical equivalence or distribution preservation.
+Archived task-run receipts record engagement of the specialized attention kernel in all sixteen attention layers, fused selection, device acceptance, and captured state publication. The task outcomes and trace analysis in Section~\ref{sec:agent-workload} describe those deployments. This route-engagement evidence is separate from current full-model qualification; neither component checks nor task outcomes establish a conditional-distribution proof.
 
 \subsection{Recurrent verification and publication comparison}
 \label{sec:m1-qualification}
-\input{sections/recurrent-comparison}
+\input{results/review-response-20260927/m1-qualification}
 
-\section{Discussion}
-\label{sec:discussion}
+\section{Discussion and Remaining Evidence}
+\label{sec:planned}
 The design couples tree geometry, physical layout, and continuation publication. Optimizing any one of these in isolation can move work elsewhere or invalidate another stage's mapping. The verifier uses transient cut states, static graph buffers, and native persistent rows for different purposes; conflating them would obscure both memory cost and state ownership.
 
-Sequential replay and compact reconstruction remain alternative implementation choices. The held-out recurrent comparison includes accepted publication and final deferred commitment under each implementation's stated preprocessing and arithmetic conventions. Only \sys{} satisfies its specified numerical envelope. The differing comparators and failed bounds limit this result to numerical behavior; it supplies no timing ranking or complete-system advantage.
+Sequential replay and compact reconstruction remain alternative implementation choices. The held-out recurrent comparison in Section~\ref{sec:m1-qualification} includes accepted publication and final deferred commitment, with each declared preprocessing and arithmetic convention retained. Only \sys{} satisfies its specified numerical envelope. The other configurations' failures limit the comparison to reported numerical behavior; we report no four-way timing or complete-system advantage from this experiment.
 
 For long-running agents, task completion and task wall time are the relevant application outcomes. More decoded tokens can reflect additional reasoning or a longer tool loop. The pooled decode comparison is therefore accompanied by task identities, outcomes, agent/tool policy, and terminal budgets. It describes the evaluated deployments and the stated retrospective patch-producing subset; it is not a task-completion speedup estimate.
 
@@ -323,26 +354,27 @@ Component validation and whole-task performance answer different questions. The 
 
 Exploratory Qwen3.8-27B NVFP4 deployments on GB10 give 27.27--29.09 pooled tokens/s across three tree revisions and 26.89 for SGLang EAGLE on two shared SWE-bench Verified Astropy tasks with nonempty patches. The separate ten-task deployment attains 25.63 tokens/s, with six tasks resolved and four failing tests. The all-attempt ledger also reports the excluded empty-patch SGLang pair and additional incomplete records. These observations describe the recorded systems and populations; fixed-build repetitions and same-stack controls are required for a confirmatory advantage claim.
 
-The contribution is a concrete verifier design and component-level numerical evidence, accompanied by exploratory application results and explicit limitations. Native-reference differences leave full-model continuation and cache lifecycle correctness unestablished. The recurrent-component comparison supplies numerical results rather than a timing ranking. Same-stack task comparisons and controlled ablations are needed to establish application speedups and attribute them to individual design choices.
+The contribution is a concrete verifier design, component-level numerical evidence, and an explicit account of the remaining qualification failure. The native joint reference does not satisfy its frozen repeatability requirement, and the recurrent comparator results do not admit a qualified four-policy timing comparison. The current full-model candidate and request lifecycle therefore remain unqualified. The exploratory workload records do not establish task-quality preservation, full-model sequential equivalence, or general superiority over SGLang or the published compact-state systems.
 
 \appendices
-\section{Serving Configuration and Measurement}
+\section{Reproducibility and Claim Boundaries}
 \label{app:audit}
-\label{app:settings}
-The artifact provides source versions, kernel identities, launch settings, task metadata, and raw measurements. Earlier implementations are documented separately and are not pooled with the evaluated NVFP4 deployments.
-\input{sections/workload-configuration}
+The artifact records source revisions, effective serving settings, kernel identities, tree geometry, graph and cache configuration, and original task metadata. Dated development records are retained separately from the evidence supporting the evaluated method.
 
-Workload rates use Eq.~\ref{eq:pooled-decode}; token counts and latency sums cover the same completed requests. Metric counters are checked for continuity, resets, and outstanding requests at task boundaries. First-output latency, tools, and evaluator time remain distinct from decode duration. GPU phase times divide each timer's duration sum by its own span count. Output-side acceptance counters describe emitted draft lengths and do not identify the committed tree path.
+All workload rates use the completed-request pooled decode estimator in Eq.~\ref{eq:pooled-decode}. Token totals and latency sums come from the same completed-request population. First-output latency, tool execution, and evaluator time are separate quantities. Earlier global-token/subset-wall proxies and local-document timing do not supply paper performance claims. The selection ledger preserves every included and excluded run-pair and the unchanged unfiltered measurements.
 
-\textit{Algebraic correctness} concerns the real-arithmetic recurrence. \textit{Numerical agreement} concerns particular kernels and references. \textit{Sampler correctness} concerns the acceptance/residual law for the supplied probabilities. \textit{Serving correctness} additionally requires coherent state across continuation and cache operations~\cite{yang2024delta,chen2023sampling,lumo2026archive}. Component outputs and task completion address different parts of this chain.
+\textit{Algebraic correctness} concerns the real-arithmetic recurrence. \textit{Numerical agreement} concerns particular kernels and references. \textit{Sampler correctness} concerns the acceptance/residual law for the supplied probabilities. \textit{Serving correctness} additionally requires coherent state across continuation and cache operations~\cite{yang2024delta,chen2023sampling,lumo2026archive}. Equal candidate outputs, bounded attention error, and observed task completion address different parts of that chain.
 
 For target probabilities $p$ and proposal probabilities $q$, ordinary rejection sampling combines accepted mass $\min(p,q)$ with residual mass proportional to $(p-q)_+$. This gives the intended target marginal only for the probabilities actually supplied~\cite{leviathan2023fast,chen2023sampling}. A correct abstract sampling rule cannot compensate for stale state or different target logits. The paper therefore does not promote component checks or task outcomes into a general distribution-preservation claim.
 
-\section{Additional Workload Results}
-\label{app:workload}
-\input{sections/workload-details}
+\section{Unexecuted Workload Case Study}
+\label{app:validation}
+The approved case study specified one SWE-bench Verified task, \texttt{scikit-learn\_\_scikit-learn-9288}, with one attempt each under autoregressive decoding, chain MTP, SGLang EAGLE, and \sys{}, in that order. Execution required qualified current routes. That prerequisite was not met, so none of the four attempts was started. This paper reports no task outcome, agent time, pooled decode rate, or task pass for that planned comparison. The fixed plan and the decision not to proceed are retained in the artifact; unexecuted attempts are not task failures. No task replacement, extra repetition, or smaller-arm substitute was run.
 
-\FloatBarrier
+The recurrent comparison reports the completed numerical qualification and its limits in Section~\ref{sec:m1-qualification}; its failed prerequisites leave the four-way timing comparison unreported. Allocated scratch, state traffic, and register spills remain separate measurements. SpecLA and Bole inform the mechanism comparison; running their author systems remains contingent on obtaining verified implementations. Layout attribution needs a controlled intervention with unchanged logical candidates and correctly paired KV/mask remapping. These component diagnoses remain separate from workload speed.
+
+\input{results/history-recovery-20260930/history}
+
 \label{ReferencesStart}
 \balance
 \bibliographystyle{IEEEtran}

@@ -1,0 +1,19 @@
+Output-side acceptance and GPU phase measurements describe the recorded workloads. Accepted drafts per speculative event range from 4.41 to 4.61 for the shared-task builds and average 4.05 in the ten-task deployment. These counters measure emitted draft length after filtering, excluding the correction or bonus token. They do not identify the accepted branch or the path materialized in persistent state. Physical draft slots include padding, so their count is not an appropriate denominator for logical-candidate acceptance.
+
+\begin{table}[t]
+\caption{Accepted drafts per event and mean GPU span durations (ms). Dispatch covers acceptance, path handling, and state commitment. These observational measurements do not isolate optimization effects or sum to a verified critical-path decomposition.}
+\label{tab:recovered-telemetry}
+\centering\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Deployment & \shortstack{Accepted\\drafts} & Target & Drafter & Dispatch \\
+\midrule
+Build A & 4.61 & 113.89 & 51.95 & 20.73 \\
+Build B & 4.49 & 114.57 & 52.49 & 20.68 \\
+Build C & 4.41 & 115.90 & 54.61 & 20.46 \\
+Ten-task cohort & 4.05 & 114.89 & 54.76 & 20.15 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Each timer is reduced using its own duration sum and span count, with no pending samples at task boundaries. Dispatch does not separate sampling from native replay. Instrumentation overhead was not measured through an on/off control, and the recorded spans do not supply isolated attention, convolution, or replay costs. SGLang's saved acceptance statistics are window gauges rather than task-total counters, preventing a directly comparable acceptance estimate.
