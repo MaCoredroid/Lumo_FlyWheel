@@ -1,0 +1,50 @@
+{
+  "scope": "PREVIOUS_NARROWED_DELIVERY_PRESERVED_BEFORE_HISTORY_FORMALIZATION",
+  "files": [
+    {
+      "path": "main.tex",
+      "bytes": 47786,
+      "sha256": "5edcbda6aa239495d5c7cc034d9c898f5d51f8b35dfd05514328a3c4fd320fa9"
+    },
+    {
+      "path": "abstract.tex",
+      "bytes": 1383,
+      "sha256": "43eae5a1775a19d3622bf85f9e578d33aa571dfb8c42cd6e3fefcf578f05c4dc"
+    },
+    {
+      "path": "main.pdf",
+      "bytes": 313457,
+      "sha256": "2589d34bdc0d9f0336994c6dc02195db2f7e814b65e1bd6cc60c93ae8c06a759"
+    },
+    {
+      "path": "main.bbl",
+      "bytes": 12055,
+      "sha256": "88b288c16d0cd76a0eda28774cee4ae2b9f5ab57ffd61925a91b33047b6bdfb3"
+    },
+    {
+      "path": "README.md",
+      "bytes": 9888,
+      "sha256": "e5affe44d57fae5531c2ec5f505c31146f7bd39f7ee261b8193f3932f07737ea"
+    },
+    {
+      "path": "paper.config.yaml",
+      "bytes": 1945,
+      "sha256": "f1c805212b49a43f0b997c9e1f5ae832e5b69f317461029a89da2b256b37221f"
+    },
+    {
+      "path": "artifacts/FINAL-DELIVERY.json",
+      "bytes": 6524,
+      "sha256": "e439624af67f00901644725f51664c9f03c6705a027875a895501c54135cd4e0"
+    },
+    {
+      "path": "results/agent-workload/case-study.tex",
+      "bytes": 12316,
+      "sha256": "798470a439c2bebad6956a779803d459a2d8572217d446b1f794b855296e87c3"
+    },
+    {
+      "path": "notes/design/experiment-matrix.csv",
+      "bytes": 5305,
+      "sha256": "9b03d4052d5dd6c85b3f2751aff223833c65e1d4959d29af38cb5d28d25e431a"
+    }
+  ]
+}

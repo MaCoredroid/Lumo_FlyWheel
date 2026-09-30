@@ -1,0 +1,596 @@
+{
+  "schema": "lumotree-history-evidence-package-v1",
+  "scope": "ERA_BOUND_RECOVERED_RECORDS_NOT_NEW_EXPERIMENTS",
+  "members": [
+    {
+      "path": "notes/history-formalization-20260930.md",
+      "bytes": 7075,
+      "sha256": "e1c0460dc0c925af42fe983c6456ec2aa1e282c0c6ed4a814d335434f0734e06"
+    },
+    {
+      "path": "notes/history-formalization-review-20260930.md",
+      "bytes": 2050,
+      "sha256": "8ec053ed605601ffd05e30fc8ef05ed88a8e26a299e3260bcb9cb152b761e273"
+    },
+    {
+      "path": "results/history-recovery-20260930/audit.json",
+      "bytes": 88738,
+      "sha256": "9f49040790843b395f57cc83f56f7a555d25e064a6de6dd54a4263355316d5c9"
+    },
+    {
+      "path": "results/history-recovery-20260930/history.tex",
+      "bytes": 5266,
+      "sha256": "eb878a4c9b9499dc9fa6b34a82a7205bb861f4e478ef5dcecd03071cec688a79"
+    },
+    {
+      "path": "results/history-recovery-20260930/july22-attempts.csv",
+      "bytes": 18261,
+      "sha256": "209a358309796fddfac53bde654be3bd0576ec354d9b6eadd693c934e954be37"
+    },
+    {
+      "path": "results/history-recovery-20260930/july22-table.tex",
+      "bytes": 571,
+      "sha256": "9d638488a4d2240336ce9361baddf129973dd8cf988e5285064fb9f4556d089b"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/calibration/bench_bs1.jsonl.projection.json",
+      "bytes": 974,
+      "sha256": "76c78533781b3005473a1704b6527f6b6562e33ca9b3ae104b29f852a73538be"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/calibration/dspark_bench_bs1.jsonl.projection.json",
+      "bytes": 1012,
+      "sha256": "a8cff1c23fc1bc257c1aada96a1c798997599043d20158614567d5dd047c70b6"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/calibration/dspark_bench_bs8.jsonl.projection.json",
+      "bytes": 1012,
+      "sha256": "00b2ed9c3eba73ee720a221f745cda569d695711dfa3072f0011279a958cdb8f"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/calibration/n2_bench_bs1.jsonl.projection.json",
+      "bytes": 974,
+      "sha256": "172ca320d26f000d3fd2293a8d7d826316e4a391f2b218e219607d7ab613f680"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/FR13_POSTSNAPFIX3_CLOSEOUT.md",
+      "bytes": 7714,
+      "sha256": "3ce92516ef36dacb525ed3694734c9de6bb0929a249b1cf43825b1d5a3c1a5a0"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-12907/eval_report.json",
+      "bytes": 495,
+      "sha256": "76c92fe90167951ab248af6474a33c0f43396526525249fd13d80c7d716f73ce"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-12907/runner_metadata.json",
+      "bytes": 1806,
+      "sha256": "ea5bf290642c7fe0eaff967603dcac25551b590a4f424936c3d00ca814e41c88"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-13033/eval_report.json",
+      "bytes": 493,
+      "sha256": "fa8d7deb9991ebfdd9876059fa54f14ccf29207d02ab74620be3b0e79d38622c"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-13033/runner_metadata.json",
+      "bytes": 1807,
+      "sha256": "e77496bf5ecca79abaa41ab75e482e26721d7b3426a5ad1f28549261dfc3d8f4"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-13236/eval_report.json",
+      "bytes": 495,
+      "sha256": "1fcf2303b6a7f9482b1a00ced87e35678954b216044f2a85c31f1c3ead78fd5e"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-13236/runner_metadata.json",
+      "bytes": 1808,
+      "sha256": "b7685454f625a988aa6d99cef620f86ec6f93ff63e419959b71aaf43cd805eb8"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-13398/eval_report.json",
+      "bytes": 494,
+      "sha256": "c73eea75df1ee4f871de96d6ce44a63c5f557697525e9ca94f802be95d07608a"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-13398/runner_metadata.json",
+      "bytes": 1807,
+      "sha256": "96a96c1b8f31fd03b69903bc808e238e2a80c98631beabca3330fc71bcc481c4"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-13453/eval_report.json",
+      "bytes": 495,
+      "sha256": "302a2544b8023fd548c5434ec6fd67dd176c673b7ecd9568c059e979fda5a533"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-13453/runner_metadata.json",
+      "bytes": 1808,
+      "sha256": "ba1373516bf1fbb63e602bfefbd11949240f5b0e0da05a70cdc3367f525b5d3d"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-13579/eval_report.json",
+      "bytes": 495,
+      "sha256": "7c9612690c32f9519fd115839de9635be8bcc181ea575816234e699f3e0c3d79"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-13579/runner_metadata.json",
+      "bytes": 1808,
+      "sha256": "db566968041471cb467c05b7392cdd4f9043923aa5515a9204b691ca19bffa76"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-13977/eval_report.json",
+      "bytes": 494,
+      "sha256": "d0a01e0ae8eaf8c25ef8e20b0cc43fc22162fa79bae54f4962b16377a453c576"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-13977/runner_metadata.json",
+      "bytes": 1807,
+      "sha256": "185c6a951fa87eb92b713a5c10d89891729daca8bea4b3ca413df0d8bb0118db"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14096/eval_report.json",
+      "bytes": 495,
+      "sha256": "d2c99e4f3d2bc75dd790f21bf208aae9ea7a3dbb411259a1997d757ac1ab725d"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14096/runner_metadata.json",
+      "bytes": 1809,
+      "sha256": "353d79c872eec8808290871375c7e494f62ed198091a2f6b4ee486290adfe815"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14182/eval_report.json",
+      "bytes": 495,
+      "sha256": "8cd0a87c0dfdabe420b241083edc0eb0cdbc92dbae40a751a841ba08fe248f0d"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14182/runner_metadata.json",
+      "bytes": 1808,
+      "sha256": "b1b5e3246c20d699429789106783b85934a049d04e11bc67bd0e2aec0fe63fe2"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14309/eval_report.json",
+      "bytes": 494,
+      "sha256": "37fd9a90457ac8e29859e64dace7254873712d5ebba8ee486988206973b87896"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14309/runner_metadata.json",
+      "bytes": 1805,
+      "sha256": "c1af3b498bcafb63e8e9e10b69ec6bf00d6eef602aed62d9c957e308089bc66c"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14365/eval_report.json",
+      "bytes": 255,
+      "sha256": "eabff67f039ab2602b815343b902ae0d8c829cf27cf8fb2e50eedf623449d810"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14365/runner_metadata.json",
+      "bytes": 1706,
+      "sha256": "7ebf6b957adc029205db7c068cefff3bff81a6050d6a6373e6dc82dace440880"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14369/eval_report.json",
+      "bytes": 494,
+      "sha256": "d33d6eb6c513bd8df14e4fc84d91686643009528d6715c7b34ea2d04b83f8787"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14369/runner_metadata.json",
+      "bytes": 1809,
+      "sha256": "d88874e001471a15ce30b87854e03889ac5982cebbdd286e677fbdb72dc98636"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14508/eval_report.json",
+      "bytes": 495,
+      "sha256": "10b71542ca7412c4c77577a39dc3b93f56d3742bccc53fb9627421ee4fbe795b"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14508/runner_metadata.json",
+      "bytes": 1809,
+      "sha256": "0b6d1a3cf431daa980c117b578099ca264867b6e27ebf7602524f6abe612c20f"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14539/eval_report.json",
+      "bytes": 495,
+      "sha256": "d60c00f3b4d93278a5ed286e0032d13c8d59866e79fdf239a24dc3bbf4cbb5ad"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14539/runner_metadata.json",
+      "bytes": 1806,
+      "sha256": "c09b2dddc6a7418a71b5eb04bb529c8bd4697791162afea1b13fdc7f075433e4"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14598/eval_report.json",
+      "bytes": 494,
+      "sha256": "7e8406b25703d50ff3eaae97c7fa77574689a931963d9090bb0f5107f9205369"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14598/runner_metadata.json",
+      "bytes": 1805,
+      "sha256": "42ac2c3501a15b4d72014336ab26848d29f3e77a42e08fa7451bbbbec24f8d2d"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14995/eval_report.json",
+      "bytes": 494,
+      "sha256": "11418d9c2a946e2e8514dbe31ae3b65f3f2d09d16d7c0c2e67a68db865cfea21"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/kvremap_tail6_kvr1/astropy__astropy-14995/runner_metadata.json",
+      "bytes": 1807,
+      "sha256": "1dc8d689a91b89a960869ba0b1096071a60cb96804dcc15a9a6f6f2089c2f872"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-12907/eval_report.json",
+      "bytes": 495,
+      "sha256": "cdfe7ae027adb99c973ed96db3fa5883af476c4cb641d79ecf2b7a2d87a44093"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-12907/runner_metadata.json",
+      "bytes": 1808,
+      "sha256": "a9604e43583201b0efe64fef07189d1d237d4bf909d5d36616359aa509c74e02"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-13033/eval_report.json",
+      "bytes": 494,
+      "sha256": "4103a94d12281d9bec8178774abf7d16d387807ec9895764e2511762647d1497"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-13033/runner_metadata.json",
+      "bytes": 1807,
+      "sha256": "e7bf0576fb6127c0596bbe131a786893a13b00eb1b2347a1a781a1be067504e3"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-13236/eval_report.json",
+      "bytes": 494,
+      "sha256": "36ed86e98648800f14eb02a645a0c2ceab8ef440c707a45a4cc02b1cc47375ad"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-13236/runner_metadata.json",
+      "bytes": 1805,
+      "sha256": "8e3c31346f9850701dd75049e1babd8dc064d2ef11dc6831fd99672c457c641b"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-13398/eval_report.json",
+      "bytes": 494,
+      "sha256": "73de62659d08ce886a3e28a176925d8c78bd47a8a859aae69245597ae4adf773"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-13398/runner_metadata.json",
+      "bytes": 1804,
+      "sha256": "366bec441137d2627d2d0035499b6cc67612faee5548a56ecc8113d23259e48e"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-13453/eval_report.json",
+      "bytes": 495,
+      "sha256": "4a6efa7faddf9e04e79cea7f270d356bdc5cafe45a6b388536da64ac3e6eec53"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-13453/runner_metadata.json",
+      "bytes": 1808,
+      "sha256": "6a19e3c753edde897b7e3a0501274128856ab4336c8d9e158dcc6b88ede7802c"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-13579/eval_report.json",
+      "bytes": 495,
+      "sha256": "fa44a15580add4c08e72f3dec74e0854366a13d69ac9174359024085a594d6b2"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-13579/runner_metadata.json",
+      "bytes": 1809,
+      "sha256": "f58e8f14cc4b2c03b677701efa96e1e2bccfba013eb3e2a41800343f41d7410c"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-13977/eval_report.json",
+      "bytes": 494,
+      "sha256": "6293c86c725ed9653ff884c90d467af555093b7a03d279012e07e09d14f59b90"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-13977/runner_metadata.json",
+      "bytes": 1805,
+      "sha256": "8e53307e478c23e8b7bf0c625dc7b714f2ffaaa9b4727518bc30d761dcb2248b"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14096/eval_report.json",
+      "bytes": 495,
+      "sha256": "b9f0ff2177043e115fec834cbd341c92142f2b17ab24f1084f47fbd421725687"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14096/runner_metadata.json",
+      "bytes": 1809,
+      "sha256": "beda1e3418af271f192c587f3f1f2701a1923422f20d4b380782ba231021c38e"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14182/eval_report.json",
+      "bytes": 494,
+      "sha256": "241bbbcbc34b7a4e9a7f4ac552772f6c759e7dcdc78ceae17534b786cdc95048"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14182/runner_metadata.json",
+      "bytes": 1807,
+      "sha256": "2c2812c9762e9bc9d501e277bf3f5fab206310af4429e3499084c5063211215d"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14309/eval_report.json",
+      "bytes": 495,
+      "sha256": "4917e46aea6ba8dff82d201b9fc7950200a534f95768ef6576b25c5fd9027b13"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14309/runner_metadata.json",
+      "bytes": 1804,
+      "sha256": "f301cd462b0b90802ce42c3cd96610515e3f94648ba2637058fe070234cc9ef2"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14365/eval_report.json",
+      "bytes": 494,
+      "sha256": "0c68d32e711d4603054e80057311413bb9563217c270c7b3892c83a4ae7847cf"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14365/runner_metadata.json",
+      "bytes": 1805,
+      "sha256": "faa96032ae43e40f1c044d835e823471240508fd0c9fdd90da99fd71c33ef9d1"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14369/eval_report.json",
+      "bytes": 494,
+      "sha256": "752c47e66cca50e3e1537adc328ba954de50e4aafbcb5781e8f2d0d43a62fd8f"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14369/runner_metadata.json",
+      "bytes": 1809,
+      "sha256": "d12b5339881634219767e60e6268c69abb2edf5108c266bc8587f8014d8148b6"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14508/eval_report.json",
+      "bytes": 495,
+      "sha256": "15839c8bbcbefb4f8e1a7e816e8eb08595b1e5f3448134fcd67f0eac15131a55"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14508/runner_metadata.json",
+      "bytes": 1809,
+      "sha256": "d384bbbe705fea9d04f05fe0157827461443c4444e4e5f431e739aaf079e8a2e"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14539/eval_report.json",
+      "bytes": 495,
+      "sha256": "d5ee85a8ee6b7ce34aa0f95ffb6fd08342ddec7be6cf57d3a4ddbfaf34440e8c"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14539/runner_metadata.json",
+      "bytes": 1806,
+      "sha256": "a7ff00e76eca4d2898e98902adb37c39758510d6340aaf58c991a25e89fbf3b1"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14598/eval_report.json",
+      "bytes": 494,
+      "sha256": "ae3f54a656c448123d0b8067b08456e4019035ebca3f119a9fda59b869f33c42"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14598/runner_metadata.json",
+      "bytes": 1808,
+      "sha256": "c5bb9a9b74b02990585b0c30d44b03abfd5520bdf8d98340968fa71a5356f5ba"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14995/eval_report.json",
+      "bytes": 495,
+      "sha256": "76df267f1ef9971d50a657b31a7940f546b6dff991de64f9e623cbe7bd1ca0bb"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native11_control_kvr1/astropy__astropy-14995/runner_metadata.json",
+      "bytes": 1806,
+      "sha256": "e54cc14623a9b1ca53eaccec01336fd8d55fbde7add7fadac9164bb454e1743e"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-12907/eval_report.json",
+      "bytes": 495,
+      "sha256": "a0c5843c030f87b8f126865e49d95e409a115419717c07687457f572d13c4c74"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-12907/runner_metadata.json",
+      "bytes": 1806,
+      "sha256": "41378189a66d52d989b57748ccff8188cfb4f7a1f2a72d1dcb5bd81726ddcfff"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-13033/eval_report.json",
+      "bytes": 494,
+      "sha256": "bd8216f3872229614247ae49d530c90d56d9fb8e67e117c547b9c7c5b272d2c9"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-13033/runner_metadata.json",
+      "bytes": 1804,
+      "sha256": "bc33c980bc0d4d56e90f438949a2089bade518170e800510f49fa93974e09d35"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-13236/eval_report.json",
+      "bytes": 495,
+      "sha256": "8a213d36b8f97352cb7b34e1bd984c8e020659caac59fc40b6ce23bf087c32dc"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-13236/runner_metadata.json",
+      "bytes": 1809,
+      "sha256": "81bd359ae87d2ce7e45c41e7a6e28a72608ae6c229ace7fd31153f76468a2f80"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-13398/eval_report.json",
+      "bytes": 494,
+      "sha256": "40c40f7e7a1330e7d43436c99be3e034e60090dc4c4b558993f1a3ba21662158"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-13398/runner_metadata.json",
+      "bytes": 1807,
+      "sha256": "7d129d35ee7cd20dba31b2ddbd48eab7fa29fa24bf6fbcb6a4be8e919b24ae4f"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-13453/eval_report.json",
+      "bytes": 495,
+      "sha256": "16f4e27c3edf377eabdd9fa576d12c92b4df3551bf569606740ab474511002e7"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-13453/runner_metadata.json",
+      "bytes": 1808,
+      "sha256": "399c47de160181159c51c84c1ddacd5a05498687dcb5d8effda6e22398269286"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-13579/eval_report.json",
+      "bytes": 495,
+      "sha256": "710e55a64eb3a6c5e142e8685819b89ffd381a12e50c393ba8db42301f998452"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-13579/runner_metadata.json",
+      "bytes": 1809,
+      "sha256": "059da549011180ba5dda78b58c8bb7a779416fc231cfe3a09fbf3901a9269a52"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-13977/eval_report.json",
+      "bytes": 494,
+      "sha256": "f58f40fe06c4de6a3d70cf4e2621d47315948feac1ccc422c207e71361d994e4"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-13977/runner_metadata.json",
+      "bytes": 1807,
+      "sha256": "346765d449792f0cb3f3d1c4d5c351665d00bd50a16af9f3c9138d18c9b25bfc"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14096/eval_report.json",
+      "bytes": 495,
+      "sha256": "037735e0cf2e3f06b7bfafbd8350c8597ff91ff03aa170eca20ff6349209c012"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14096/runner_metadata.json",
+      "bytes": 1807,
+      "sha256": "57867ab5ee1e8c3bc30b4fb47de4b6bee8e768711b2ed4d096301cad1c950f6c"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14182/eval_report.json",
+      "bytes": 494,
+      "sha256": "16601f4edf847c7149c0cd19151355581b2a7ee7c458217541432d8c6ac4afa6"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14182/runner_metadata.json",
+      "bytes": 1805,
+      "sha256": "b61f07a7eadaf6f4ce518285734c34efb37badae87e1c752ab21a230e36b8e7b"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14309/eval_report.json",
+      "bytes": 495,
+      "sha256": "e8e23e2e90b18925397752fc00d4a08c221a295cac5d031f45cc07e250aaed6d"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14309/runner_metadata.json",
+      "bytes": 1806,
+      "sha256": "63ab37f31c95340d949a0a2675979d5b248e0d816da3107e5b7533546095a584"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14365/eval_report.json",
+      "bytes": 495,
+      "sha256": "b03ed0cbae1bb280690d5947dcff4b0f885327e46009f7ccf72acbfa4686d9e9"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14365/runner_metadata.json",
+      "bytes": 1806,
+      "sha256": "0b8acbb49645d686be2c7121ecaf0b8ffb7e9642c25a1d79648b2058740d1507"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14369/eval_report.json",
+      "bytes": 494,
+      "sha256": "84d944a0a58e1d28a0cc7481dd6c331fb94757adf7c44af4d45552cb7a6e4a5c"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14369/runner_metadata.json",
+      "bytes": 1807,
+      "sha256": "171418b51f5d0f8af60b910aec35b8c9ac17fa32899750ec2c06456c84fc4375"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14508/eval_report.json",
+      "bytes": 495,
+      "sha256": "e067bafbe7571e0c565806443d165934a5eb56d5b3068a1f0e8d2df4d353aa8e"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14508/runner_metadata.json",
+      "bytes": 1809,
+      "sha256": "e9fb3be4ab2bf2a152cabdd584bdbcf0d23c23f559c8ce07726409ca7a0ac91b"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14539/eval_report.json",
+      "bytes": 495,
+      "sha256": "6cb0e6bc3eba618a1a0390f79e081df0b1dd2542494bdebdc81ebefd07a41f1a"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14539/runner_metadata.json",
+      "bytes": 1809,
+      "sha256": "8a34e60f7bf42b81536804f441c88bff64773534b13f4163b974939091b22459"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14598/eval_report.json",
+      "bytes": 494,
+      "sha256": "73a7c854f7e4f84aec7747ff2d833e6014de87c418187a7559f36890a2ee5805"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14598/runner_metadata.json",
+      "bytes": 1807,
+      "sha256": "70da2320f81315d787b0341f12ed378943670d47c9e0f77ce4294c72944379f4"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14995/eval_report.json",
+      "bytes": 495,
+      "sha256": "8e62568adc1371beceb4b57cf6fee18132496c15240c293d7e478b902912d052"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/july22/native5_control_kvr1/astropy__astropy-14995/runner_metadata.json",
+      "bytes": 1805,
+      "sha256": "a04907462b03180a2b29101ee27ae4958021f3f7b8fb5bf1512f810fdba57bb8"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/qualifications/JUNE-REPLAY-REPORTED.md",
+      "bytes": 13772,
+      "sha256": "00a869eb31d52409e72e70ca9b39e159e2e207b484f419389ec9c5834d1de17f"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/qualifications/aug05-v7-invalidated/SUPERSESSION.md",
+      "bytes": 6995,
+      "sha256": "ffae2310d31a5d0769e80e2ff48d092d05acbe55b2983758e2565db4548ac0af"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/qualifications/aug05-v7-invalidated/b1_credential.json",
+      "bytes": 2040,
+      "sha256": "7e91b64f210f0c20a8b6625aef8ab60bb383e7b1ac29e66c9c539285057e398b"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/qualifications/aug05-v7-invalidated/b4_byte_gate.json",
+      "bytes": 2198,
+      "sha256": "9a170daac35c6c77a804b95de346dd48ba66adc1ab438a48e33c02e088f4753b"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/qualifications/aug24-nvfp4-cqc10/fixed32_final_flush.json",
+      "bytes": 498,
+      "sha256": "4492d14ec659cb91d0476293cf4027715928975e91d45eba96d735af9f7cd001"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/qualifications/july31-b1/fixed32_final_flush.json",
+      "bytes": 491,
+      "sha256": "7358f82931f9c637eee03f0235745f01d8ceb31dc48a97bbbd3e974ddc1a73c0"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/qualifications/july31-b1/fr13_fa2_qrow16_live_paged_ab.json",
+      "bytes": 1569,
+      "sha256": "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/qualifications/july31-b4/failed_generation5_ack.json",
+      "bytes": 422,
+      "sha256": "a77b9ca04116ea876e9cfa005f0d936da7830b4c4a1d652f51bc1c981b495468"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/qualifications/july31-b4/fr13_fixed32_batch_gdn_byte_ab.jsonl",
+      "bytes": 211968,
+      "sha256": "7f9a34c0259e60347e1301df4259542b45fa3cd8625fa201d53566bec82f6311"
+    },
+    {
+      "path": "results/history-recovery-20260930/raw/qualifications/july31-b4/verdict.json",
+      "bytes": 6029,
+      "sha256": "4c696df09817e70337bd3fc435f44af1853bb8629f53d07b1dc654b4334d9b6a"
+    },
+    {
+      "path": "scripts/recover_git_history.py",
+      "bytes": 16908,
+      "sha256": "f3f0bb4a6c55eac12ffe4a019aad6106c1bf8bc94404448dc4490dbbd16f04cd"
+    }
+  ]
+}

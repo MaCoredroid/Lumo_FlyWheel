@@ -1,0 +1,153 @@
+{
+  "schema": "lumo.final-paper-delivery.v2",
+  "status": "DELIVERED_WITH_REVIEWED_SUPPORTED_NARROWING",
+  "delivered_utc": "2026-09-30T07:17:47.167766+00:00",
+  "delivered_pacific": "2026-09-30T00:17:47.167766-07:00",
+  "campaign_complete": true,
+  "all_proposed_experiments_executed": false,
+  "full_model_candidate_qualified": false,
+  "published": false,
+  "submitted": false,
+  "completion_basis": "All stages have reviewed results or explicit supported narrowing; the manuscript, source closure, independent claim review and recoverable source/raw backups are verified. Unexecuted downstream stages are not counted as successful experiments.",
+  "manuscript": {
+    "path": "main.pdf",
+    "sha256": "2589d34bdc0d9f0336994c6dc02195db2f7e814b65e1bd6cc60c93ae8c06a759",
+    "bytes": 313457
+  },
+  "manuscript_source": {
+    "path": "main.tex",
+    "sha256": "5edcbda6aa239495d5c7cc034d9c898f5d51f8b35dfd05514328a3c4fd320fa9",
+    "bytes": 47786
+  },
+  "abstract": {
+    "path": "abstract.tex",
+    "sha256": "43eae5a1775a19d3622bf85f9e578d33aa571dfb8c42cd6e3fefcf578f05c4dc",
+    "bytes": 1383
+  },
+  "source_archive": {
+    "path": "artifacts/delivery-source-20260930/lumotree-source.tar.gz",
+    "sha256": "d8bfde9c330151999eeb9a9f3d0b91d405db151866ff16bd8cacd8e9c2a5192a",
+    "bytes": 115286
+  },
+  "source_manifest": {
+    "path": "artifacts/delivery-source-20260930/source/SOURCE-MANIFEST.json",
+    "sha256": "4f459f2cfd0a75cc87b3df284f41f29ce286d2346f9e6a94bb61f5f0d9d9a521",
+    "bytes": 25448
+  },
+  "source_verification": {
+    "path": "artifacts/delivery-source-20260930/VERIFICATION.json",
+    "sha256": "05619047e5674a9fb96420096cd8b18b54628bb9efea66a36644a723cf302bee",
+    "bytes": 872
+  },
+  "render_and_text_verification": {
+    "path": "p0/monitor/review-response-20260927/PAPER-FINAL-RENDER-SOURCE-VERIFICATION-20260930.json",
+    "sha256": "597fb749af408fba5aa478824401c76f5d79c498ee58b27cf76604eef4a28b6b",
+    "bytes": 1882
+  },
+  "pages": 15,
+  "source_members": 21,
+  "parent_paper_review": {
+    "path": "p0/monitor/review-response-20260927/PARENT-FINAL-PAPER-REVIEW-20260930.json",
+    "sha256": "0c9cd1549ecd6e6dc36f31f39a74582969de1ce8a380a0b49477a5690651e669",
+    "bytes": 1731
+  },
+  "independent_paper_review": {
+    "path": "notes/review-response-20260927/paper-final-delivery-claim-review-20260930.md",
+    "sha256": "fea34d53cc43532bc3c954f1bf7eec06d0a8ebec016838010c47a5bba90d55dc",
+    "bytes": 7108
+  },
+  "independent_native_review": {
+    "path": "notes/review-response-20260927/q1-native-pinned-AB-terminal-result-review-20260930.md",
+    "sha256": "b841c7b5c8f3a36a5c8f49ded02bb3b55dec018bd5e80e946bdb45b773a7da99",
+    "bytes": 5970
+  },
+  "claim_disposition": {
+    "path": "notes/review-response-20260927/FINAL-CLAIM-DISPOSITION-20260930.md",
+    "sha256": "8014dc7a2e68dfd2ccf8b9a90420c264ed21fb31b314606878fb1b35eec00a78",
+    "bytes": 7020
+  },
+  "scientific_disposition": {
+    "path": "p0/monitor/review-response-20260927/CAMPAIGN-SCIENTIFIC-DISPOSITION-20260930.json",
+    "sha256": "40cc3b73a2fef31a2193494e7f69842ca8f4f1c32223572c0aed09785f06bed4",
+    "bytes": 2629
+  },
+  "workload_disposition": {
+    "path": "experiments/review-response-20260927/workload-case-study-v1/DISPOSITION-20260930.json",
+    "sha256": "4ad7614a6e4d96320704d805b2de52955dc1b9fb1bf840bc1731fb22b27518e7",
+    "bytes": 1590
+  },
+  "prior_delivery_preserved": {
+    "path": "p0/monitor/review-response-20260927/before-final-narrowed-delivery-20260930T0629Z/FINAL-DELIVERY.json",
+    "sha256": "cc0d4eebc2710d05a825b637d6f1e11911ad3173f3f4ade9fcf86a4810205cec",
+    "bytes": 6550
+  },
+  "qualification": {
+    "component_calibration_unique_cases_per_process": 5760,
+    "component_heldout_unique_cases_per_process": 5760,
+    "component_processes_per_block": 2,
+    "healthy_full_model_boots_independently_verified": 16,
+    "full_model_candidate_cases_qualified": 0,
+    "native_joint_original": {
+      "observations": 336,
+      "paths": 84,
+      "target_greedy_agreement": 84,
+      "joint_categorical_agreement": 68
+    },
+    "native_joint_pinned_followup": {
+      "observations": 336,
+      "paths": 84,
+      "independently_verified_observations": 336,
+      "target_greedy_agreement": 84,
+      "joint_categorical_agreement": 68,
+      "adverse_long_prefix_paths": 16
+    }
+  },
+  "mechanism": {
+    "untimed_unique_cells": 285696,
+    "repeated_untimed_observations": 571392,
+    "timed_cells": 0,
+    "lumo": "PASS_TESTED_RECURRENT_COMPONENT",
+    "treewy_author_default": "FAIL_FROZEN_COMPARATOR",
+    "weaver_author_default": "FAIL_FROZEN_COMPARATOR",
+    "weaver_aligned_local": "FAIL_FROZEN_COMPARATOR"
+  },
+  "workload": {
+    "task": "scikit-learn__scikit-learn-9288",
+    "approved": 4,
+    "started": 0,
+    "completed": 0,
+    "task_failures": 0,
+    "status": "UNEXECUTED_BECAUSE_PREREQUISITE_NOT_QUALIFIED"
+  },
+  "running_experiment_jobs": 0,
+  "quiescence": {
+    "path": "p0/monitor/review-response-20260927/FINAL-QUIESCENCE-20260930.json",
+    "sha256": "6731feefa4ec8042cd32bd01271e8cbb40f84aa96ba78589f98487d91df990f1",
+    "bytes": 376
+  },
+  "scientific_gates": "Q1 and WP closed; WC superseded and closed; no launch waiver",
+  "backup": {
+    "branch": "codex/lumotree-recovery-backup-20260929",
+    "final_manuscript_source_commit": "cd42ae362ff166b4f4b15f90d4055a135a65eb21",
+    "final_source_verification": {
+      "path": "p0/monitor/review-response-20260927/GIT-BACKUP-VERIFIED-20260930-update41.json",
+      "sha256": "1b402b3c8457bd63b68368d7f3f0f1eb0ed34a3d7f68795484eedf2327451188",
+      "bytes": 112029
+    },
+    "complete_archive_count": 64,
+    "objects_verified": 411,
+    "raw_cohort_commit": "6088b6e349f8bd00a881addae114c368bc8e4d9c",
+    "raw_verification": {
+      "path": "p0/monitor/review-response-20260927/GIT-BACKUP-VERIFIED-20260930-update40.json",
+      "sha256": "0fc398d5e1b9e91862d2530fc2bd74822aafeb08718460f86152a127cae66886",
+      "bytes": 111742
+    },
+    "restoration": {
+      "path": "notes/review-response-20260927/final-backup-restoration-20260930.md",
+      "sha256": "039796ee082565bc8dd959e60cbda3822c61a3f53ec476f5cebb029bc72d9f60",
+      "bytes": 3649
+    },
+    "this_receipt_backup": "Closing receipt is preserved in the subsequent source-update44 archive; its commit is bound separately by FINAL-CLOSURE-SEAL-20260930.json to avoid a recursive self-hash."
+  },
+  "monitor": "Pause after this completed delivery and closing receipt backup. Actual tool confirmation is bound separately in the closure seal."
+}

@@ -1,0 +1,57 @@
+{
+  "schema": "lumotree-history-formalization-delivery-v1",
+  "created_at_pacific": "2026-09-30T12:15:28.260002-07:00",
+  "status": "REVIEWED_HISTORY_INTEGRATION_COMPLETE",
+  "published": false,
+  "new_gpu_runs": 0,
+  "new_workload_attempts": 0,
+  "new_unit_tests": 0,
+  "git_blobs_independently_verified": 123,
+  "historical_attempts_recovered": 48,
+  "synthetic_records_recovered": 4,
+  "current_NVFP4_scientific_claims": "UNCHANGED_NO_HISTORICAL_CREDENTIAL_TRANSFER",
+  "gates": "Q1_WP_CLOSED_WC_SUPERSEDED_UNCHANGED",
+  "previous_delivery_preserved": "artifacts/before-history-formalization-20260930/MANIFEST.json",
+  "pdf_sha256": "93540c16affde0f3faa308a5de48d6068d7771f284d1831586af61b00dbbf36c",
+  "pdf_pages": 16,
+  "source_archive_sha256": "5dd2dd04dc7cb96f343155dd315cffc1b39c9e2f9736f916a741600afe31fd44",
+  "evidence_archive_sha256": "bdc0844ce06bb59978a2f640675b38193b8ab1c8b2d7c5d8b9d49f69653c22d1",
+  "evidence_members_verified": 118,
+  "clean_build_verification": {
+    "schema": "lumotree-manuscript-source-delivery-verification-v1",
+    "published": false,
+    "archive_sha256": "5dd2dd04dc7cb96f343155dd315cffc1b39c9e2f9736f916a741600afe31fd44",
+    "source_manifest_sha256": "a6079e44fd5c0bf6e9929407621568781b7883db0bd9a6a7effb60812c4fdb27",
+    "command": [
+      "latexmk",
+      "-pdf",
+      "-interaction=nonstopmode",
+      "-halt-on-error",
+      "-file-line-error",
+      "-no-shell-escape",
+      "main.tex"
+    ],
+    "returncode": 0,
+    "source_members_verified": 23,
+    "build_log_sha256": "f981ecfea800683fec95ad7d06b1823bfd9d0a05d684ffd10fbf20cd80516519",
+    "campaign_disposition": "SEPARATE_DELIVERY_RECEIPT_NOT_INFERRED_FROM_COMPILATION",
+    "unresolved_or_horizontal_overflow": [],
+    "pdf_sha256": "7b78beb0ae565b5eee829d5686fe9afa47587b5bcea9a7d0f879bd41af4a63d7",
+    "pdf_bytes": 321167,
+    "original_workspace_inputs": [],
+    "status": "PASS"
+  },
+  "clean_and_working_pdf_text_equal": true,
+  "visual_review": {
+    "pages": [
+      14,
+      15,
+      16
+    ],
+    "status": "PASS_NO_CLIPPING_OR_OVERLAP",
+    "table": "Historical era and accumulated-agent-time caption visible"
+  },
+  "build_warning_disposition": "One 6.934pt vertical overflow warning in reference pagination; rendered pages show no clipping; no horizontal overflow or undefined citations/references",
+  "review_report_sha256": "8ec053ed605601ffd05e30fc8ef05ed88a8e26a299e3260bcb9cb152b761e273",
+  "recovery_audit_sha256": "9f49040790843b395f57cc83f56f7a555d25e064a6de6dd54a4263355316d5c9"
+}

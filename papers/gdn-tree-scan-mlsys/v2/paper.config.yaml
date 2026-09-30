@@ -1,0 +1,36 @@
+topic: LumoTree
+paper_type: empirical
+status: history_formalization_reviewed_current_route_claims_bounded
+format: IEEEtran conference
+main_tex: main.tex
+bibliography: ref.bib
+performance_scope: named_SWE_bench_Verified_agent_tasks_only
+application_case: exploratory_development_cohorts_all_attempt_ledger_and_patch_producing_subset
+performance_estimator: pooled_completed_request_decode_rate
+performance_formula: (total_output_tokens - completed_requests) / (summed_E2E_latency - summed_TTFT)
+performance_evidence: results/agent-workload/patch-producing-rate-audit.json
+excluded_performance: local_document_E1_E8_and_superseded_rate_proxies
+runtime:
+  python: /Users/zhiyuanma/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3
+  experiment_execution: closed_with_supported_narrowing_history_recovery_no_new_inference
+  remaining_claim_gap: current_route_fullmodel_continuation_and_four_attempt_agent_case_study
+  experiment_proposal: plan/2026-09-27-adversarial-review-response.md
+  workload_amendment: plan/2026-09-27-four-attempt-workload-amendment.md
+  workload_scope: experiments/review-response-20260927/workload-case-study-v1/SCOPE.json
+  workload_attempts: 4
+  p0_report: p0/P0-REPORT.md
+  remote_worktree: /home/mark/lumotree-review-20260927
+  handoff_status: p0/monitor/review-response-20260927/ACTIVE.json
+
+current_method: NVFP4_Hydra27_fixed32_patched_FA2_splitK4_graph_cache
+component_evidence: results/current-production/audit.json
+excluded_current_method_results: superseded_Cat10_E2_E7a_E7b_E8_and_July22_FP8
+historical_evidence: results/history-recovery-20260930/audit.json
+historical_evidence_scope: era_bound_task_outcomes_and_serving_coverage_no_current_qualification_transfer
+
+author_component_evidence: experiments/author-code-20260926/RUN-RECEIPT.json
+
+review_response_evidence: results/review-response-20260927/p0-evidence.json
+review_response_status: experiments/review-response-20260927/status.json
+m1_numerical_evidence: results/review-response-20260927/m1-qualification.json
+m1_performance_disposition: unreported_three_author_policy_numerical_prerequisites_failed
