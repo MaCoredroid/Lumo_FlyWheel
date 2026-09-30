@@ -1,0 +1,10 @@
+{
+  "schema": "lumotree-editorial-git-backup-v1",
+  "branch": "codex/lumotree-editorial-review-20260930",
+  "source_artifact_commit": "6bace867adc35b91f5d5a7e94208a6cdb501f88a",
+  "parent_already_pushed": "44f991aec71924cdae25ec571ce91dfe7a2bf701",
+  "remote_source_sha_verified": "6bace867adc35b91f5d5a7e94208a6cdb501f88a",
+  "scoped_files": 62,
+  "real_index_and_checkout_unchanged": true,
+  "restoration": "Check out this branch in a separate worktree; main.pdf is the reviewed manuscript and artifacts/editorial-delivery-20260930/lumotree-source.tar.gz is its standalone source package. Prior source and raw evidence remain in ancestor backups."
+}
