@@ -1,0 +1,798 @@
+{
+  "schema": "lumo.source-update-manifest.v1",
+  "utc": "2026-09-30T04:57:51.417903+00:00",
+  "files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/FREEZE-Q1-NATURAL-LIFECYCLE-SOURCES-v1.json",
+      "bytes": 23330,
+      "sha256": "e3d229ea47d2de97831d06c11e67d2462d4b900ab8e2b810c1ba716ae7776624"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/WORKLOG.md",
+      "bytes": 127348,
+      "sha256": "84d0194ac20bf80858063fb4c22e30add247410e088c680b8071b73fb77ce5ce"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-http-source-20260930/SOURCE-MANIFEST.json",
+      "bytes": 956,
+      "sha256": "5e1b7e5befcfe600d3cf237ad35f62f931381c9cfc4a0ab15d8d5a1cfe41b3fd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-http-source-20260930/entrypoints/openai/completion/protocol.py",
+      "bytes": 19383,
+      "sha256": "d529d72221c54beb3b2ddd54aa431b6bb6f9c7f0553db57768d8a1bf5f8d9b20"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-http-source-20260930/entrypoints/openai/completion/serving.py",
+      "bytes": 26021,
+      "sha256": "ffb08a4e5113ed2bf2f23b5389f4f01f1b3393a7b3a5028e26e4c91ce3831bc5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-http-source-20260930/entrypoints/openai/engine/serving.py",
+      "bytes": 28125,
+      "sha256": "2132293166071cebafa04479532467d07f9c970c2912542fa3fe66d94ed4a3fa"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-http-source-20260930/entrypoints/serve/cache/api_router.py",
+      "bytes": 2084,
+      "sha256": "aba8ba22ca0885bce2031773c3cdeca9b53ce19402e0ffb22671a51d16768691"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-http-source-20260930/v1/engine/async_llm.py",
+      "bytes": 42078,
+      "sha256": "60d6b9eba277fed19416cc38e9a9136c3f01febb51b422db66696bad11130cff"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-http-source-20260930/v1/engine/input_processor.py",
+      "bytes": 20156,
+      "sha256": "17c091fef7bbaa4537335367abf8267345a782914f00fe01919c6efbbeff9c3b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-stale-connection-pre-review-20260930/q1_lifecycle_stale_consumer_v1.py",
+      "bytes": 10379,
+      "sha256": "935191ce6e4847548bf387f049e6703e73bb064d1c471953b86b40dd30ec056b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-stale-connection-pre-review-20260930/q1_lifecycle_worker_bytes_v1.py",
+      "bytes": 6925,
+      "sha256": "837fcb3017cffa013c3b9d2108569ab3b0b8b179fb8377d6dd1a003730eb6d3c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-stale-connection-pre-review-20260930/q1_natural_lifecycle_binding_v1.py",
+      "bytes": 9297,
+      "sha256": "3003e737c3e4f77bbc8c3f698a844b485834cf5fcc13d239b8ce5dc8b31d5b4f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-storage-witness-pre-review-20260930/q1_lifecycle_cache_storage_witness_v1.py",
+      "bytes": 5409,
+      "sha256": "920e45f9fc81c05f4b1471d33dbb7ef856a6637861f2b2d4ab9288da1f2b4829"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-zeroer-source-20260930/SOURCE-MANIFEST.json",
+      "bytes": 601,
+      "sha256": "f654178b291836faa4223d0216855a3372467897a3bd0feaf99f9e359b88261f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-zeroer-source-20260930/v1/attention/backends/flash_attn.py",
+      "bytes": 47406,
+      "sha256": "c949e39a0b0b3dfa316017c422b1cb1368cd3a4a1328a1c691f5d7f44ed571e7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-zeroer-source-20260930/v1/kv_cache_interface.py",
+      "bytes": 22161,
+      "sha256": "0db7ff3efa74e29a53a4a921d4ac4446fef3999f78747186796ee68f58cc8a79"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-zeroer-source-20260930/v1/worker/utils.py",
+      "bytes": 21267,
+      "sha256": "29c6a5fe527f531b7c5d3b72b504c933002ad2acffdf971a887b44a77e96145f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/natural-lifecycle-driver-pre-review-20260930/q1_natural_lifecycle_binding_v1.py",
+      "bytes": 8399,
+      "sha256": "8a1486dd93616795c16e948bdf6a5f5ad11cb47904f16f06ff1e42eee7899af0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/natural-lifecycle-driver-pre-review-20260930/q1_natural_lifecycle_driver_v1.py",
+      "bytes": 7841,
+      "sha256": "872ea89e6b31bfd6a344487689a8b6b90f8a8bb5e6470fc65211ead5075c937e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/natural-lifecycle-outer-pre-review-20260930/q1_natural_lifecycle_binding_v1.py",
+      "bytes": 7105,
+      "sha256": "d519a44c45318e5998d88a58f4b2693d9c1e14b45697897692061348a47a61b8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/natural-lifecycle-outer-pre-review-20260930/q1_natural_lifecycle_hooks_v1.py",
+      "bytes": 13939,
+      "sha256": "5d7820530350dca58a8fd8b83019b1a59bb75fc91f1d9f573bf1fbb0da577dfa"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/natural-lifecycle-outer-pre-review-20260930/q1_natural_lifecycle_raw_v1.py",
+      "bytes": 17376,
+      "sha256": "7c84353f316708a1237df691180abc291525aee216244f295075b42f3957d69c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/natural-lifecycle-outer-preparation-20260930/PREPARATION.json",
+      "bytes": 977,
+      "sha256": "cde7a3ee0cf679e8049ff1696ea45aa5584c5393ccafae115b15f0fea256217b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/natural-lifecycle-outer-preparation-20260930/RAW-PREPARATION.json",
+      "bytes": 592,
+      "sha256": "c7b0839a23a8be21293a5173d17acc93aaf1b41290378be2756dab85d9303505"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/natural-lifecycle-source-composition-20260930/PREPARATION.json",
+      "bytes": 1238,
+      "sha256": "9b65adbb19226a37b2e27c62f93228c207ecde3e97dbc39a383de76c9ea295be"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/natural-lifecycle-source-composition-20260930/eagle.py",
+      "bytes": 403256,
+      "sha256": "64cbaadc9c7a7847fa9313c5c6d6cc15dc8010e92b08891156005452d061af51"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/natural-lifecycle-source-composition-20260930/rejection_sampler.py",
+      "bytes": 198756,
+      "sha256": "80e331732ea8175cb4df5e9dcda666690d9cdcf5302480d4d6ca927512c5a78f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/natural-lifecycle-source-composition-20260930/runner.py",
+      "bytes": 620287,
+      "sha256": "8ae8bd67398bb2d0e29d7cd920339e6534d1937f5fd0ddfdb8c2739ef30f59b9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/natural-lifecycle-source-composition-20260930/scheduler.py",
+      "bytes": 106038,
+      "sha256": "c2fa15c7304046ed766e17f0a6ddf20eeb5fb5d30dfa25f46645ee787d509125"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/RECEIPT.json",
+      "bytes": 119332,
+      "sha256": "184e5d91908e9069557b8d3a4eb90e4f9842fe3142f8ae332bc16c61f7ce50c0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/RECEIPT.preliminary.json",
+      "bytes": 117655,
+      "sha256": "0ef2b0ce5a611884dbee990449c6f08587d09db3bc6ae19e6a6e367bdcf219dd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/after-meminfo.txt",
+      "bytes": 1507,
+      "sha256": "00f746dbea14373e1b176683d41601c3f40214d44ae95d5260003dfd650ab438"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/after-vmstat.txt",
+      "bytes": 4175,
+      "sha256": "26e1607252546c20a46ae524d78f5e9375043b5dac939265c010f1e4c6eabf3f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/after10s-meminfo.txt",
+      "bytes": 1507,
+      "sha256": "faf96650e0f3270f8c720d85428e3ea00c7cfa6752e0241671c61ea0646d80d9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/after10s-vmstat.txt",
+      "bytes": 4175,
+      "sha256": "aaf0fb0ec02c21036958152f5f01c4fa0e88e418c7376a94052af04ccef46af4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/authorization.copy.json",
+      "bytes": 1415,
+      "sha256": "e2a3c4b470ecb573fdad266da71305d0922003a975e71b15de9346b8d4bdd878"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/before-meminfo.txt",
+      "bytes": 1505,
+      "sha256": "2b85764dd371dc82b3640b915d6399431eda2a426b73331ae151f5527e4c74da"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/before-vmstat.txt",
+      "bytes": 4189,
+      "sha256": "bc6ba01ca7a64dae4c1a56006f4352d9c2e022a15dff751d57e3f8cb25c7a0a6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-01-uname-r.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-01-uname-r.stdout.txt",
+      "bytes": 19,
+      "sha256": "c733324a73fee684aecd35ce6a7a8e54d5b9142381737751b44303505379118b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-02-nvidia-smi-driver.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-02-nvidia-smi-driver.stdout.txt",
+      "bytes": 10,
+      "sha256": "eb4a23418e3f083bc3f79c488143534b5a591b429cf059ca797f6b277715de2a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-03-docker-image-inspect.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-03-docker-image-inspect.stdout.txt",
+      "bytes": 72,
+      "sha256": "60dac37c4d1eea7014a78c815c30b1d5229f497029c838d9243ebaab00b428dd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-04-docker-ps.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-04-docker-ps.stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-05-pgrep-engine.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-05-pgrep-engine.stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-06-nvidia-smi-compute-apps.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-06-nvidia-smi-compute-apps.stdout.txt",
+      "bytes": 41,
+      "sha256": "cae79969ce448872401f5d9bcd1d52bbefa1a5450cf3a5658f62f068ab59294b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-07-before-fuser-nvidia.stderr.txt",
+      "bytes": 802,
+      "sha256": "c016204e188cff73c3b6f8a963045d7ea9642cac2231c50bc68ee1fe24b2bc3c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-07-before-fuser-nvidia.stdout.txt",
+      "bytes": 90,
+      "sha256": "11660c9f946f55e5d09810404907376769c762d0c95c2bbe442e5148a99ba139"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-08-before-ps-identity-4178.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-08-before-ps-identity-4178.stdout.txt",
+      "bytes": 38,
+      "sha256": "ee8326caa9ef9361abab816c663b1be5f4078236fc060362ae600cdaa7bc8836"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-09-before-ps-identity-4354.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-09-before-ps-identity-4354.stdout.txt",
+      "bytes": 45,
+      "sha256": "7a9a5f9bd03f75993d451be9d5fd5b0985bb3b7cbcf1ab42f3ce45349db9bb6c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-10-before-ps-identity-4383.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-10-before-ps-identity-4383.stdout.txt",
+      "bytes": 49,
+      "sha256": "cee2240f2b114be9ffc2da48e1663d3c408193627292bd3c8119a4ca2c4b99c3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-11-before-ps-identity-4849.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-11-before-ps-identity-4849.stdout.txt",
+      "bytes": 49,
+      "sha256": "6cc53036452fd4156e74541752428a901e58c9994b7bc6bc68c3c9c74263aa04"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-12-before-ps-identity-5132.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-12-before-ps-identity-5132.stdout.txt",
+      "bytes": 49,
+      "sha256": "dae27dbb0f40d7a4cb931bd3c306aab5a8c587fa07c1f092971f0ed22794ecca"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-13-before-lsmod.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-13-before-lsmod.stdout.txt",
+      "bytes": 7330,
+      "sha256": "deb83b7fe929a1e17f6b2399004073bce1d8082a8a2fb1a8abe770d282fbcd01"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-14-before-ps-list.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-14-before-ps-list.stdout.txt",
+      "bytes": 52182,
+      "sha256": "3134bd8c806055a85d101e5faa29121f931b60c05997322157c4473a5e5b49b7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-15-docker-ps.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-15-docker-ps.stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-16-pgrep-engine.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-16-pgrep-engine.stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-17-nvidia-smi-compute-apps.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-17-nvidia-smi-compute-apps.stdout.txt",
+      "bytes": 41,
+      "sha256": "cae79969ce448872401f5d9bcd1d52bbefa1a5450cf3a5658f62f068ab59294b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-18-prewrite-fuser-nvidia.stderr.txt",
+      "bytes": 802,
+      "sha256": "c016204e188cff73c3b6f8a963045d7ea9642cac2231c50bc68ee1fe24b2bc3c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-18-prewrite-fuser-nvidia.stdout.txt",
+      "bytes": 90,
+      "sha256": "11660c9f946f55e5d09810404907376769c762d0c95c2bbe442e5148a99ba139"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-19-prewrite-ps-identity-4178.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-19-prewrite-ps-identity-4178.stdout.txt",
+      "bytes": 38,
+      "sha256": "ee8326caa9ef9361abab816c663b1be5f4078236fc060362ae600cdaa7bc8836"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-20-prewrite-ps-identity-4354.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-20-prewrite-ps-identity-4354.stdout.txt",
+      "bytes": 45,
+      "sha256": "7a9a5f9bd03f75993d451be9d5fd5b0985bb3b7cbcf1ab42f3ce45349db9bb6c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-21-prewrite-ps-identity-4383.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-21-prewrite-ps-identity-4383.stdout.txt",
+      "bytes": 49,
+      "sha256": "cee2240f2b114be9ffc2da48e1663d3c408193627292bd3c8119a4ca2c4b99c3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-22-prewrite-ps-identity-4849.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-22-prewrite-ps-identity-4849.stdout.txt",
+      "bytes": 49,
+      "sha256": "6cc53036452fd4156e74541752428a901e58c9994b7bc6bc68c3c9c74263aa04"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-23-prewrite-ps-identity-5132.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-23-prewrite-ps-identity-5132.stdout.txt",
+      "bytes": 49,
+      "sha256": "dae27dbb0f40d7a4cb931bd3c306aab5a8c587fa07c1f092971f0ed22794ecca"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-24-drop-caches-write.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-24-drop-caches-write.stdout.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-25-after-lsmod.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-25-after-lsmod.stdout.txt",
+      "bytes": 7330,
+      "sha256": "deb83b7fe929a1e17f6b2399004073bce1d8082a8a2fb1a8abe770d282fbcd01"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-26-after-ps-list.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-26-after-ps-list.stdout.txt",
+      "bytes": 52329,
+      "sha256": "e40e1eac4bea26f71c00f98633fed66316e83ace252a6a86acb2a54055fb664a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-27-after-fuser-nvidia.stderr.txt",
+      "bytes": 802,
+      "sha256": "c016204e188cff73c3b6f8a963045d7ea9642cac2231c50bc68ee1fe24b2bc3c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-27-after-fuser-nvidia.stdout.txt",
+      "bytes": 90,
+      "sha256": "11660c9f946f55e5d09810404907376769c762d0c95c2bbe442e5148a99ba139"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-28-after-ps-identity-4178.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-28-after-ps-identity-4178.stdout.txt",
+      "bytes": 38,
+      "sha256": "ee8326caa9ef9361abab816c663b1be5f4078236fc060362ae600cdaa7bc8836"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-29-after-ps-identity-4354.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-29-after-ps-identity-4354.stdout.txt",
+      "bytes": 45,
+      "sha256": "7a9a5f9bd03f75993d451be9d5fd5b0985bb3b7cbcf1ab42f3ce45349db9bb6c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-30-after-ps-identity-4383.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-30-after-ps-identity-4383.stdout.txt",
+      "bytes": 49,
+      "sha256": "cee2240f2b114be9ffc2da48e1663d3c408193627292bd3c8119a4ca2c4b99c3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-31-after-ps-identity-4849.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-31-after-ps-identity-4849.stdout.txt",
+      "bytes": 49,
+      "sha256": "6cc53036452fd4156e74541752428a901e58c9994b7bc6bc68c3c9c74263aa04"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-32-after-ps-identity-5132.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-32-after-ps-identity-5132.stdout.txt",
+      "bytes": 49,
+      "sha256": "dae27dbb0f40d7a4cb931bd3c306aab5a8c587fa07c1f092971f0ed22794ecca"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-33-journalctl-k.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-33-journalctl-k.stdout.txt",
+      "bytes": 63,
+      "sha256": "dfd8bd9cfa8d751822added95b0f5cee0a6f0510fc95fec9a121fbb627e1ef7f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-34-query-docker-create.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-34-query-docker-create.stdout.txt",
+      "bytes": 65,
+      "sha256": "fc28fc022b046cf677d65aada5ce9eade61b0e90a3bb7b1466645344c622b117"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-35-query-inspect-owned.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-35-query-inspect-owned.stdout.txt",
+      "bytes": 170,
+      "sha256": "66eea7e59021a2019f9b6dcab487640cc98944188a3455bf224f346650070e3b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-36-query-docker-start.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-36-query-docker-start.stdout.txt",
+      "bytes": 124,
+      "sha256": "d5989804afe71e46cf51ac2a94a29cd8cae7b87fe316b56fb4bb1f5ed6748fc9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-37-query-inspect-before-rm.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-37-query-inspect-before-rm.stdout.txt",
+      "bytes": 169,
+      "sha256": "6199844ec19cd253208906f35046027087651f34c176b6cf5938888c4827dc04"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-38-query-docker-rm-cid.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-38-query-docker-rm-cid.stdout.txt",
+      "bytes": 65,
+      "sha256": "fc28fc022b046cf677d65aada5ce9eade61b0e90a3bb7b1466645344c622b117"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-39-query-inspect-after-rm.stderr.txt",
+      "bytes": 112,
+      "sha256": "7ab74233b432d38157730c90ad3b9fad30b96f2b886ccd3ecd6e02f0a1dfce64"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/cmd-39-query-inspect-after-rm.stdout.txt",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/operational-config.json",
+      "bytes": 3284,
+      "sha256": "4256a2259df6f8961cfac7d5ff4404fccfc4d9480def63c33f9ca09c3face03c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/prewrite-meminfo.txt",
+      "bytes": 1505,
+      "sha256": "4be8b41aa7df082ac8ce65b251a0a3a5809675d7546e9c5956a8aad7c6c52418"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-retry1-20260930T012000Z-aligned_nonpacked-B-20260930T040044Z/query-container.cid",
+      "bytes": 64,
+      "sha256": "c4be4f3d52efeecbe9946c03778cfaed5a71ba2338a1267ac2f394ce164fc607"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/status.json",
+      "bytes": 51992,
+      "sha256": "9cfeeb626d2c395775cb1d528b00c91555e1cbe233eab5e7bfa88c5dcf5f6e66"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_lifecycle_cache_storage_witness_v1.py",
+      "bytes": 5539,
+      "sha256": "854b122a4d17d3e1d8099c8feafb6da10eac98c3a7bb21c2a146758608d0edf2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_lifecycle_cache_storage_witness_v2.py",
+      "bytes": 6306,
+      "sha256": "e92972384f1ea370519d813fc20449a457c5780f5e21aaf65394d4761b7db2da"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_lifecycle_device_raw_v1.py",
+      "bytes": 13164,
+      "sha256": "4150cf85493413fafe2905321f89f894a92a1fa912413cdd22a2a22c210c6d18"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_lifecycle_device_store_v1.py",
+      "bytes": 1844,
+      "sha256": "c23449ed4a77e4268488b2132633799d04e8065a76a8a16ec2e5464df3b9d36e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_lifecycle_stale_consumer_v1.py",
+      "bytes": 11540,
+      "sha256": "5a6c2797c56a04095b2a713375fe1769d23d8d867756a9fa478a9b8e9542e19d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_lifecycle_worker_bytes_v1.py",
+      "bytes": 8065,
+      "sha256": "9d0fb06e8bec811d703dbf47816af2a46e0fcca64b342b495c4036143534b300"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_lifecycle_zero_geometry_v1.py",
+      "bytes": 3720,
+      "sha256": "a00dca96a9a3bf700401d058cbdab3a1a86d957255e39c46e99c243ef2b1843d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_natural_lifecycle_allocation_raw_v1.py",
+      "bytes": 3663,
+      "sha256": "fb33b1241201e5bfa3a64af781ae1561b1315bf5dca1bbcdee3beec4ad84143b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_natural_lifecycle_binding_v1.py",
+      "bytes": 10928,
+      "sha256": "da7c5326ac7628e78fe27f5190129f7e9faecd4b09c59854d16ad6fb5544ed23"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_natural_lifecycle_dispatch_v1.py",
+      "bytes": 3135,
+      "sha256": "39c75cfef7e578ec39082290e4d7a390cd5bbe38d5c5674bf5fa00395e7d4f13"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_natural_lifecycle_driver_v1.py",
+      "bytes": 8442,
+      "sha256": "3cdb1336d0a53352b307d4eafeb1390a730da0603c977168da8e8416e97b2039"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_natural_lifecycle_hooks_v1.py",
+      "bytes": 14473,
+      "sha256": "2a75404f18241db69c4a96b0ecbafa171f41c1d27614bf38e5d833e2aec90556"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_natural_lifecycle_join_v1.py",
+      "bytes": 23123,
+      "sha256": "50db66f5bc092e13f858a4ac886f8cee397fca9b1f28a33400abdc3af1b74b93"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_natural_lifecycle_phase_raw_v1.py",
+      "bytes": 9441,
+      "sha256": "2b46288e39ed141b3f538d6fd73ab94c4c6fe8b4afdc37126e1bac0183271dea"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_natural_lifecycle_raw_v1.py",
+      "bytes": 17698,
+      "sha256": "251b9e2e7db1778a4dd58ba8c8655d1b76c555b6b584f332d2a6eeadcaf762f9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_natural_lifecycle_source_bundle_v1.py",
+      "bytes": 3766,
+      "sha256": "a36c16c08fd2efbfffb6152e58c6a05bafb2e2aab7b798a637016f7a3a8b2816"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-f5-l3-workload-routing-check-20260930.md",
+      "bytes": 6220,
+      "sha256": "7c664ca93a009d27eb00306671ee35087b63f011bd8bd299aaa12de03faf74b7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-lifecycle-cache-storage-witness-v1-source-review-20260930.md",
+      "bytes": 4096,
+      "sha256": "f1f8258a49f465992398081abcba8b23e5f7df415179a6f07f71746b029d1043"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-lifecycle-device-raw-v1-source-review-20260930.md",
+      "bytes": 4484,
+      "sha256": "b4a4aa88e6b1888800c20d16b1cf874e0ee82f23f6275a6442afdc3ab9e4f231"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-lifecycle-stale-consumer-connected-source-review-20260930.md",
+      "bytes": 7011,
+      "sha256": "bfed706dfd146c2df69ad3562f8c2dacc4dd19ee4306a2be1d14545aa6d5a4c0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-lifecycle-worker-bytes-and-driver-source-review-20260930.md",
+      "bytes": 4534,
+      "sha256": "c79b2e157a438494b03b7750e684c267d9f111c8d90e707460f7eee71893084d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-natural-lifecycle-join-v1-source-review-20260930.md",
+      "bytes": 5330,
+      "sha256": "c7f8f2872547e768f1038eb1bc4b03f465a92d96379c0410cb78689f1e5a70f9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-natural-lifecycle-l5-consumer-driver-source-review-20260930.md",
+      "bytes": 6566,
+      "sha256": "d02dd47eb5dccfae7f89170d584f6f9b7460386683068bfb6bca72d29bec1e64"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-natural-lifecycle-outer-source-review-20260930.md",
+      "bytes": 7867,
+      "sha256": "567c944b0de9f2117d82e7ab7906d798645aa35183927d538bd0a0c4d4a5090c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/ACTIVE.json",
+      "bytes": 65442,
+      "sha256": "f8518f316f486f8d920b27466c626338317aef7ce34f2f792fe7bce7862173c3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GIT-BACKUP-VERIFIED-20260930-update37.json",
+      "bytes": 107253,
+      "sha256": "5bf2b7034639d339c71b7651aa4465157737812f02d4596111ba79b7bb2672d3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-20260930-update37.json",
+      "bytes": 335,
+      "sha256": "d808e3392ffd9c30fdaea4682bff2d2979a931313cb716a2d440085aa6d70803"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-20260930-update37.progress.jsonl",
+      "bytes": 251,
+      "sha256": "fdd32161b96449fad42e533195b323cd8a4cbde3fb5dccd9350de990ea2c2a5b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/NATIVE-RETRY1-B-DISPATCH-20260930.json",
+      "bytes": 917,
+      "sha256": "4cc48f98946ea5392cba83d0f93ec94aaeb640cc4407f4b14df7ac52d7fe3de2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PARENT-LIVE-NATIVE-RETRY1-B-20260930T040407Z.json",
+      "bytes": 1093,
+      "sha256": "3ef144d6024fce779336b09ebba6f345970ae5d88dadb5c36027a13efdae7886"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PARENT-LIVE-NATIVE-RETRY1-B-20260930T040958Z.json",
+      "bytes": 1954,
+      "sha256": "43f1b0ca7517539c406978c853e197d6e13942d1dd8d2548109138ff6428e592"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PARENT-LIVE-NATIVE-RETRY1-B-20260930T041604Z.json",
+      "bytes": 1954,
+      "sha256": "cf01d902c71793b18726cbd5b4ba1fdf98d6ad38e532ecf61bc446ddfb7a21d0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PARENT-LIVE-NATIVE-RETRY1-B-20260930T042715Z.json",
+      "bytes": 1957,
+      "sha256": "d7fb48c7f653bca61447aa15291fd6a788784a317c6ee6f736b650a40cb1dede"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PARENT-LIVE-NATIVE-RETRY1-B-20260930T043827Z.json",
+      "bytes": 1958,
+      "sha256": "b9f573bf203c1933615e00d6eac95fbdb7c20885facef70b0a69535e3f389aca"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PARENT-LIVE-NATIVE-RETRY1-B-20260930T045053Z.json",
+      "bytes": 1960,
+      "sha256": "5d7bb017a6282a0917d4bbb26e13ccc8a807cd4e2960fc169b373d21c0d23bd8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PUSHED-ARCHIVE-CIPHER-CACHE-20260930T040010Z.json",
+      "bytes": 26144,
+      "sha256": "65f7f73d1b84ec27c164f9ce3849062520ea5ec7b2694740142010a477e6f598"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/finish_native_retry1_AB_reduce_v1.py",
+      "bytes": 2576,
+      "sha256": "5cf8c1939ba2eaa73b7a77a1cff1e9972736a2d2672ae1c50497ae13a3c192cf"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/finish_native_retry1_B_archive_v1.py",
+      "bytes": 3017,
+      "sha256": "78adf15c17da093f705b51379c9fa76c5f66d465dbc35fb5424b2c8939ece06a"
+    }
+  ],
+  "scope": "source-update41",
+  "restore_order": "after source-update3; this later snapshot wins"
+}
