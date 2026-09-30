@@ -1,0 +1,103 @@
+{
+  "schema": "lumo.source-update-manifest.v1",
+  "utc": "2026-09-30T01:49:17.221192+00:00",
+  "files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/WORKLOG.md",
+      "bytes": 110976,
+      "sha256": "2ca7fdbb4aa52bd97ed865a538f8b092f0fb63afa766f402e0ff04b3a99ceea2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/runtime-debug-20260930T011200Z/gpu-input-batch-read.json",
+      "bytes": 269,
+      "sha256": "b5507c0fcb50f6774c1f5acbaf755722779212990da26c0b1c32aeea3ac246fe"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/runtime-debug-20260930T011200Z/gpu_input_batch.py",
+      "bytes": 45896,
+      "sha256": "a371c9831d7ee248b42d284cffe96a31bcb3d59b7900b9adafdcb5d0272ae943"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/status.json",
+      "bytes": 48804,
+      "sha256": "ab6d114f71673a2cf09f7020617dadd81acba8d9fe531dc91eb9380ccb129acc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_driver_sequences_v1.py",
+      "bytes": 6331,
+      "sha256": "0ad37c5deb0c8c1063fe3230c2a4b3ef19723009cf549d747d9d6c86d607cf61"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_hooks_sequences_v1.py",
+      "bytes": 14352,
+      "sha256": "3f8aadf9d90820f377b10c1c4b1dff9bb1516f8074718f8e0bb6025a307dc9f4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_sequence_binding_v1.py",
+      "bytes": 7184,
+      "sha256": "6bd4a2fe5efd71f69fedbc320236a841de14fa2bf19c04ed9a309e92c5c7f021"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_sequence_phase_raw_v1.py",
+      "bytes": 9422,
+      "sha256": "94a50f350ee4a94c2c95fa6b15f1b414f45e50da010b36b62feb54868fcbdfac"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_sequences_raw_v1.py",
+      "bytes": 17481,
+      "sha256": "84bde2ab6e2b63a85f996a61855c554b7dc9410487fb886611ff8d0210eab04a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/candidate-continuous-audit-driver-v1-review.md",
+      "bytes": 810,
+      "sha256": "fdbf435f4ac58261b342f3e75dfab63fb9c801e703fe55b28f0ee9462c7d1b0a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/candidate-continuous-outer-source-v1-review.md",
+      "bytes": 727,
+      "sha256": "4cdf42df0db2ec7065ffa2d7462f13799f9665beaf5f1702b63d35a4cb27c5c4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/ACTIVE.json",
+      "bytes": 62254,
+      "sha256": "90f7ff8dae759ad7e4a3a73c2db45421542f0f06405fa64e89173c99022a5df1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GIT-BACKUP-VERIFIED-20260930-update28.json",
+      "bytes": 101211,
+      "sha256": "b20018bdca06e7779d11f5d88819cd4b3c10ac0dbc8b3d078c5f68bfa669d488"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-20260930T012500Z.json",
+      "bytes": 335,
+      "sha256": "1828b832e31860e223b4ec1ab13971e8340f45dc171fe2ed77fb8929a31185f3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-20260930T012500Z.progress.jsonl",
+      "bytes": 251,
+      "sha256": "8efa9e19bc825d0575992ddf5fc9f966ca5e8d6698f4cd22f55bf21ee9d77391"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PARENT-CONTINUOUS-AUDIT-DRIVER-REVIEW-20260930.json",
+      "bytes": 974,
+      "sha256": "138eba8fba64d28b4b0fff69b141b11d089bd9091fffd8f5c2d9af727b6fbf9e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PARENT-CONTINUOUS-OUTER-SOURCE-REVIEW-20260930.json",
+      "bytes": 1089,
+      "sha256": "eaa489415e352281238d7c3343eaf207290af1aa78a9430ab5adf7dec2d9c90c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PARENT-LIVE-NATIVE-RETRY1-20260930T014900Z.json",
+      "bytes": 488,
+      "sha256": "3eb1af6b5c8beca282fab776e2a3eb8214d319d5f27075529cc3a6a582c48c04"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PARENT-NATIVE-RETRY1-A-FIRST-OBSERVATION-20260930.json",
+      "bytes": 717,
+      "sha256": "12f652772913c7234d36d80ad89c30d1cdd1fec1faa0971fcfc40430d71c2dc9"
+    }
+  ],
+  "scope": "source-update33",
+  "restore_order": "after source-update3; this later snapshot wins"
+}
