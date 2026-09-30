@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "complete_decrypt_and_every_member_hash_verified": true,
+  "manifest_sha256": "ce781a309e4740e29cf590ce664b75df8b666effacff9c4caf55c8c5cffe95fb",
+  "members": 64590,
+  "hardlink_members": 34414,
+  "logical_bytes": 9877041447,
+  "reused_baseline_bytes": 5085732864,
+  "baseline_pushed_commit": "f96b48e8629a0ea3b4fb1aa59596e65d8cd8e9a9",
+  "restore_dependency": "baseline required; every cross-archive hardlink target hash/length authenticated against pushed manifest",
+  "utc": "2026-09-30T00:48:41.367442+00:00"
+}

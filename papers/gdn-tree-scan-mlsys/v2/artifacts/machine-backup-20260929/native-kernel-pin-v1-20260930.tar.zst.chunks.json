@@ -1,0 +1,45 @@
+{
+  "bytes": 3765380352,
+  "chunks": [
+    {
+      "file": "native-kernel-pin-v1-20260930.tar.zst.0000.enc",
+      "bytes": 536870912,
+      "sha256": "2134f547be4b7ce5900e0bd0497b3d616bbf5975bf9ff8dd0af1cc5c5166970e"
+    },
+    {
+      "file": "native-kernel-pin-v1-20260930.tar.zst.0001.enc",
+      "bytes": 536870912,
+      "sha256": "4969b60b45c8ac12715c3755a11ab0ae6a3849ab58c384757d86ae71f318c638"
+    },
+    {
+      "file": "native-kernel-pin-v1-20260930.tar.zst.0002.enc",
+      "bytes": 536870912,
+      "sha256": "1b0debabfa34773320f28f55b71ef5dbd7c4a56e2b6f2c18f06cd016bee3c120"
+    },
+    {
+      "file": "native-kernel-pin-v1-20260930.tar.zst.0003.enc",
+      "bytes": 536870912,
+      "sha256": "54591d3d6fe18426403233f42fc7959c01af4c365d0bcca1c1d07780e3eb1656"
+    },
+    {
+      "file": "native-kernel-pin-v1-20260930.tar.zst.0004.enc",
+      "bytes": 536870912,
+      "sha256": "b1dbed746a236989017b04b658e283d5268dac756c482aed898523a646243c98"
+    },
+    {
+      "file": "native-kernel-pin-v1-20260930.tar.zst.0005.enc",
+      "bytes": 536870912,
+      "sha256": "8b988155ea04182ef71fb56fba454ee86d5d4dbe9d29c92fde5301929eb76d9e"
+    },
+    {
+      "file": "native-kernel-pin-v1-20260930.tar.zst.0006.enc",
+      "bytes": 536870912,
+      "sha256": "8cd476d09777176806307440f7c8a1542e0ab39477a893f808bbf7f919e3e305"
+    },
+    {
+      "file": "native-kernel-pin-v1-20260930.tar.zst.0007.enc",
+      "bytes": 7283968,
+      "sha256": "d051cbc810c4a946aa1df225b2fc41c866ae17eac815d1d8cf1dd3f485b5e628"
+    }
+  ]
+}
