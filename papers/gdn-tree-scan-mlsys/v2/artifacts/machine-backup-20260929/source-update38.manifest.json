@@ -1,0 +1,43 @@
+{
+  "schema": "lumo.source-update-manifest.v1",
+  "utc": "2026-09-30T03:03:53.858879+00:00",
+  "files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/native-joint-kernel-pin-retry1-v1/JOB-B.PREPARED.json",
+      "bytes": 51230,
+      "sha256": "4aebdc64f3a0f96887841eb9c49f8281943160bd0fa2c078ba56d1ae3d1eed4a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/native-joint-kernel-pin-retry1-v1/PROCESS-B.PREPARED.json",
+      "bytes": 1525,
+      "sha256": "71abc69d1dc7db9327943e0a9a0bcee1f2df1b1f8f5374879b45475b7556fbd5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GIT-BACKUP-VERIFIED-20260930-update33.json",
+      "bytes": 102520,
+      "sha256": "59854c5a1305114dd1007a3942f353ff17c2bf634ed185387575d41bfe5d4dfd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-20260930T025940Z.json",
+      "bytes": 335,
+      "sha256": "e884ca14da733c9d01acbb1e93dcf47a66e19fd76a1a10987728a7f58cb3a165"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-20260930T025940Z.progress.jsonl",
+      "bytes": 251,
+      "sha256": "69ce55e1f44ce22b92dcde63b1e3e6b8824305c1746be1ac430f2e4a99ea1601"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PARENT-CIPHERTEXT-CACHE-RECOVERY-SOURCE-REVIEW-20260930.json",
+      "bytes": 663,
+      "sha256": "8482f134fd79d5484f28b4ecd46c7a0489a6128bbc4178c81cc0d6fdb3cb9956"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/prune_pushed_archive_ciphertext_cache_v1.py",
+      "bytes": 3335,
+      "sha256": "77630261145c6aa5aa0af4fa9b6d0cab62d37c39949a506f7ecf099cc57ac995"
+    }
+  ],
+  "scope": "source-update38",
+  "restore_order": "after source-update3; this later snapshot wins"
+}
