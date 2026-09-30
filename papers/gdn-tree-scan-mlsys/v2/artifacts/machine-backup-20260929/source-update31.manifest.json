@@ -1,0 +1,278 @@
+{
+  "schema": "lumo.source-update-manifest.v1",
+  "utc": "2026-09-30T01:13:58.795784+00:00",
+  "files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/WORKLOG.md",
+      "bytes": 109533,
+      "sha256": "c75b2074bd264d53f0484d376fc95040a305454568a726e43299dda20ebf38c4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/fullmodel/native-joint-kernel-pin-retry1-v1/CORPUS.json",
+      "bytes": 15763,
+      "sha256": "8b1ab3e055292801e1e40b3f6372b49bd48377f30d60f6eb5df01e74115159ae"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/runtime-debug-20260930T011200Z/autotuner.py",
+      "bytes": 58240,
+      "sha256": "68e4860cd09c7d73ceecf2da7d9e5d3166702826282115b624c54d68fda9921b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/runtime-debug-20260930T011200Z/gdn_linear_attn.py",
+      "bytes": 45685,
+      "sha256": "c6c1a8ae5c9039f7a17c004761486013de58756a2988e25af78e4b6aa5316019"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/runtime-debug-20260930T011200Z/gemm_base.py",
+      "bytes": 249980,
+      "sha256": "99fc985248ab1467d857d42f5c27b1f4c1a985933e43a41d86ccc69c7b3845fe"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/runtime-debug-20260930T011200Z/successful-pin-engine.log",
+      "bytes": 26006,
+      "sha256": "21206df03430bdfea97637b08c8a4a127ec5bef90fa95aaac2d76fb434d42edc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/runtime-debug-20260930T011200Z/triton_autotuner.py",
+      "bytes": 20692,
+      "sha256": "40f5e142806219942585a16742e9f3721d5bfef88145b571cf389f9aec6460bb"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/runtime-debug-20260930T011200Z/triton_utils.py",
+      "bytes": 25625,
+      "sha256": "4ad4b4440aa4a5ee15ac2382ae78a7aa8029986c22ec2acbd072a91810e85e94"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/memory-recovery/memory-recovery-v2-q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A-20260930T010343Z/RECEIPT.json",
+      "bytes": 119109,
+      "sha256": "f907b65dc71ded9a1d0ee9dcdb4e500bebdb3264dedad444f86bb1491f42e2b9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/CORPUS-BINDING.json",
+      "bytes": 249,
+      "sha256": "970d5d6ba2fb8592be63f483e5476c8e70a164facd5ac7558e10491af9617c9c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/CREATION-ATTEMPTED.txt",
+      "bytes": 75,
+      "sha256": "80a83e3e6ee9f4f7f0dd227ce943a1ac81e6bccd4d421075c6fdee75a11b844c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/FINALIZED.txt",
+      "bytes": 32,
+      "sha256": "ba62a50329335017d984501bd1ef3f99f3791f252c5f59a941dbdafecc6937b0"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/GATE-Q1-NATIVE-JOINT-COMMON-O0.snapshot.json",
+      "bytes": 12547,
+      "sha256": "8ff4f2dbbba1b478f21a90bfe9856ed8ed3d261ae059e1a60539af52b56cfe21"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/LAUNCH-BINDING.json",
+      "bytes": 10450,
+      "sha256": "837348b5097e2a30bf3bd1be376ddba0524c0ef4aefd3429a79fb4e107d82523"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/NATIVE-JOINT-COMMON-O0.snapshot.json",
+      "bytes": 15742,
+      "sha256": "cf0cdda3f32b79926009660813479dfb73e924458c9ec6fdd3d03d601cb804ee"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/RUN-RECEIPT.json",
+      "bytes": 5243,
+      "sha256": "039af78b459fe8213a632e4098dfd4580ab9abb248d6d98f0a0adcd141c84ae2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/docker_rm.out",
+      "bytes": 65,
+      "sha256": "0d1224d82c0cd64e921026b8a7b6b140a3fef416a4f9ba0b12ba2393e35fe332"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/docker_run.err",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/docker_run.out",
+      "bytes": 65,
+      "sha256": "0d1224d82c0cd64e921026b8a7b6b140a3fef416a4f9ba0b12ba2393e35fe332"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/docker_stop.out",
+      "bytes": 65,
+      "sha256": "0d1224d82c0cd64e921026b8a7b6b140a3fef416a4f9ba0b12ba2393e35fe332"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/engine-config.json",
+      "bytes": 16934,
+      "sha256": "e3ae85a4b8719d64792c47292dc2e95718267933e320307cd672adca9d591963"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/engine.cid",
+      "bytes": 65,
+      "sha256": "0d1224d82c0cd64e921026b8a7b6b140a3fef416a4f9ba0b12ba2393e35fe332"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/engine.log",
+      "bytes": 61046,
+      "sha256": "69658d8309ec5cf2207932de8bff1522f795b96349eb3481c67815ee9f745c7b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/engine_cleanup.err",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/engine_cleanup_state.txt",
+      "bytes": 20,
+      "sha256": "336d2850726907a96c938ed9db4d297a7a221e1de32d2394dcfc3a5927efc5c1"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/engine_exit.txt",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/engine_inspect.json",
+      "bytes": 21853,
+      "sha256": "0d9268da4bd5ee271e07c824adcccf0aac42a583a0c9aae89a72c1bc28dd8ec8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/engine_launch_argv.json",
+      "bytes": 4487,
+      "sha256": "0abae416b6405e31f58dc8b24b174f691b1cdb5210111bc8adda4cba90f2325b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/engine_started_utc.txt",
+      "bytes": 21,
+      "sha256": "fd970948b2d88bac0e0395a82aa14f30d02f50c7975dfca738246670709e3dd7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/engine_stopped_utc.txt",
+      "bytes": 21,
+      "sha256": "1ea967d479b9378acf2ec48d1a3af871ba0694ce20757bd49076f8f40af9f60f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/flashinfer-pin-loaded.json",
+      "bytes": 334,
+      "sha256": "3675071d320d85a850192adfe2745c5b37a55b224cff6e910b97325b9473c2a2"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/gpu_contention_after.txt",
+      "bytes": 41,
+      "sha256": "cae79969ce448872401f5d9bcd1d52bbefa1a5450cf3a5658f62f068ab59294b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/gpu_contention_before.txt",
+      "bytes": 41,
+      "sha256": "cae79969ce448872401f5d9bcd1d52bbefa1a5450cf3a5658f62f068ab59294b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/gpu_state_before.txt",
+      "bytes": 125,
+      "sha256": "297c1277a14cb43e4e58f1d301dcce18cc532a6ccb53b9dca9faec791238ab31"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/image_inspect.json",
+      "bytes": 9646,
+      "sha256": "7bcf44e26a6890ec2d3bb5bbac71b4457d36b06b66bcdfc819270d9a82b0ac3f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/kernel-pin-patch.json",
+      "bytes": 295,
+      "sha256": "410a1bd905bf8b921306ceb7e23de0d7ffc8b40e115c13bf200ba4c56da780b9"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/ownership_inspect.err",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/q1_ref_fa2_install_receipt.json",
+      "bytes": 1791,
+      "sha256": "b0268edcac26ccd3bddca5373bb696a85dc2c6fb18c08bb9184de83653673f19"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/q1_ref_hooks_job.json",
+      "bytes": 51223,
+      "sha256": "2c50e71a8db8600b2bd987bc2d50a6b847058d48b29a5a1a66e6cd56ec929554"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/q1_ref_patch_receipt.json",
+      "bytes": 1020,
+      "sha256": "e69174cddd56e7d1a3d9d8fcae936fc6e14f73a1ada65cfeec6221b9e5e5486d"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-native-joint-common-o0/q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A/readiness_treatment.json",
+      "bytes": 1389,
+      "sha256": "184464a1a5d5b5dd1e26a7bd9c21d63b8c8b43ec550eed66ea6783706016d802"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/status.json",
+      "bytes": 47684,
+      "sha256": "dedadd2a9875b557545e00568a7a29166f8b3bcd636525f2c4de22ca6b18c796"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/native-kernel-pin-full-rerun-independent-review-20260930.md",
+      "bytes": 1075,
+      "sha256": "8b48e7272383c1dac71359487785399dfb7c50e55a70d7b4acd9c2520829bd19"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/native-kernel-pin-startup-failure-review-20260930.md",
+      "bytes": 1516,
+      "sha256": "da487f2b07bec1bac9037a3f63c1bf2cc1e4005073cc8a803afe218146afa1f4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/ACTIVE.json",
+      "bytes": 61134,
+      "sha256": "f22c4b8406f2e77502ee13cfdceb149a024dbfd70d2b1fcaa381cff153802015"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/AUTH-NATIVE-JOINT-KERNEL-PIN-20260930T011600Z.json",
+      "bytes": 1415,
+      "sha256": "f4b48d20094c46f165b0966684120e0bccdd96a35d0ef0b163c557360bc6fba3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GATE-NATIVE-JOINT-KERNEL-PIN-20260930T011600Z.json",
+      "bytes": 13132,
+      "sha256": "0ca1e079abbff9f89bcd4b0c8564cfe53c05a7712755a608ba51b825b79f3f3b"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GIT-BACKUP-VERIFIED-20260930-update26.json",
+      "bytes": 100724,
+      "sha256": "143b7138d57fe1c7e7a3943f38b4b577be38aa4f812bfbca76cfaf2f2aaa014a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/HISTORICAL-RAW-DEDUP-RECEIPT-20260930.json",
+      "bytes": 308,
+      "sha256": "8f2cbac408063bc7075c0271b9d6761c43253b3a4dd46ec00de605c725cbcc96"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LAUNCH-NATIVE-JOINT-KERNEL-PIN-20260930T011600Z.json",
+      "bytes": 2323,
+      "sha256": "beaf5684ad108cdef89cf1ffe6ad0e7f5229c6703436762222d3fdf44e4b8379"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-20260930T005300Z.json",
+      "bytes": 1755,
+      "sha256": "cd35d3074bbe261788e4daa92ae9cdd49db54f5b72a5b466c797ccb2a8faa9df"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-20260930T005300Z.progress.jsonl",
+      "bytes": 1471,
+      "sha256": "1de532423f25c2989f6ea6a62d19df36369ae0f6ea67912f2d818fabdfbd5d49"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/NATIVE-JOINT-KERNEL-PIN-A-DISPATCH-20260930.json",
+      "bytes": 450,
+      "sha256": "6ec764bfaf63d2eabc79e64670a5e177d28fffa5db7db45f0e889b1587624d9f"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/NATIVE-KERNEL-PIN-STARTUP-FAILURE-20260930.json",
+      "bytes": 709,
+      "sha256": "5e3ea32e45ecbfbef6b6a509a776b4e4cd7cad75abb609a350457b50efc17fdf"
+    }
+  ],
+  "scope": "source-update31",
+  "restore_order": "after source-update3; this later snapshot wins"
+}
