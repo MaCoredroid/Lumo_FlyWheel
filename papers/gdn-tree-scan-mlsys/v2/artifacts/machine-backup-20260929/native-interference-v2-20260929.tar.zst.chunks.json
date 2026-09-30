@@ -1,0 +1,45 @@
+{
+  "bytes": 4278561104,
+  "chunks": [
+    {
+      "file": "native-interference-v2-20260929.tar.zst.0000.enc",
+      "bytes": 536870912,
+      "sha256": "716bdfbbf3455e3e02e52def1ded02bc77ed926ec802af458d297a3e589eb55c"
+    },
+    {
+      "file": "native-interference-v2-20260929.tar.zst.0001.enc",
+      "bytes": 536870912,
+      "sha256": "70f432c2fed2202116eb93437edd02eaef8c325199a964eb2ee74871ada3b475"
+    },
+    {
+      "file": "native-interference-v2-20260929.tar.zst.0002.enc",
+      "bytes": 536870912,
+      "sha256": "7c5a68c6f531d2344dcce38b9bf18f630cd1480c7e02473eb4e1e01084325824"
+    },
+    {
+      "file": "native-interference-v2-20260929.tar.zst.0003.enc",
+      "bytes": 536870912,
+      "sha256": "4cf8999b3332263a3c9e2cbb6bba5565d11c73dec614146f03ca5ecd8e4c907b"
+    },
+    {
+      "file": "native-interference-v2-20260929.tar.zst.0004.enc",
+      "bytes": 536870912,
+      "sha256": "5374d46e7f16979d1f89aa876c910e3980bbdc5d8d172713e9297d7e7d3bccbf"
+    },
+    {
+      "file": "native-interference-v2-20260929.tar.zst.0005.enc",
+      "bytes": 536870912,
+      "sha256": "8b695d80db8160d545db6cb18d199ecff7710b3d61b13c8888020789a072064c"
+    },
+    {
+      "file": "native-interference-v2-20260929.tar.zst.0006.enc",
+      "bytes": 536870912,
+      "sha256": "97783ccfdda2b4117e34227fe77ea970662296dbeda00e3ad9408b4b4ff78771"
+    },
+    {
+      "file": "native-interference-v2-20260929.tar.zst.0007.enc",
+      "bytes": 520464720,
+      "sha256": "081214928ee65b5cedbb3786413488f8d0dca237b349d60445bbddf63fd084bb"
+    }
+  ]
+}
