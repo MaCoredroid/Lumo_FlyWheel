@@ -1,0 +1,13 @@
+{
+  "schema": "lumotree-history-git-backup-v1",
+  "branch": "codex/lumotree-history-formalization-20260930-source",
+  "source_artifact_commit": "afeddb3caf1be8642bafe34b45bf6fbafaa42da4",
+  "parent_already_pushed": "4340a94e9db6fdcbf0d928423aee6a1e85c2a571",
+  "input_checkout_head": "4cdb6ecc00c13488c10b62e9fd2949501a25c7af",
+  "remote_source_sha_verified": "afeddb3caf1be8642bafe34b45bf6fbafaa42da4",
+  "scoped_files": 161,
+  "real_index_and_checkout_unchanged": true,
+  "original_archived_whitespace_preserved": true,
+  "delivery_receipt_sha256": "fa033a8afe5db433463830ec3c1d74d650723a4df20e63366c2889a749cf628e",
+  "prior_push_attempt": "Unpublished backup based on local 4cdb6ecc0 stopped before completion to avoid transferring 4.4 GiB superseded archives; local ref retained"
+}
