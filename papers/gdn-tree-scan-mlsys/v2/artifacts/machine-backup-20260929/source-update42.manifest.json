@@ -1,0 +1,138 @@
+{
+  "schema": "lumo.source-update-manifest.v1",
+  "utc": "2026-09-30T05:31:27.579598+00:00",
+  "files": [
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/abstract.tex",
+      "bytes": 1325,
+      "sha256": "700b16c6cb1085bbd2ba1203d2b721634151079b6a6b0b306b716ebccfd3c7bc"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-allocator-source-20260930/SOURCE-CAPTURE.json",
+      "bytes": 861,
+      "sha256": "e23cb2b5c26cc516bd9ae680820cc15d92d1e4ef9cc7005ccf06807b3dfd2520"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-allocator-source-20260930/block_pool.py",
+      "bytes": 19881,
+      "sha256": "c2a8eb59aaae2f15f7e75e5d14a68bd321730d2e62158c822af7179b85157347"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-allocator-source-20260930/kv_cache_manager.py",
+      "bytes": 22842,
+      "sha256": "0df69b7626195cbaabb33013d1e05ba6660243369171367f87313e4221bfffc8"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-allocator-source-20260930/kv_cache_utils.py",
+      "bytes": 66954,
+      "sha256": "4d3475bd1515cf1cbd43199bc3dc2d811482f71f046acf8fc0b678a70405a40e"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/lifecycle-allocator-source-20260930/single_type_kv_cache_manager.py",
+      "bytes": 49137,
+      "sha256": "a9f1308033150d4bf0bd652b0505c71af8ee5bc9716e795a614ec14ce271f6dd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/status.json",
+      "bytes": 52249,
+      "sha256": "187ae615951450e22d6e656eed166d2e1968ac3d4c21b4f9534f972292621793"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_natural_lifecycle_pair_raw_v1.py",
+      "bytes": 9439,
+      "sha256": "7da470549c684036f132c3c2608e837fff90f9798fea7bd80f52522b75a16be4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/main.pdf",
+      "bytes": 311176,
+      "sha256": "c7d62ab58f64a2ffc7e3e63019ef1ec0f7efc812579f2bfc84eb69f668dc66a5"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/main.tex",
+      "bytes": 47147,
+      "sha256": "348be4640890514fe557dd3aca60b9010676380341dadf7ef4e8ddd08a7ac176"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/paper-current-qualification-boundary-review-20260930.md",
+      "bytes": 8363,
+      "sha256": "af1f5bc230ea21636bdb9185732cc4853b6f3328952c7843878a698c93a18387"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-f5-prospective-state-population-design-review-20260930.md",
+      "bytes": 8747,
+      "sha256": "aade5f6f27ac7ae45095edfe6acec16d39a2c7bd0f3eaa4fd87f5091bd609eb4"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-native-pinned-partial-failure-and-disposition-review-20260930.md",
+      "bytes": 6440,
+      "sha256": "2621d8121230421d59503494d1f6255a8f0f2581d620696a8c7521c2401808df"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-native-pinned-supported-disposition-draft-20260930.md",
+      "bytes": 3881,
+      "sha256": "80a38ed0184d3ad63216f6e7d045a5718d81b73f7da85f6e457dd84c3321ef3a"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/notes/review-response-20260927/q1-natural-lifecycle-pair-raw-v1-source-review-20260930.md",
+      "bytes": 3074,
+      "sha256": "21c1fc89ad39650c4ce4ee54b44f195ae7f234d67b58f53e7c0f9e2c60221ee3"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/ACTIVE.json",
+      "bytes": 65699,
+      "sha256": "d8a2d91ed554f0de5ac6151432dca2e769bb2ca48a004585381c269848cdfb77"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/GIT-BACKUP-VERIFIED-20260930-update38.json",
+      "bytes": 107515,
+      "sha256": "1c21bd24855b8b46168aaa0e6afd2ec0b096770790e672cecd649619be6585ea"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-20260930-update38.json",
+      "bytes": 335,
+      "sha256": "48e9d69d5670c9e84dd67ab95cc4c4acb219a7833a5cb31d266850af6fc58493"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/LFS-UPLOAD-20260930-update38.progress.jsonl",
+      "bytes": 251,
+      "sha256": "8201bd1f692f972055b132ffee4fd01dbf8d83ecb8823e2a3d708e33069ff299"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/NATIVE-RETRY1-AB-PARTIAL-ADVERSE-20260930T0526Z.json",
+      "bytes": 18834,
+      "sha256": "5398ab2d8fd05916d794829cd45c1723cd80a661b06fb4f6eeb6b14b2d35180c"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PARENT-LIVE-NATIVE-RETRY1-B-20260930T050441Z.json",
+      "bytes": 1962,
+      "sha256": "724f827bb552886234def7459166c44fc7666a516dcb3211abb58eec729d1575"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PARENT-LIVE-NATIVE-RETRY1-B-20260930T051126Z.json",
+      "bytes": 1959,
+      "sha256": "e0ecd7be5c331507f340cc1d98ae96f97089c11352b52001ea960022519c7fa7"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PARENT-LIVE-NATIVE-RETRY1-B-20260930T051950Z.json",
+      "bytes": 1960,
+      "sha256": "5cb44c2fc8218cb1a0dc6f5e29d94f15d4a64fc6ab4f0cd96f44ca8eb53515c6"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/PARENT-LIVE-NATIVE-RETRY1-B-20260930T052711Z.json",
+      "bytes": 1960,
+      "sha256": "3f0d481aae6adfd8e4d438f68fccc48a3241071871925ff6aa4f00fcf3674fcd"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/retire_native_corpus_raw_cache_v1.py",
+      "bytes": 6315,
+      "sha256": "5c2e7175d31593e4bb83c052c278a1b7af4b3c444d4ed9d8be22547645faf100"
+    },
+    {
+      "path": "papers/gdn-tree-scan-mlsys/v2/scripts/build_native_joint_pinned_paper_result_v1.py",
+      "bytes": 1163,
+      "sha256": "0954b8ad947a20577bef6f1484d23c6bcc931fe5189f943d5f5d440ac04988f0"
+    }
+  ],
+  "scope": "source-update42",
+  "restore_order": "after source-update3; this later snapshot wins"
+}
