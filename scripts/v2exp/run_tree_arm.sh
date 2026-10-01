@@ -52,7 +52,12 @@ touch "$RUNROOT/STOP"
 echo "stop requested; waiting for driver teardown"
 wait $DRV; echo "driver rc=$? $(date -u +%FT%TZ)"
 # remove only this run's own preserved (exited) container; its log is already in docker_full.log
-for c in $(docker ps -aq --filter "name=fr13-bigdenom-hydra27_fixed32_promoab_C_v2exp${MODE}${TS}" --filter status=exited); do docker rm "$c" >/dev/null && echo "removed own exited container $c"; done
+# Serve-only exits before the SWE finalize, so the harness may preserve this run's own
+# container (even running). Save its log, then stop/remove only that container.
+for c in $(docker ps -aq --filter "name=fr13-bigdenom-hydra27_fixed32_promoab_C_v2exp${MODE}${TS}"); do
+  docker logs "$c" > "$OUT/container_after_teardown.log" 2>&1
+  docker stop -t 30 "$c" >/dev/null 2>&1; docker rm "$c" >/dev/null && echo "removed own container $c"
+done
 # fail the step if any replay record errored or the replay itself failed
 python3 - "$OUT/replay.jsonl" <<'PY' || REPLAY_RC=7
 import json,sys
