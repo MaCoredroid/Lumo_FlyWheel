@@ -10,7 +10,7 @@ WT=/home/mark/shared/lumotree-v2exp-20260930
 PORTWT=/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 TAGW=$(printf "%s" "${V2_TAG:-}" | tr -cd "A-Za-z0-9")
-echo "variant: FA2=${V2_FA2:-default} TOPK=${V2_TOPK:-promoted} KIND=${V2_KIND:-hydra27_fixed32} TAG=${V2_TAG:-}"
+echo "variant: FA2=${V2_FA2:-default} TOPK=${V2_TOPK:-promoted} KIND=${V2_KIND:-hydra27_fixed32} TAG=${V2_TAG:-} EXTRA=${V2_EXTRA_ENV:-}"
 LOG=$ROOT/tree-driver-$MODE-$TS.log
 exec > >(tee -a "$LOG") 2>&1
 [[ -z "$(docker ps -q)" ]] || { echo "a container is running; refusing"; exit 3; }
@@ -20,7 +20,7 @@ before=$(ls -d "$ROOT"/tree/fr14_promoab_C_v2exp${TAGW}${MODE}${TS}_* 2>/dev/nul
 PROMOAB_EXTRA_ENV="FR13_B1_CREDENTIAL_POINTER=/nonexistent
 FR13_FA2_QROW32_B1_TIERB_WORKLOAD=exact16_qc_remainder_10
 FR13_FA2_QROW32_B1_TIERB_TASK_IDS=astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995
-FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256=716503a46a991e3b187e14777f96f074c1a3359d9f8b7928f4453a6b9da1ee9b" \
+FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256=716503a46a991e3b187e14777f96f074c1a3359d9f8b7928f4453a6b9da1ee9b${V2_EXTRA_ENV:+$'\n'$V2_EXTRA_ENV}" \
 ARM_KIND=C PROMOAB_FA2=${V2_FA2:-default} PROMOAB_TOPK=${V2_TOPK:-promoted} PROMOAB_KIND=${V2_KIND:-hydra27_fixed32} PROMOAB_SUBSET=exact16_qc_remainder_10 PROMOAB_ARM_SUFFIX=_v2exp${TAGW}${MODE}${TS} setsid bash "$WT/scripts/v2exp/promoab_tail10_serve_only.sh" \
   > "$ROOT/tree-promoab-$TS.out" 2>&1 < /dev/null &
 DRV=$!
