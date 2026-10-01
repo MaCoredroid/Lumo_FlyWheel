@@ -1,0 +1,8 @@
+{"schema":"v2exp-replay-summary-v1","build":"origin/main 984f613d7 src/scripts (LumoTree via nvfp4-port worktree 2d9e409b2, identical src/scripts); vLLM 0.19.2rc1.dev134 image 3dbe092e; Qwen3.8-27B NVFP4 RadixArk",
+"workload":"43 recorded Qwen Code agent chat requests (SWE-bench Verified astropy 12907/13033 sessions), max_tokens 1024, B=1, temp 0.6/top_p 0.95/top_k 20/presence 1.0, no per-request seed",
+"metric":"pooled decode rate = (sum completion_tokens - requests)/sum(decode time after first token); mean accepted length = 1 + accepted/drafts from vLLM spec-decode counters",
+"arms":{"lumotree_hydra27_fixed32_splitk":{"runs":[28.64,28.38,29.41],"mean":28.81,"sd":0.53,"accept":[5.44,5.40,5.59]},
+"native_mtp5":{"runs":[26.04,26.08,26.23],"mean":26.11,"sd":0.10,"accept":[4.17,4.16,4.19]},
+"native_mtp3":{"runs":[22.06],"accept":[3.17]},"native_ar":{"runs":[10.54]}},
+"ratios":{"lumotree_over_mtp5":1.103,"lumotree_over_mtp3":1.306,"lumotree_over_ar":2.73},
+"notes":["native arms: stock vLLM + NVFP4 lm_head patch + same forked FA2 .so; same prefix-caching/cudagraph/scheduler flags as LumoTree","LumoTree: Cqc10 tail10 vehicle, PROMOAB_FA2=default (split-K tier-B, credential 37ed4ff5), GPU timers on as deployed (<=2.5% overhead, conservative)","seeded MTP-5 sampled run (24.85) superseded; greedy runs supplementary (LumoTree route refuses temp 0)"]}
