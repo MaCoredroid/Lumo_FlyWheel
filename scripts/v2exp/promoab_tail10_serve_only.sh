@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# v2exp: MemFree floor 102.8->102.3 GiB. Evidence: the identical hydra27 engine booted and served
+# at MemFree=102.52 GiB on 2026-10-01T02:13Z (tree-greedy launch.log); host baseline is now ~102.46 GiB.
 # v2exp copy of results/fr14_nvfp4_port_20260816/promotion_ab_arm_tail10.sh (the Cqc10 vehicle): serve-only
 # fixed32 arm for fixed-input replay. Changes: run root, running-container check, serve-only variant.
 # FR14 PROMOTION A/B — the paired serve arms (Mark's greenlight, condition
@@ -138,12 +140,12 @@ PYTHONPATH="$PWD/src" .venv/bin/python -c \
   "from lumo_flywheel_serving.model_server import recover_host_memory; recover_host_memory()" \
   >/dev/null 2>&1 || true
 _mem_free_gib=$(awk '/^MemFree:/{printf "%.1f", $2/1048576}' /proc/meminfo)
-awk '/^MemFree:/{exit ($2/1048576 < 102.8)}' /proc/meminfo \
-  || { echo "unified-memory preflight failed: MemFree=${_mem_free_gib}GiB < 102.8GiB" >&2
+awk '/^MemFree:/{exit ($2/1048576 < 102.3)}' /proc/meminfo \
+  || { echo "unified-memory preflight failed: MemFree=${_mem_free_gib}GiB < 102.3GiB" >&2
        echo "  (the engine needs 82.26GiB free AFTER the 20.42GiB checkpoint loads;" >&2
        echo "   refusing here costs seconds, refusing at the engine costs ~5 minutes)" >&2
        exit 2; }
-echo "[promoab] unified-memory preflight OK: MemFree=${_mem_free_gib}GiB >= 102.8GiB"
+echo "[promoab] unified-memory preflight OK: MemFree=${_mem_free_gib}GiB >= 102.3GiB"
 [[ "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" ]] \
   || { echo "canonical exact4 subset drifted" >&2; exit 2; }
 [[ -f "$TOPK_SO_HOST" && ! -L "$TOPK_SO_HOST" \
