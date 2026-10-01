@@ -8,6 +8,11 @@ WT=/home/mark/shared/lumotree-v2exp-20260930
 RUN=$ROOT/replay/${ARM}-${MODE}-$(date -u +%Y%m%dT%H%M%SZ)
 mkdir -p "$RUN"; exec > >(tee -a "$RUN/driver.log") 2>&1
 echo "run=$RUN arm=$ARM mode=$MODE maxtok=$MAXTOK commit=$(git -C $WT rev-parse HEAD)"
+# Same pre-boot hygiene as the LumoTree harness (drop caches, cycle swap), then gate.
+PYTHONPATH=$WT/src /home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/.venv/bin/python -c \
+  "from lumo_flywheel_serving.model_server import recover_host_memory; recover_host_memory()" || echo "recover_host_memory failed"
+free -g | tee "$RUN/free_before_boot.txt"
+awk '/^MemFree:/{exit ($2/1048576 < 85)}' /proc/meminfo || { echo "MemFree < 85 GiB after recovery"; exit 1; }
 bash "$WT/scripts/v2exp/serve_native.sh" "$ARM" "$RUN" || exit 1
 NAME=v2exp-$ARM
 cleanup() { docker logs "$NAME" > "$RUN/engine.log" 2>&1; docker stop -t 30 "$NAME" >/dev/null; docker rm "$NAME" >/dev/null; echo "stopped $NAME"; }
