@@ -15,9 +15,11 @@ for step in "${STEPS[@]}"; do
   [[ -e $ROOT/QUEUE-STOP ]] && { log "QUEUE-STOP present; halting before: $step"; exit 0; }
   set -- $step
   log "start: $step"
-  if [[ $1 == tree ]]; then bash $V/run_tree_arm.sh "$2" 1024; rc=$?
+  if [[ $1 == tree ]]; then mode=$2; shift 2; env "$@" bash $V/run_tree_arm.sh "$mode" 1024; rc=$?
   else bash $V/run_native_arm.sh "$2" "$3" 1024; rc=$?; fi
   log "end: $step rc=$rc"
-  if [[ $rc != 0 ]]; then log "step failed; halting queue for inspection"; exit 1; fi
+  # leave no own container behind before the next step
+  for c in $(docker ps -aq --filter "name=v2exp"); do docker stop -t 30 "$c" >/dev/null 2>&1; docker rm "$c" >/dev/null 2>&1 && log "cleaned own container $c"; done
+  if [[ $rc != 0 && "${QUEUE_CONTINUE_ON_FAIL:-0}" != 1 ]]; then log "step failed; halting queue for inspection"; exit 1; fi
 done
 log "queue complete"
