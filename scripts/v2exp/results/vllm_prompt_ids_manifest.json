@@ -1,0 +1,1 @@
+{"file":"lumotree-v2exp-runs/corpus/vllm_prompt_ids.json","sha256":"6eb11056ceffa98b9ee133b8bed7336c0d8f346b43175f6187745218f16f7e2d","source":"vLLM /tokenize (messages+tools, add_generation_prompt) on the MTP-5 server, same image/template as all vLLM arms","check":"count equals vLLM-reported prompt_tokens for all 43 requests","captured_utc":"2026-10-01T16:50:55Z"}
