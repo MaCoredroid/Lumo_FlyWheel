@@ -1,0 +1,14 @@
+{
+  "created_at_utc": "2026-10-01T01:36:10.473068+00:00",
+  "source_artifact_commit": "e45ea6aed347f3a2a2f67999a0396ee801918dd8",
+  "parent_already_pushed": "02cb2d1ec3877973cfe75af35e18cc077ae099a1",
+  "remote_source_head_verified": "e45ea6aed347f3a2a2f67999a0396ee801918dd8",
+  "backup_branch": "codex/lumotree-academic-review3-20260930",
+  "artifact_tag": "lumotree-v2-artifact-r1",
+  "tag_policy": "Never move this tag; new artifact revisions receive new tags.",
+  "scoped_files": 94,
+  "shared_checkout_head_unchanged": "4cdb6ecc00c13488c10b62e9fd2949501a25c7af",
+  "shared_index_sha256_unchanged": "249aefd460cad6d0eb68a7b3291498fb3ec97c676ec3811bbe026667e2b3f982",
+  "source_archive_sha256": "553ea2c1efed0a1a942fc336ac56ce7fd2cffa601a42d5e33ac11ad59a429f5b",
+  "scope": "Manuscript/artifact snapshot only; no submission, no new inference, no expansion of scientific claims."
+}
