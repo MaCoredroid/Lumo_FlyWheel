@@ -12,6 +12,27 @@ IMAGE=vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada6
 FA2_SO=/home/mark/fr14_splitk_build_20260818/_vllm_fa2_qrow32_gqa_pair_splitk_b1_sm121a.abi3.so
 GPU_UTIL=${GPU_UTIL:-0.70}
 NAME=v2exp-$ARM
+if [[ "$ARM" == sglang-s*k*d* ]]; then
+  # SGLang EAGLE baseline, same checkpoint and chat template as the vLLM arms.
+  # ARM=sglang-s<steps>k<topk>d<draft_tokens>; flags otherwise follow the Codex
+  # owned SGLang launcher v3 (flashinfer, chunked prefill 8192, bf16 KV, 1 request).
+  read -r S K DT <<< "$(sed -E 's/^sglang-s([0-9]+)k([0-9]+)d([0-9]+)$/\1 \2 \3/' <<< "$ARM")"
+  SG_IMAGE=sha256:0076dffa60b76b7bf033c04d05e0cc69d46f2b8cd60aa2468827782afe9bc38f
+  docker ps -q --filter publish=9950 | grep -q . && { echo "port 9950 busy" >&2; exit 3; }
+  mkdir -p "$OUT/engine-logs"
+  SG="python3 -m sglang.launch_server --model-path /models/qwen3.8-27b-nvfp4-radixark --tokenizer-path /models/qwen3.8-27b-nvfp4-radixark \
+ --served-model-name qwen3.8-27b-nvfp4-radixark --host 0.0.0.0 --port 9950 --trust-remote-code --attention-backend flashinfer \
+ --chunked-prefill-size 8192 --mem-fraction-static ${SG_MEM:-0.70} --speculative-algorithm EAGLE --speculative-num-steps $S \
+ --speculative-eagle-topk $K --speculative-num-draft-tokens $DT --reasoning-parser qwen3 --tool-call-parser qwen3_coder \
+ --enable-metrics --context-length 131072 --max-running-requests 1 --kv-cache-dtype bf16 \
+ --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja"
+  echo "$SG" > "$OUT/serve_cmd.txt"
+  docker run -d --name "$NAME" --gpus all --network host --shm-size 16g --ipc=host \
+    -v "$WT":/workspace:ro -v /home/mark/shared/models:/models:ro -e PYTHONDONTWRITEBYTECODE=1 \
+    "$SG_IMAGE" bash -lc "exec $SG" > "$OUT/container_id.txt"
+  echo "started $NAME $(cat "$OUT/container_id.txt")"
+  exit 0
+fi
 SPEC=""
 case "$ARM" in
   ar) ;;

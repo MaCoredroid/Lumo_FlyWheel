@@ -15,7 +15,7 @@ import argparse, glob, http.client, importlib, json, os, re, sys, time
 
 HOST, PORT = "127.0.0.1", 9950
 MODEL = "qwen3.8-27b-nvfp4-radixark"
-SPEC_RE = re.compile(r'^(vllm:spec_decode_[a-z_]+?)(?:_total)?(\{[^}]*\})?\s+([0-9.eE+-]+)$')
+SPEC_RE = re.compile(r'^(vllm:spec_decode_[a-z_]+?|sglang:[a-z_]*(?:spec|accept)[a-z_]*?)(?:_total)?(\{[^}]*\})?\s+([0-9.eE+-]+)$')
 
 
 def metrics():
