@@ -22,7 +22,7 @@ if [[ "$ARM" == sglang-s*k*d* ]]; then
   mkdir -p "$OUT/engine-logs"
   SG="python3 -m sglang.launch_server --model-path /models/qwen3.8-27b-nvfp4-radixark --tokenizer-path /models/qwen3.8-27b-nvfp4-radixark \
  --served-model-name qwen3.8-27b-nvfp4-radixark --host 0.0.0.0 --port 9950 --trust-remote-code --attention-backend flashinfer \
- --chunked-prefill-size 8192 --mem-fraction-static ${SG_MEM:-0.70} --speculative-algorithm EAGLE --speculative-num-steps $S \
+ --chunked-prefill-size 8192 --random-seed ${V2_SEED:-0} --mem-fraction-static ${SG_MEM:-0.70} --speculative-algorithm EAGLE --speculative-num-steps $S \
  --speculative-eagle-topk $K --speculative-num-draft-tokens $DT --reasoning-parser qwen3 --tool-call-parser qwen3_coder \
  --enable-metrics --context-length 131072 --max-running-requests 1 --kv-cache-dtype bf16 \
  --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja"
@@ -43,7 +43,7 @@ docker ps -q --filter publish=9950 | grep -q . && { echo "port 9950 busy" >&2; e
 mkdir -p "$OUT/engine-logs"
 SERVE="vllm serve /models/qwen3.8-27b-nvfp4-radixark --tokenizer /models/qwen3.8-27b-nvfp4-radixark \
  --served-model-name qwen3.8-27b-nvfp4-radixark --host 0.0.0.0 --port 9950 --max-num-seqs 1 \
- --gpu-memory-utilization $GPU_UTIL --max-model-len 131072 --seed 0 --attention-backend FLASH_ATTN \
+ --gpu-memory-utilization $GPU_UTIL --max-model-len 131072 --seed ${V2_SEED:-0} --attention-backend FLASH_ATTN \
  --gdn-prefill-backend triton --enable-prefix-caching --enable-chunked-prefill --mamba-block-size 1024 \
  --mamba-ssm-cache-dtype float32 --block-size 1024 --mamba-cache-mode align --max-num-batched-tokens 4096 \
  --long-prefill-token-threshold 1024 --compilation-config '{\"cudagraph_mode\":\"FULL_AND_PIECEWISE\"}' \

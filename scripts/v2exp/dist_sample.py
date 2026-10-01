@@ -26,6 +26,7 @@ def main():
     ap.add_argument("--every", type=int, default=2)
     ap.add_argument("--max-tokens", type=int, default=24)
     ap.add_argument("--auth-hook", default="")
+    ap.add_argument("--temperature", type=float, default=0.6)
     a = ap.parse_args()
     hook = None
     if a.auth_hook:
@@ -49,7 +50,7 @@ def main():
                 rec = json.load(open(f))
                 body = {"model": R.MODEL, "messages": rec["messages"], "max_tokens": a.max_tokens,
                         "stream": True, "stream_options": {"include_usage": True},
-                        "temperature": 0.6, "top_p": 0.95, "top_k": 20, "min_p": 0.0,
+                        "temperature": a.temperature, "top_p": 0.95, "top_k": 20, "min_p": 0.0,
                         "presence_penalty": 1.0}
                 if rec.get("tools"):
                     body["tools"] = rec["tools"]

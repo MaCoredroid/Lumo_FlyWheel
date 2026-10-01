@@ -18,7 +18,7 @@ for step in "${STEPS[@]}"; do
   if [[ $1 == tree ]]; then mode=$2; shift 2; env "$@" bash $V/run_tree_arm.sh "$mode" 1024; rc=$?
   elif [[ $1 == swe-tree ]]; then shift 1; env "$@" bash $V/run_swe_tree_arm.sh; rc=$?
   elif [[ $1 == swe-native ]]; then arm=$2; shift 2; env "$@" bash $V/run_swe_native_arm.sh "$arm"; rc=$?
-  else bash $V/run_native_arm.sh "$2" "$3" 1024; rc=$?; fi
+  else arm=$2; mode=$3; shift 3; env "$@" bash $V/run_native_arm.sh "$arm" "$mode" 1024; rc=$?; fi
   log "end: $step rc=$rc"
   # leave no own container behind before the next step
   for c in $(docker ps -aq --filter "name=v2exp"); do docker stop -t 30 "$c" >/dev/null 2>&1; docker rm "$c" >/dev/null 2>&1 && log "cleaned own container $c"; done

@@ -6,9 +6,9 @@ ARM=$1; MODE=${2:-greedy}; MAXTOK=${3:-1024}
 ROOT=/home/mark/shared/lumotree-v2exp-runs
 WT=/home/mark/shared/lumotree-v2exp-20260930
 KINDDIR=replay; [[ "${V2_DIST:-0}" == 1 ]] && KINDDIR=dist
-RUN=$ROOT/$KINDDIR/${ARM}-${MODE}-$(date -u +%Y%m%dT%H%M%SZ)
+RUN=$ROOT/$KINDDIR/${ARM}${V2_TAG:-}-${MODE}-$(date -u +%Y%m%dT%H%M%SZ)
 mkdir -p "$RUN"; exec > >(tee -a "$RUN/driver.log") 2>&1
-echo "run=$RUN arm=$ARM mode=$MODE maxtok=$MAXTOK commit=$(git -C $WT rev-parse HEAD)"
+echo "run=$RUN arm=$ARM seed=${V2_SEED:-0} dist_temp=${V2_DIST_TEMP:-0.6} mode=$MODE maxtok=$MAXTOK commit=$(git -C $WT rev-parse HEAD)"
 # Same pre-boot hygiene as the LumoTree harness (drop caches, cycle swap), then gate.
 PYTHONPATH=$WT/src /home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/.venv/bin/python -c \
   "from lumo_flywheel_serving.model_server import recover_host_memory; recover_host_memory()" || echo "recover_host_memory failed"
@@ -31,7 +31,7 @@ python3 "$WT/scripts/v2exp/replay.py" --arm "$ARM-warmup" --requests "$ROOT/corp
   --out "$RUN/warmup.jsonl" --mode greedy --max-tokens 64 --limit 1
 if [[ "${V2_DIST:-0}" == 1 ]]; then
   python3 "$WT/scripts/v2exp/dist_sample.py" --arm "$ARM" --requests "$ROOT/corpus/requests" \
-    --out "$RUN/dist.jsonl" --samples "${V2_DIST_SAMPLES:-40}" --max-tokens "${V2_DIST_MAXTOK:-24}"
+    --out "$RUN/dist.jsonl" --samples "${V2_DIST_SAMPLES:-40}" --max-tokens "${V2_DIST_MAXTOK:-24}" --temperature "${V2_DIST_TEMP:-0.6}"
 else
   python3 "$WT/scripts/v2exp/replay.py" --arm "$ARM" --requests "$ROOT/corpus/requests" \
     --out "$RUN/replay.jsonl" --mode "$MODE" --max-tokens "$MAXTOK"
