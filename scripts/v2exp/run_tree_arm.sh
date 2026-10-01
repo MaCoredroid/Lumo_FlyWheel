@@ -39,15 +39,21 @@ echo "READY after $(( $(date +%s) - t0 ))s: $(cat "$RUNROOT/READY.json")"
 L=$(ls "$RUNROOT"/*/launch.log 2>/dev/null | head -1)
 grep -h "B1 arm\|PROMOTED DEFAULT\|split-K\|INCUMBENT" "$L" "$ROOT"/tree-promoab-$TS.out 2>/dev/null | head -5
 [[ "${V2_FA2:-default}" != default ]] || grep -q "gqa_pair_splitk" "$L" || { echo "ABORT: deployed split-K attention arm not engaged"; touch "$RUNROOT/STOP"; wait $DRV; exit 4; }
-OUT=$ROOT/replay/tree${V2_TAG:-}-$MODE-$TS; mkdir -p "$OUT"; echo "$RUNROOT" > "$OUT/serve_runroot.txt"
+KINDDIR=replay; [[ "${V2_DIST:-0}" == 1 ]] && KINDDIR=dist
+OUT=$ROOT/$KINDDIR/tree${V2_TAG:-}-$MODE-$TS; mkdir -p "$OUT"; echo "$RUNROOT" > "$OUT/serve_runroot.txt"
 export V2EXP_READY_FILE="$RUNROOT/READY.json"
 cd "$WT/scripts/v2exp"
 PY=$PORTWT/.venv/bin/python
 curl -s http://127.0.0.1:9950/metrics > "$OUT/metrics_boot.txt"
 $PY replay.py --arm tree-warmup --requests "$ROOT/corpus/requests" --out "$OUT/warmup.jsonl" \
   --mode sampled --max-tokens 64 --limit 1 --auth-hook fixed32_auth:headers
-$PY replay.py --arm tree --requests "$ROOT/corpus/requests" --out "$OUT/replay.jsonl" \
-  --mode "$MODE" --max-tokens "$MAXTOK" --auth-hook fixed32_auth:headers
+if [[ "${V2_DIST:-0}" == 1 ]]; then
+  $PY dist_sample.py --arm tree --requests "$ROOT/corpus/requests" --out "$OUT/dist.jsonl" \
+    --samples "${V2_DIST_SAMPLES:-40}" --max-tokens "${V2_DIST_MAXTOK:-24}" --auth-hook fixed32_auth:headers
+else
+  $PY replay.py --arm tree --requests "$ROOT/corpus/requests" --out "$OUT/replay.jsonl" \
+    --mode "$MODE" --max-tokens "$MAXTOK" --auth-hook fixed32_auth:headers
+fi
 REPLAY_RC=$?
 curl -s http://127.0.0.1:9950/metrics > "$OUT/metrics_end.txt"
 touch "$RUNROOT/STOP"
@@ -61,11 +67,13 @@ for c in $(docker ps -aq --filter "name=fr13-bigdenom-${V2_KIND:-hydra27_fixed32
   docker stop -t 30 "$c" >/dev/null 2>&1; docker rm "$c" >/dev/null && echo "removed own container $c"
 done
 # fail the step if any replay record errored or the replay itself failed
-python3 - "$OUT/replay.jsonl" <<'PY' || REPLAY_RC=7
+EXPECT=43; RFILE="$OUT/replay.jsonl"
+[[ "${V2_DIST:-0}" == 1 ]] && { EXPECT=$(( ${V2_DIST_SAMPLES:-40} * 20 )); RFILE="$OUT/dist.jsonl"; }
+python3 - "$RFILE" "$EXPECT" <<'PY' || REPLAY_RC=7
 import json,sys
 recs=[json.loads(l) for l in open(sys.argv[1])] if __import__("os").path.exists(sys.argv[1]) else []
 bad=[r for r in recs if r.get("error")]
 print(f"replay records={len(recs)} errors={len(bad)}")
-sys.exit(1 if (bad or len(recs)<43) else 0)
+sys.exit(1 if (bad or len(recs)<int(sys.argv[2])) else 0)
 PY
 exit $REPLAY_RC
