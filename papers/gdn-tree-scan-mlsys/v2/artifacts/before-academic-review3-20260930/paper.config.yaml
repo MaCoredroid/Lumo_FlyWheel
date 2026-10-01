@@ -1,11 +1,11 @@
 topic: LumoTree
 paper_type: empirical
-status: academic_review3_ten_task_deployment_only_claims_bounded
+status: academic_review2_final_deployment_focus_claims_bounded
 format: IEEEtran conference
 main_tex: main.tex
 bibliography: ref.bib
 performance_scope: named_SWE_bench_Verified_agent_tasks_only
-application_case: ten_task_NVFP4_deployment_without_matched_baseline
+application_case: ten_task_NVFP4_deployment_with_two_task_context
 performance_estimator: pooled_completed_request_decode_rate
 performance_formula: (total_output_tokens - completed_requests) / (summed_E2E_latency - summed_TTFT)
 performance_evidence: results/agent-workload/patch-producing-rate-audit.json

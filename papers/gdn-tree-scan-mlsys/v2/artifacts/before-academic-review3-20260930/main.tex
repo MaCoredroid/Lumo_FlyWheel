@@ -16,6 +16,7 @@
 \usepackage{xurl}
 \usepackage[hidelinks]{hyperref}
 \usepackage{microtype}
+\usepackage{balance}
 \usepackage{placeins}
 \usetikzlibrary{arrows.meta,positioning,calc}
 \pgfplotsset{compat=1.17}
@@ -280,7 +281,7 @@ The subtlety is that argmax and top-k do not have interchangeable tie behavior. 
 
 \section{Evaluation Setup}
 \label{sec:protocol}
-We evaluate Qwen3.8-27B NVFP4 on a single NVIDIA DGX Spark (GB10) with ten SWE-bench Verified Astropy tasks~\cite{jimenez2024swe}, using one attempt per task. Qwen Code performs repository edits and tool calls, and the benchmark evaluator tests the resulting patches. Decode rates pool token counts and decode durations over the same completed requests, excluding time to first output. Agent duration additionally includes tools and repository operations; server startup and evaluation are measured separately.
+We evaluate Qwen3.8-27B NVFP4 on a single GB10/DGX Spark with ten SWE-bench Verified Astropy tasks~\cite{jimenez2024swe}, using one attempt per task. Qwen Code performs repository edits and tool calls, and the benchmark evaluator tests the resulting patches. Decode rates pool token counts and decode durations over the same completed requests, excluding time to first output. Agent duration additionally includes tools and repository operations; server startup and evaluation are measured separately.
 
 The evaluated tree has 27 draft candidates and one root, padded to 32 verification rows. A five-depth MTP head supplies 15 candidates; suffix prediction adds a six-token principal tail and rescue branches of four and two tokens. Maximum draft depth is eleven, and four post-root MTP forwards construct the head. Attention groups query heads in pairs and divides the context into four partitions. The model has 48 GDN layers and sixteen full-attention layers. All \sys{} workload deployments use this geometry and the patched FlashAttention-2 path. Appendix~\ref{app:settings} gives the serving configuration; the accompanying artifact identifies each source and kernel version.
 
@@ -296,10 +297,11 @@ The evaluated tree has 27 draft candidates and one root, padded to 32 verificati
 \subsection{Numerical and candidate-selection validation}
 \label{sec:current-validation}
 \input{sections/recurrent-validation}
+\input{sections/native-continuation}
 
 The fused full-vocabulary selection test compares the two output tensors against the reference argmax and top-k operations. Across 1,368 input cases and five block-count settings (6,840 configurations), it records zero byte mismatches; planted negative controls fire. A separate captured four-level selection graph completes 24 replays with zero mismatches. The reference selection outputs match exactly on these inputs and graph replays.
 
-Attention tests use the same kernel build as the ten-task deployment. They show bit-identical repeated output and log-sum-exp values within each of sixteen determinism cases, with matching digests across two processes. On synthetic query/key/value tensors drawn at scales measured from model operands, 93.31\% of output elements agree with the reference kernel within two ULP, the maximum absolute output difference is $2^{-8}$, and maximum log-sum-exp disagreement is four ULP. All nine checks pass, including comparisons against a float64 dense reference and checks for non-finite disagreements. Split-K changes the reduction order, so its bounded error accompanies the repeatability result.
+Attention tests use the same kernel build as the ten-task deployment. They show bit-identical repeated output and log-sum-exp values within each of sixteen determinism cases, with matching digests across two processes. On synthetic query/key/value tensors drawn at scales measured from measured model operands, 93.31\% of output elements agree with the reference kernel within two ULP, the maximum absolute output difference is 0.00390625, and maximum log-sum-exp disagreement is four ULP. All nine checks pass, including comparisons against a float64 dense reference and checks for non-finite disagreements. Split-K changes the reduction order, so its bounded error accompanies the repeatability result.
 
 Runtime traces confirm execution of the specialized kernel in all sixteen attention layers, fused selection, device acceptance, and captured state publication during the workload runs.
 
@@ -316,10 +318,10 @@ For coding agents, decoding rate and task completion measure different effects. 
 \section{Limitations}
 \label{sec:limitations}
 \paragraph{Numerical scope}
-The component results cover recurrent verification and publication, attention error, and candidate selection. Full-model tree equivalence remains untested: across processes, native target/draft choices agree on 68 of 84 paths despite stable greedy decisions (Appendix~\ref{app:native-reference}). Multi-cycle continuation, prefix-cache cold/hit behavior, row reuse, stale-state refusal, and distribution preservation remain open. The recurrent results for \sys{}, TreeWY, and Weaver use different sequential comparators and preprocessing conventions; they measure agreement with those references, not a common accuracy or timing ranking. Matching starting states, tokens, and positions also does not guarantee identical intermediate hidden tensors, so the observed native differences do not identify a kernel-level cause.
+The component results cover recurrent verification and publication, attention error, and candidate selection. The full-model tree route has not been compared with a reproducible joint native reference: across processes, native target/draft choices agree on 68 of 84 paths despite stable greedy decisions. Multi-cycle continuation, prefix-cache cold/hit behavior, row reuse, stale-state refusal, and distribution preservation remain open. The recurrent results for \sys{}, TreeWY, and Weaver use different sequential comparators and preprocessing conventions; they measure agreement with those references, not a common accuracy or timing ranking. Matching starting states, tokens, and positions also does not guarantee identical intermediate hidden tensors, so the observed native differences do not identify a kernel-level cause.
 
 \paragraph{Performance and task scope}
-The ten-task deployment contains one attempt per selected task and no matched native-decoding or chain-MTP control. The task outcomes provide no benchmark-wide quality estimate, and the pooled decode rate provides no controlled application speedup. Fixed-build repetitions, same-stack controls, and per-optimization ablations are needed to quantify those effects. GPU instrumentation overhead has not been measured, and logical state-storage formulas are not measurements of allocated scratch memory.
+The ten-task deployment contains one attempt per selected task and no matched native-decoding control. The two-task observations were selected retrospectively and span different implementation revisions, checkpoint conversions, attention kernels, scheduling, context limits, and proposal budgets. Cross-stack weight/tokenizer identity and graph/cache execution parity are unverified; SGLang also processes overlapping requests in one run. Other development records include degeneration, budget-capped responses, and incomplete evaluations. The task outcomes therefore provide no benchmark-wide quality estimate, and the decode rates provide no controlled application speedup. Fixed-build repetitions, same-stack controls, and per-optimization ablations are needed to quantify those effects. GPU instrumentation overhead has not been measured, and logical state-storage formulas are not measurements of allocated scratch memory.
 
 \section{Conclusion}
 \sys{} combines path-parallel recurrent scans with immediate native replay and a shared mapping for convolution, attention, acceptance, and drafter continuation. The implementation integrates fused selection, device-resident acceptance, and grouped split-K attention. Component evaluation characterizes exact selection outputs, bounded recurrent error, and attention repeatability. The ten-task Qwen3.8-27B NVFP4 deployment on GB10 records 25.63 pooled tokens/s, with six tasks resolved and four patches failing tests. These results provide an empirical foundation for studying coordinated tree verification in recurrent hybrid models.
@@ -339,14 +341,10 @@ For target probabilities $p$ and proposal probabilities $q$, ordinary rejection 
 \label{app:workload}
 \input{sections/workload-details}
 
-\section{Native-Reference Reproducibility}
-\label{app:native-reference}
-\input{sections/native-continuation}
-
 \FloatBarrier
 \label{ReferencesStart}
-\IEEEtriggeratref{31}
-\IEEEtriggercmd{\newpage}
+\IEEEtriggeratref{14}
+\IEEEtriggercmd{\balance}
 \bibliographystyle{IEEEtran}
 \bibliography{ref}
 \end{document}

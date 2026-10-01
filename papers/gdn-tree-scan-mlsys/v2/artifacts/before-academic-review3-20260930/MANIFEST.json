@@ -1,0 +1,101 @@
+{
+  "created_at_utc": "2026-10-01T01:27:32.491527+00:00",
+  "scope": "pre-third-academic-pass manuscript snapshot",
+  "members": [
+    {
+      "path": "IEEEtran.cls",
+      "bytes": 281789,
+      "sha256": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b"
+    },
+    {
+      "path": "README.md",
+      "bytes": 12479,
+      "sha256": "78d242019d403e604041b92385cdd66fbb2833a87078f8b5766bfc00a1b82f08"
+    },
+    {
+      "path": "abstract.tex",
+      "bytes": 1154,
+      "sha256": "175460e62e79ae6435de8e9235e653ce99dc27b0d88282ae6f639914105f6beb"
+    },
+    {
+      "path": "figures/pipeline.tikz",
+      "bytes": 4669,
+      "sha256": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c"
+    },
+    {
+      "path": "figures/scan-replay.tikz",
+      "bytes": 1035,
+      "sha256": "19c984883a8b70cc5209c33fa4f62e98aba708ad2b025568d1b2d600a3e4ecd0"
+    },
+    {
+      "path": "figures/state-contract.tikz",
+      "bytes": 1056,
+      "sha256": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898"
+    },
+    {
+      "path": "main.aux",
+      "bytes": 17028,
+      "sha256": "d3ebd5add9728aa4cdb81c8d47158cdac6998e0ae371d45d0918c0fc3626c3c2"
+    },
+    {
+      "path": "main.bbl",
+      "bytes": 13012,
+      "sha256": "e0f30f404ceeaab376e6257a546411b6b19a9b7a41a8592345a818a05ff1b114"
+    },
+    {
+      "path": "main.pdf",
+      "bytes": 286805,
+      "sha256": "23b35e3e56204d202375f5920d3efbca5dac1cb1354b24aa5d6cfafefb2905ca"
+    },
+    {
+      "path": "main.tex",
+      "bytes": 42754,
+      "sha256": "c113dd323f6be98272d87b8d66652e3101f1b9add47abdbad67c0a7b7205326d"
+    },
+    {
+      "path": "paper.config.yaml",
+      "bytes": 2083,
+      "sha256": "9fe0d3b3595508981bef7fb82139f2037d61447210c5d9e828145b4827251824"
+    },
+    {
+      "path": "ref.bib",
+      "bytes": 13801,
+      "sha256": "46d51a754aa8c160970944806c0ec51ed39a6254ddea1c4f62e49d97fed9f8eb"
+    },
+    {
+      "path": "sections/execution-costs.tex",
+      "bytes": 1186,
+      "sha256": "b1d41514f91eef214e8461e12556c7855239e7f4e84cca464c7f6fbbad10fb87"
+    },
+    {
+      "path": "sections/native-continuation.tex",
+      "bytes": 2496,
+      "sha256": "d2be85bc1d4aa396db93bb96456867979d1c9d71c1702b4be586bb49ca002fe0"
+    },
+    {
+      "path": "sections/recurrent-comparison.tex",
+      "bytes": 2792,
+      "sha256": "7e0eb9a8d38d2f4337164bc99fb9ee1ee3686e7fe30424b2df8809d7b33cec4f"
+    },
+    {
+      "path": "sections/recurrent-validation.tex",
+      "bytes": 2076,
+      "sha256": "4b8540c9162a2de4c44574ef10178e42674480cc579efca0cfca14fc70edc953"
+    },
+    {
+      "path": "sections/workload-configuration.tex",
+      "bytes": 1234,
+      "sha256": "0dd4f60e852606e10f3ce60ab2337cc7af26220d0bd519d85785809b9fb39d8b"
+    },
+    {
+      "path": "sections/workload-details.tex",
+      "bytes": 848,
+      "sha256": "c5d628813ab68f8cab5a4a26811536b2e2c4e38490d3215990ef1e6811a2ee3b"
+    },
+    {
+      "path": "sections/workload.tex",
+      "bytes": 2060,
+      "sha256": "443986b7aff3d0937b86244dd12c64307aa60b9bbe034dadd17f5718dfd5a35b"
+    }
+  ]
+}

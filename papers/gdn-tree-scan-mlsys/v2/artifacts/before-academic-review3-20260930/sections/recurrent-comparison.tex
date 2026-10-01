@@ -13,7 +13,7 @@ Configuration & Output cells & State cells \\
 \midrule
 \multicolumn{3}{@{}l}{\textit{Sequential software references}} \\
 Weaver author-default & 53,745 & 1,154 \\
-Weaver (FP32 preparation) & 57,707 & 388 \\
+Weaver aligned-local & 57,707 & 388 \\
 TreeWY author-default & 37,528 & 6,912 \\
 \bottomrule
 \end{tabular}
@@ -27,6 +27,6 @@ Each cell must satisfy both root-mean-square and maximum absolute error bounds,
 \end{equation}
 where errors are measured against the specified float64 recurrence and $M_{64}$ is its corresponding root-mean-square or maximum magnitude. For \sys{}, the sequential comparator is the native GPU recurrence. Weaver and TreeWY use sequential software comparators that do not emulate every tensor-core rounding operation.
 
-TreeWY retains the author implementation's normalization floor of $10^{-12}$ and BF16 dot products. Weaver uses TF32 verification, FP32 elementwise accepted replay, and an additive normalization constant of $10^{-6}$. We report both its author-default preparation and a variant with FP32 preparation. The two Weaver variants retain their respective preprocessing conventions.
+TreeWY retains the author implementation's normalization floor of $10^{-12}$ and BF16 dot products. Weaver uses TF32 verification, FP32 elementwise accepted replay, and an additive normalization constant of $10^{-6}$. We report both its author-default preparation and a separately labeled local FP32-preparation variant. The two Weaver variants retain their respective preprocessing conventions.
 
 Table~\ref{tab:m1-qualification} reports the cells outside each implementation's paired bounds. All configurations produce finite tensors and reproduce bitwise between repeats. TreeWY's BF16 compact commit and its sequential comparator's FP32 outer-product updates, for example, are different floating-point computations. The normalization and arithmetic conventions are part of the numerical comparison and must be interpreted alongside its reference choice (Section~\ref{sec:limitations}).

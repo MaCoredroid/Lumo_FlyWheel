@@ -16,4 +16,4 @@ Dispatch span (ms) & 20.15 \\
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:recovered-telemetry} summarizes the phase measurements. Each timer is reduced using its own duration sum and span count, with no outstanding samples at task boundaries. Dispatch combines sampling and native replay; the spans do not form an isolated critical-path decomposition.
+Table~\ref{tab:recovered-telemetry} summarizes the phase measurements. Each timer is reduced using its own duration sum and span count, with no outstanding samples at task boundaries. Dispatch combines sampling and native replay; the spans do not form an isolated critical-path decomposition. SGLang's saved acceptance statistics are window gauges, so a comparable task-total acceptance estimate is unavailable.

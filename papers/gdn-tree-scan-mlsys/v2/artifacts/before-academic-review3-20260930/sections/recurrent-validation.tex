@@ -1,0 +1,26 @@
+% Manuscript prose adapted from the generated component result; numerical data unchanged.
+\begin{table}[t]
+\centering
+\caption{GDN component checks on GB10. Bitwise columns compare with the native chain; the paired rule compares both implementations with a float64 reference. Counts are per block and process.}
+\label{tab:gdn-component}
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Operand sets & \shortstack{BF16 output\\bitwise} & \shortstack{FP32 state\\bitwise} & \shortstack{Paired rule\\passed} \\
+\midrule
+Calibration & 3,004/3,072 & 2,688/2,688 & 5,760/5,760 \\
+Held-out & 3,018/3,072 & 2,688/2,688 & 5,760/5,760 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+We test GDN verification and accepted recurrent-state publication on two calibration and two held-out synthetic operand sets. Each set supplies 48 recurrent instances with the evaluated tree geometry: 32 physical output rows, including padding, and 28 accepted publication paths. Each block runs twice in each of two fresh processes. These repetitions check reproducibility; they do not increase the number of distinct inputs.
+
+For each head, we compare both implementations with a float64 recurrence. We require both root-mean-square and maximum absolute errors to satisfy
+\begin{equation}
+ E_{\mathrm{tree}} \leq 1.10 E_{\mathrm{native}} + 2^{-24} M_{64} + 2^{-149},
+\end{equation}
+where $M_{64}$ is the corresponding root-mean-square or maximum magnitude of the reference. Table~\ref{tab:gdn-component} reports all enumerated cases passing in both processes. All published recurrent states are bitwise equal to the native chain, while 68 calibration and 54 held-out output tensors differ in BF16 rounding. Native and candidate results reproduce bitwise across repeats and processes.
+
+Calibration controls detect sibling substitution, swapped state rings, and stale publication metadata. Poisoning an off-path branch leaves the tested selected-path state unchanged, and a zero-replay control is rejected. These results support the tested GDN scan and recurrent publication mechanism.

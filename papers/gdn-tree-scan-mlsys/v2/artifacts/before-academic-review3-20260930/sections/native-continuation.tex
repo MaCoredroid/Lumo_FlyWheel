@@ -1,4 +1,5 @@
-We examine native-reference reproducibility across independent processes as a prerequisite for full-model tree validation. Each condition covers 84 paths: a root-only continuation and 27 candidate paths for each of three calibration prefixes. Every path is repeated twice in each of two independent processes. The conditions distinguish natural prefill from an imported common starting state and separate target continuation from continuation coupled to the MTP drafter.
+\paragraph{Full-model native reference}
+Before comparing the tree route with native continuation, we test whether the native reference reproduces the state and decisions that define that comparison. Each condition covers 84 paths: a root-only continuation and 27 candidate paths for each of three calibration prefixes. Every path is repeated twice in each of two independent processes. The conditions distinguish natural prefill from an imported common starting state and separate target continuation from continuation coupled to the MTP drafter.
 
 \begin{table}[t]
 \caption{Cross-process native-reference agreement, in paths out of 84. State/logits requires identical published target state and full target logits. Joint choices requires the next target decision and the actual MTP spine and ordered top-three selections at every tested phase. A dash denotes an untested joint MTP condition.}
@@ -21,4 +22,4 @@ Natural-prefill continuation reproduces within each process but changes the gree
 
 All sixteen paths with differing joint choices have long prefixes. Their within-process repetitions agree, and every principal MTP spine remains stable; the disagreements affect secondary top-three membership or order. The tested phases include initial MTP continuation, a follow-up, and continuation after consuming the pending target token. Common imported state and matched tokens and positions do not guarantee identical intermediate hidden tensors.
 
-The sixteen joint-choice disagreements prevent this reference from supporting a full-model tree equivalence claim (Section~\ref{sec:limitations}).
+The full-model tree-candidate comparison requires reproducible joint target/draft choices. Because sixteen paths differ across native processes, that comparison was not executed.

@@ -114,10 +114,11 @@ J.~Wang, Y.~Su, J.~Li, Q.~Xia, Z.~Ye, X.~Duan, Z.~Wang, and M.~Zhang,
 \BIBentrySTDinterwordspacing
 
 \bibitem{li2025eagle3}
-Y.~Li, F.~Wei, C.~Zhang, and H.~Zhang, ``{EAGLE-3}: Scaling up inference
-  acceleration of large language models via training-time test,'' in
-  \emph{Advances in Neural Information Processing Systems}, vol.~38, 2025, pp.
-  136\,737--136\,756.
+\BIBentryALTinterwordspacing
+Y.~Li, F.~Wei, C.~Zhang, and H.~Zhang, ``{EAGLE-3: Scaling up Inference
+  Acceleration of Large Language Models via Training-Time Test},'' 2025.
+  [Online]. Available: \url{https://arxiv.org/abs/2503.01840}
+\BIBentrySTDinterwordspacing
 
 \bibitem{chen2026dflash}
 \BIBentryALTinterwordspacing
@@ -165,13 +166,14 @@ R.~Pan, Z.~Wang, Z.~Jia, C.~Karakus, L.~Zancato, T.~Dao, Y.~Wang, and
 \bibitem{dao2023flashdecoding}
 T.~Dao, D.~Haziza, F.~Massa, and G.~Sizov, ``{Flash-Decoding for long-context
   inference},'' \url{https://pytorch.org/blog/flash-decoding/}, 2023, {October}
-  13.
+  13, 2023.
 
 \bibitem{ye2025flashinfer}
 Z.~Ye, L.~Chen, R.~Lai, W.~Lin, Y.~Zhang, S.~Wang, T.~Chen, B.~Kasikci,
   V.~Grover, A.~Krishnamurthy, and L.~Ceze, ``{FlashInfer}: Efficient and
   customizable attention engine for {LLM} inference serving,'' in
-  \emph{Proceedings of Machine Learning and Systems}, vol.~7, 2025.
+  \emph{Proceedings of Machine Learning and Systems}, vol.~7.\hskip 1em plus
+  0.5em minus 0.4em\relax MLSys, 2025.
 
 \bibitem{yao2024deft}
 \BIBentryALTinterwordspacing
@@ -185,8 +187,8 @@ J.~Yao, K.~Chen, K.~Zhang, J.~You, B.~Yuan, Z.~Wang, and T.~Lin, ``{DeFT}:
 \bibitem{pan2025fasttree}
 Z.~Pan, Y.~Ding, Y.~Guan, Z.~Wang, Z.~Yu, X.~Tang, Y.~Wang, and Y.~Ding,
   ``{FastTree: Optimizing Attention Kernel and Runtime for Tree-Structured LLM
-  Inference},'' in \emph{Proceedings of Machine Learning and Systems}, vol.~7,
-  2025.
+  Inference},'' in \emph{Proceedings of Machine Learning and Systems},
+  vol.~7.\hskip 1em plus 0.5em minus 0.4em\relax MLSys, 2025.
 
 \bibitem{dao2023flashattention}
 \BIBentryALTinterwordspacing
@@ -287,8 +289,8 @@ Y.~Hu, K.~Wang, X.~Zhang, F.~Zhang, C.~Li, H.~Chen, and J.~Zhang, ``{SAM
 
 \bibitem{lumo2026archive}
 Z.~Ma, ``{LumoTree: Implementation and Experiment Artifact},''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/tree/lumotree-v2-artifact-r1/papers/gdn-tree-scan-mlsys/v2},
-  2026, version 1; paper source, evaluated implementations, and supporting
-  experiment records.
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/tree/codex/lumotree-academic-review2-20260930/papers/gdn-tree-scan-mlsys/v2},
+  2026, paper source, evaluated implementations, and supporting experiment
+  records.
 
 \end{thebibliography}
