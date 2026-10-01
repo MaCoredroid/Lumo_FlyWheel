@@ -49,7 +49,7 @@ $PY replay.py --arm tree-warmup --requests "$ROOT/corpus/requests" --out "$OUT/w
   --mode sampled --max-tokens 64 --limit 1 --auth-hook fixed32_auth:headers
 if [[ "${V2_DIST:-0}" == 1 ]]; then
   $PY dist_sample.py --arm tree --requests "$ROOT/corpus/requests" --out "$OUT/dist.jsonl" \
-    --samples "${V2_DIST_SAMPLES:-40}" --max-tokens "${V2_DIST_MAXTOK:-24}" --auth-hook fixed32_auth:headers
+    --samples "${V2_DIST_SAMPLES:-40}" --max-tokens "${V2_DIST_MAXTOK:-24}" --order "${V2_DIST_ORDER:-sample-outer}" --auth-hook fixed32_auth:headers
 else
   $PY replay.py --arm tree --requests "$ROOT/corpus/requests" --out "$OUT/replay.jsonl" \
     --mode "$MODE" --max-tokens "$MAXTOK" --auth-hook fixed32_auth:headers

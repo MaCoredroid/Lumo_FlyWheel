@@ -31,7 +31,7 @@ python3 "$WT/scripts/v2exp/replay.py" --arm "$ARM-warmup" --requests "$ROOT/corp
   --out "$RUN/warmup.jsonl" --mode greedy --max-tokens 64 --limit 1
 if [[ "${V2_DIST:-0}" == 1 ]]; then
   python3 "$WT/scripts/v2exp/dist_sample.py" --arm "$ARM" --requests "$ROOT/corpus/requests" \
-    --out "$RUN/dist.jsonl" --samples "${V2_DIST_SAMPLES:-40}" --max-tokens "${V2_DIST_MAXTOK:-24}" --temperature "${V2_DIST_TEMP:-0.6}"
+    --out "$RUN/dist.jsonl" --samples "${V2_DIST_SAMPLES:-40}" --max-tokens "${V2_DIST_MAXTOK:-24}" --order "${V2_DIST_ORDER:-sample-outer}" --temperature "${V2_DIST_TEMP:-0.6}"
 elif [[ "${V2_IDS:-0}" == 1 ]]; then
   python3 "$WT/scripts/v2exp/replay_ids.py" --arm "$ARM" --ids "$ROOT/corpus/vllm_prompt_ids.json" \
     --out "$RUN/replay.jsonl" --max-tokens "$MAXTOK"
