@@ -46,9 +46,19 @@ $PY replay.py --arm tree-warmup --requests "$ROOT/corpus/requests" --out "$OUT/w
   --mode sampled --max-tokens 64 --limit 1 --auth-hook fixed32_auth:headers
 $PY replay.py --arm tree --requests "$ROOT/corpus/requests" --out "$OUT/replay.jsonl" \
   --mode "$MODE" --max-tokens "$MAXTOK" --auth-hook fixed32_auth:headers
+REPLAY_RC=$?
 curl -s http://127.0.0.1:9950/metrics > "$OUT/metrics_end.txt"
 touch "$RUNROOT/STOP"
 echo "stop requested; waiting for driver teardown"
 wait $DRV; echo "driver rc=$? $(date -u +%FT%TZ)"
 # remove only this run's own preserved (exited) container; its log is already in docker_full.log
 for c in $(docker ps -aq --filter "name=fr13-bigdenom-hydra27_fixed32_promoab_C_v2exp${MODE}${TS}" --filter status=exited); do docker rm "$c" >/dev/null && echo "removed own exited container $c"; done
+# fail the step if any replay record errored or the replay itself failed
+python3 - "$OUT/replay.jsonl" <<'PY' || REPLAY_RC=7
+import json,sys
+recs=[json.loads(l) for l in open(sys.argv[1])] if __import__("os").path.exists(sys.argv[1]) else []
+bad=[r for r in recs if r.get("error")]
+print(f"replay records={len(recs)} errors={len(bad)}")
+sys.exit(1 if (bad or len(recs)<43) else 0)
+PY
+exit $REPLAY_RC

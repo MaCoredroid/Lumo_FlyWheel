@@ -30,5 +30,7 @@ python3 "$WT/scripts/v2exp/replay.py" --arm "$ARM-warmup" --requests "$ROOT/corp
   --out "$RUN/warmup.jsonl" --mode greedy --max-tokens 64 --limit 1
 python3 "$WT/scripts/v2exp/replay.py" --arm "$ARM" --requests "$ROOT/corpus/requests" \
   --out "$RUN/replay.jsonl" --mode "$MODE" --max-tokens "$MAXTOK"
+REPLAY_RC=$?
 curl -s http://127.0.0.1:9950/metrics > "$RUN/metrics_end.txt"
 echo "done $(date -u +%FT%TZ)"
+exit $REPLAY_RC

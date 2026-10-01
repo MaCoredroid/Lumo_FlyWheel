@@ -140,8 +140,10 @@ def main():
             if a.mode == "greedy":
                 body.update({"temperature": 0.0, "top_p": 1.0, "top_k": -1, "seed": 0})
             else:
+                # Deployed agent-proxy sampling; no per-request seed (the proxy sends none,
+                # and the fixed32 route forbids per-request generators).
                 body.update({"temperature": 0.6, "top_p": 0.95, "top_k": 20, "min_p": 0.0,
-                             "presence_penalty": 1.0, "seed": 1000 + i})
+                             "presence_penalty": 1.0})
             headers = hook(i, name, body) if hook else {}
             m0 = metrics()
             res = stream_chat(body, headers)
