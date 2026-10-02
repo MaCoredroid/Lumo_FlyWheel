@@ -35,7 +35,7 @@ done
 log "READY after $(( $(date +%s) - t0 ))s"; cat "$RUN/CAND/patch_receipt.json" | head -c 300; echo
 grep -h "SUFFIX PASS GATE" "$RR"/*/launch.log | head -2
 cd "$WT/scripts/v2exp"; export V2EXP_READY_FILE="$RR/READY.json"
-/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/.venv/bin/python replay.py --arm gatediag --requests "$ROOT/corpus/requests" \
+/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/.venv/bin/python replay.py --arm gatediag --requests "${GD_REQUESTS:-$ROOT/corpus/requests}" \
   --out "$RUN/replay.jsonl" --mode sampled --max-tokens "${GD_MAXTOK:-512}" --limit "${GD_LIMIT:-8}" --auth-hook fixed32_auth:headers
 touch "$RR/STOP"; log "stop requested"; wait $DRV; log "vehicle rc=$?"
 for c in $(docker ps -aq --filter "name=fr13-bigdenom-hydra27_fixed32_promoab_${GD_ARM_KIND:-G}_gdiag$TS"); do
