@@ -1,0 +1,7 @@
+{
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "split": "test",
+  "tier": "v2exp_capture_confirmation_4",
+  "note": "Disjoint confirmation-set capture for the drafter-pass sweep (2026-10-02). Four SWE-bench Verified tasks from the Cqc10 list; none of them appears in the 43-request tuning corpus (whose conversations are astropy__astropy-13033 and one session without an instance id).",
+  "instance_ids": ["astropy__astropy-14096", "astropy__astropy-14309", "astropy__astropy-14508", "astropy__astropy-14995"]
+}

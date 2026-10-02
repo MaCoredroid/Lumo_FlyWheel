@@ -5,10 +5,11 @@ set -uo pipefail
 ARM=$1; MODE=${2:-greedy}; MAXTOK=${3:-1024}
 ROOT=/home/mark/shared/lumotree-v2exp-runs
 WT=/home/mark/shared/lumotree-v2exp-20260930
+REQ=${V2_REQUESTS:-$ROOT/corpus/requests}
 KINDDIR=replay; [[ "${V2_DIST:-0}" == 1 ]] && KINDDIR=dist
 RUN=$ROOT/$KINDDIR/${ARM}${V2_TAG:-}-${MODE}-$(date -u +%Y%m%dT%H%M%SZ)
 mkdir -p "$RUN"; exec > >(tee -a "$RUN/driver.log") 2>&1
-echo "run=$RUN arm=$ARM seed=${V2_SEED:-0} dist_temp=${V2_DIST_TEMP:-0.6} mode=$MODE maxtok=$MAXTOK commit=$(git -C $WT rev-parse HEAD)"
+echo "run=$RUN req=$REQ arm=$ARM seed=${V2_SEED:-0} dist_temp=${V2_DIST_TEMP:-0.6} mode=$MODE maxtok=$MAXTOK commit=$(git -C $WT rev-parse HEAD)"
 # Same pre-boot hygiene as the LumoTree harness (drop caches, cycle swap), then gate.
 PYTHONPATH=$WT/src /home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/.venv/bin/python -c \
   "from lumo_flywheel_serving.model_server import recover_host_memory; recover_host_memory()" || echo "recover_host_memory failed"
@@ -27,16 +28,16 @@ done
 echo "healthy after $(( $(date +%s) - t0 ))s"
 curl -s http://127.0.0.1:9950/metrics > "$RUN/metrics_boot.txt"
 # warmup (not recorded)
-python3 "$WT/scripts/v2exp/replay.py" --arm "$ARM-warmup" --requests "$ROOT/corpus/requests" \
+python3 "$WT/scripts/v2exp/replay.py" --arm "$ARM-warmup" --requests "$REQ" \
   --out "$RUN/warmup.jsonl" --mode greedy --max-tokens 64 --limit 1
 if [[ "${V2_DIST:-0}" == 1 ]]; then
-  python3 "$WT/scripts/v2exp/dist_sample.py" --arm "$ARM" --requests "$ROOT/corpus/requests" \
+  python3 "$WT/scripts/v2exp/dist_sample.py" --arm "$ARM" --requests "$REQ" \
     --out "$RUN/dist.jsonl" --samples "${V2_DIST_SAMPLES:-40}" --max-tokens "${V2_DIST_MAXTOK:-24}" --order "${V2_DIST_ORDER:-sample-outer}" --temperature "${V2_DIST_TEMP:-0.6}"
 elif [[ "${V2_IDS:-0}" == 1 ]]; then
   python3 "$WT/scripts/v2exp/replay_ids.py" --arm "$ARM" --ids "$ROOT/corpus/vllm_prompt_ids.json" \
     --out "$RUN/replay.jsonl" --max-tokens "$MAXTOK"
 else
-  python3 "$WT/scripts/v2exp/replay.py" --arm "$ARM" --requests "$ROOT/corpus/requests" \
+  python3 "$WT/scripts/v2exp/replay.py" --arm "$ARM" --requests "$REQ" \
     --out "$RUN/replay.jsonl" --mode "$MODE" --max-tokens "$MAXTOK"
 fi
 REPLAY_RC=$?
