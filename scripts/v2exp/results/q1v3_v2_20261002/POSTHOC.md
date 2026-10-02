@@ -60,8 +60,10 @@ The other state surfaces show the same pattern as KL:
 
 ## Statement this supports
 
-This is a disclosed post-hoc analysis, not the pre-registered test:
+This is a disclosed post-hoc analysis, not the pre-registered test. Corrected 2026-10-02 after review: an earlier wording overstated both points below.
 
-> Over 147 forced multi-cycle cells on prefixes up to 60k tokens, LumoTree's post-commit recurrent, convolution and attention state stays within 1.29× the distance between two native vLLM GDN decode kernels at the same cell. Each of 10 injected commit faults is at least 2.83×. LumoTree's next-token logits are distributed like the native packed-kernel variant's, with the same greedy-flip count.
+> Over 147 forced multi-cycle cells on prefixes up to 60k tokens, LumoTree's post-commit recurrent, convolution and attention state stays within 1.29x the distance between two native vLLM GDN decode kernels at the same cell. Each of the 8 injected state-fault observations (NC_CONV, NC_GDN, NC_KV and NC_SIB on two prefixes) is at least 2.83x. The 2 stale-root-input observations (NC_STALE) are logit faults. They exceed every clean candidate and native cell in next-token KL, but no per-cell logit rule was validated.
+
+**What the logit table does not show.** Similar median, 90th-percentile and maximum KL, together with equal greedy-flip counts, do not establish that the output distributions match. That needs a sampling-level test (target and draft probabilities, and acceptance and correction sampling under the deployed filters) whose sensitivity to faults is shown first.
 
 The pre-registered comparator could not certify equivalence, because its tolerance was too loose for the faults to register.

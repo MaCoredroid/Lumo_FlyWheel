@@ -35,5 +35,5 @@ The LumoTree per-step split here is similar to the tuning corpus: 185.2 ms wall 
 
 - **Ranking holds on unseen tasks.** It is LumoTree ≈ SGLang EAGLE s7k1d8 > native MTP-5, the same ranking as on the tuning corpus.
 - **Lead over MTP-5 reproduces:** about +12% here.
-- **LumoTree vs SGLang is parity.** The sign flips between the two request sets, and both differences fall within SGLang's own run-to-run spread of about ±3%.
+- **LumoTree vs SGLang is not resolved.** With one replay per arm on this set (corrected 2026-10-02: an earlier wording said "parity"), the +1.4% here and the -3% to -4% on the tuning corpus do not establish parity or a difference. Replicates, ideally with identical token IDs, are needed.
 - **Caveat:** single replicates per arm on this set.
