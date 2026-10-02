@@ -18,7 +18,7 @@ bash "$WT/scripts/v2exp/serve_native.sh" "$ARM" "$RUN" || exit 1
 NAME=v2exp-$ARM
 cleanup() {
   docker logs "$NAME" > "$RUN/engine.log" 2>&1; docker stop -t 30 "$NAME" >/dev/null 2>&1; docker rm "$NAME" >/dev/null 2>&1
-  (cd "$REPO" && LUMO_OFFLOAD_PROXY_PORT=8023 bash scripts/swe_x86_helpers/offload_codex_proxy.sh stop alienware >> "$RUN/offload_teardown.log" 2>&1)
+  (cd "$REPO" && LUMO_OFFLOAD_PROXY_PORT=8023 REPO=$REPO bash /home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/offload_codex_proxy_capture.sh stop alienware >> "$RUN/offload_teardown.log" 2>&1)
   echo "stopped $NAME and offload proxy"
 }
 trap cleanup EXIT
@@ -35,8 +35,8 @@ unset FR13_FIXED32_INGRESS_SECRET_FILE FR13_FIXED32_INGRESS_TASK_IDS
 export FR13_CAMPAIGN_TASK_BUDGET_S=$WALL AGENT_WALL_S=$WALL FR13_PROXY_RAW_DUMPS=on LUMO_OFFLOAD_PROXY_PORT=8023
 ssh -o BatchMode=yes -o ConnectTimeout=15 alienware "curl -fsS -m 6 http://100.103.10.122:9950/health >/dev/null && echo ok" | grep -q ok \
   || { echo "alienware cannot reach GB10 :9950"; exit 5; }
-bash scripts/swe_x86_helpers/offload_codex_proxy.sh sync alienware > "$RUN/offload_sync.log" 2>&1 || { echo "offload sync failed"; cat "$RUN/offload_sync.log"; exit 5; }
-bash scripts/swe_x86_helpers/offload_codex_proxy.sh start alienware 100.103.10.122 "$RUN" > "$RUN/offload_start.log" 2>&1 || { echo "offload start failed"; cat "$RUN/offload_start.log"; exit 5; }
+REPO=$REPO bash /home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/offload_codex_proxy_capture.sh sync alienware > "$RUN/offload_sync.log" 2>&1 || { echo "offload sync failed"; cat "$RUN/offload_sync.log"; exit 5; }
+REPO=$REPO bash /home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/offload_codex_proxy_capture.sh start alienware 100.103.10.122 "$RUN" > "$RUN/offload_start.log" 2>&1 || { echo "offload start failed"; cat "$RUN/offload_start.log"; exit 5; }
 cat "$RUN/offload_start.log"; cat "$RUN/proxy_raw_dumps.json" 2>/dev/null
 grep -q '"disabled":false' "$RUN/proxy_raw_dumps.json" || { echo "ABORT: proxy raw dumps are not enabled"; exit 6; }
 S0=$(date +%s)
@@ -47,6 +47,6 @@ S0=$(date +%s)
   > "$RUN/swe_orchestrator.log" 2>&1
 SWERC=$?
 echo "swe orchestrator rc=$SWERC wall=$(( $(date +%s) - S0 ))s"; tail -5 "$RUN/swe_orchestrator.log"
-bash scripts/swe_x86_helpers/offload_codex_proxy.sh fetch alienware "$RUN" > "$RUN/offload_fetch.log" 2>&1 || echo "offload fetch failed"
+REPO=$REPO bash /home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/offload_codex_proxy_capture.sh fetch alienware "$RUN" > "$RUN/offload_fetch.log" 2>&1 || echo "offload fetch failed"
 echo "request dumps fetched: $(ls "$RUN"/proxy_request_dumps 2>/dev/null | wc -l)"
 exit 0
