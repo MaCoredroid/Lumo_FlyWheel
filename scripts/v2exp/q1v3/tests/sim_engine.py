@@ -142,9 +142,18 @@ class Engine:
     def run(self, H, max_steps=400):
         r, req = self.runner, self.runner.requests["req-1"]
         P = len(self.prompt)
-        # prefill (one chunk)
-        req.num_computed_tokens = 0
-        H.on_pre_forward(r, NS(num_scheduled_tokens={"req-1": P}), self._md(), None, None, None)
+        # prefill in chunks; like the deployed engine, the candidate's drafter runs after every chunk and only the
+        # last chunk's drafts feed tree step 0 (v1 indexed forced rows by raw drafter calls and missed this)
+        cuts = [0, P // 3, (2 * P) // 3, P] if P >= 6 else [0, P]
+        assert all(b - a != Q.N_ROWS for a, b in zip(cuts, cuts[1:])), "a 32-token prefill chunk would look like a tree step"
+        for a, b in zip(cuts[:-2], cuts[1:-1]):
+            req.num_computed_tokens = a
+            H.on_pre_forward(r, NS(num_scheduled_tokens={"req-1": b - a}), self._md(), None, None, None)
+            if self.kind == "cand":
+                H.on_drafts(r, torch.full((1, 31), 3, dtype=torch.int64))
+        a = cuts[-2]
+        req.num_computed_tokens = a
+        H.on_pre_forward(r, NS(num_scheduled_tokens={"req-1": P - a}), self._md(), None, None, None)
         st = self._consume(self.prompt, 0)
         self._write_state(st)
         for p, t in enumerate(self.prompt):
@@ -152,7 +161,7 @@ class Engine:
         lg = self._logits(st, P).unsqueeze(0)
         H.on_logits(r, lg, None)
         so = NS(sampled_token_ids=torch.tensor([[int(torch.argmax(lg[0]))]]))
-        H.on_sampled(r, so, NS(num_scheduled_tokens={"req-1": P}))
+        H.on_sampled(r, so, NS(num_scheduled_tokens={"req-1": P - a}))
         self.pending = int(so.sampled_token_ids[0, 0]); req.num_computed_tokens = P
         emitted = [self.pending]
         if self.kind == "cand":

@@ -1,4 +1,32 @@
-# q1v3 — full-model multi-cycle state-equivalence check for LumoTree (frozen protocol v1)
+# q1v3 — full-model multi-cycle state-equivalence check for LumoTree (protocol v2; v1 text below unchanged)
+
+## v2 amendment (2026-10-02, frozen before any v2 GPU run)
+
+v1 run q1v3-20261001T223300Z (verdict INCONCLUSIVE, R6) is retained unedited in
+`scripts/v2exp/results/q1v3_v1_20261002/`. Its candidate observations are **invalid**: a harness defect, not a
+candidate property. The engine's drafter also runs after every prefill chunk, and v1 indexed the forced tree rows by
+the raw drafter-call count. Forced rows therefore went into discarded prefill-chunk drafts (cold prefixes, 14-29
+chunks) or arrived one cycle early (prefix-cached cases). The tree forwards verified other tokens while the harness
+forced the commit products. A GPU diagnostic captured the 32 inputs of every tree forward: 0 of 25 steps carried the
+forced rows, and every step equalled the drafter output of the last prefill chunk or the step before.
+v1 checked only the root input, so the defect stayed invisible. The v1 negative controls ran on the same broken
+forcing and are also invalid.
+
+v2 changes the harness only:
+1. `on_drafts` indexes forced rows by the tree step the drafts feed (number of tree steps already consumed).
+2. New integrity check: at every candidate tree forward all 32 input tokens must equal the forced rows (flush rows
+   for the flush step). A mismatch invalidates the observation (R1), since it is a harness failure, not candidate
+   behaviour.
+3. The simulator runs chunked prefill with a drafter call per chunk. v1 hooks fail the end-to-end tests under it;
+   v2 hooks pass all 15.
+
+Decision rules, metrics, tolerances, cases, arms and negative controls are **unchanged** (sections 2-6). Note
+recorded before the v2 run: v1's native envelope (calibration cells of B, V, P vs A) gives state tolerances tau of
+1.0-1.6 (relative L2). Two unrelated vectors of equal norm give about sqrt(2) = 1.41, so R6 may fail again on
+state-surface negative controls. Any tolerance redesign would be a separate, disclosed protocol version.
+
+# v1 protocol text
+
 
 Status: **frozen before any GPU run**. `FREEZE.json` binds this file, `cases.v1.json`, the request fixtures and every
 executed source by sha256; `run_all.sh` refuses to start if any of them differ. Any change after the first GPU

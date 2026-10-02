@@ -372,6 +372,13 @@ class Hooks:
         c.rec["consumed"].append({"step": t, "i": i, "root_token": tok, "position": pos})
         if tok != c.stream[i]:
             c.structural.append({"check": "root_token", "step": t, "i": i, "got": tok, "want": c.stream[i]})
+        want = c.cycles[t]["row_tokens"] if t < c.K else c.fx["flush_rows"]
+        src = input_ids if input_ids is not None else runner.input_ids.gpu
+        got = [int(x) for x in src[qsl:qsl + Q.N_ROWS].tolist()]
+        c.rec.setdefault("tree_inputs", []).append({"step": t, "ids": got})
+        bad = [r for r in range(1, Q.N_ROWS) if got[r] != int(want[r])]
+        if bad:   # a harness forcing failure, not candidate behaviour: invalidates the observation (R1)
+            c.problem(f"tree step {t}: {len(bad)} forced draft rows not consumed (first {bad[:6]})")
         nodes = c.cycles[t]["nodes"] if t < c.K else [0]
         c.cur = {"t": t, "i": i, "qsl": qsl, "nodes": nodes}
         if t == 0:
@@ -503,12 +510,16 @@ class Hooks:
             return
         c = self.case
         try:
-            j = c.draft_calls
+            # v2: the engine's drafter also runs after every prefill chunk, so the raw call count is not the tree step
+            # (v1 defect: forced rows went into discarded prefill-chunk drafts or one cycle early). The drafts produced
+            # now feed tree step j = number of tree steps already consumed; prefill-chunk calls all see j == 0 and only
+            # the last one reaches the tree forward.
+            j = len(c.rec["consumed"])
             c.draft_calls += 1
             idx = runner.input_batch.req_id_to_index[c.rid]
             if not (torch.is_tensor(draft_token_ids) and draft_token_ids.dim() == 2 and int(draft_token_ids.shape[1]) == Q.N_DRAFTS):
                 c.problem(f"draft tensor contract drift {getattr(draft_token_ids, 'shape', None)}"); return
-            c.rec["natural_drafts"].append({"for_step": j, "tokens": [int(x) for x in draft_token_ids[idx].tolist()]})
+            c.rec["natural_drafts"].append({"call": c.draft_calls - 1, "for_step": j, "tokens": [int(x) for x in draft_token_ids[idx].tolist()]})
             rows = c.cycles[j]["row_tokens"] if j < c.K else (c.fx["flush_rows"] if j == c.K else None)
             if rows is not None:
                 draft_token_ids[idx].copy_(torch.tensor(rows[1:], dtype=draft_token_ids.dtype, device=draft_token_ids.device))
@@ -592,6 +603,8 @@ class Hooks:
                 pr.append(f"TAW calls {c.taw_calls} < {c.K + 1}")
             if c.draft_calls < c.K + 1:
                 pr.append(f"draft calls {c.draft_calls} < {c.K + 1}")
+            if len(c.rec.get("tree_inputs", [])) != c.K + 1:
+                pr.append(f"tree-input checks {len(c.rec.get('tree_inputs', []))} != {c.K + 1}")
             if not c.rec["natural_sampled"]:
                 pr.append("prefill root not forced")
         else:
