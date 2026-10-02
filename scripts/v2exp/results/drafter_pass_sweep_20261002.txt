@@ -1,0 +1,14 @@
+tree-swA1-sampled-20261002T181143Z             n=43 err=0 rate=24.52 acc/step=3.197 steps=4363 wall_ms=170.8 target_ms=111.9 drafter_ms=31.7 commit_ms=20.6
+   survival: [0.961, 0.843, 0.7, 0.401, 0.126, 0.039, 0.033, 0.028, 0.025, 0.022, 0.019]
+tree-swAF1-sampled-20261002T201229Z            n=43 err=0 rate=28.94 acc/step=3.973 steps=3939 wall_ms=171.3 target_ms=112.1 drafter_ms=32.0 commit_ms=20.7
+   survival: [0.955, 0.796, 0.64, 0.349, 0.273, 0.212, 0.184, 0.16, 0.144, 0.134, 0.125]
+tree-swAFdiag-sampled-20261002T194109Z         n= 8 err=0 rate=31.09 acc/step=4.391 steps=276 wall_ms=173.0 target_ms=112.0 drafter_ms=30.8 commit_ms=31.1
+   survival: [0.978, 0.899, 0.75, 0.384, 0.312, 0.232, 0.185, 0.178, 0.163, 0.156, 0.156]
+tree-swG1-sampled-20261002T172743Z             n=43 err=0 rate=26.51 acc/step=3.950 steps=3788 wall_ms=185.8 target_ms=111.8 drafter_ms=46.8 commit_ms=20.8
+   survival: [0.947, 0.806, 0.648, 0.509, 0.354, 0.181, 0.14, 0.113, 0.096, 0.084, 0.072]
+tree-swGF1-sampled-20261002T194930Z            n=43 err=0 rate=27.05 acc/step=4.089 steps=4203 wall_ms=187.6 target_ms=112.6 drafter_ms=47.7 commit_ms=20.7
+   survival: [0.948, 0.795, 0.62, 0.476, 0.379, 0.217, 0.17, 0.142, 0.125, 0.114, 0.103]
+tree-swT1-sampled-20261002T174951Z             n=43 err=0 rate=28.78 acc/step=4.469 steps=3806 wall_ms=189.1 target_ms=112.0 drafter_ms=49.7 commit_ms=20.8
+   survival: [0.96, 0.805, 0.641, 0.519, 0.427, 0.261, 0.218, 0.185, 0.168, 0.148, 0.137]
+tree-swT2-sampled-20261002T185812Z             n=43 err=0 rate=28.59 acc/step=4.441 steps=3627 wall_ms=189.6 target_ms=112.2 drafter_ms=50.0 commit_ms=20.8
+   survival: [0.956, 0.819, 0.643, 0.526, 0.433, 0.256, 0.209, 0.176, 0.155, 0.138, 0.129]
