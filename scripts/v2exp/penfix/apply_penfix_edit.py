@@ -21,39 +21,39 @@ _FR13_TREE_DP_CACHE: dict = {}
 _FR13_TREE_HIST_STATS = {"calls": 0, "tree_calls": 0, "self_calls": 0, "rows": 0}
 
 
-def _fr13_tree_draft_parents(metadata, num_requests):
-    """Per-request draft-space parent tables (root = -1) from metadata.tree_parent_indices, which lists
-    the physical verification rows of every request (row 0 = the request's root, then its drafts in
-    draft order; values may be request-local or batch-global). None when the batch carries no tree."""
+def _fr13_tree_draft_parents(metadata, spec_token_ids):
+    """Per-request draft-space parent tables (root = -1) from metadata.tree_parent_indices. The runner
+    builds that tensor as the concatenation, over the requests that carry drafts, of the tree's parent
+    template in draft order (request-local indices, no batch offset); requests with no drafts contribute
+    nothing. Returns a list aligned with spec_token_ids (None for a request without drafts), or None
+    when the batch carries no tree."""
     tpi = getattr(metadata, "tree_parent_indices", None)
-    if tpi is None:
+    if tpi is None or spec_token_ids is None:
         return None
-    key = (int(tpi.data_ptr()), int(tpi.numel()), int(num_requests))
+    lens = tuple(len(s) for s in spec_token_ids)
+    key = (int(tpi.data_ptr()), int(tpi.numel()), lens)
     hit = _FR13_TREE_DP_CACHE.get(key)
     if hit is not None:
         return hit
     phys = [int(x) for x in tpi.detach().cpu().tolist()]
-    n = len(phys)
-    if num_requests <= 0 or n % num_requests != 0 or n // num_requests < 2:
+    if sum(lens) != len(phys):
         raise RuntimeError(
-            f"FR13_TREE_PENALTY_HISTORY: tree_parent_indices numel={n} does not tile requests={num_requests}")
-    rows = n // num_requests
+            f"FR13_TREE_PENALTY_HISTORY: tree_parent_indices numel={len(phys)} but the batch carries "
+            f"{sum(lens)} draft tokens over {len(lens)} requests")
     tables = []
-    for r in range(num_requests):
-        seg = phys[r * rows:(r + 1) * rows]
-        base = r * rows
-        loc = [p - base if p >= base else p for p in seg]
-        if loc[0] >= 0:
-            raise RuntimeError(f"FR13_TREE_PENALTY_HISTORY: root row of request {r} has parent {seg[0]}")
-        dp = []
-        for i in range(1, rows):
-            p = loc[i]
-            if not (0 <= p < i):
+    pos = 0
+    for r, n in enumerate(lens):
+        if n == 0:
+            tables.append(None)
+            continue
+        seg = phys[pos:pos + n]
+        pos += n
+        for j, p in enumerate(seg):
+            if not (-1 <= p < j):
                 raise RuntimeError(
-                    f"FR13_TREE_PENALTY_HISTORY: request {r} row {i} has parent {seg[i]} (local {p}); "
-                    "parents must precede children")
-            dp.append(p - 1)
-        tables.append(tuple(dp))
+                    f"FR13_TREE_PENALTY_HISTORY: request {r} draft {j} has parent {p}; "
+                    "parents must be -1 (root) or an earlier draft")
+        tables.append(tuple(seg))
     if len(_FR13_TREE_DP_CACHE) >= 64:
         _FR13_TREE_DP_CACHE.clear()
     _FR13_TREE_DP_CACHE[key] = tables
@@ -72,10 +72,10 @@ def _fr13_tree_combine_outputs(output_token_ids, spec_token_ids, draft_parents, 
         if len(spec) == 0:
             continue
         dp = draft_parents[ri]
-        if len(dp) != len(spec):
+        if dp is None or len(dp) != len(spec):
             raise RuntimeError(
                 f"FR13_TREE_PENALTY_HISTORY: request {ri} has {len(spec)} draft tokens but a "
-                f"{len(dp)}-node tree parent table")
+                f"{0 if dp is None else len(dp)}-node tree parent table")
         paths = []
         for j in range(len(spec)):
             p = dp[j]
@@ -126,7 +126,7 @@ def _patch_rejection_sampler_tree_penalty_history() -> bool:
         "        if any_penalties_or_bad_words:\n"
         "            # FR13_TREE_PENALTY_HISTORY: tree rows take per-path histories; chain rows keep\n"
         "            # the stock combiner (output + spec[:j]).\n"
-        "            _fr13_tdp = _fr13_tree_draft_parents(metadata, len(output_token_ids))\n"
+        "            _fr13_tdp = _fr13_tree_draft_parents(metadata, sampling_metadata.spec_token_ids)\n"
         "            _FR13_TREE_HIST_STATS[\"calls\"] += 1\n"
         "            if _fr13_tdp is not None:\n"
         "                _FR13_TREE_HIST_STATS[\"tree_calls\"] += 1\n"
