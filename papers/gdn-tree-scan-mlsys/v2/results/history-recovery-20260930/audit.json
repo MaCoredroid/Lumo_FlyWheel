@@ -1,0 +1,1845 @@
+{
+  "git_input_bindings": [
+    {
+      "bytes": 498,
+      "commit": "470a589d4948e274278b861ff2a85157409976cd",
+      "git_blob": "f04937445cb905f3f6cd70301cf96fb266ac8c5b",
+      "path": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/fixed32_final_flush.json",
+      "sha256": "4492d14ec659cb91d0476293cf4027715928975e91d45eba96d735af9f7cd001"
+    },
+    {
+      "bytes": 7714,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "f26123ec487ff7f24a27f5c55d85a7e6ce653366",
+      "path": "FR13_POSTSNAPFIX3_CLOSEOUT.md",
+      "sha256": "3ce92516ef36dacb525ed3694734c9de6bb0929a249b1cf43825b1d5a3c1a5a0"
+    },
+    {
+      "bytes": 38308,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "43f855621c1c12174cb1c3e3279e7ff23f7b8e43",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/boot_log_snapshot.txt",
+      "sha256": "8c5a830240505e55b4080f0a9ef6f7a3f274d647b77fec61aaa15abdb08b3963"
+    },
+    {
+      "bytes": 9888,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "1e660a74c5ac0771cc72bd57d56ccf56faecaf99",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/container_env.txt",
+      "sha256": "36e509d9dbe8639add09d78bde97a3f8b81a069f2e0e836c691d8a8c6bcece95"
+    },
+    {
+      "bytes": 41,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "a858ab080877194f477a09eeb464bba62968c0ab",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/git_head.txt",
+      "sha256": "4acb88d239e1ec970eeda717f34b4e6e81cce0aa2a6f5723d4cb99c17ab3474d"
+    },
+    {
+      "bytes": 732,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "e3b9480a9e7502f83578854b1d0fb40c2ae99c36",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/campaign_summary.json",
+      "sha256": "77064b9fc9be7a7b8740f6873cc1fe13e9704bc0433be8edb9dcc66f76178eb9"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "446187b45b77cea86b62da8b51bddd44a5511cbd",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json",
+      "sha256": "76c92fe90167951ab248af6474a33c0f43396526525249fd13d80c7d716f73ce"
+    },
+    {
+      "bytes": 1806,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "0021133720ae7822c41c3eda847bc5786a070ead",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json",
+      "sha256": "ea5bf290642c7fe0eaff967603dcac25551b590a4f424936c3d00ca814e41c88"
+    },
+    {
+      "bytes": 493,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "c3d529de66f350f1226f6a4c87ec02a505fa9d35",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json",
+      "sha256": "fa8d7deb9991ebfdd9876059fa54f14ccf29207d02ab74620be3b0e79d38622c"
+    },
+    {
+      "bytes": 1807,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "0128d82656e217510e0b4550330755a95ccba37e",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json",
+      "sha256": "e77496bf5ecca79abaa41ab75e482e26721d7b3426a5ad1f28549261dfc3d8f4"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "958f01bf0a9448126a5bed2a6073a3e5b7fe9bcc",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13236/eval/eval_report.json",
+      "sha256": "1fcf2303b6a7f9482b1a00ced87e35678954b216044f2a85c31f1c3ead78fd5e"
+    },
+    {
+      "bytes": 1808,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "f7e1ea57190e2f344908624d4a19889a2a79ee51",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13236/runner_metadata.json",
+      "sha256": "b7685454f625a988aa6d99cef620f86ec6f93ff63e419959b71aaf43cd805eb8"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "68a916424a4623664cfe2535bb47979757dff765",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13398/eval/eval_report.json",
+      "sha256": "c73eea75df1ee4f871de96d6ce44a63c5f557697525e9ca94f802be95d07608a"
+    },
+    {
+      "bytes": 1807,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "6fff2fc983d0b90f17649277f9ebeae1fb4f7269",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13398/runner_metadata.json",
+      "sha256": "96a96c1b8f31fd03b69903bc808e238e2a80c98631beabca3330fc71bcc481c4"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "362225700511b00274eaa170bf109c57e9cb585a",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13453/eval/eval_report.json",
+      "sha256": "302a2544b8023fd548c5434ec6fd67dd176c673b7ecd9568c059e979fda5a533"
+    },
+    {
+      "bytes": 1808,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "6b1a8c908174c7750053e94b510f637311e7862f",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13453/runner_metadata.json",
+      "sha256": "ba1373516bf1fbb63e602bfefbd11949240f5b0e0da05a70cdc3367f525b5d3d"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "0a12384a08ff35e51c9fda2a0ce3b3b31d1090b9",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13579/eval/eval_report.json",
+      "sha256": "7c9612690c32f9519fd115839de9635be8bcc181ea575816234e699f3e0c3d79"
+    },
+    {
+      "bytes": 1808,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "858024e8a3d897594427397d1b9080c9a994058e",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13579/runner_metadata.json",
+      "sha256": "db566968041471cb467c05b7392cdd4f9043923aa5515a9204b691ca19bffa76"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "ce33795b0ba932fa3eda3255c97ebed44d304b37",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13977/eval/eval_report.json",
+      "sha256": "d0a01e0ae8eaf8c25ef8e20b0cc43fc22162fa79bae54f4962b16377a453c576"
+    },
+    {
+      "bytes": 1807,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "d7ff0ebc1cd83de600d6f215115d07aaea83739e",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13977/runner_metadata.json",
+      "sha256": "185c6a951fa87eb92b713a5c10d89891729daca8bea4b3ca413df0d8bb0118db"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "0b6ac63c1ff6b169b24aedf590581a4e03db7307",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14096/eval/eval_report.json",
+      "sha256": "d2c99e4f3d2bc75dd790f21bf208aae9ea7a3dbb411259a1997d757ac1ab725d"
+    },
+    {
+      "bytes": 1809,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "87c60addaae9f360db54150ece8c7006322f7159",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14096/runner_metadata.json",
+      "sha256": "353d79c872eec8808290871375c7e494f62ed198091a2f6b4ee486290adfe815"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "99923f9bbb0a0edf0ff63fbad21a2beecef8f012",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14182/eval/eval_report.json",
+      "sha256": "8cd0a87c0dfdabe420b241083edc0eb0cdbc92dbae40a751a841ba08fe248f0d"
+    },
+    {
+      "bytes": 1808,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "106d50caedb0233672a2c00d777e71a29da26567",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14182/runner_metadata.json",
+      "sha256": "b1b5e3246c20d699429789106783b85934a049d04e11bc67bd0e2aec0fe63fe2"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "97453a76cdae9e1781e8eab6bc6b9778df13a7aa",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14309/eval/eval_report.json",
+      "sha256": "37fd9a90457ac8e29859e64dace7254873712d5ebba8ee486988206973b87896"
+    },
+    {
+      "bytes": 1805,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "9a78a1383f704b833f53fdb67aeb6040aa95ba2e",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14309/runner_metadata.json",
+      "sha256": "c1af3b498bcafb63e8e9e10b69ec6bf00d6eef602aed62d9c957e308089bc66c"
+    },
+    {
+      "bytes": 255,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "0650ddc2b990c77b566c4fdee89f9ca66d8ec8f5",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14365/eval/eval_report.json",
+      "sha256": "eabff67f039ab2602b815343b902ae0d8c829cf27cf8fb2e50eedf623449d810"
+    },
+    {
+      "bytes": 1706,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "f6b8ec7c15189ab10bd853a6085781f9686c497a",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14365/runner_metadata.json",
+      "sha256": "7ebf6b957adc029205db7c068cefff3bff81a6050d6a6373e6dc82dace440880"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "8f9360d75fbb24c58004ebb8bcfef9480f78ae8c",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14369/eval/eval_report.json",
+      "sha256": "d33d6eb6c513bd8df14e4fc84d91686643009528d6715c7b34ea2d04b83f8787"
+    },
+    {
+      "bytes": 1809,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "cc131d50b5fc62ce8b028fbe29fcbd087dbcb86d",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14369/runner_metadata.json",
+      "sha256": "d88874e001471a15ce30b87854e03889ac5982cebbdd286e677fbdb72dc98636"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "0436c82bae095aa0593f2fe47c4ab4ce7403cb31",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14508/eval/eval_report.json",
+      "sha256": "10b71542ca7412c4c77577a39dc3b93f56d3742bccc53fb9627421ee4fbe795b"
+    },
+    {
+      "bytes": 1809,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "180e9194c828b950f569dc3c730ca522906147f3",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14508/runner_metadata.json",
+      "sha256": "0b6d1a3cf431daa980c117b578099ca264867b6e27ebf7602524f6abe612c20f"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "33c3094d9de3028a6197cb77c008d32c8a8d7372",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14539/eval/eval_report.json",
+      "sha256": "d60c00f3b4d93278a5ed286e0032d13c8d59866e79fdf239a24dc3bbf4cbb5ad"
+    },
+    {
+      "bytes": 1806,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "75a9f33ad78dd50566f389b8d05dab0351367cf7",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14539/runner_metadata.json",
+      "sha256": "c09b2dddc6a7418a71b5eb04bb529c8bd4697791162afea1b13fdc7f075433e4"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "6582e0f4e264014464cb20e9252857f36f7bad1f",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14598/eval/eval_report.json",
+      "sha256": "7e8406b25703d50ff3eaae97c7fa77574689a931963d9090bb0f5107f9205369"
+    },
+    {
+      "bytes": 1805,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "47d1136bca21b6a18b28385f1725692651d24958",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14598/runner_metadata.json",
+      "sha256": "42ac2c3501a15b4d72014336ab26848d29f3e77a42e08fa7451bbbbec24f8d2d"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "97293956c9eeee32b0d026f8fc1f9f1417359648",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14995/eval/eval_report.json",
+      "sha256": "11418d9c2a946e2e8514dbe31ae3b65f3f2d09d16d7c0c2e67a68db865cfea21"
+    },
+    {
+      "bytes": 1807,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "aa4d3c71e0f0db4a5f4aefe8e5854e019901516e",
+      "path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14995/runner_metadata.json",
+      "sha256": "1dc8d689a91b89a960869ba0b1096071a60cb96804dcc15a9a6f6f2089c2f872"
+    },
+    {
+      "bytes": 35994,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "788dc8f30d4379750e304311c6934ceb36042bf9",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/boot_log_snapshot.txt",
+      "sha256": "f339c953d0b9b54383b70e03dfdc9e89df0d8ba28d7d6a6b7c30f6e2469551c9"
+    },
+    {
+      "bytes": 9615,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "2d5e53becc348f913a8a58bf03e13570bcb0ce64",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/container_env.txt",
+      "sha256": "923b3083b0125a77103fdc770f2bbcca2e5f8a70ab9458845e45c49670e9b233"
+    },
+    {
+      "bytes": 41,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "47649b84b2df2d9758ecfa47d65b558a0178160c",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/git_head.txt",
+      "sha256": "78d17f3f0915e37de7d5cc7d2f7e1839ae467aa50fd22f36febb27fb48c9af41"
+    },
+    {
+      "bytes": 699,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "eece996fe24220edf4904484166331ffbd829267",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/campaign_summary.json",
+      "sha256": "8ec00d0959739108292d6513b51f16425c4d1569dde6898bd4a037b1cc35f8a4"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "fd086bb1bdc9955745d2d14297bd45a245043e8d",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json",
+      "sha256": "cdfe7ae027adb99c973ed96db3fa5883af476c4cb641d79ecf2b7a2d87a44093"
+    },
+    {
+      "bytes": 1808,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "3b0de45f38814925fe756e879f2da144d26c0897",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json",
+      "sha256": "a9604e43583201b0efe64fef07189d1d237d4bf909d5d36616359aa509c74e02"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "bea617409c8a0093e32a947bc843e3b2dc7e756e",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json",
+      "sha256": "4103a94d12281d9bec8178774abf7d16d387807ec9895764e2511762647d1497"
+    },
+    {
+      "bytes": 1807,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "6953075c2c79529abd2b7c95d6189b4c22a08848",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json",
+      "sha256": "e7bf0576fb6127c0596bbe131a786893a13b00eb1b2347a1a781a1be067504e3"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "f5f2fd74fb2cac43994940e08f261080df5eb479",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13236/eval/eval_report.json",
+      "sha256": "36ed86e98648800f14eb02a645a0c2ceab8ef440c707a45a4cc02b1cc47375ad"
+    },
+    {
+      "bytes": 1805,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "c0059ec949b3b4429357578f849bf2cefe0403c5",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13236/runner_metadata.json",
+      "sha256": "8e3c31346f9850701dd75049e1babd8dc064d2ef11dc6831fd99672c457c641b"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "0869cce912a172db97a885557af6677d3eaaf9d2",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13398/eval/eval_report.json",
+      "sha256": "73de62659d08ce886a3e28a176925d8c78bd47a8a859aae69245597ae4adf773"
+    },
+    {
+      "bytes": 1804,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "204507946fa7a960e3c824d5c2ea023dbac9cc7d",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13398/runner_metadata.json",
+      "sha256": "366bec441137d2627d2d0035499b6cc67612faee5548a56ecc8113d23259e48e"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "ff153bfb40c8db2728669930c8308ae7401eaafe",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13453/eval/eval_report.json",
+      "sha256": "4a6efa7faddf9e04e79cea7f270d356bdc5cafe45a6b388536da64ac3e6eec53"
+    },
+    {
+      "bytes": 1808,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "e83acc8750f114b4299547962b5169577b4f9beb",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13453/runner_metadata.json",
+      "sha256": "6a19e3c753edde897b7e3a0501274128856ab4336c8d9e158dcc6b88ede7802c"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "d8eb73c962c972cd090dbe8fbd5c4d87ef06963e",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13579/eval/eval_report.json",
+      "sha256": "fa44a15580add4c08e72f3dec74e0854366a13d69ac9174359024085a594d6b2"
+    },
+    {
+      "bytes": 1809,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "4e3af5836a609937dbc58c58c0c465005d5e0685",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13579/runner_metadata.json",
+      "sha256": "f58e8f14cc4b2c03b677701efa96e1e2bccfba013eb3e2a41800343f41d7410c"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "f2daff8c5151cfc078013007b17beb2f8a852a9b",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13977/eval/eval_report.json",
+      "sha256": "6293c86c725ed9653ff884c90d467af555093b7a03d279012e07e09d14f59b90"
+    },
+    {
+      "bytes": 1805,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "01224574d99330e03ff83bd9da040a75bacc11cc",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13977/runner_metadata.json",
+      "sha256": "8e53307e478c23e8b7bf0c625dc7b714f2ffaaa9b4727518bc30d761dcb2248b"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "8a36a0511328b0f9e437c6631be4ab676b640ec4",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14096/eval/eval_report.json",
+      "sha256": "b9f0ff2177043e115fec834cbd341c92142f2b17ab24f1084f47fbd421725687"
+    },
+    {
+      "bytes": 1809,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "7745508b28465aae393f06b5a0d1a02d1453abbd",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14096/runner_metadata.json",
+      "sha256": "beda1e3418af271f192c587f3f1f2701a1923422f20d4b380782ba231021c38e"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "e2375f1a8de11cbf441807e80eea5cca56ac82de",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14182/eval/eval_report.json",
+      "sha256": "241bbbcbc34b7a4e9a7f4ac552772f6c759e7dcdc78ceae17534b786cdc95048"
+    },
+    {
+      "bytes": 1807,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "e826e23eeb2753a63d2e5da718433e8a7704d0fa",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14182/runner_metadata.json",
+      "sha256": "2c2812c9762e9bc9d501e277bf3f5fab206310af4429e3499084c5063211215d"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "8ee7847b6cf40028ad6ee54e2561f3df9d7edf98",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14309/eval/eval_report.json",
+      "sha256": "4917e46aea6ba8dff82d201b9fc7950200a534f95768ef6576b25c5fd9027b13"
+    },
+    {
+      "bytes": 1804,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "e14ef806bd047b8d1b01d7e0caa9d7dbaaf012cc",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14309/runner_metadata.json",
+      "sha256": "f301cd462b0b90802ce42c3cd96610515e3f94648ba2637058fe070234cc9ef2"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "85c7c2bade68e0a0e9be192fe170f0cc3db56ea2",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14365/eval/eval_report.json",
+      "sha256": "0c68d32e711d4603054e80057311413bb9563217c270c7b3892c83a4ae7847cf"
+    },
+    {
+      "bytes": 1805,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "d9766e929c80152e8851f94336a2fb76a82fa310",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14365/runner_metadata.json",
+      "sha256": "faa96032ae43e40f1c044d835e823471240508fd0c9fdd90da99fd71c33ef9d1"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "747fe19a87d9f3bfde8bb85db4fc5b92a72c2e71",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14369/eval/eval_report.json",
+      "sha256": "752c47e66cca50e3e1537adc328ba954de50e4aafbcb5781e8f2d0d43a62fd8f"
+    },
+    {
+      "bytes": 1809,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "995725a56522e46c4fa08ce121778df78c180db1",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14369/runner_metadata.json",
+      "sha256": "d12b5339881634219767e60e6268c69abb2edf5108c266bc8587f8014d8148b6"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "a6ca72f8bfd6a82621f98cc824c4823aadc91c0f",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14508/eval/eval_report.json",
+      "sha256": "15839c8bbcbefb4f8e1a7e816e8eb08595b1e5f3448134fcd67f0eac15131a55"
+    },
+    {
+      "bytes": 1809,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "ad9bfd7646ed8bc2f8add03dd7e9e5efd2495d44",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14508/runner_metadata.json",
+      "sha256": "d384bbbe705fea9d04f05fe0157827461443c4444e4e5f431e739aaf079e8a2e"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "56a207112c69fa95b72074e22a936655cf364fe5",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14539/eval/eval_report.json",
+      "sha256": "d5ee85a8ee6b7ce34aa0f95ffb6fd08342ddec7be6cf57d3a4ddbfaf34440e8c"
+    },
+    {
+      "bytes": 1806,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "de337a99db995e3ed7c3064c984583e3a21e83a3",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14539/runner_metadata.json",
+      "sha256": "a7ff00e76eca4d2898e98902adb37c39758510d6340aaf58c991a25e89fbf3b1"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "2992fa711212a97e8bb1bb302b465b7946003806",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14598/eval/eval_report.json",
+      "sha256": "ae3f54a656c448123d0b8067b08456e4019035ebca3f119a9fda59b869f33c42"
+    },
+    {
+      "bytes": 1808,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "65bd0a20ec47df235ea64659ea58624d141dd729",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14598/runner_metadata.json",
+      "sha256": "c5bb9a9b74b02990585b0c30d44b03abfd5520bdf8d98340968fa71a5356f5ba"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "60e57a2a49cb9feae772a845d48062dd25e7221e",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14995/eval/eval_report.json",
+      "sha256": "76df267f1ef9971d50a657b31a7940f546b6dff991de64f9e623cbe7bd1ca0bb"
+    },
+    {
+      "bytes": 1806,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "72af39ddf09e7f5eb043cef58ca8d13397e7b8e1",
+      "path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14995/runner_metadata.json",
+      "sha256": "e54cc14623a9b1ca53eaccec01336fd8d55fbde7add7fadac9164bb454e1743e"
+    },
+    {
+      "bytes": 35828,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "cc2e24c520caad4d1a6b49a1bad2c50897f0d3fa",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/boot_log_snapshot.txt",
+      "sha256": "1760ecd68c1b203a432e626f1eec1d8d4593a33095b6fab700d50d007a25aa78"
+    },
+    {
+      "bytes": 9609,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "900466e90f2a5380fd21b47975527c7c89f4c384",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/container_env.txt",
+      "sha256": "89bba7b329ef62c5ebbfa1d558b4369f1d65787f89834ff2b50784ae9272e127"
+    },
+    {
+      "bytes": 41,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "cdcfd1cfcfa41847a8fa73ec263deb6b958fe024",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/git_head.txt",
+      "sha256": "e8557f46ef2a9c0630fd36ecf6a317d3958e078359647f68f234c9fe5ec56582"
+    },
+    {
+      "bytes": 707,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "c6befb58ce70c98e53b6dea80c0e3a17877815e8",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/campaign_summary.json",
+      "sha256": "dd5741f534adf076c3a888351beb7e30d37eb2ff66f9e9f68e314adc9ee7c1f5"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "3bce2d7df54c06e81d7aef3c4231268f44945027",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json",
+      "sha256": "a0c5843c030f87b8f126865e49d95e409a115419717c07687457f572d13c4c74"
+    },
+    {
+      "bytes": 1806,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "aa87f805619f3d9f8ce8440a6e16bf9ee3d5a372",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json",
+      "sha256": "41378189a66d52d989b57748ccff8188cfb4f7a1f2a72d1dcb5bd81726ddcfff"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "fdf0190ae3e7ec35ae5a3a1ccc09b09f47cf9fc7",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json",
+      "sha256": "bd8216f3872229614247ae49d530c90d56d9fb8e67e117c547b9c7c5b272d2c9"
+    },
+    {
+      "bytes": 1804,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "d5df5dbbe36115f3bddb1f3ca966ee19d2725eb1",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json",
+      "sha256": "bc33c980bc0d4d56e90f438949a2089bade518170e800510f49fa93974e09d35"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "8803beb1cab03084272520911b2fbe830f6e700c",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13236/eval/eval_report.json",
+      "sha256": "8a213d36b8f97352cb7b34e1bd984c8e020659caac59fc40b6ce23bf087c32dc"
+    },
+    {
+      "bytes": 1809,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "a491bb8c9dad255689324e1a624f0352047cdc5c",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13236/runner_metadata.json",
+      "sha256": "81bd359ae87d2ce7e45c41e7a6e28a72608ae6c229ace7fd31153f76468a2f80"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "f024f82a2bc6ad8e64c44f95f984fd40f7c89e1e",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13398/eval/eval_report.json",
+      "sha256": "40c40f7e7a1330e7d43436c99be3e034e60090dc4c4b558993f1a3ba21662158"
+    },
+    {
+      "bytes": 1807,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "56d32c79497e934dde9dcf0bbc5a2707e7f2b3f6",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13398/runner_metadata.json",
+      "sha256": "7d129d35ee7cd20dba31b2ddbd48eab7fa29fa24bf6fbcb6a4be8e919b24ae4f"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "41dcfc50fbe5098b215e2ea94a00232599c2064b",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13453/eval/eval_report.json",
+      "sha256": "16f4e27c3edf377eabdd9fa576d12c92b4df3551bf569606740ab474511002e7"
+    },
+    {
+      "bytes": 1808,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "2cf919ad4bb874dd55c4e28b896b99c4e3125791",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13453/runner_metadata.json",
+      "sha256": "399c47de160181159c51c84c1ddacd5a05498687dcb5d8effda6e22398269286"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "3115d9ab7b662b0a814ef54feec32856ea46237e",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13579/eval/eval_report.json",
+      "sha256": "710e55a64eb3a6c5e142e8685819b89ffd381a12e50c393ba8db42301f998452"
+    },
+    {
+      "bytes": 1809,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "72e957aba86d3e1c1461d0390b053d0825cd81d4",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13579/runner_metadata.json",
+      "sha256": "059da549011180ba5dda78b58c8bb7a779416fc231cfe3a09fbf3901a9269a52"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "dade2f31099dfb740590fb23aecf17cb86a0388e",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13977/eval/eval_report.json",
+      "sha256": "f58f40fe06c4de6a3d70cf4e2621d47315948feac1ccc422c207e71361d994e4"
+    },
+    {
+      "bytes": 1807,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "e35d1c753fdef986e9eeab8110a1cdf6bee10c93",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13977/runner_metadata.json",
+      "sha256": "346765d449792f0cb3f3d1c4d5c351665d00bd50a16af9f3c9138d18c9b25bfc"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "7e6fbb07be365eec21f16d156ec8a75ad3e23dc7",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14096/eval/eval_report.json",
+      "sha256": "037735e0cf2e3f06b7bfafbd8350c8597ff91ff03aa170eca20ff6349209c012"
+    },
+    {
+      "bytes": 1807,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "84ca03051414c5dd64d7bb08e379db160a909906",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14096/runner_metadata.json",
+      "sha256": "57867ab5ee1e8c3bc30b4fb47de4b6bee8e768711b2ed4d096301cad1c950f6c"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "3a2aed4e133a188c5c86d6c4265cf2b06a69b706",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14182/eval/eval_report.json",
+      "sha256": "16601f4edf847c7149c0cd19151355581b2a7ee7c458217541432d8c6ac4afa6"
+    },
+    {
+      "bytes": 1805,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "549b7f94fabd08db08a624867aa285b8d1f700dc",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14182/runner_metadata.json",
+      "sha256": "b61f07a7eadaf6f4ce518285734c34efb37badae87e1c752ab21a230e36b8e7b"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "cf7b80ea35f5e3302b812e039e6787903feaa403",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14309/eval/eval_report.json",
+      "sha256": "e8e23e2e90b18925397752fc00d4a08c221a295cac5d031f45cc07e250aaed6d"
+    },
+    {
+      "bytes": 1806,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "70d6c3c5d0e8ce769e58629893727dbd4a765fd0",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14309/runner_metadata.json",
+      "sha256": "63ab37f31c95340d949a0a2675979d5b248e0d816da3107e5b7533546095a584"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "6e3ee551898a3178ffd43bd8b1109e3b6ec31b78",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14365/eval/eval_report.json",
+      "sha256": "b03ed0cbae1bb280690d5947dcff4b0f885327e46009f7ccf72acbfa4686d9e9"
+    },
+    {
+      "bytes": 1806,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "164a79d8dfad24335e8c85b959e74acd781ca0d3",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14365/runner_metadata.json",
+      "sha256": "0b8acbb49645d686be2c7121ecaf0b8ffb7e9642c25a1d79648b2058740d1507"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "9129a75d95957a88744bb7baa7aadeef53b0facb",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14369/eval/eval_report.json",
+      "sha256": "84d944a0a58e1d28a0cc7481dd6c331fb94757adf7c44af4d45552cb7a6e4a5c"
+    },
+    {
+      "bytes": 1807,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "a1c79da4ff1a46eb0619cdbfb2ae644815e92227",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14369/runner_metadata.json",
+      "sha256": "171418b51f5d0f8af60b910aec35b8c9ac17fa32899750ec2c06456c84fc4375"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "7998310cf2bbd863e32ea2b9ac104d1a8858540e",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14508/eval/eval_report.json",
+      "sha256": "e067bafbe7571e0c565806443d165934a5eb56d5b3068a1f0e8d2df4d353aa8e"
+    },
+    {
+      "bytes": 1809,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "d4d1e8aec8b9b5f92e075dc68f13c5e26cd7d958",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14508/runner_metadata.json",
+      "sha256": "e9fb3be4ab2bf2a152cabdd584bdbcf0d23c23f559c8ce07726409ca7a0ac91b"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "6b19a2bbb1fcf1b1f2f28dffba7cdef3fb5e5f77",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14539/eval/eval_report.json",
+      "sha256": "6cb0e6bc3eba618a1a0390f79e081df0b1dd2542494bdebdc81ebefd07a41f1a"
+    },
+    {
+      "bytes": 1809,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "44ea6889054d873ffc463e7516268172c46197c7",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14539/runner_metadata.json",
+      "sha256": "8a34e60f7bf42b81536804f441c88bff64773534b13f4163b974939091b22459"
+    },
+    {
+      "bytes": 494,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "02354b5782b8b14032cd8aa81477de7ea2b8aa65",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14598/eval/eval_report.json",
+      "sha256": "73a7c854f7e4f84aec7747ff2d833e6014de87c418187a7559f36890a2ee5805"
+    },
+    {
+      "bytes": 1807,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "cfc6ef8e818f39f39400b9eaf2d1150f73fa4c86",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14598/runner_metadata.json",
+      "sha256": "70da2320f81315d787b0341f12ed378943670d47c9e0f77ce4294c72944379f4"
+    },
+    {
+      "bytes": 495,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "e216864cd8850c8abc4fe60f395691972b99d308",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14995/eval/eval_report.json",
+      "sha256": "8e62568adc1371beceb4b57cf6fee18132496c15240c293d7e478b902912d052"
+    },
+    {
+      "bytes": 1805,
+      "commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+      "git_blob": "fb5515e49ff984010a67e687e8d6b8c357f3e1a7",
+      "path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14995/runner_metadata.json",
+      "sha256": "a04907462b03180a2b29101ee27ae4958021f3f7b8fb5bf1512f810fdba57bb8"
+    },
+    {
+      "bytes": 35605,
+      "commit": "6530b1f17d84714e8aaf98b1ea5431a403f1e3ea",
+      "git_blob": "9a42cc4c038bce1632aedc9b7950e1587117a302",
+      "path": "results/fr14_nvfp4_port_20260816/sglang_calibration/dspark_bench_bs1.jsonl",
+      "sha256": "e9467cf4da82be76c70d64d334e4443d2b88f9e59b4e2c696ed99366a9ee1aab"
+    },
+    {
+      "bytes": 35613,
+      "commit": "6530b1f17d84714e8aaf98b1ea5431a403f1e3ea",
+      "git_blob": "2ad427cecbd68f019dbd5b32ad3951114ef9ea46",
+      "path": "results/fr14_nvfp4_port_20260816/sglang_calibration/dspark_bench_bs8.jsonl",
+      "sha256": "bb4ca75a2a29f4232e3690129619442899528ddad97c3d0df0f19d3f8c262af6"
+    },
+    {
+      "bytes": 422,
+      "commit": "92d705c31f375b8a8d42a911eaa73104c722b075",
+      "git_blob": "b257935427a6a0ec6d481a67e3f5994280441e47",
+      "path": "results/fr13_fixed32_b4_graph_batch_bv8_exact4_lifecycle_rejected_20260731T225552Z/flush/failed_generation5_ack.json",
+      "sha256": "a77b9ca04116ea876e9cfa005f0d936da7830b4c4a1d652f51bc1c981b495468"
+    },
+    {
+      "bytes": 211968,
+      "commit": "92d705c31f375b8a8d42a911eaa73104c722b075",
+      "git_blob": "b9e541fe1bd2dcb09e12e20060d4894a002ddce4",
+      "path": "results/fr13_fixed32_b4_graph_batch_bv8_exact4_lifecycle_rejected_20260731T225552Z/kernel/fr13_fixed32_batch_gdn_byte_ab.jsonl",
+      "sha256": "7f9a34c0259e60347e1301df4259542b45fa3cd8625fa201d53566bec82f6311"
+    },
+    {
+      "bytes": 6029,
+      "commit": "92d705c31f375b8a8d42a911eaa73104c722b075",
+      "git_blob": "f7ca7965114a668b13fc090e929b84275a76c9fa",
+      "path": "results/fr13_fixed32_b4_graph_batch_bv8_exact4_lifecycle_rejected_20260731T225552Z/verdict.json",
+      "sha256": "4c696df09817e70337bd3fc435f44af1853bb8629f53d07b1dc654b4334d9b6a"
+    },
+    {
+      "bytes": 35632,
+      "commit": "ae9cfc6d6f8b22cc06fdccf684f6aa0a58f8e671",
+      "git_blob": "3dc65c2550f6a0525e0319de24c6938f0da00669",
+      "path": "results/fr14_nvfp4_port_20260816/sglang_calibration/n2_bench_bs1.jsonl",
+      "sha256": "0b0fd61d203e9c26b463a419fb9aef1eb11ff9658c6a169a93ea49b1bd95bef9"
+    },
+    {
+      "bytes": 6995,
+      "commit": "b48dfe124bed0ba2a78638d18f1a2692502babc3",
+      "git_blob": "0db048b543db71572a3029db89391bdbfa93a255",
+      "path": "results/fr13_taw_widegate_shape_pin_20260815/README.md",
+      "sha256": "ffae2310d31a5d0769e80e2ff48d092d05acbe55b2983758e2565db4548ac0af"
+    },
+    {
+      "bytes": 35631,
+      "commit": "d060db3c0c7d17fcee858a46c5b3c61ba80e6ce2",
+      "git_blob": "781798babbdf97241d9a7fa17030f6d615ba5a53",
+      "path": "results/fr14_nvfp4_port_20260816/sglang_calibration/bench_bs1.jsonl",
+      "sha256": "798229e37f82de94b11c2334f24d228f8bfec519aa6f655ffeba00dbbfd5d031"
+    },
+    {
+      "bytes": 1569,
+      "commit": "d857dad0a24f4917ba5cfc4a418e69b3ed1e25ae",
+      "git_blob": "896fab7ace00d451877f20638c30fcbd9b161bb9",
+      "path": "results/fr13_fixed32_qrow16_num_splits0_live_pass_20260731T173608Z/fr13_fa2_qrow16_live_paged_ab.json",
+      "sha256": "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77"
+    },
+    {
+      "bytes": 491,
+      "commit": "d857dad0a24f4917ba5cfc4a418e69b3ed1e25ae",
+      "git_blob": "35efebd5b05d6ccbfbcf0054b7ab9ae57c2b8948",
+      "path": "results/fr13_fixed32_qrow16_num_splits0_live_pass_20260731T173608Z/lifecycle/fixed32_final_flush.json",
+      "sha256": "7358f82931f9c637eee03f0235745f01d8ceb31dc48a97bbbd3e974ddc1a73c0"
+    },
+    {
+      "bytes": 2040,
+      "commit": "da5cb4b72728b3298b2dfdaa9d4ab6b0e6287279",
+      "git_blob": "71a9adc3779a287fca717d00433f38c143f8f52e",
+      "path": "results/fr13_fixed32_taw_source_v7_b1_b4_bound_20260805/b1_credential.json",
+      "sha256": "7e91b64f210f0c20a8b6625aef8ab60bb383e7b1ac29e66c9c539285057e398b"
+    },
+    {
+      "bytes": 2198,
+      "commit": "da5cb4b72728b3298b2dfdaa9d4ab6b0e6287279",
+      "git_blob": "ebff602fdd339a72ad8e3d05746474b7d213887c",
+      "path": "results/fr13_fixed32_taw_source_v7_b1_b4_bound_20260805/b4_byte_gate.json",
+      "sha256": "9a170daac35c6c77a804b95de346dd48ba66adc1ab438a48e33c02e088f4753b"
+    },
+    {
+      "bytes": 13772,
+      "commit": "f4d971c1c6201f6ef6b420853bf1273e1e90335a",
+      "git_blob": "a180baed254f99a088591d637dd9481f0afe5be2",
+      "path": "FR13_REPLAY_GPU_GATES_BIND.md",
+      "sha256": "00a869eb31d52409e72e70ca9b39e159e2e207b484f419389ec9c5834d1de17f"
+    }
+  ],
+  "july22": {
+    "allowed_claim": "Recorded task outcomes and agent durations on this named historical cohort",
+    "archive_commit": "51b7dafdf5cd2fe21978d45fc49c378830eee68f",
+    "arms": [
+      {
+        "arm": "kvremap_tail6_kvr1",
+        "attempts": 16,
+        "campaign_summary_span_s": 11390.0,
+        "empty_patches": 1,
+        "failure_mode_counts": {
+          "patch_apply_failed": 1,
+          "tests_failed": 5,
+          "tests_passed": 10
+        },
+        "flags": {
+          "FR13_ATTN_KV_REMAP": "1",
+          "FR13_DRAFT_SOURCE": "merged",
+          "FR13_ENABLE_APC": "1",
+          "FR13_REPLAY_ROUTE": "1",
+          "FR13_SLOT_REORDER": "1",
+          "FR13_TREE_RUNROW_INIT": "1"
+        },
+        "label": "Tree tail6",
+        "max_num_seqs": 4,
+        "model_path_recorded": "/models/qwen3.6-27b-fp8",
+        "quantization": "fp8",
+        "source_commit_recorded": "224c5db735dae01bd5a6b4d1dd1599db31640175",
+        "summed_agent_elapsed_s": 36672.257,
+        "timeouts": 0,
+        "verdict_counts": {
+          "failed": 6,
+          "resolved": 10
+        }
+      },
+      {
+        "arm": "native5_control_kvr1",
+        "attempts": 16,
+        "campaign_summary_span_s": 7826.0,
+        "empty_patches": 0,
+        "failure_mode_counts": {
+          "tests_failed": 6,
+          "tests_passed": 10
+        },
+        "flags": {
+          "FR13_ATTN_KV_REMAP": "1",
+          "FR13_DRAFT_SOURCE": null,
+          "FR13_ENABLE_APC": "1",
+          "FR13_REPLAY_ROUTE": "0",
+          "FR13_SLOT_REORDER": "1",
+          "FR13_TREE_RUNROW_INIT": "1"
+        },
+        "label": "Native MTP-5",
+        "max_num_seqs": 4,
+        "model_path_recorded": "/models/qwen3.6-27b-fp8",
+        "quantization": "fp8",
+        "source_commit_recorded": "103cedccd75b3149c87b465c9201416abff7533a",
+        "summed_agent_elapsed_s": 22423.922,
+        "timeouts": 0,
+        "verdict_counts": {
+          "failed": 6,
+          "resolved": 10
+        }
+      },
+      {
+        "arm": "native11_control_kvr1",
+        "attempts": 16,
+        "campaign_summary_span_s": 11282.0,
+        "empty_patches": 0,
+        "failure_mode_counts": {
+          "tests_failed": 8,
+          "tests_passed": 8
+        },
+        "flags": {
+          "FR13_ATTN_KV_REMAP": "1",
+          "FR13_DRAFT_SOURCE": null,
+          "FR13_ENABLE_APC": "1",
+          "FR13_REPLAY_ROUTE": "0",
+          "FR13_SLOT_REORDER": "1",
+          "FR13_TREE_RUNROW_INIT": "1"
+        },
+        "label": "Native MTP-11",
+        "max_num_seqs": 4,
+        "model_path_recorded": "/models/qwen3.6-27b-fp8",
+        "quantization": "fp8",
+        "source_commit_recorded": "2fc0faf624eb44dc1bfd43cf48e915c936b72804",
+        "summed_agent_elapsed_s": 33427.373,
+        "timeouts": 0,
+        "verdict_counts": {
+          "failed": 8,
+          "resolved": 8
+        }
+      }
+    ],
+    "attempts": 48,
+    "common_task_count": 16,
+    "era": "SUPERSEDED_FP8_TAIL6_NATIVE_MTP_JULY22",
+    "excluded_claims": [
+      "Current NVFP4 qualification",
+      "Quality preservation",
+      "Current native-versus-tree speedup",
+      "Historical invalidated decode/host-cost proxies"
+    ],
+    "measurement_erratum_sha256": "83ce2026e5bb7e544b210ddd96d3a039989a1f631f8e2b5c6ffd190b98c50d8a",
+    "paired_outcomes": {
+      "native11_control_kvr1": {
+        "both_resolved": 8,
+        "neither_resolved": 6,
+        "tree_only_resolved": 2
+      },
+      "native5_control_kvr1": {
+        "both_resolved": 9,
+        "control_only_resolved": 1,
+        "neither_resolved": 5,
+        "tree_only_resolved": 1
+      }
+    },
+    "records": [
+      {
+        "agent_elapsed_s": 854.393,
+        "arm": "kvremap_tail6_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-12907",
+        "label": "Tree tail6",
+        "passed": true,
+        "patch_bytes": 504,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 1303.322,
+        "arm": "kvremap_tail6_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-13033",
+        "label": "Tree tail6",
+        "passed": false,
+        "patch_bytes": 1070,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 2292.305,
+        "arm": "kvremap_tail6_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13236/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-13236",
+        "label": "Tree tail6",
+        "passed": true,
+        "patch_bytes": 819,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13236/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 4097.753,
+        "arm": "kvremap_tail6_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13398/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-13398",
+        "label": "Tree tail6",
+        "passed": false,
+        "patch_bytes": 580,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13398/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 2205.808,
+        "arm": "kvremap_tail6_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13453/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-13453",
+        "label": "Tree tail6",
+        "passed": true,
+        "patch_bytes": 575,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13453/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 7030.284,
+        "arm": "kvremap_tail6_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13579/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-13579",
+        "label": "Tree tail6",
+        "passed": true,
+        "patch_bytes": 1565,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13579/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 1181.343,
+        "arm": "kvremap_tail6_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13977/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-13977",
+        "label": "Tree tail6",
+        "passed": false,
+        "patch_bytes": 815,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-13977/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 2817.797,
+        "arm": "kvremap_tail6_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14096/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-14096",
+        "label": "Tree tail6",
+        "passed": true,
+        "patch_bytes": 1020,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14096/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 2155.874,
+        "arm": "kvremap_tail6_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14182/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-14182",
+        "label": "Tree tail6",
+        "passed": true,
+        "patch_bytes": 969,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14182/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 309.272,
+        "arm": "kvremap_tail6_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14309/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-14309",
+        "label": "Tree tail6",
+        "passed": true,
+        "patch_bytes": 574,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14309/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 49.957,
+        "arm": "kvremap_tail6_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14365/eval/eval_report.json",
+        "failure_mode": "patch_apply_failed",
+        "instance_id": "astropy__astropy-14365",
+        "label": "Tree tail6",
+        "passed": false,
+        "patch_bytes": 0,
+        "recorded_model_id": null,
+        "runner_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14365/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 6769.755,
+        "arm": "kvremap_tail6_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14369/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-14369",
+        "label": "Tree tail6",
+        "passed": false,
+        "patch_bytes": 12622,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14369/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 1109.086,
+        "arm": "kvremap_tail6_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14508/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-14508",
+        "label": "Tree tail6",
+        "passed": true,
+        "patch_bytes": 2411,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14508/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 639.982,
+        "arm": "kvremap_tail6_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14539/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-14539",
+        "label": "Tree tail6",
+        "passed": true,
+        "patch_bytes": 530,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14539/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 2635.47,
+        "arm": "kvremap_tail6_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14598/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-14598",
+        "label": "Tree tail6",
+        "passed": false,
+        "patch_bytes": 507,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14598/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 1219.856,
+        "arm": "kvremap_tail6_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14995/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-14995",
+        "label": "Tree tail6",
+        "passed": true,
+        "patch_bytes": 607,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/kvremap_tail6_kvr1/swe_out/verified/per_task/astropy__astropy-14995/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 537.351,
+        "arm": "native5_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-12907",
+        "label": "Native MTP-5",
+        "passed": true,
+        "patch_bytes": 504,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 639.02,
+        "arm": "native5_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-13033",
+        "label": "Native MTP-5",
+        "passed": false,
+        "patch_bytes": 1336,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 1036.249,
+        "arm": "native5_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13236/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-13236",
+        "label": "Native MTP-5",
+        "passed": true,
+        "patch_bytes": 1924,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13236/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 4781.541,
+        "arm": "native5_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13398/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-13398",
+        "label": "Native MTP-5",
+        "passed": false,
+        "patch_bytes": 580,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13398/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 1360.649,
+        "arm": "native5_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13453/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-13453",
+        "label": "Native MTP-5",
+        "passed": true,
+        "patch_bytes": 551,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13453/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 1969.532,
+        "arm": "native5_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13579/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-13579",
+        "label": "Native MTP-5",
+        "passed": true,
+        "patch_bytes": 1506,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13579/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 1218.633,
+        "arm": "native5_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13977/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-13977",
+        "label": "Native MTP-5",
+        "passed": false,
+        "patch_bytes": 890,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-13977/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 611.822,
+        "arm": "native5_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14096/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-14096",
+        "label": "Native MTP-5",
+        "passed": true,
+        "patch_bytes": 1010,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14096/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 918.717,
+        "arm": "native5_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14182/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-14182",
+        "label": "Native MTP-5",
+        "passed": false,
+        "patch_bytes": 784,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14182/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 317.151,
+        "arm": "native5_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14309/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-14309",
+        "label": "Native MTP-5",
+        "passed": true,
+        "patch_bytes": 574,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14309/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 838.069,
+        "arm": "native5_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14365/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-14365",
+        "label": "Native MTP-5",
+        "passed": true,
+        "patch_bytes": 989,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14365/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 2049.08,
+        "arm": "native5_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14369/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-14369",
+        "label": "Native MTP-5",
+        "passed": false,
+        "patch_bytes": 12168,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14369/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 1037.336,
+        "arm": "native5_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14508/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-14508",
+        "label": "Native MTP-5",
+        "passed": true,
+        "patch_bytes": 1692,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14508/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 1167.419,
+        "arm": "native5_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14539/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-14539",
+        "label": "Native MTP-5",
+        "passed": true,
+        "patch_bytes": 1094,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14539/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 3341.222,
+        "arm": "native5_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14598/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-14598",
+        "label": "Native MTP-5",
+        "passed": false,
+        "patch_bytes": 507,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14598/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 600.131,
+        "arm": "native5_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14995/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-14995",
+        "label": "Native MTP-5",
+        "passed": true,
+        "patch_bytes": 607,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native5_control_kvr1/swe_out/verified/per_task/astropy__astropy-14995/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 1587.869,
+        "arm": "native11_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-12907",
+        "label": "Native MTP-11",
+        "passed": true,
+        "patch_bytes": 504,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 1358.994,
+        "arm": "native11_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-13033",
+        "label": "Native MTP-11",
+        "passed": false,
+        "patch_bytes": 1394,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 474.153,
+        "arm": "native11_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13236/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-13236",
+        "label": "Native MTP-11",
+        "passed": false,
+        "patch_bytes": 927,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13236/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 6605.03,
+        "arm": "native11_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13398/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-13398",
+        "label": "Native MTP-11",
+        "passed": false,
+        "patch_bytes": 580,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13398/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 1397.647,
+        "arm": "native11_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13453/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-13453",
+        "label": "Native MTP-11",
+        "passed": true,
+        "patch_bytes": 408,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13453/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 4696.478,
+        "arm": "native11_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13579/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-13579",
+        "label": "Native MTP-11",
+        "passed": true,
+        "patch_bytes": 1019,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13579/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 654.529,
+        "arm": "native11_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13977/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-13977",
+        "label": "Native MTP-11",
+        "passed": false,
+        "patch_bytes": 727,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-13977/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 2109.349,
+        "arm": "native11_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14096/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-14096",
+        "label": "Native MTP-11",
+        "passed": true,
+        "patch_bytes": 1113,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14096/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 2588.104,
+        "arm": "native11_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14182/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-14182",
+        "label": "Native MTP-11",
+        "passed": false,
+        "patch_bytes": 797,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14182/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 301.95,
+        "arm": "native11_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14309/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-14309",
+        "label": "Native MTP-11",
+        "passed": true,
+        "patch_bytes": 574,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14309/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 623.566,
+        "arm": "native11_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14365/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-14365",
+        "label": "Native MTP-11",
+        "passed": false,
+        "patch_bytes": 475,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14365/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 3315.096,
+        "arm": "native11_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14369/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-14369",
+        "label": "Native MTP-11",
+        "passed": false,
+        "patch_bytes": 12167,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14369/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 1744.003,
+        "arm": "native11_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14508/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-14508",
+        "label": "Native MTP-11",
+        "passed": true,
+        "patch_bytes": 2583,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14508/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 735.546,
+        "arm": "native11_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14539/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-14539",
+        "label": "Native MTP-11",
+        "passed": true,
+        "patch_bytes": 530,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14539/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      },
+      {
+        "agent_elapsed_s": 4567.863,
+        "arm": "native11_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14598/eval/eval_report.json",
+        "failure_mode": "tests_failed",
+        "instance_id": "astropy__astropy-14598",
+        "label": "Native MTP-11",
+        "passed": false,
+        "patch_bytes": 2827,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14598/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "failed"
+      },
+      {
+        "agent_elapsed_s": 667.196,
+        "arm": "native11_control_kvr1",
+        "eval_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14995/eval/eval_report.json",
+        "failure_mode": "tests_passed",
+        "instance_id": "astropy__astropy-14995",
+        "label": "Native MTP-11",
+        "passed": true,
+        "patch_bytes": 992,
+        "recorded_model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+        "runner_source_path": "output/fr13_kvremap_tail6/native11_control_kvr1/swe_out/verified/per_task/astropy__astropy-14995/runner_metadata.json",
+        "timed_out": false,
+        "verdict": "resolved"
+      }
+    ]
+  },
+  "new_gpu_runs": 0,
+  "qualification_era_register": {
+    "aug05_v7_credentials": {
+      "b4_batches_recorded": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "candidate_served": false,
+      "current_qualification_transfer": false,
+      "era": "SUPERSEDED_FP8_HYDRA27_K64_SOURCE_V7",
+      "exhaustive_case_denominator": null,
+      "probability_mismatches_recorded": 0,
+      "product_mismatches_recorded": 0,
+      "scope": "SHADOW_TAW_COMPONENT",
+      "status": "EXPLICITLY_INVALIDATED_AUG15"
+    },
+    "aug24_cqc10_flush": {
+      "era": "CURRENT_DEPLOYED_NVFP4_HYDRA27_NATIVE_COMMITTER",
+      "final_work_census": {
+        "cfwd_pending": 0,
+        "complete_work_census_events": 49333,
+        "dfwd_pending": 0,
+        "pure_decode_forward_steps": 49333,
+        "sfwd_pending": 0,
+        "work_census_first_forward_step": 0,
+        "work_census_last_forward_step": 49332
+      },
+      "fullmodel_equivalence": false,
+      "generation": 21,
+      "scope": "RECORDED_TERMINAL_WORK_INTERVALS_NOT_STATE_ORACLE",
+      "status": "ok"
+    },
+    "july31_b1_shadow_attention": {
+      "byte_mismatches": 0,
+      "candidate_served": false,
+      "current_qualification_transfer": false,
+      "era": "SUPERSEDED_FP8_QROW16_NUM_SPLITS0",
+      "final_work_census": {
+        "cfwd_pending": 0,
+        "complete_work_census_events": 810,
+        "dfwd_pending": 0,
+        "pure_decode_forward_steps": 810,
+        "sfwd_pending": 0,
+        "work_census_first_forward_step": 0,
+        "work_census_last_forward_step": 809
+      },
+      "lse_bytes": 3072,
+      "output_bytes": 393216,
+      "scope": "ONE_ATTENTION_LAYER_SHADOW",
+      "sequence_length": 22901
+    },
+    "july31_b4_shadow_gdn": {
+      "byte_mismatches": 0,
+      "campaign_status": "REJECTED_LIFECYCLE_FLUSH_RACE_AFTER_KERNEL_PASS",
+      "candidate_served": false,
+      "candidate_surface_comparisons": 432,
+      "current_qualification_transfer": false,
+      "era": "SUPERSEDED_FP8_TAIL6_BV8_BATCHING",
+      "failed_snapshot_is_terminal_census": false,
+      "graph_baseline_comparisons": 288,
+      "layer_records": 48,
+      "scope": "48_LAYER_SHADOW_COMPONENT"
+    },
+    "june_replay": {
+      "current_qualification_transfer": false,
+      "era": "SUPERSEDED_SHARED_STEP_SCAN_REPLAY",
+      "primary_raw_recovered": false,
+      "reported_byte_cases": 126,
+      "scope": "CONTEMPORANEOUS_REPORT_ONLY",
+      "status": "INITIAL_LIVE_FAIL_THEN_REPORTED_WIRING_FIX"
+    }
+  },
+  "schema": "lumotree-git-history-recovery-v1",
+  "synthetic_serving": [
+    {
+      "accept_length": 2.240217391304348,
+      "completed": 8,
+      "concurrency": 0.9997457813981234,
+      "dataset_name": "random",
+      "duration": 411.09202655707486,
+      "max_concurrency": 1,
+      "output_rate_recomputed": 19.927411554557715,
+      "output_throughput": 19.927411554557715,
+      "random_input_len": 1024,
+      "random_output_len": 1024,
+      "scope": "SYNTHETIC_SERVING_NOT_AGENT_OR_CURRENT_TREE_COMPARISON",
+      "server_info": {
+        "attention_backend": "flashinfer",
+        "dtype": "auto",
+        "kv_cache_dtype": "auto",
+        "model_path": "/models/qwen3.8-27b-nvfp4-radixark-asshipped",
+        "random_seed": 652161593,
+        "speculative_algorithm": "DSPARK",
+        "speculative_draft_model_path": "/models/qwen3.8-27b-dspark-draft",
+        "speculative_eagle_topk": 1,
+        "speculative_num_draft_tokens": 8,
+        "speculative_num_steps": 1
+      },
+      "source_commit": "6530b1f17d84714e8aaf98b1ea5431a403f1e3ea",
+      "source_path": "results/fr14_nvfp4_port_20260816/sglang_calibration/dspark_bench_bs1.jsonl",
+      "total_output_tokens": 8192
+    },
+    {
+      "accept_length": 2.8339417315242095,
+      "completed": 32,
+      "concurrency": 7.29754270447153,
+      "dataset_name": "random",
+      "duration": 277.8548802298028,
+      "max_concurrency": 8,
+      "output_rate_recomputed": 117.93206573481409,
+      "output_throughput": 117.93206573481409,
+      "random_input_len": 1024,
+      "random_output_len": 1024,
+      "scope": "SYNTHETIC_SERVING_NOT_AGENT_OR_CURRENT_TREE_COMPARISON",
+      "server_info": {
+        "attention_backend": "flashinfer",
+        "dtype": "auto",
+        "kv_cache_dtype": "auto",
+        "model_path": "/models/qwen3.8-27b-nvfp4-radixark-asshipped",
+        "random_seed": 652161593,
+        "speculative_algorithm": "DSPARK",
+        "speculative_draft_model_path": "/models/qwen3.8-27b-dspark-draft",
+        "speculative_eagle_topk": 1,
+        "speculative_num_draft_tokens": 8,
+        "speculative_num_steps": 1
+      },
+      "source_commit": "6530b1f17d84714e8aaf98b1ea5431a403f1e3ea",
+      "source_path": "results/fr14_nvfp4_port_20260816/sglang_calibration/dspark_bench_bs8.jsonl",
+      "total_output_tokens": 32768
+    },
+    {
+      "accept_length": 2.901056338028169,
+      "completed": 8,
+      "concurrency": 0.9996814896127245,
+      "dataset_name": "random",
+      "duration": 313.86385970702395,
+      "max_concurrency": 1,
+      "output_rate_recomputed": 26.100488306129982,
+      "output_throughput": 26.100488306129982,
+      "random_input_len": 1024,
+      "random_output_len": 1024,
+      "scope": "SYNTHETIC_SERVING_NOT_AGENT_OR_CURRENT_TREE_COMPARISON",
+      "server_info": {
+        "attention_backend": "flashinfer",
+        "dtype": "auto",
+        "kv_cache_dtype": "auto",
+        "model_path": "/models/qwen3.8-27b-nvfp4-radixark-asshipped",
+        "random_seed": 864376620,
+        "speculative_algorithm": "EAGLE",
+        "speculative_draft_model_path": null,
+        "speculative_eagle_topk": 1,
+        "speculative_num_draft_tokens": 4,
+        "speculative_num_steps": 3
+      },
+      "source_commit": "d060db3c0c7d17fcee858a46c5b3c61ba80e6ce2",
+      "source_path": "results/fr14_nvfp4_port_20260816/sglang_calibration/bench_bs1.jsonl",
+      "total_output_tokens": 8192
+    },
+    {
+      "accept_length": 2.901056338028169,
+      "completed": 8,
+      "concurrency": 0.9996733075195807,
+      "dataset_name": "random",
+      "duration": 313.255807782989,
+      "max_concurrency": 1,
+      "output_rate_recomputed": 26.15115122039521,
+      "output_throughput": 26.15115122039521,
+      "random_input_len": 1024,
+      "random_output_len": 1024,
+      "scope": "SYNTHETIC_SERVING_NOT_AGENT_OR_CURRENT_TREE_COMPARISON",
+      "server_info": {
+        "attention_backend": "flashinfer",
+        "dtype": "auto",
+        "kv_cache_dtype": "auto",
+        "model_path": "/models/qwen3.8-27b-nvfp4-radixark-asshipped",
+        "random_seed": 1068101960,
+        "speculative_algorithm": "EAGLE",
+        "speculative_draft_model_path": null,
+        "speculative_eagle_topk": 1,
+        "speculative_num_draft_tokens": 4,
+        "speculative_num_steps": 3
+      },
+      "source_commit": "ae9cfc6d6f8b22cc06fdccf684f6aa0a58f8e671",
+      "source_path": "results/fr14_nvfp4_port_20260816/sglang_calibration/n2_bench_bs1.jsonl",
+      "total_output_tokens": 8192
+    }
+  ]
+}

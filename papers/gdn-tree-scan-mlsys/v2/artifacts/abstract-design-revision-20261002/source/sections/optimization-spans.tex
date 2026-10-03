@@ -1,0 +1,20 @@
+Phase timers add a descriptive view of these variants (Table~\ref{tab:optimization-spans}). Stock attention has a 14.6\,ms longer target span and a 15.1\,ms longer step than the two instrumented deployed repeats. Disabling fused selection increases the drafter span by 0.7\,ms; operand-preparation removal has no clear measured separation. Request inputs are shared, but generated trajectories, acceptance lengths, and actual KV capacities differ, so these are not isolated causal effects at identical computation.
+
+\begin{table}[t]
+\caption{Mean execution spans of exploratory replay variants, in milliseconds. Each phase pools its own duration and timer count. Deployed uses two instrumented runs; stock attention three; other variants one.}
+\label{tab:optimization-spans}
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Configuration & Target & Draft & Dispatch & Step \\
+\midrule
+Deployed & 112.14 & 49.84 & 20.81 & 189.35 \\
+Stock attention & 126.78 & 49.94 & 21.13 & 204.44 \\
+Fused selection off & 112.32 & 50.57 & 21.08 & 190.38 \\
+Operand preparation off & 111.85 & 49.85 & 20.75 & 188.97 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Boot logs report 20.54\,GiB of model-loading allocation in every variant. Reported CUDA-graph pools are 1.52--1.59\,GiB for the deployed runs, 0.42--0.50\,GiB for stock attention, 1.97\,GiB without fused selection, and 1.47\,GiB without prepared operands. Deployed KV capacity is 203,776 tokens versus 197,632--198,656 for stock attention. These allocation reports do not measure peak serving memory, and the unequal capacities further limit attribution.

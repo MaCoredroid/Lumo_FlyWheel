@@ -1,0 +1,78 @@
+[
+  {
+    "path": "IEEEtran.cls",
+    "sha256": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b"
+  },
+  {
+    "path": "abstract.tex",
+    "sha256": "8e61ef09525722b913d7187fe18656b96e22e42d57a517298b37ffab622eacdc"
+  },
+  {
+    "path": "figures/pipeline.tikz",
+    "sha256": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c"
+  },
+  {
+    "path": "figures/scan-replay.tikz",
+    "sha256": "19c984883a8b70cc5209c33fa4f62e98aba708ad2b025568d1b2d600a3e4ecd0"
+  },
+  {
+    "path": "figures/state-contract.tikz",
+    "sha256": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898"
+  },
+  {
+    "path": "main.bbl",
+    "sha256": "392512456ceb65b6d3e8b5e06b522910508f4984792a8654bde42b0e6df67c30"
+  },
+  {
+    "path": "main.tex",
+    "sha256": "3d290c7a83735ec3e0cd34b6dfda28cc5a89e766a2b27a554499395eff41a052"
+  },
+  {
+    "path": "ref.bib",
+    "sha256": "6cba931832435ef088018bcb885b1117e0154863cb081e9da974c5ec2bffa7a2"
+  },
+  {
+    "path": "sections/execution-costs.tex",
+    "sha256": "96b3a0b128f72362ebb74ed95c3de1c5812b47f16db5e04811126f22a0eb0842"
+  },
+  {
+    "path": "sections/fullmodel-protocol.tex",
+    "sha256": "5e886d013cd21e20c4a78c80377b2f2776e4b3bca9244e46843cb717b1824c31"
+  },
+  {
+    "path": "sections/fullmodel-validation.tex",
+    "sha256": "6dbb800854195509c1d4864fb4662110c8cf0c36c831ac25fc6bb9d86d8a4397"
+  },
+  {
+    "path": "sections/mechanism-costs.tex",
+    "sha256": "fbc21f0b2fc66bf650706f49bdb8ef5bfa7856839570e5ebb5e16843769a0f2a"
+  },
+  {
+    "path": "sections/recurrent-comparison.tex",
+    "sha256": "0ac8ea1e338af46351a0feaac63f910c8698d30ba3bfa15c898c2ee5db3f3814"
+  },
+  {
+    "path": "sections/recurrent-validation.tex",
+    "sha256": "4b8540c9162a2de4c44574ef10178e42674480cc579efca0cfca14fc70edc953"
+  },
+  {
+    "path": "sections/replay-protocol.tex",
+    "sha256": "95257179dcb77cacc8d4d5600a7588be4d16d5abc9f5bc2c29cfc0870c99bcd0"
+  },
+  {
+    "path": "sections/request-replay.tex",
+    "sha256": "bffc4b242172782939be6003796e468a4210f622f9bcab109737dcbcf1c2004c"
+  },
+  {
+    "path": "sections/workload-configuration.tex",
+    "sha256": "c378de8ed8ec14e9f743200c9a0b1dd434118dac5304f6fc7f644231282b4d3a"
+  },
+  {
+    "path": "sections/workload-details.tex",
+    "sha256": "93da83861148630e81824472fdc528afd53a902d8db95c6ebbb6a66f6aa62813"
+  },
+  {
+    "path": "sections/workload.tex",
+    "sha256": "9c70b3d21495d3377c892c8468654f56dc43ae73493888fb42c0069dcb7963d0"
+  }
+]

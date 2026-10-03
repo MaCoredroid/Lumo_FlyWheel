@@ -1,0 +1,12 @@
+{
+  "compile": "success",
+  "overfull_boxes": 0,
+  "undefined_references": 0,
+  "bib_formal_version_audit": "pass",
+  "section_citation_tier_tool": "legacy registry has8 unknown introduction citation classifications; no new citations added; not a bibliography verification failure",
+  "raw_rate_and_timing_reductions": "pass",
+  "distribution_CPU_repeat": "exact result match",
+  "visual_review": "13-page overview and full-resolution updated pages8\u201310 inspected",
+  "scientific_limits": "full-model qualification remains open; timed author methods descriptive only",
+  "memory_accounting": "Naive bank includes null and durable slots; named buffers, separate pools and implementation-specific boundaries stated explicitly"
+}

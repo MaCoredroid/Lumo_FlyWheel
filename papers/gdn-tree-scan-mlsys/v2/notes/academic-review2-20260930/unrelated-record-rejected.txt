@@ -1,0 +1,11 @@
+@inproceedings{MLSYS2026_4abf3968,
+ author = {Yuan, Joyce and Shi, Yichuan and Singh, Abhishek and Sharma, Rishi and Raskar, Ramesh and Blanc, Jonas and Jaggi, Martin},
+ booktitle = {Proceedings of Machine Learning and Systems},
+ editor = {A. Chowdhery and Z. Jia},
+ pages = {2186--2200},
+ publisher = {MLSys},
+ title = {SONAR: Benchmarking Topology and Collaboration in Decentralized Learning},
+ url = {https://proceedings.mlsys.org/paper_files/paper/2026/file/4abf39685e89559523a4d644036fd2b3-Paper-Conference.pdf},
+ volume = {8},
+ year = {2026}
+}

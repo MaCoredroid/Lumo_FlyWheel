@@ -1,0 +1,97 @@
+{
+  "scope": "Bounded local source/stdlib review; no launcher, Docker, GPU, cache, remote, numerical experiment or gate operation",
+  "files": {
+    "tools/run_q1_candidate_cycle0_v3.sh": "77dc89459a9b3bef1db1d5c19e3ef9d83788fa19a834f6bc8422438db0a06c4e",
+    "tools/q1_candidate_cycle0_gate_v3.py": "004da986417c8222bf23e57debc9b88d7df40e473f112c8db7723445c4011038",
+    "tools/q1_make_diag_launcher_v3_5.py": "c86ec3ca13168fbfa1fe9f405613757e81f7bc0143e9b86c3172db87f9af0a66",
+    "tools/generated/fr14_leg3_launch_nomiddleware.q1diag.v3_5.sh": "c943ff2f1060376e55857c6b0ed8a9b5c076e2f75749ee019a1463dbfa7b70c4",
+    "identity/launcher-diagnostic.v3_5-from-v3_2.diff": "8b48046188c45eeed378e96ee1054789e120fc7eadc052574538637d24c557ad",
+    "tools/tests/test_q1_candidate_cycle0_gate_v3.py": "b7f2e851cc767e4ee97574ecc41f0e5d111cfca13c8bfdac4a80ae74706e018c"
+  },
+  "wrapper_inverse_to_v2_byte_exact": true,
+  "gate_inverse_to_v2_byte_exact": true,
+  "generated_base_sha256": "db89386fb76db8594c00b575bddf369f6f8b05a6183f425734d1679f81de5352",
+  "generated_replacements_exactly": 5,
+  "generated_inverse_byte_exact": true,
+  "saved_diff_exact": true,
+  "control_results": {
+    "base_sha_drift": "reviewed v3.2 diagnostic launcher source changed",
+    "occurrence_drift_with_matching_test_sha": "candidate patcher path occurrence count changed",
+    "closed_gate": {
+      "returncode": 1,
+      "stderr": "candidate cycle0 gate closed/foreign",
+      "campaign_import_marker_absent": true,
+      "output_absent": true
+    },
+    "changed_conv_helper": {
+      "returncode": 1,
+      "stderr": "reviewed dependency hash mismatch: conv_publication_witness",
+      "campaign_import_marker_absent": true,
+      "output_absent": true
+    },
+    "changed_replay_helper": {
+      "returncode": 1,
+      "stderr": "reviewed dependency hash mismatch: replay_publication_witness",
+      "campaign_import_marker_absent": true,
+      "output_absent": true
+    }
+  },
+  "reachable_campaign_module_closure": [
+    "memory_recovery_v2_8",
+    "q1_candidate_case_binding_v2",
+    "q1_candidate_cycle0_gate_v3",
+    "q1_candidate_driver_v2",
+    "q1_candidate_hooks_v5",
+    "q1_candidate_hydration",
+    "q1_candidate_hydration_v2",
+    "q1_candidate_job",
+    "q1_candidate_job_v2",
+    "q1_candidate_job_v5",
+    "q1_candidate_launch_env_v2_5",
+    "q1_candidate_layer_registry_v1",
+    "q1_candidate_raw_audit_v4",
+    "q1_conv_publication_witness_v1",
+    "q1_forced_acceptance",
+    "q1_host_validation_binding_v1",
+    "q1_make_diag_launcher_v3_5",
+    "q1_native_corpus_v1",
+    "q1_patch_candidate_v5",
+    "q1_readiness_consumer_v1",
+    "q1_reference_driver_v2",
+    "q1_reference_hooks_v2",
+    "q1_reference_hooks_v2_1",
+    "q1_replay_publication_witness_v1",
+    "q1_target_kv_witness_v1"
+  ],
+  "reachable_campaign_modules_missing_reviewed_pin": [],
+  "dormant_native_only_imports_not_executed_by_candidate_route": [
+    {
+      "parent": "q1_native_corpus_v1",
+      "function": "engine_view",
+      "module": "q1_spec_off_engine_config_v2_1"
+    },
+    {
+      "parent": "q1_native_corpus_v1",
+      "function": "reduce",
+      "module": "q1_reference_job"
+    },
+    {
+      "parent": "q1_native_corpus_v1",
+      "function": "reduce",
+      "module": "q1_patch_reference_runner_v2_1"
+    },
+    {
+      "parent": "q1_native_corpus_v1",
+      "function": "main",
+      "module": "q1_reference_job"
+    }
+  ],
+  "transitive_repo_topology_pin": "fr13_fixed32_topology.py covered by topology_module",
+  "root_v1_2_source_hashes_unchanged_from_prior_review": {
+    "run_q1_candidate_stage1_v2_7.sh": "08190b5176bb1ba81a8b55c69ab54412f4ea5afc9bd2708a105de8f1af639591",
+    "q1_candidate_hooks_v1_2.py": "af4595e4b03d8f5c44a5ae0bca5125677e00b827666d8062fec7b43fdb2ac516",
+    "q1_patch_candidate_v1_2.py": "e0418f8f544ae88cc1be445db98d20bcc97272fbe4363f945c22127e25771c8c",
+    "q1_candidate_job_v1_2.py": "2560965556574b53cbcc6b914f00119723d3407af8763d77d34af0e362d731b7"
+  },
+  "parent_gates_unchanged": true
+}

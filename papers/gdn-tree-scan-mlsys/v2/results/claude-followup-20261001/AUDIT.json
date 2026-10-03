@@ -1,0 +1,731 @@
+{
+  "schema": "lumo.followup.audit.v1",
+  "synced_files": 120,
+  "replay": {
+    "stockfa2": {
+      "runs": [
+        {
+          "name": "tree-fa2stock-sampled-20261001T093533Z",
+          "sha256": "23e5b6caed9318092fe906cc44a22c9ee020df4ef94aa35cd5b5558366b6d034",
+          "requests": 43,
+          "interval_tokens": 19110,
+          "decode_seconds": 704.9457341926172,
+          "rate": 27.10846959289272,
+          "cap_hits": 10
+        },
+        {
+          "name": "tree-fa2stock-sampled-20261001T211905Z",
+          "sha256": "32fe76ed56ebab93d299fb069f61198c8f5a989c841031b65485cb4817f4125c",
+          "requests": 43,
+          "interval_tokens": 19290,
+          "decode_seconds": 722.5514773046598,
+          "rate": 26.697059802517682,
+          "cap_hits": 10
+        },
+        {
+          "name": "tree-fa2stock-sampled-20261001T220159Z",
+          "sha256": "e3b6982b4cfe5e57e05610bc22c736f0db4316156bdf3105702da93b8a7c27fe",
+          "requests": 43,
+          "interval_tokens": 20244,
+          "decode_seconds": 759.1009360430762,
+          "rate": 26.668390247975175,
+          "cap_hits": 11
+        }
+      ],
+      "pooled_rate": 26.81974283476234,
+      "run_min": 26.668390247975175,
+      "run_max": 27.10846959289272
+    },
+    "sglang7_ids": {
+      "runs": [
+        {
+          "name": "sglang-s7k1d8-ids-sampled-20261001T205933Z",
+          "sha256": "51500a26f19fbb5690a5ff9d7cf8f63054cbe2e2a27aca1cb64e110977e981bb",
+          "requests": 43,
+          "interval_tokens": 18254,
+          "decode_seconds": 619.809480140917,
+          "rate": 29.450985480005656,
+          "cap_hits": 9
+        },
+        {
+          "name": "sglang-s7k1d8-ids-sampled-20261001T214120Z",
+          "sha256": "d040be78862028b0e335878eb3cae627259b52613f462fe9c74664fa3b2e4671",
+          "requests": 43,
+          "interval_tokens": 20685,
+          "decode_seconds": 715.5845751808956,
+          "rate": 28.906436384226073,
+          "cap_hits": 11
+        },
+        {
+          "name": "sglang-s7k1d8-ids-sampled-20261001T222500Z",
+          "sha256": "1d860c62cdc5a05c8cbdb5c7420acd71b7b2bba2672ab59151bc2c01761bf030",
+          "requests": 43,
+          "interval_tokens": 18163,
+          "decode_seconds": 587.860942996107,
+          "rate": 30.89676260414579,
+          "cap_hits": 9
+        }
+      ],
+      "pooled_rate": 29.69029070505027,
+      "run_min": 28.906436384226073,
+      "run_max": 30.89676260414579
+    }
+  },
+  "kernel": [
+    {
+      "method": "lumo_fixed32",
+      "mode": "graph",
+      "sha256": "f3ff6a6969d84026c328e8cbc586647bf4bc861577dc94aaf72e3bcb1528e1f2",
+      "step_ms": {
+        "n": 100,
+        "median_ms": 17.688271522521973,
+        "p10_ms": 17.182200813293456,
+        "p90_ms": 17.841292953491212,
+        "mean_ms": 17.567378215789795,
+        "std_ms": 0.30735190136191415,
+        "min_ms": 17.16326332092285,
+        "max_ms": 18.34662437438965
+      },
+      "regions_ms": {
+        "verify": {
+          "n": 100,
+          "median_ms": 12.897535800933838,
+          "p10_ms": 12.69286069869995,
+          "p90_ms": 13.338409519195556,
+          "mean_ms": 13.001823034286499,
+          "std_ms": 0.3087147129691622,
+          "min_ms": 12.673791885375977,
+          "max_ms": 13.782367706298828
+        },
+        "commit": {
+          "n": 100,
+          "median_ms": 4.491407871246338,
+          "p10_ms": 4.47713270187378,
+          "p90_ms": 4.84178581237793,
+          "mean_ms": 4.565555195808411,
+          "std_ms": 0.16676255894480804,
+          "min_ms": 4.4627838134765625,
+          "max_ms": 5.151328086853027
+        }
+      },
+      "scratch_named_bytes": 138923500,
+      "framework_peak_allocated_bytes": 2294975488,
+      "output_max_abs": 0.00048187751636083465,
+      "committed_n31_max_abs": 2.6235755832271224e-06,
+      "derived": {
+        "step_total_median_ms": 17.688271522521973,
+        "step_total_p10_ms": 17.182200813293456,
+        "step_total_p90_ms": 17.841292953491212,
+        "verify_median_ms": 12.897535800933838,
+        "verify_per_layer_median_ms": 0.26869866251945496,
+        "commit_median_ms": 4.491407871246338,
+        "commit_per_layer_median_ms": 0.09357099731763203,
+        "verify_layer0_median_ms": 0.2921760082244873
+      },
+      "numerical_gate": false
+    },
+    {
+      "method": "lumo_fixed32",
+      "mode": "eager",
+      "sha256": "f3ff6a6969d84026c328e8cbc586647bf4bc861577dc94aaf72e3bcb1528e1f2",
+      "step_ms": {
+        "n": 100,
+        "median_ms": 17.583248138427734,
+        "p10_ms": 17.416995239257812,
+        "p90_ms": 18.146704864501952,
+        "mean_ms": 17.76202604293823,
+        "std_ms": 0.3558341559599318,
+        "min_ms": 17.310304641723633,
+        "max_ms": 18.73004722595215
+      },
+      "regions_ms": {
+        "verify": {
+          "n": 100,
+          "median_ms": 12.964208126068115,
+          "p10_ms": 12.92949743270874,
+          "p90_ms": 13.651340961456299,
+          "mean_ms": 13.217922248840331,
+          "std_ms": 0.3460176623125312,
+          "min_ms": 12.881183624267578,
+          "max_ms": 14.230367660522461
+        },
+        "commit": {
+          "n": 100,
+          "median_ms": 4.491503953933716,
+          "p10_ms": 4.475852727890015,
+          "p90_ms": 4.816403388977052,
+          "mean_ms": 4.544103698730469,
+          "std_ms": 0.1588478682058777,
+          "min_ms": 4.418784141540527,
+          "max_ms": 5.183680057525635
+        }
+      },
+      "scratch_named_bytes": 138923500,
+      "framework_peak_allocated_bytes": 2294975488,
+      "output_max_abs": 0.00048187751636083465,
+      "committed_n31_max_abs": 2.6235755832271224e-06,
+      "derived": {
+        "step_total_median_ms": 17.583248138427734,
+        "step_total_p10_ms": 17.416995239257812,
+        "step_total_p90_ms": 18.146704864501952,
+        "verify_median_ms": 12.964208126068115,
+        "verify_per_layer_median_ms": 0.27008766929308575,
+        "commit_median_ms": 4.491503953933716,
+        "commit_per_layer_median_ms": 0.09357299904028575,
+        "verify_layer0_median_ms": 0.3157760053873062
+      },
+      "numerical_gate": false
+    },
+    {
+      "method": "naive_native_paths",
+      "mode": "graph",
+      "sha256": "b6ecb449e70014fd3db006da80fe3063fae998ee0ce078cda6033595fb6a36b5",
+      "step_ms": {
+        "n": 100,
+        "median_ms": 32.411231994628906,
+        "p10_ms": 32.35993766784668,
+        "p90_ms": 32.6689208984375,
+        "mean_ms": 32.484981842041016,
+        "std_ms": 0.2360085175489134,
+        "min_ms": 32.295265197753906,
+        "max_ms": 33.40089416503906
+      },
+      "regions_ms": {
+        "verify": {
+          "n": 100,
+          "median_ms": 29.709888458251953,
+          "p10_ms": 29.67094440460205,
+          "p90_ms": 29.88382377624512,
+          "mean_ms": 29.785630970001222,
+          "std_ms": 0.23035147249932836,
+          "min_ms": 29.639328002929688,
+          "max_ms": 30.75926399230957
+        },
+        "commit": {
+          "n": 100,
+          "median_ms": 2.697440028190613,
+          "p10_ms": 2.6537855863571167,
+          "p90_ms": 2.7329119205474854,
+          "mean_ms": 2.6993507146835327,
+          "std_ms": 0.0627087800485416,
+          "min_ms": 2.621056079864502,
+          "max_ms": 3.2356479167938232
+        }
+      },
+      "scratch_named_bytes": 5284823040,
+      "framework_peak_allocated_bytes": 5755598336,
+      "output_max_abs": 0.00048187751636083465,
+      "committed_n31_max_abs": 2.6235755832271224e-06,
+      "derived": {
+        "step_total_median_ms": 32.411231994628906,
+        "step_total_p10_ms": 32.35993766784668,
+        "step_total_p90_ms": 32.6689208984375,
+        "verify_median_ms": 29.709888458251953,
+        "verify_per_layer_median_ms": 0.6189560095469157,
+        "commit_median_ms": 2.697440028190613,
+        "commit_per_layer_median_ms": 0.0561966672539711,
+        "verify_layer0_median_ms": 0.6284960210323334
+      },
+      "numerical_gate": false
+    },
+    {
+      "method": "naive_native_paths",
+      "mode": "eager",
+      "sha256": "b6ecb449e70014fd3db006da80fe3063fae998ee0ce078cda6033595fb6a36b5",
+      "step_ms": {
+        "n": 100,
+        "median_ms": 33.72574234008789,
+        "p10_ms": 33.68355369567871,
+        "p90_ms": 34.1179916381836,
+        "mean_ms": 33.82598278045654,
+        "std_ms": 0.2599837227997541,
+        "min_ms": 33.6387825012207,
+        "max_ms": 34.692447662353516
+      },
+      "regions_ms": {
+        "verify": {
+          "n": 100,
+          "median_ms": 31.026127815246582,
+          "p10_ms": 30.97857036590576,
+          "p90_ms": 31.31777572631836,
+          "mean_ms": 31.119378204345704,
+          "std_ms": 0.2453132287402573,
+          "min_ms": 30.95462417602539,
+          "max_ms": 31.95961570739746
+        },
+        "commit": {
+          "n": 100,
+          "median_ms": 2.700816035270691,
+          "p10_ms": 2.6539680480957033,
+          "p90_ms": 2.7422975063323975,
+          "mean_ms": 2.7066048073768614,
+          "std_ms": 0.07621544231454136,
+          "min_ms": 2.6408638954162598,
+          "max_ms": 3.3876800537109375
+        }
+      },
+      "scratch_named_bytes": 5284823040,
+      "framework_peak_allocated_bytes": 5755991552,
+      "output_max_abs": 0.00048187751636083465,
+      "committed_n31_max_abs": 2.6235755832271224e-06,
+      "derived": {
+        "step_total_median_ms": 33.72574234008789,
+        "step_total_p10_ms": 33.68355369567871,
+        "step_total_p90_ms": 34.1179916381836,
+        "verify_median_ms": 31.026127815246582,
+        "verify_per_layer_median_ms": 0.6463776628176371,
+        "commit_median_ms": 2.700816035270691,
+        "commit_per_layer_median_ms": 0.05626700073480606,
+        "verify_layer0_median_ms": 0.6593439877033234
+      },
+      "numerical_gate": false
+    },
+    {
+      "method": "naive_torch_node",
+      "mode": "graph",
+      "sha256": "06d73ef9a0d01e0bc1da9fd4bf738261d4c9e5db98a7211bdb7ed19318a6e288",
+      "step_ms": {
+        "n": 100,
+        "median_ms": 55.023183822631836,
+        "p10_ms": 54.94329566955567,
+        "p90_ms": 59.26664505004883,
+        "mean_ms": 55.98951919555664,
+        "std_ms": 1.693848290531451,
+        "min_ms": 54.905601501464844,
+        "max_ms": 60.9475212097168
+      },
+      "regions_ms": {
+        "verify": {
+          "n": 100,
+          "median_ms": 52.31564712524414,
+          "p10_ms": 52.26258926391601,
+          "p90_ms": 56.537743377685544,
+          "mean_ms": 53.28938110351562,
+          "std_ms": 1.6793179670391554,
+          "min_ms": 52.23683166503906,
+          "max_ms": 58.24332809448242
+        },
+        "commit": {
+          "n": 100,
+          "median_ms": 2.69595205783844,
+          "p10_ms": 2.6485503911972046,
+          "p90_ms": 2.733676815032959,
+          "mean_ms": 2.700138249397278,
+          "std_ms": 0.06954581290539455,
+          "min_ms": 2.6325440406799316,
+          "max_ms": 3.2337279319763184
+        }
+      },
+      "scratch_named_bytes": 5284823040,
+      "framework_peak_allocated_bytes": 5791382016,
+      "output_max_abs": 0.00048187751636083465,
+      "committed_n31_max_abs": 6.514270922686194e-07,
+      "derived": {
+        "step_total_median_ms": 55.023183822631836,
+        "step_total_p10_ms": 54.94329566955567,
+        "step_total_p90_ms": 59.26664505004883,
+        "verify_median_ms": 52.31564712524414,
+        "verify_per_layer_median_ms": 1.089909315109253,
+        "commit_median_ms": 2.69595205783844,
+        "commit_per_layer_median_ms": 0.05616566787163416,
+        "verify_layer0_median_ms": 1.0913280248641968
+      },
+      "numerical_gate": false
+    },
+    {
+      "method": "naive_torch_node",
+      "mode": "eager",
+      "sha256": "06d73ef9a0d01e0bc1da9fd4bf738261d4c9e5db98a7211bdb7ed19318a6e288",
+      "step_ms": {
+        "n": 100,
+        "median_ms": 81.03652572631836,
+        "p10_ms": 80.89814758300781,
+        "p90_ms": 81.74634857177735,
+        "mean_ms": 81.16543418884277,
+        "std_ms": 0.31894965560826416,
+        "min_ms": 80.82486724853516,
+        "max_ms": 82.09343719482422
+      },
+      "regions_ms": {
+        "verify": {
+          "n": 100,
+          "median_ms": 78.3284797668457,
+          "p10_ms": 78.22765197753907,
+          "p90_ms": 79.06114349365234,
+          "mean_ms": 78.4673664855957,
+          "std_ms": 0.31717852110750067,
+          "min_ms": 78.14214324951172,
+          "max_ms": 79.41769409179688
+        },
+        "commit": {
+          "n": 100,
+          "median_ms": 2.6977280378341675,
+          "p10_ms": 2.650963306427002,
+          "p90_ms": 2.7393312454223633,
+          "mean_ms": 2.6980668807029726,
+          "std_ms": 0.035659644142683515,
+          "min_ms": 2.6336960792541504,
+          "max_ms": 2.8327999114990234
+        }
+      },
+      "scratch_named_bytes": 5284823040,
+      "framework_peak_allocated_bytes": 5792443392,
+      "output_max_abs": 0.00048187751636083465,
+      "committed_n31_max_abs": 6.514270922686194e-07,
+      "derived": {
+        "step_total_median_ms": 81.03652572631836,
+        "step_total_p10_ms": 80.89814758300781,
+        "step_total_p90_ms": 81.74634857177735,
+        "verify_median_ms": 78.3284797668457,
+        "verify_per_layer_median_ms": 1.6318433284759521,
+        "commit_median_ms": 2.6977280378341675,
+        "commit_per_layer_median_ms": 0.05620266745487849,
+        "verify_layer0_median_ms": 1.6148799657821655
+      },
+      "numerical_gate": false
+    },
+    {
+      "method": "treewy_author_default",
+      "mode": "graph",
+      "sha256": "48659e4fbb17e3ee71d083c21a076ce613c97cbd38eb4fe92eaf3455adfcee88",
+      "step_ms": {
+        "n": 100,
+        "median_ms": 11.014911651611328,
+        "p10_ms": 10.997395133972168,
+        "p90_ms": 11.036243438720703,
+        "mean_ms": 11.033016929626465,
+        "std_ms": 0.0863217584214082,
+        "min_ms": 10.9782075881958,
+        "max_ms": 11.442079544067383
+      },
+      "regions_ms": {
+        "fused_commit_prev_and_verify": {
+          "n": 100,
+          "median_ms": 11.014911651611328,
+          "p10_ms": 10.997395133972168,
+          "p90_ms": 11.036243438720703,
+          "mean_ms": 11.033016929626465,
+          "std_ms": 0.0863217584214082,
+          "min_ms": 10.9782075881958,
+          "max_ms": 11.442079544067383
+        }
+      },
+      "scratch_named_bytes": 202211328,
+      "framework_peak_allocated_bytes": 955837952,
+      "output_max_abs": 0.0006312656972183167,
+      "committed_n31_max_abs": 0.005098525272769161,
+      "derived": {
+        "step_total_median_ms": 11.014911651611328,
+        "step_total_p10_ms": 10.997395133972168,
+        "step_total_p90_ms": 11.036243438720703,
+        "fused_commit_prev_and_verify_median_ms": 11.014911651611328,
+        "fused_commit_prev_and_verify_per_layer_median_ms": 0.229477326075236,
+        "verify_only_median_ms": 10.635295867919922,
+        "commit_estimate_median_ms": 0.37961578369140625,
+        "commit_estimate_note": "derived: steady fused step minus sentinel (commit-skipped) step; not separately measurable",
+        "final_flush_median_ms": 10.50984001159668,
+        "layer0_step_median_ms": 0.2526879906654358
+      },
+      "numerical_gate": false
+    },
+    {
+      "method": "treewy_author_default",
+      "mode": "eager",
+      "sha256": "48659e4fbb17e3ee71d083c21a076ce613c97cbd38eb4fe92eaf3455adfcee88",
+      "step_ms": {
+        "n": 100,
+        "median_ms": 11.712255954742432,
+        "p10_ms": 11.696381092071533,
+        "p90_ms": 11.737183666229248,
+        "mean_ms": 11.722763214111328,
+        "std_ms": 0.06652483856372818,
+        "min_ms": 11.677151679992676,
+        "max_ms": 12.209952354431152
+      },
+      "regions_ms": {
+        "fused_commit_prev_and_verify": {
+          "n": 100,
+          "median_ms": 11.712255954742432,
+          "p10_ms": 11.696381092071533,
+          "p90_ms": 11.737183666229248,
+          "mean_ms": 11.722763214111328,
+          "std_ms": 0.06652483856372818,
+          "min_ms": 11.677151679992676,
+          "max_ms": 12.209952354431152
+        }
+      },
+      "scratch_named_bytes": 202211328,
+      "framework_peak_allocated_bytes": 956231168,
+      "output_max_abs": 0.0006312656972183167,
+      "committed_n31_max_abs": 0.005098525272769161,
+      "derived": {
+        "step_total_median_ms": 11.712255954742432,
+        "step_total_p10_ms": 11.696381092071533,
+        "step_total_p90_ms": 11.737183666229248,
+        "fused_commit_prev_and_verify_median_ms": 11.712255954742432,
+        "fused_commit_prev_and_verify_per_layer_median_ms": 0.24400533239046732,
+        "verify_only_median_ms": 11.314576148986816,
+        "commit_estimate_median_ms": 0.39767980575561523,
+        "commit_estimate_note": "derived: steady fused step minus sentinel (commit-skipped) step; not separately measurable",
+        "final_flush_median_ms": 10.62508773803711,
+        "layer0_step_median_ms": 0.2983199954032898
+      },
+      "numerical_gate": false
+    },
+    {
+      "method": "weaver_aligned_local",
+      "mode": "graph",
+      "sha256": "1480dc54c2dea1510f835b77e6b73094fec1a98ee832512fe7ac0cde7552610c",
+      "step_ms": {
+        "n": 100,
+        "median_ms": 5.445216178894043,
+        "p10_ms": 5.418112087249756,
+        "p90_ms": 5.4980544090271,
+        "mean_ms": 5.477089900970459,
+        "std_ms": 0.13960282552395287,
+        "min_ms": 5.4054718017578125,
+        "max_ms": 6.270751953125
+      },
+      "regions_ms": {
+        "verify": {
+          "n": 100,
+          "median_ms": 4.045087814331055,
+          "p10_ms": 4.039193725585937,
+          "p90_ms": 4.053827238082886,
+          "mean_ms": 4.075498881340027,
+          "std_ms": 0.1390683680478219,
+          "min_ms": 4.0344319343566895,
+          "max_ms": 4.8915839195251465
+        },
+        "commit": {
+          "n": 100,
+          "median_ms": 1.3984479904174805,
+          "p10_ms": 1.3699519634246826,
+          "p90_ms": 1.4450239658355712,
+          "mean_ms": 1.4015910422801972,
+          "std_ms": 0.027528137426762828,
+          "min_ms": 1.3627840280532837,
+          "max_ms": 1.4657280445098877
+        }
+      },
+      "scratch_named_bytes": 32658440,
+      "framework_peak_allocated_bytes": 786539008,
+      "output_max_abs": 0.0005181787443594432,
+      "committed_n31_max_abs": 8.545226182210541e-07,
+      "derived": {
+        "step_total_median_ms": 5.445216178894043,
+        "step_total_p10_ms": 5.418112087249756,
+        "step_total_p90_ms": 5.4980544090271,
+        "verify_median_ms": 4.045087814331055,
+        "verify_per_layer_median_ms": 0.08427266279856364,
+        "commit_median_ms": 1.3984479904174805,
+        "commit_per_layer_median_ms": 0.02913433313369751,
+        "verify_layer0_median_ms": 0.10931199789047241,
+        "topology_rebuild_median_ms": 0.019967999309301376
+      },
+      "numerical_gate": false
+    },
+    {
+      "method": "weaver_aligned_local",
+      "mode": "eager",
+      "sha256": "1480dc54c2dea1510f835b77e6b73094fec1a98ee832512fe7ac0cde7552610c",
+      "step_ms": {
+        "n": 100,
+        "median_ms": 9.129263877868652,
+        "p10_ms": 9.087247943878173,
+        "p90_ms": 9.214390087127686,
+        "mean_ms": 9.143308486938476,
+        "std_ms": 0.054807898996418844,
+        "min_ms": 9.06662368774414,
+        "max_ms": 9.323488235473633
+      },
+      "regions_ms": {
+        "verify": {
+          "n": 100,
+          "median_ms": 7.7147040367126465,
+          "p10_ms": 7.696505784988403,
+          "p90_ms": 7.778403091430664,
+          "mean_ms": 7.727025289535522,
+          "std_ms": 0.0457817863264626,
+          "min_ms": 7.678271770477295,
+          "max_ms": 7.888832092285156
+        },
+        "commit": {
+          "n": 100,
+          "median_ms": 1.4048320055007935,
+          "p10_ms": 1.3844031810760498,
+          "p90_ms": 1.4704320430755615,
+          "mean_ms": 1.4162832009792328,
+          "std_ms": 0.03410813517302446,
+          "min_ms": 1.3791359663009644,
+          "max_ms": 1.5185600519180298
+        }
+      },
+      "scratch_named_bytes": 32658440,
+      "framework_peak_allocated_bytes": 787724800,
+      "output_max_abs": 0.0005181787443594432,
+      "committed_n31_max_abs": 8.545226182210541e-07,
+      "derived": {
+        "step_total_median_ms": 9.129263877868652,
+        "step_total_p10_ms": 9.087247943878173,
+        "step_total_p90_ms": 9.214390087127686,
+        "verify_median_ms": 7.7147040367126465,
+        "verify_per_layer_median_ms": 0.1607230007648468,
+        "commit_median_ms": 1.4048320055007935,
+        "commit_per_layer_median_ms": 0.029267333447933197,
+        "verify_layer0_median_ms": 0.18823999911546707,
+        "topology_rebuild_median_ms": 0.035631999373435974
+      },
+      "numerical_gate": false
+    },
+    {
+      "method": "weaver_author_default",
+      "mode": "graph",
+      "sha256": "b742ac820fbacc7d4452a42d80545961984fddc9804c58f138c7e8af587aa2a1",
+      "step_ms": {
+        "n": 100,
+        "median_ms": 3.4544479846954346,
+        "p10_ms": 3.4302015781402586,
+        "p90_ms": 3.506118369102478,
+        "mean_ms": 3.4744463968276977,
+        "std_ms": 0.09218190200319526,
+        "min_ms": 3.350752115249634,
+        "max_ms": 4.021024227142334
+      },
+      "regions_ms": {
+        "verify": {
+          "n": 100,
+          "median_ms": 2.068368077278137,
+          "p10_ms": 2.0570847034454345,
+          "p90_ms": 2.084662413597107,
+          "mean_ms": 2.082208962440491,
+          "std_ms": 0.08818568765155643,
+          "min_ms": 1.9200639724731445,
+          "max_ms": 2.634687900543213
+        },
+        "commit": {
+          "n": 100,
+          "median_ms": 1.3851680159568787,
+          "p10_ms": 1.3667232275009156,
+          "p90_ms": 1.428662395477295,
+          "mean_ms": 1.3922374427318573,
+          "std_ms": 0.02627644465893296,
+          "min_ms": 1.3627519607543945,
+          "max_ms": 1.4621440172195435
+        }
+      },
+      "scratch_named_bytes": 26366984,
+      "framework_peak_allocated_bytes": 780116480,
+      "output_max_abs": 0.0005279203455401948,
+      "committed_n31_max_abs": 0.005063284260564238,
+      "derived": {
+        "step_total_median_ms": 3.4544479846954346,
+        "step_total_p10_ms": 3.4302015781402586,
+        "step_total_p90_ms": 3.506118369102478,
+        "verify_median_ms": 2.068368077278137,
+        "verify_per_layer_median_ms": 0.04309100160996119,
+        "commit_median_ms": 1.3851680159568787,
+        "commit_per_layer_median_ms": 0.02885766699910164,
+        "verify_layer0_median_ms": 0.07238399982452393,
+        "topology_rebuild_median_ms": 0.019807999953627586
+      },
+      "numerical_gate": false
+    },
+    {
+      "method": "weaver_author_default",
+      "mode": "eager",
+      "sha256": "b742ac820fbacc7d4452a42d80545961984fddc9804c58f138c7e8af587aa2a1",
+      "step_ms": {
+        "n": 100,
+        "median_ms": 5.883824110031128,
+        "p10_ms": 5.853280067443848,
+        "p90_ms": 5.932720041275024,
+        "mean_ms": 5.888767046928406,
+        "std_ms": 0.032686400010954214,
+        "min_ms": 5.838784217834473,
+        "max_ms": 6.029056072235107
+      },
+      "regions_ms": {
+        "verify": {
+          "n": 100,
+          "median_ms": 4.4792640209198,
+          "p10_ms": 4.466908645629883,
+          "p90_ms": 4.5060224533081055,
+          "mean_ms": 4.483995518684387,
+          "std_ms": 0.020115682303723067,
+          "min_ms": 4.451839923858643,
+          "max_ms": 4.5862717628479
+        },
+        "commit": {
+          "n": 100,
+          "median_ms": 1.3955360054969788,
+          "p10_ms": 1.3781119585037231,
+          "p90_ms": 1.4500287771224976,
+          "mean_ms": 1.4047715187072753,
+          "std_ms": 0.02751173243406138,
+          "min_ms": 1.3730239868164062,
+          "max_ms": 1.4692480564117432
+        }
+      },
+      "scratch_named_bytes": 26366984,
+      "framework_peak_allocated_bytes": 781302272,
+      "output_max_abs": 0.0005279203455401948,
+      "committed_n31_max_abs": 0.005063284260564238,
+      "derived": {
+        "step_total_median_ms": 5.883824110031128,
+        "step_total_p10_ms": 5.853280067443848,
+        "step_total_p90_ms": 5.932720041275024,
+        "verify_median_ms": 4.4792640209198,
+        "verify_per_layer_median_ms": 0.09331800043582916,
+        "commit_median_ms": 1.3955360054969788,
+        "commit_per_layer_median_ms": 0.029073666781187057,
+        "verify_layer0_median_ms": 0.1273599937558174,
+        "topology_rebuild_median_ms": 0.03587200120091438
+      },
+      "numerical_gate": false
+    }
+  ],
+  "main_step_timing_cells": 12,
+  "all_main_timing_surfaces": 32,
+  "verify_only_sweep_cells_raw_reduced": 0,
+  "verify_only_sweep_cells_summary_only": 40,
+  "distribution": [
+    {
+      "name": "ar-sampled-20261001T150739Z",
+      "sha256": "5eb82fb2ed8abaad7795c4f4e3bb94707c9799de7b7a0ac22fd89f3efced8b5e",
+      "samples": 800,
+      "requests": 20
+    },
+    {
+      "name": "ar-seed1-sampled-20261001T192848Z",
+      "sha256": "e67f469d79b96a797db24877aee2ba30da367acb4b5e0b95ac4038943975bf69",
+      "samples": 800,
+      "requests": 20
+    },
+    {
+      "name": "ar-seed2t065-sampled-20261001T201104Z",
+      "sha256": "ac681d147b26a7b1730d1c903f9308d97e766e0463b679920fc3d6b82571002f",
+      "samples": 800,
+      "requests": 20
+    },
+    {
+      "name": "mtp5-sampled-20261001T155028Z",
+      "sha256": "ea90b5291e4ad6a5a7f30503168e63f52abcf1f182978c777e2e34288518f3c6",
+      "samples": 800,
+      "requests": 20
+    },
+    {
+      "name": "tree-sampled-20261001T173819Z",
+      "sha256": "e106f386ecb111a6287ff1ef790f0e9542252953a7555b3e1ca1f5327da27a08",
+      "samples": 800,
+      "requests": 20
+    }
+  ],
+  "distribution_verdict": {
+    "rule1_validity_NULL_p_ge_0.01": false,
+    "rule2_sensitivity_NEG_p_lt_0.01": true,
+    "conclusion": "INVALID per DIST-PROTOCOL.md rule 1: the independent plain-decoding replicate (seed 1) is rejected against the reference (p=0.001); no candidate conclusion is drawn."
+  },
+  "cross_stack_timer_boundary": "vLLM first parsed nonempty delta; SGLang first completion-count increase; not identical API observables",
+  "fullmodel_qualification_completed": 0
+}

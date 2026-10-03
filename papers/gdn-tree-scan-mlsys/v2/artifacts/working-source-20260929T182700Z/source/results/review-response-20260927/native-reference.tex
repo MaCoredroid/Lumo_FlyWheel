@@ -1,0 +1,18 @@
+% Source: native-reference.json and independently authenticated A/B raw comparison.
+The separate full-model native-reference check covers 84 predetermined calibration
+paths, with two repetitions in each of two fresh processes (336 observations).
+All observations pass raw-data integrity, coverage and finiteness checks. Within
+each process, all 84 paths reproduce the same state bytes and full-vocabulary
+logits. Across processes, only 70 of 84 paths retain the same next-token greedy
+decision; 14 change winner. Natural-prefill states and full-logit bytes differ for
+all 84 paths. Thus the frozen common-state and greedy-repeatability prerequisite
+qualifies no aligned case. The two exact-tie observations are retained.
+
+These runs use matching recorded source and serving configurations, but do not
+establish identical unobserved intermediate tensors. They start from natural
+prefill, rather than replaying one shared serialized starting state. The cause
+of the cross-process differences remains unresolved. This adverse reference
+result does not identify a tree-verifier error or qualify full-model
+continuation. The separately planned packed-layout control is diagnostic and
+cannot replace the aligned primary reference; MTP, lifecycle and continuous-cycle
+qualification remain incomplete.

@@ -1,0 +1,19 @@
+{
+  "schema": "lumo.paper.native-aligned-ab.v1",
+  "source": "p0/monitor/review-response-20260927/native-aligned-b-independent-20260929/audit-after-terminal/ALIGNED-AB-COMPARISON.json",
+  "source_sha256": "01b9fe92697ed4d5d38b0b957d06f31a745ff4d2169fe14eabdb04d4d9908ac5",
+  "counts": {
+    "complete": 84,
+    "baseline_qualified": 0,
+    "decision_stable": 70,
+    "raw_logits_identical": 0,
+    "o0_identical": 0,
+    "o1_identical": 0,
+    "case_denominator": 84,
+    "observations": 336,
+    "exact_tie_observations": 2
+  },
+  "scope": "Native aligned cycle-0 calibration only; two fresh processes with two repeats each; no candidate or same-O0 repeat claim",
+  "status": "REPEATABILITY_PREREQUISITE_FAILED",
+  "packed_control_status": "pending_not_alternate_reference"
+}

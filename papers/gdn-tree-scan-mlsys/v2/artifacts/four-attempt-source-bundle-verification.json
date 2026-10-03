@@ -1,0 +1,10 @@
+{
+  "checked_utc": "2026-09-28T06:28:56.225866+00:00",
+  "source_archive": "artifacts/lumotree-four-attempt-scope-source-20260928.tar.gz",
+  "sha256": "6962cff4c011fc068a8d2ba659cbcdb67950fb838300a5cbcbd3731f5c450dbd",
+  "files": 15,
+  "all_member_hashes_match": true,
+  "clean_extraction": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/lumotree-four-attempt-source-check-_r3fxewz",
+  "clean_compile_exit": 0,
+  "pdf_text_identical": true
+}

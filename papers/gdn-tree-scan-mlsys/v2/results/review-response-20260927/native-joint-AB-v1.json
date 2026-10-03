@@ -1,0 +1,3170 @@
+{
+  "schema": "lumo.paper.native-joint-result.v1",
+  "observations": 336,
+  "cases": 84,
+  "processes": 2,
+  "repeats": 2,
+  "corpus_sha256": "ac3f1248aeb5343714334b402c9f0cd6ecaca856c68cae8c625a5c9b5b7b8f61",
+  "policy_sha256": "4dad3bf5918c31d734214d8d2579ca1bb5b75500b575dbf2c0718287a287c593",
+  "joint_sources_sha256": "49ec5c4ddb97342cf2ca4db41be2027d1044366e9fa3cb08b0017961a38795b8",
+  "reduction": {
+    "path": "p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/REDUCTION.json",
+    "sha256": "9ac73cd6664b9bec19fbf0cd6759d779b830bee743924acb57d533133f9bc8d3"
+  },
+  "independent_review": {
+    "path": "notes/review-response-20260927/q1-native-joint-common-o0-AB-full-review.md",
+    "sha256": "e016f25fe9b3e9c72b3b6d972311e4517b998e255d596a406bf283872484ce51"
+  },
+  "review_seal": {
+    "path": "p0/monitor/review-response-20260927/native-joint-common-o0-AB-full-independent/REVIEW-SEAL.json",
+    "sha256": "bc7534c263ab27f96b173dc309721bc0953e14400e9cf3c05ac273cb20664ecc"
+  },
+  "parent_receipt_sha256": "d28c133f112c81f9dd7720dd56ce23bf48f7a0bb44ac9fd823c02b191719dd0d",
+  "counts": {
+    "target_o0_identical": 84,
+    "target_o1_identical": 65,
+    "target_logits_identical": 65,
+    "target_greedy_stable": 84,
+    "target_baseline_eligible": 84,
+    "joint_baseline_eligible": 68
+  },
+  "phases": {
+    "before_z_first": {
+      "inputs_matched": 84,
+      "categorical_stable": 75,
+      "raw_logits_identical": 65,
+      "exact_tie_observations": 8
+    },
+    "before_z_follow": {
+      "inputs_matched": 84,
+      "categorical_stable": 77,
+      "raw_logits_identical": 65,
+      "exact_tie_observations": 0
+    },
+    "after_z_first": {
+      "inputs_matched": 84,
+      "categorical_stable": 76,
+      "raw_logits_identical": 65,
+      "exact_tie_observations": 0
+    },
+    "target_o2": {
+      "inputs_matched": 84,
+      "categorical_stable": 84,
+      "raw_logits_identical": 65,
+      "exact_tie_observations": 0
+    }
+  },
+  "case_rows": [
+    {
+      "case_id": "calibration-short_available__c0__root-only",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n01",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n02",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n03",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n04",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n05",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n06",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n07",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n08",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n09",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n10",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n11",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n12",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n13",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n14",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n15",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n16",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n17",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 4
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n19",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n20",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n21",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n22",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n24",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n26",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n28",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n29",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n30",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-short_available__c0__n31",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__root-only",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n01",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n02",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n03",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n04",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n05",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n06",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n07",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n08",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n09",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n10",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n11",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n12",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n13",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n14",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n15",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n16",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n17",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n19",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n20",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n21",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n22",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n24",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n26",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n28",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n29",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n30",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-medium_available__c0__n31",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-long_available__c0__root-only",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-long_available__c0__n01",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": false
+    },
+    {
+      "case_id": "calibration-long_available__c0__n02",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-long_available__c0__n03",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-long_available__c0__n04",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": false
+    },
+    {
+      "case_id": "calibration-long_available__c0__n05",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": false
+    },
+    {
+      "case_id": "calibration-long_available__c0__n06",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-long_available__c0__n07",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-long_available__c0__n08",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-long_available__c0__n09",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-long_available__c0__n10",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": false
+    },
+    {
+      "case_id": "calibration-long_available__c0__n11",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": false
+    },
+    {
+      "case_id": "calibration-long_available__c0__n12",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-long_available__c0__n13",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 4
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-long_available__c0__n14",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": false
+    },
+    {
+      "case_id": "calibration-long_available__c0__n15",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": false
+    },
+    {
+      "case_id": "calibration-long_available__c0__n16",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": false
+    },
+    {
+      "case_id": "calibration-long_available__c0__n17",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-long_available__c0__n19",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": false
+    },
+    {
+      "case_id": "calibration-long_available__c0__n20",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": false
+    },
+    {
+      "case_id": "calibration-long_available__c0__n21",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": false
+    },
+    {
+      "case_id": "calibration-long_available__c0__n22",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": true,
+        "raw_logits_identical": true,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": true,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-long_available__c0__n24",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": false
+    },
+    {
+      "case_id": "calibration-long_available__c0__n26",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": true
+    },
+    {
+      "case_id": "calibration-long_available__c0__n28",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": false
+    },
+    {
+      "case_id": "calibration-long_available__c0__n29",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": false
+    },
+    {
+      "case_id": "calibration-long_available__c0__n30",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": false
+    },
+    {
+      "case_id": "calibration-long_available__c0__n31",
+      "target": {
+        "o0_identical": true,
+        "o1_identical": false,
+        "raw_logits_identical": false,
+        "decision_stable": true
+      },
+      "phases": {
+        "before_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": false,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "before_z_follow": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "after_z_first": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        },
+        "target_o2": {
+          "inputs_matched": true,
+          "categorical_stable": true,
+          "raw_logits_identical": false,
+          "exact_tie_observations": 0
+        }
+      },
+      "target_baseline_eligible": true,
+      "joint_baseline_eligible": false
+    }
+  ],
+  "candidate_qualified": false,
+  "full_q1_qualified": false,
+  "performance_claim": false
+}

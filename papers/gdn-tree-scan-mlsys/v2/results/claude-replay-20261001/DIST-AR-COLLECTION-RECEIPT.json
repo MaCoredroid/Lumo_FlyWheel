@@ -1,0 +1,11 @@
+{
+  "collection": "ar-sampled-20261001T150739Z",
+  "requests_collected": 800,
+  "unique_prompts": 20,
+  "samples_per_prompt": 40,
+  "unique_prompt_sample_pairs": 800,
+  "errors": 0,
+  "sha256": "5eb82fb2ed8abaad7795c4f4e3bb94707c9799de7b7a0ac22fd89f3efced8b5e",
+  "qualification_status": "unqualified_diagnostic_collection_no_distribution_equivalence_claim",
+  "verified_utc": "2026-10-01T15:57:07.195121+00:00"
+}

@@ -1,0 +1,25 @@
+{
+  "utc": "2026-09-29T05:58:57.210653+00:00",
+  "scope": "AST-extracted real hook methods with structural stubs only; exact production registry names; no tensor/model execution. Local CPU bridge full suite refused import because NumPy unavailable.",
+  "hashes": {
+    "tools/q1_candidate_hooks_v3.py": "9c00f38242aece81bf367294ca458c9cc2236066e287ffb4e4396c5370183020",
+    "tools/q1_patch_candidate_v3.py": "9cf6f87b5a6ead4c8cc99671a5a9b5c39476e9ddbab870decffdd3f36238819d",
+    "tools/tests/test_q1_target_kv_bridge_v3.py": "7d1dd19b82c0594c535aad1c64d36af2408411bcc60560b97239b39eadf24cd5",
+    "tools/q1_target_kv_witness_v1.py": "195dadc17ddb0204786fccf3aaa5cbd68217bda2c0d3cfc3ce68ee66807133e4",
+    "identity/generated_source/probe-20260928T035847Z/logs/generated/gpu_model_runner.patched.py": "3d9df101ebb1b2d5e8bc0ca844451b47a935f4adf48f7c6ab4ef81438ce21b79",
+    "identity/generated_source/probe-20260928T035847Z/logs/generated/rejection_sampler.patched.py": "7e4691a6e48fdd9426117beb9b91ef1fdd1053578f792b4d670234efba7b0e52"
+  },
+  "registry_controls": [
+    {
+      "registry_members": 16,
+      "failure": "target KV before: StopCapture: Reached cache signatures after registry acceptance",
+      "unusable_marker_retained": true
+    },
+    {
+      "registry_members": 17,
+      "failure": "target KV before: ValueError: target layer registry coverage",
+      "unusable_marker_retained": true
+    }
+  ],
+  "generated_patch_ast_and_inverse": true
+}

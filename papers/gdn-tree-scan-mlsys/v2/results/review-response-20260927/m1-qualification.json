@@ -1,0 +1,75 @@
+{
+  "scope": "Synthetic recurrent-component numerical qualification; no timing/fullmodel/workload claim",
+  "seed": 20260929,
+  "layers": 48,
+  "value_heads": 48,
+  "active_output_nodes": 28,
+  "publications": 3,
+  "uninterrupted_update_counts": [
+    1,
+    6,
+    11
+  ],
+  "processes": 1,
+  "unique_cells": 285696,
+  "repeated_observations": 571392,
+  "rows": [
+    {
+      "policy": "lumo_fixed32_native",
+      "label": "\\sys{} / native",
+      "output_fail": 0,
+      "state_fail": 0,
+      "output_total": 64512,
+      "state_total": 6912,
+      "verdict": "PASS",
+      "repeats": 2,
+      "unique_cells": 71424
+    },
+    {
+      "policy": "weaver_author_default",
+      "label": "Weaver author-default",
+      "output_fail": 53745,
+      "state_fail": 1154,
+      "output_total": 64512,
+      "state_total": 6912,
+      "verdict": "FAIL",
+      "repeats": 2,
+      "unique_cells": 71424
+    },
+    {
+      "policy": "weaver_aligned_local",
+      "label": "Weaver aligned-local",
+      "output_fail": 57707,
+      "state_fail": 388,
+      "output_total": 64512,
+      "state_total": 6912,
+      "verdict": "FAIL",
+      "repeats": 2,
+      "unique_cells": 71424
+    },
+    {
+      "policy": "treewy_author_default",
+      "label": "TreeWY author-default",
+      "output_fail": 37528,
+      "state_fail": 6912,
+      "output_total": 64512,
+      "state_total": 6912,
+      "verdict": "FAIL",
+      "repeats": 2,
+      "unique_cells": 71424
+    }
+  ],
+  "comparator_boundary": "Native GPU C1 for Lumo; declared sequential software C1 for each author policy. These different floating-point conventions prevent interpreting failures as an algorithm or task-quality ranking.",
+  "performance_disposition": "No qualified four-policy timing comparison; numerical prerequisites failed",
+  "original_failure_preserved": "m1-q-c0-20260928T221747Z",
+  "inputs_sha256": {
+    "experiments/review-response-20260927/runs/m1-q-c0/reduction-repair-20260928T223230Z/RECEIPT.json": "22b5a831277f91c5f1b15f7a86f9cfa5ba0f198a3f0d1dfadd71c2ddaa3edaec",
+    "notes/review-response-20260927/m1-q-c0-repaired-result-review.md": "e2d9f8d6ab787e1a517d12985a6ba9fe1d11443414a2d1e840543c930521fe2e",
+    "notes/review-response-20260927/m1-q-c0-original-result-review.md": "c53acab407b8807acd6c9737eb0236066d67fa88b378e38e1134742461251c5a",
+    "experiments/review-response-20260927/runs/m1-q-c0/m1-q-c0-20260928T222959Z/LAUNCH-RECEIPT.json": "32be4401846eb2f8b736e549adb3799f5ec9250a9babd78dc95e9ab8cd592241",
+    "p0/monitor/review-response-20260927/M1-Q-REFERENCE-PARENT-ACCEPTANCE-v1.json": "034942fc5527575a0696a278965690cbd1c34baf0ef8db6d2fd8251390901f64",
+    "p0/monitor/review-response-20260927/FREEZE-M1-Q-C0-LIFETIME-REPAIR-v1.json": "ad0c4839f021a16e988537653ec932357eee9a46bcafe5b581fe517ad8fa3276",
+    "experiments/review-response-20260927/m1/M1-NUMERICAL-CONTRACT.v4.2.json": "b98c3af2fd1d7cccf492cc10040a5847b82aefdc940c7570cb777b805ee4ee80",
+    "p0/monitor/review-response-20260927/M1-Q-C0-PARENT-ACCEPTANCE-v1.json": "e416dec59907b1c56896ce861c31a183ef4f68221e49cc3c3b57751598526ac6"
+  }
+}

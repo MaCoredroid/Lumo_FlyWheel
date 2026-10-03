@@ -1,0 +1,42 @@
+{
+  "schema": "q1-publication-observer-seam-source-map-v1",
+  "observed_utc": "2026-09-29T07:05:06.673118+00:00",
+  "scope": "Read-only source reconnaissance; no import of GPU code, runtime operation, implementation change, or qualification claim.",
+  "files": {
+    "patcher": {
+      "path": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+      "bytes": 2118510,
+      "sha256": "c382ef22a5a8d4e84209e6723f8eea21c3819543c6e942c62951385b5c1c003e"
+    },
+    "kernel": {
+      "path": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+      "bytes": 732084,
+      "sha256": "d9dd0c697b466180ab5d834a52555c1516edb534e0a3d1bd3094e0d1489c24c8"
+    },
+    "hooks": {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_hooks_v3.py",
+      "bytes": 43031,
+      "sha256": "72a399fcddb80255d7eff9b650cc3deb88a1a48d4ee1f814721a3b297fb5bdf2"
+    },
+    "RS": {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/generated_source/probe-20260928T035847Z/logs/generated/rejection_sampler.patched.py",
+      "bytes": 197812,
+      "sha256": "7e4691a6e48fdd9426117beb9b91ef1fdd1053578f792b4d670234efba7b0e52"
+    },
+    "Runner": {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/generated_source/probe-20260928T035847Z/logs/generated/gpu_model_runner.patched.py",
+      "bytes": 618896,
+      "sha256": "3d9df101ebb1b2d5e8bc0ca844451b47a935f4adf48f7c6ab4ef81438ce21b79"
+    },
+    "Eagle": {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/generated_source/probe-20260928T035847Z/logs/generated/eagle.patched.py",
+      "bytes": 399863,
+      "sha256": "8b22dd4fb15044813c8da28afa43b90f178709f7ed3111b3925b28abea717d62"
+    },
+    "GDN": {
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/generated_source/probe-20260928T035847Z/logs/generated/gdn_linear_attn.patched.py",
+      "bytes": 725033,
+      "sha256": "23df7748f02a742753e586487e3e905e0ffb23815a9c5aaf87f5cf2c4a2ff91a"
+    }
+  }
+}

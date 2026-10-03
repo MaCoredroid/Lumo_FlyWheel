@@ -1,0 +1,21 @@
+Pre/post task snapshots also retain speculative counters and GPU-event spans. For the three shared-pair tree revisions, output-side accepted drafts per event are 4.61, 4.49, and 4.41; the ten-task deployment gives 4.05. These counts follow the scheduler's observed output length after filtering, excluding one correction or bonus token. They are distinct from the accepted path used to commit state. The position counters are survival counts of accepted output length, not node or branch identities; their differences recover a length histogram with support 0--11. Each event records 31 physical draft slots, including four padded slots, so dividing by that count would give a padding-dependent fraction rather than logical-candidate acceptance.
+
+\begin{table*}[t]
+\caption{Recovered tree telemetry within task boundaries. GPU columns are mean recorded duration per span; forward, drafter, and dispatch span counts equal the speculative-event counts in each row. Dispatch includes acceptance/path handling and state commitment, not recurrent replay alone. These measurements are observational and do not isolate optimization effects.}
+\label{tab:recovered-telemetry}
+\centering\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Build/cohort & Events & Accepted drafts/event & Target forward ms & Drafter ms & Dispatch ms \\
+\midrule
+Aug. 19 \texttt{bdca0bd}, pair & 4,483 & 4.61 & 113.89 & 51.95 & 20.73 \\
+Aug. 19 \texttt{78a29d3}, pair & 4,800 & 4.49 & 114.57 & 52.49 & 20.68 \\
+Aug. 23 \texttt{a450f6c}, pair & 13,054 & 4.41 & 115.90 & 54.61 & 20.46 \\
+Aug. 24 \texttt{e7af6b5}, ten tasks & 49,333 & 4.05 & 114.89 & 54.76 & 20.15 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+All tree boundaries report zero pending forward, drafter, and dispatch event samples. Table~\ref{tab:recovered-telemetry} divides each timer's duration sum by its own span count. The dispatch interval covers the rejection-sampler call and its commitment work; it does not supply separate acceptance or native-replay times. An additional wall timer admits only compatible consecutive decode steps: the first shared pair has 4,441 admitted intervals but 4,483 speculative events. That subset wall sum is unsuitable as a denominator for all generated or accepted tokens. No same-input instrumentation-on/off control is available, so these spans are not assumed to be overhead-free or a complete critical-path decomposition.
+
+SGLang retains verification-call totals, but its saved acceptance-rate and acceptance-length series are window gauges. Their endpoint differences cannot recover comparable task-total acceptance. Missing acceptance, isolated attention/convolution/replay times, and per-event distributions remain measurement gaps, rather than inferred results.

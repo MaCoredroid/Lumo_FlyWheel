@@ -1,0 +1,54 @@
+{
+  "source_sha256": "9c00f38242aece81bf367294ca458c9cc2236066e287ffb4e4396c5370183020",
+  "scope": "AST-extracted actual hook/CandCase/seal methods; injected backend capture/audit only. No real tensors, GPU, Docker, cache or model.",
+  "controls": [
+    {
+      "kind": "duplicate_before",
+      "case_record_valid": false,
+      "unusable_retained": true,
+      "sealed": true,
+      "reason": "target KV before: ValueError: duplicate target KV stage or missing O0",
+      "after_retained": false
+    },
+    {
+      "kind": "batch2",
+      "case_record_valid": false,
+      "unusable_retained": true,
+      "sealed": true,
+      "reason": "target KV before: ValueError: target KV witness requires pure B1",
+      "after_retained": false
+    },
+    {
+      "kind": "registry_mismatch",
+      "case_record_valid": false,
+      "unusable_retained": true,
+      "sealed": true,
+      "reason": "target KV before: ValueError: target layer registry coverage",
+      "after_retained": false
+    },
+    {
+      "kind": "missing_before",
+      "case_record_valid": false,
+      "unusable_retained": true,
+      "sealed": true,
+      "reason": "target KV after: ValueError: target KV after lacks unique before",
+      "after_retained": false
+    },
+    {
+      "kind": "duplicate_after",
+      "case_record_valid": false,
+      "unusable_retained": true,
+      "sealed": true,
+      "reason": "target KV after: ValueError: target KV after lacks unique before",
+      "after_retained": false
+    },
+    {
+      "kind": "audit_failure",
+      "case_record_valid": false,
+      "unusable_retained": true,
+      "sealed": true,
+      "reason": "target KV after: ValueError: injected audit mismatch",
+      "after_retained": true
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "working": {
+    "text_sha256": "a731b441957612b88195d46bcf7cb55832f52e96efc6ed2b41f49ad81e6e64a9",
+    "pdfinfo": "Title:           \nSubject:         \nKeywords:        \nAuthor:          \nCreator:         LaTeX with hyperref\nProducer:        pdfTeX-1.40.22\nCreationDate:    Mon Sep 28 15:49:03 2026 PDT\nModDate:         Mon Sep 28 15:49:03 2026 PDT\nCustom Metadata: yes\nMetadata Stream: no\nTagged:          no\nUserProperties:  no\nSuspects:        no\nForm:            none\nJavaScript:      no\nPages:           14\nEncrypted:       no\nPage size:       612 x 792 pts (letter)\nPage rot:        0\nFile size:       306710 bytes\nOptimized:       no\nPDF version:     1.5\n"
+  },
+  "clean": {
+    "text_sha256": "a731b441957612b88195d46bcf7cb55832f52e96efc6ed2b41f49ad81e6e64a9",
+    "pdfinfo": "Title:           \nSubject:         \nKeywords:        \nAuthor:          \nCreator:         LaTeX with hyperref\nProducer:        pdfTeX-1.40.22\nCreationDate:    Mon Sep 28 17:17:56 2026 PDT\nModDate:         Mon Sep 28 17:17:56 2026 PDT\nCustom Metadata: yes\nMetadata Stream: no\nTagged:          no\nUserProperties:  no\nSuspects:        no\nForm:            none\nJavaScript:      no\nPages:           14\nEncrypted:       no\nPage size:       612 x 792 pts (letter)\nPage rot:        0\nFile size:       306710 bytes\nOptimized:       no\nPDF version:     1.5\n"
+  },
+  "text_equal": true,
+  "raster_equal": {
+    "11": true,
+    "12": true
+  }
+}

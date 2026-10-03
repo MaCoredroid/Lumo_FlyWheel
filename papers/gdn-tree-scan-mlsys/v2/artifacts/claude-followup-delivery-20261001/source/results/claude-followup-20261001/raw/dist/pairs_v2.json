@@ -1,0 +1,4 @@
+{"NULL": ["ar-seed1-sampled-20261001T192848Z/dist.jsonl", "ar-sampled-20261001T150739Z/dist.jsonl"],
+ "NEG": ["ar-seed2t065-sampled-20261001T201104Z/dist.jsonl", "ar-sampled-20261001T150739Z/dist.jsonl"],
+ "CAND_lumotree": ["tree-sampled-20261001T173819Z/dist.jsonl", "ar-sampled-20261001T150739Z/dist.jsonl"],
+ "SEC_mtp5": ["mtp5-sampled-20261001T155028Z/dist.jsonl", "ar-sampled-20261001T150739Z/dist.jsonl"]}

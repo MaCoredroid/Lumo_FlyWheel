@@ -1,0 +1,19 @@
+{
+  "checked_utc": "2026-09-27T21:10:22.060915+00:00",
+  "scope": "Read-only precision-policy applicability check; no executed kernel or model verdict",
+  "source": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+  "source_sha256": "d9dd0c697b466180ab5d834a52555c1516edb534e0a3d1bd3094e0d1489c24c8",
+  "receipt": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/cqc10/hydra27_fixed32_promoab_Cqc10/fixed32_process_identity.SANITIZED.json",
+  "receipt_sha256": "e8af05d0c49caa9aaab404cbbe92d9188b44acfae82ceac12d6713694e7fa627",
+  "FR13_SCAN_ALIGN": "UNSET",
+  "FR13_SCAN_ALIGN_MODE": "UNSET",
+  "finding": "scan_align_on defaults off. The default node body uses fp32 beta, rsqrt normalization and fp32 state carry; its SCAN_ALIGN=true comments/casts target an older packed-decode reference and are not authority for current native fused_sigmoid reference. Absence of these optional flags in archived serving identity supports default semantics, but fresh boot must attest actual executed path.",
+  "line_pointers": [
+    906,
+    10409,
+    10451,
+    10462,
+    10489
+  ],
+  "prohibition": "Do not enable legacy alignment from comments alone; bind current native source and actual launch flags."
+}

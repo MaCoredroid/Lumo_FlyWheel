@@ -1,0 +1,729 @@
+LumoTree: Path-Parallel Speculative Verification for
+           Hybrid Language Models
+                                                              Zhiyuan Ma
+                                                   zhiyuanma0520@gmail.com
+
+
+   Abstract—Tree speculative decoding for hybrid language mod-     to organize independent GPU work, and how to keep full-
+els must preserve one coherent continuation across recurrent,      vocabulary probability arithmetic on the device. The attention
+convolution, and attention state. We present LumoTree, a verifier  layout and accepted-state mappings constrain those changes as
+that executes recurrent paths in parallel, reuses state tiles within
+each path, and coordinates native recurrent replay, convolution-   much as the recurrent equation does.
+history gathering, and attention-cache remapping through a            The paper studies three coupled design questions in recurrent-
+shared logical tree. Fused candidate selection, GPU-resident       hybrid tree verification. First, how can branch-local compu-
+acceptance, and grouped split-K attention support the verification tation produce one coherent continuation across recurrent,
+cycle. Component experiments show exact candidate-selection        convolution, and attention state? We define a shared logical tree
+parity and recurrent agreement within paired error bounds.
+A Qwen3.8-27B NVFP4 deployment on a single GB10 attains            and coordinate state publication through its logical-to-physical
+25.63 pooled tokens/s on ten SWE-bench Verified Astropy tasks,     mapping. Second, how should verification trade temporary
+resolving six and producing test-failing patches on four. A native-state storage against repeated computation? We use path-
+continuation study reproduces greedy decisions on all 84 tested    parallel scans with shared boundary states and replay the
+paths across processes, but joint target and ordered draft selections
+                                                                   accepted path into persistent state, building on established
+on only 68. The results support component-level numerical
+agreement and exploratory coding-agent deployment; complete-       chain-scheduling and replay mechanisms [6], [7]. Third, how
+model continuation and controlled application speedups remain      can this organization reduce serving overhead? We combine
+open.                                                              fused candidate selection, device-resident acceptance, and
+   Index Terms—speculative decoding, Gated DeltaNet, state         grouped split-K attention with a spine-contiguous KV layout.
+commitment, numerical reproducibility, language-model serving      We evaluate component numerical agreement and exploratory
+                                                                   coding-agent deployments, with the scope of these results
+                       I. I NTRODUCTION                            discussed in Section IX.
+   Speculative decoding reduces serial target-model invocations       The target workload is a long-running coding agent: genera-
+by verifying draft tokens in parallel. Its sampling guarantee tion alternates with repository inspection, tool execution, and
+assumes that verification supplies the intended target probabil- tests, and a task can require many model requests. Performance
+ities. Tree speculation expands the candidate set, but it does therefore depends on useful completed work as well as token
+not relax that assumption [1]–[3]. For recurrent-hybrid models, production. Our workload evaluation uses explicitly identified
+realizing the verifier requires more than an attention mask: Astropy tasks from SWE-bench Verified [8]. We report the
+a candidate must inherit the state of its ancestors, and the model, serving route, task cohort, and measurement definition
+next serving iteration must inherit exactly the path selected for together; a decode-rate change is not a task-completion speedup.
+continuation [4], [5].                                             Candidate-selection and attention tests complement the agent-
+   LumoTree executes recurrent paths in parallel, reuses state workload measurements.
+tiles across updates within each path, and coordinates the ac-        Tree verification and compact accepted-state reconstruction
+cepted continuation across recurrent, convolution, and attention have direct prior art. Section II positions our implementation
+state. An ancestry-aware attention path and a device acceptance against those mechanisms. Sections III–IV develop the architec-
+walk use the same logical tree as recurrent verification and state ture and kernel design; Section V describes the optimizations
+publication. A shared descriptor carries ancestry and logical-to- that connect them to the serving cycle. Appendix A gives
+physical mappings through each stage. This system boundary configuration and measurement details.
+matters because a verifier can compute plausible candidate
+                                                                             II. BACKGROUND AND R ELATED W ORK
+logits yet publish the wrong state for the next iteration.
+   The central execution choice is to verify branches in A. Drafting, verification, and serving
+temporary state and replay only the selected path into the native     Speculative sampling constructs an exact target sample
+running state. The verifier scans branch paths, while the fixed- from proposal and residual distributions, conditional on the
+shape committer replays accepted operands through native GDN probabilities actually supplied [1], [2]. SpecInfer supplies
+updates in a captured graph. Their finite-precision agreement the tree-verification framing; Sequoia, EAGLE-2, and OPT-
+is a separate requirement, not assumed from the recurrence. Tree investigate tree construction and its performance conse-
+This choice exposes concrete optimization questions: how quences [3], [9]–[11]. EAGLE-3 and DFlash further change
+much branch state to cache, when to recompute ancestry, how the drafter, through feature-conditioned autoregression and
+   (a) Propose a candidate tree                          (b) Verify branch-local computation                     (c) Select a path and commit state
+
+                             c           f                   Ancestry-aware target forward                        Select using p and q         Pending token
+                 a                                          Recurrent state           path scans          p
+                                                                                                                  m         a         d              b∗
+                             d                              Convolution       path-local filtering
+      m
+                                                                                                                                               not yet in state
+                                                            Attention      tree mask + KV map
+ materialized     b          e
+                                                                                retain within the step                Recurrent: replay accepted path
+   prefix
+     MTP proposals and suffix extensions                           Temporary cut states                               Convolution: gather history
+         share one logical ancestry.                               and replay operands                                Attention: remap KV entries
+   Draft tokens carry proposal probabilities q .         Unselected branch state is not published.
+                                                                                                                  One coherent continuation: S(mad)
+
+           Shared tree descriptor: parents, positions, attention visibility, and logical-to-physical slots stay consistent across all three stages.
+
+
+Fig. 1. Tree verification and accepted-path commitment. (a) Drafting provides a candidate tree and proposal probabilities q. (b) Branch-local computation
+produces target probabilities p and retains temporary state. (c) Sampling selects a materialized path (here a, d); recurrent replay, convolution gathering, and KV
+remapping publish S(mad). The newly sampled token b∗ remains pending. One descriptor keeps logical ancestry and physical storage aligned.
+
+
+
+block-parallel diffusion proposals respectively [12], [13]. These C. Direct GDN comparisons
+drafting mechanisms are distinct from the recurrent verifier          Trees from Marginals (Weaver) combines a factorized
+and state-publication choices studied here.                        drafter with an autoregressive adapter. Its GDN verifier uses an
+   PagedAttention and SGLang address the scheduling, memory, ancestor-masked triangular solve and replays the selected path
+and execution substrate [14], [15]. Marconi addresses prefix- through a short recurrence at commit time; padded verification
+cache admission and eviction for hybrid models [16]. Hybrid shapes support CUDA graphs [7]. Thus read-only speculative
+serving additionally manages recurrent-state pools alongside verification followed by accepted-path replay is direct prior art,
+KV storage, as documented by SGLang’s hybrid-model inte- even when the verification arithmetic differs from ours.
+gration [17], [18]. Thus neither a fast isolated recurrent kernel     SpecLA keeps value tiles of recurrent state on chip across
+nor low transient state memory alone determines user-visible updates within a chain and schedules independent ready chains
+latency. Flash-Decoding splits the KV sequence and combines in parallel. Boundary states connect dependent chains. This
+partial attention results; FlashInfer develops customizable directly overlaps both the state reuse and path scheduling
+attention with head/query fusion and split-KV execution; DeFT in LumoTree. SpecLA buffers accepted factors for a later
+specializes KV grouping and partitioning to trees [19]–[21]. fused update, whereas our publication stage replays recorded
+FastTree groups queries with shared contexts to reuse KV operands through native GDN updates into running rows. Its
+tiles and partitions tree work to control execution cost [22]. evaluation uses a pure GDN model; our serving boundary
+These attention methods establish precedents for on-chip additionally coordinates convolution and softmax attention [6].
+reuse and tree-aware partitioning. Our modified FlashAttention- SpecLA’s token-replay baseline regenerates factors, so its cost
+2 kernel combines ancestry-aware decode, grouped split-K cannot be assigned to our replay of cached operands.
+execution, and a physical layout coordinated with accepted-           Bole derives a tree-structured closed form and evaluates it
+path publication [23].                                             with a value-tiled finite-polynomial solver. It reuses intermedi-
+                                                                   ate tiles on chip, stores compact update factors, and reconstructs
+                                                                   the accepted state. Its SGLang integration combines batch-wide
+B. Recurrent and hybrid speculation                                verification budgeting with captured GPU execution. Evaluation
+                                                                   includes unquantized Qwen3.5-27B on GB10 and replay of
+   Gated DeltaNet augments a decayed recurrent state with recorded OpenHands agent sessions [28]. This is a direct hybrid-
+a data-dependent delta update [4]. Parallel delta-rule formu- serving comparison; its workload replay differs from running
+lations provide relevant algebraic background [24]. Snakes the coding agent on tasks, as in our evaluation.
+and Ladders introduces activation replay for SSM speculative          Concretely, Bole’s correction system is (I + G)U = R,
+decoding, and STree also uses replay to recover continuation where G contains strict-ancestor interactions and R is the
+state [5], [25]. Stateful speculation is established territory: source
+                                                                   Pd       correction. Tree depth d gives Gd+1 = 0, so U =
+                                                                                 m
+STree studies speculative trees for hybrid state-space models,        m=0 (−G) R. This finite identity changes the arithmetic
+SpecMamba targets an FPGA implementation, and component- schedule from sequential updates to matrix propagation [28].
+aware self-speculation studies how hybrid components affect Our path preserves sequential updates and replays accepted
+the design [5], [26], [27]. These works motivate an explicit operands; Section IV-B explains why the numerical comparison
+state lineage; they do not justify treating every recurrent update remains an empirical question.
+or numerical implementation as interchangeable.                       TreeWY expresses GDN tree verification as a triangular
+                           TABLE I                                       A. State and the execution boundary
+   R ECURRENT VERIFICATION AND CONTINUATION POLICIES . T HESE
+      MECHANISM COMPARISONS DO NOT RANK THE SYSTEMS BY                     Let m be a materialized token prefix: the tokens already
+                       PERFORMANCE .                                     consumed by the target’s forward computation. Write its
+                                                                         persistent state as
+Method           Verification work           Continuation state                                                    
+Weaver [7]       Ancestor-masked             Short selected-path
+                                                                                         S(m) = R(m), C(m), K(m) ,               (1)
+                 triangular solve            recurrence
+SpecLA [6]       Resident state tiles;       Buffered factors; later
+                                                                     where R collects recurrent matrices, C collects convolution
+                 parallel chains             fused update            histories, and K collects attention KV entries. The logical
+Bole [28]        Finite-Neumann correction   Compact factors; state  emitted prefix can also include a newly sampled token b that
+                 solve                       reconstruction
+TreeWY [30]      Triangular solve in fused
+                                                                     has not yet been consumed. The continuation boundary is then
+                                             Prior-path reconstruction
+                 kernel                      with next verify        (S(m), b), not a claim that S(mb) has already been computed.
+ReplaySSM [31]   Corrected inputs; cached    Deferred state update   This distinction is essential when counting the correction or
+                 transitions
+OneLA [32]       Shared-base projections  Compact per-beam
+                                                                     bonus token while checking cache state.
+                 across beams             transition records            A tree descriptor contains candidate token IDs, parent
+LumoTree         Resident state tiles;    Native replay; coordinated indices, depth/position information, attention visibility, and
+                 parallel paths           convolution and KV
+                                          publication
+                                                                     maps between logical nodes and physical slots. For a candidate
+                                                                     node i, each target layer must consume the state obtained
+                                                                     from the candidate’s root-to-parent path. At publication, the
+                                                                     selected materialized path, pending-token convention, and next-
+system and reconstructs the accepted state from pseudo-values.
+                                                                     drafter input row must agree. Figure 2 illustrates the three state
+The author implementation fuses reconstruction of the previous
+                                                                     surfaces coordinated by the verifier.
+accepted state with the next verification, reusing a resident
+state tile. Its GDN tree kernel supports CUDA graph capture; B. The recurrence and path locality
+the paper’s wider-tree fallback to piecewise execution concerns         For one GDN head, let R ∈ Rdv ×dk . Queries and keys are
+ancestry masks in the softmax-attention integration [29], [30]. in Rdk and values in Rdv . With decay αi and write strength
+Its B200 evaluation uses greedy verification and disabled βi , a node applies the standard update [4]
+prefix caching. A comparison must therefore include fused
+                                                                              Ri0 = αi Rπ(i) ,          δi = βi vi − Ri0 ki ,
+                                                                                                                            
+commit work and distinguish kernel support from whole-model                                                                         (2)
+execution policy.                                                                      0       >
+                                                                              Ri = Ri + δi ki ,         oi = Ri qi ,                (3)
+   ReplaySSM caches recurrent inputs and delays state ma-
+                                                                     where π(i) is its parent. A previous node in the packed
+terialization. Its GDN path uses corrected inputs from a
+                                                                     buffer need not be π(i). The causal convolution likewise
+triangular solve, with commitment represented through buffer
+                                                                     requires path predecessors rather than adjacent packed rows.
+progress and later state updates [31]. OneLA addresses a
+                                                                     The attention visibility relation must select the same logical
+related state-sharing problem in recommendation beam search:
+                                                                     prefix and ancestry. These requirements follow from the model’s
+compact transition records and ancestry indices allow projection
+                                                                     computation; a correct attention mask cannot repair a wrong
+computation without reconstructing a full state for each beam,
+                                                                     recurrent parent.
+and a fused kernel shares the prompt-derived state across
+                                                                        The implementation verifies nodes with branch-local scratch
+beams [32]. Its beam-search output and commitment policy
+                                                                     and makes the selected continuation durable through replay
+differ from speculative acceptance. Table I compares state
+                                                                     and remapping. This is an implementation route, not the only
+lifetimes; published speed ratios from different models and
+                                                                     way to satisfy the contract. In particular, rejecting a branch
+workloads are not combined into a ranking.
+                                                                     requires that its contents cannot influence future computation;
+D. Design focus                                                      it does not require zeroing every scratch byte if future reads
+                                                                     are correctly restricted.
+   LumoTree connects path-parallel recurrent computation to
+one accepted continuation across the hybrid model. The C. A descriptor shared by verification and commitment
+shared descriptor links path boundaries, convolution ancestry,          Figure 1 shows how a shared descriptor connects drafting
+attention visibility, physical KV slots, and the next drafter to continuation. Native multi-token prediction (MTP) supplies
+input. Native replay preserves the serving system’s recurrent- a principal chain and runner-up candidates; suffix prediction
+state ownership while selected-path gathering and remapping extends selected paths within a bounded candidate capacity [34],
+publish the other state components. Spine-first KV placement [35]. Combining retrieval and neural drafting has prior art,
+controls the physical attention reduction layout within this including SAM Decoding [36]. The verifier derives attention
+design, building on established floating-point reduction and visibility, physical packing, path scheduling, and the acceptance
+batch-invariance concerns [33]. Evaluation separates component walk from the same logical topology. Padding permits reusable
+behavior from complete agent-workload performance.                   execution shapes while remaining invisible to attention and
+                                                                     selection. The particular tree geometry used in our experiments
+              III. T REE -V ERIFIER A RCHITECTURE                    is specified in Section VI.
+         Materialized               Verify                Select accepted                                                         Recorded node operands
+                                                                                               Pre-tree state R0
+          prefix m               candidate tree               path a
+
+
+                                                                                          Scan dependent path groups                 Replay selected
+                                                                                          temporary cut-state exports                 path from R0
+          Recurrent               Convolution              Attention KV
+                                                                                                                                   one carried state tile
+          R(ma)                    C(ma)                     K(ma)                                                         path
+                                                                                                                     cted
+                                                                                              Candidate outputs
+              Same selected materialized prefix on all three surfaces;                                              sele          Publish accepted state
+                                                                                              complete forward
+           correction token b may remain pending for the next forward.                                                            to native running rows
+                                                                                               and acceptance
+
+Fig. 2. The accepted-prefix interface. Recurrent, convolution, and attention-   Fig. 3. State lifetime in the path-scan verifier. Temporary cut states connect
+KV state must all describe the same materialized prefix. A newly sampled        path groups; recorded operands support selected-path replay. Only the accepted
+correction or bonus token can remain pending until the next forward.            frontier becomes native persistent state.
+
+
+   The attention layout places the principal spine first in paths. This schedule exposes parallel branch work while
+the physical suffix and permutes KV write locations and retaining the state-transfer cost at the decomposition boundary.
+ancestry-mask key columns while retaining logical query-row B. Sequential arithmetic and accepted-path replay
+and position order. Selection remains in logical-node space;
+accepted-path publication maps those nodes back to their             Verification uses sequential path scans with fp32 carried
+physical slots. This distinction prevents a layout optimization   state,  raw gate inputs, and in-kernel query/key normalization.
+from silently changing which key/value entries a branch reads.    Accepted-path     replay uses native fused GDN updates with
+Recurrent paths begin at the native pre-tree state or a transient recorded   accepted    operands and in-place publication to the
+cut state; the device committer publishes the selected recurrent  fp32   state  bank.  Its graph contains one native update call
+and convolution state into native running rows and re-linearizes  per  GDN     layer. Query/key   normalization, beta conversion,
+its attention KV entries.                                         gate   evaluation,  and  output casts can differ between these
+                                                                  implementations; agreement is not guaranteed by their common
+   Algorithm 1 separates candidate verification, path selection,
+                                                                  real-arithmetic recurrence.
+and state publication. Every publication operation uses the
+                                                         ∗           The sampling stage produces accepted node indices and path
+same materialized path A. A newly sampled token b can be
+                                                                  lengths on the GPU. Recurrent replay, convolution publication,
+emitted while remaining pending: its state is created by the
+                                                                  and attention-KV publication consume this same path. Graph
+next target forward.
+                                                                  capture reduces host launch overhead for the sequence of per-
+                                                                  layer native updates; each layer retains its own update kernel.
+        IV. GPU S CAN AND ACCEPTED -PATH R EPLAY
+                                                                  C. Temporary state versus recomputation
+A. Path-parallel verification and state lifetime
+                                                                     Path decomposition caches the states needed where down-
+   The GDN verifier decomposes the tree into dependent path stream paths branch, then reuses them across independent work.
+groups, a scheduling family also studied by SpecLA [6]. A first If a program exports Nc cut states with value-tile width Bv
+path starts from the request’s pre-tree state and exports the cut and key dimension dk , their fp32 payload is
+states needed by downstream paths. The second level evaluates
+independent branch paths from those cut states. Each GPU                               Mcut = 4Nc Bv dk bytes.                  (4)
+program covers one path, head, and value tile, retaining the This counts one head and value tile’s logical export payload.
+full key dimension in its working state tile. Sequential updates The current reusable scratch allocation reserves a full matrix
+reuse this tile through the path loop rather than loading a slot for each actual node even though only required cut states
+full recurrent state for every node. Candidate outputs continue are written; allocated bytes therefore differ from state traffic.
+through the model; rounded operands are recorded for later Recomputing ancestry could remove some exports at the cost
+accepted-path replay. The source expresses this local reuse; of repeating updates. Exporting every candidate state would
+register allocation and spills remain compiler- and geometry- instead trade more writes for less recomputation. The two-level
+dependent.                                                        path schedule occupies a particular point in this design space.
+   Cut states and operand rings are temporary within a verifi-       Accepted-path replay carries one state tile through a bounded
+cation step. The durable continuation resides in the request- path loop. Its carried-state footprint is O(Bv dk ) in tree size,
+owned native recurrent and convolution running rows. Replay while the recorded operands and candidate outputs scale with
+starts from the pre-tree running state and publishes the accepted the verification shape. Static padding makes graph buffers
+frontier back to those rows; prefix-cache snapshots and restores and kernel geometry reusable, but padded rows must remain
+use that native layout. Static work buffers can be reused by invisible to attention and selection. Neither a shorter logical
+CUDA graphs, but they do not replace the request’s persistent path nor fewer state writes alone establishes a faster complete
+state with a branch-leaf pointer.                                 request.
+   The two levels execute in separate GPU launches and               The closest scheduling comparison is SpecLA: both systems
+exchange only the boundary states required by downstream carry state tiles through sequential paths and parallelize ready
+Algorithm 1 Tree verification and native continuation
+Input: Native continuation state; candidate tree T ; proposal probabilities q
+Output: Emitted tokens; updated native state; next drafter input; any pending token
+    Verify candidates
+ 1: Map T to physical slots, positions, and ancestor masks.
+ 2: p ← target probabilities from path-local GDN, convolution, and attention computation.
+ 3: Retain candidate hidden states, rounded replay operands, convolution histories, and temporary KV entries.
+    Select one continuation
+ 4: (A, b∗ ) ← accepted materialized path and pending token from sampling with p and q.
+    Publish the same path across all state components
+ 5: for each GDN layer do
+ 6:    Replay recorded operands along A into the native recurrent state.
+ 7:    Gather the convolution history for A into the native running row.
+ 8: end for
+ 9: Remap the accepted KV entries using the same logical-to-physical slot map.
+10: Select the matching hidden-state row for the next drafter input.
+11: Advance positions along A; keep b∗ pending until its target forward.
+12: return Emitted tokens and the updated continuation boundary.
+
+
+
+paths. Their continuation policies differ. SpecLA buffers           path-list preparation and synchronization between acceptance
+accepted factors for application in a later fused update [6];       and publication.
+LumoTree immediately replays recorded operands through                 LumoTree replaces that handoff with fixed-shape device
+native per-layer updates and publishes the matching convolution     products: accepted node indices, path lengths, emitted tokens,
+and attention state. Weaver also uses selected-path replay,         and the selected final row. These products feed native recurrent
+but verifies candidates with a triangular solve [7]. Bole           replay, convolution gathering, KV remapping, and drafter-row
+reconstructs accepted states from compact factors in a batched      selection. Recorded operands are staged for the native per-layer
+commit [28]. TreeWY can fuse prior-frontier reconstruction          updates in one captured committer graph; convolution and KV
+with the next verification while retaining its working tile [30].   publication use the same selected path. Graph capture amortizes
+Thus, LumoTree pairs path recurrence with immediate native          launch orchestration, while the shared path prevents each state
+replay and coordinated hybrid-state publication. This pays          component from independently interpreting acceptance.
+explicit accepted-path update work in exchange for returning           The distinction between emitted and materialized tokens
+each iteration to the native state representation. Complete-cycle   must survive this handoff. A correction or bonus token may be
+measurements must include that tradeoff.                            emitted while remaining pending for the next target forward;
+                                                                    padded path entries must not advance state. After publication,
+  V. O PTIMIZING THE L UMOT REE V ERIFICATION C YCLE                the implementation stores persistent state in native request
+   The architectural choice in Section IV is realized through       rows and branch cut states in temporary scratch. The native
+the implementation changes below. Three representations must        representation supports the intended prefix-cache and serving-
+agree: logical tree nodes, temporary verification storage, and      graph interface. The implementation captures the serving,
+the native state used by the next forward. LumoTree carries         drafter, and committer stages separately.
+one accepted path across these representations and reorganizes
+preparation and selection around it, using established techniques   B. One slot map governs attention and publication
+such as fusion and graph replay. The nontrivial constraints       An ancestry mask specifies visible keys, but does not specify
+arise at their boundaries: changing a slot order, a rounding   their physical placement or the reduction groups that process
+step, or a tied candidate can change which continuation the    them. Interleaving masked branch columns with spine keys can
+next iteration consumes. Table II summarizes the changes and   change the online-softmax reduction layout even when logical
+these constraints.                                             visibility is unchanged. Physical ordering therefore matters
+                                                               both for addressing and for finite-precision execution [33].
+A. One device-selected path drives native continuation            LumoTree places the principal spine contiguously in the
+   Selecting valid output tokens does not by itself update candidate suffix while retaining logical query-row and position
+a hybrid model’s state. The recurrent matrix must contain order. It applies the same permutation to KV write slots and
+the accepted updates, convolution must retain the accepted ancestry-mask key columns. Acceptance remains in logical-
+history, attention must reference the accepted KV entries, node space; publication translates the selected nodes through
+and the drafter must receive the corresponding hidden row. that slot map into native continuation positions. Reordering only
+Reconstructing these choices separately on the host introduces writes, only masks, or only the final copy would leave another
+Algorithm 2 Path-parallel scan and accepted-path replay
+Input: Candidate tree T and the pre-tree recurrent state for each GDN layer
+Output: Recurrent outputs for all candidates; native recurrent state for the accepted path
+    Verify paths; keep branch state temporary
+ 1: for each GDN layer reached during the target forward do
+ 2:    Compute and record this layer’s rounded node operands.
+ 3:    for each path group, in dependency order do
+ 4:       parallel for each ready path, head, and value tile do
+ 5:           Load the working state tile from the pre-tree state or a saved parent cut state.
+ 6:           for each node on this path, in ancestry order do
+ 7:              Update the working tile with this node’s operands; write its recurrent output.
+ 8:              Save the tile if a downstream path needs this node’s state.
+ 9:           end for
+10:       end for
+11:    end for
+12: end for
+    Finish verification and select a path
+13: Complete the target forward and sampling to obtain the accepted materialized path A.
+    Replay only the accepted path into native recurrent state
+14: for each GDN layer do
+15:    Start from this layer’s pre-tree recurrent state.
+16:    for each node on A, in path order do
+17:       Apply the native GDN update using this layer’s recorded operands.
+18:    end for
+19:    Publish the resulting recurrent state to the request’s native running row.
+20: end for
+
+
+                                                             TABLE II
+C ONCRETE IMPLEMENTATION CHANGES AROUND THE PATH VERIFIER . T HE THIRD COLUMN IDENTIFIES THE COORDINATION OR NUMERICAL CONSTRAINT
+                    THAT MAKES EACH CHANGE NONTRIVIAL . W ORKLOAD RATES MEASURE THEIR COMBINED EXECUTION .
+
+
+Starting work or constraint           LumoTree change                                             What must remain consistent
+Host path-list construction between   Device-selected path feeds captured native replay,          All consumers select the same materialized prefix;
+acceptance and publication            convolution, KV and drafter selection                       pending and padded tokens do not advance state
+Logical ancestry does not determine   Spine-contiguous slots with coordinated writes, mask        Logical query order, physical source slots and native
+physical KV placement                 columns and accepted-path remap                             destination positions agree
+Per-node convolution histories and    Static ancestry gathers, fused ordered taps and per-layer   Tap order, cast boundaries, history padding and layer
+repeated layer preparation            operand buffers                                             identity
+Separate score preparation and        One shared logits tensor and fused selection into graph     Both reference tie conventions, candidate order and
+argmax/top-k operations               buffers                                                     duplicate behavior
+Repeated KV staging and limited       Grouped query heads and split-K in the patched              Tree visibility and slot mapping across partitions;
+decode parallelism                    tree-attention kernel                                       characterized reduction error
+
+
+
+consumer reading a different branch. The implementation                        an ablation question.
+change is this coordinated mapping across verification and
+publication.                                                                   C. Precompute branch histories while preserving arithmetic
+   The patched FlashAttention-2 decode kernel combines this                      The starting tree-convolution implementation constructs
+layout with grouped query heads that share staged KV tiles and                 candidate histories with per-node operations and repeats path-
+split-K context partitions. KV reuse and partitioned attention are             row preparation across layers. LumoTree derives static gather
+established techniques [21], [22]; here they are applied under                 indices from the topology, gathers windows from the prior
+the tree’s visibility and slot mapping. They target repeated KV                convolution history and candidate inputs, and fuses the tap
+staging and insufficient parallel work at batch one. Prefill retains           computation. Stacked operand buffers retain each GDN layer’s
+a native-compatible attention path. The current component                      inputs for subsequent accepted-path replay.
+tests measure repeatability and numerical error of the deployed                  This transformation must preserve more than ancestry.
+attention kernel; the isolated effect of spine placement remains               Convolution tap order and cast boundaries affect the values
+recorded for recurrent updates, and unused history positions                                    TABLE III
+must retain the intended padding. A generic reduction can              ACCEPTANCE AND MEAN GPU SPAN DURATIONS FOR THE TEN - TASK
+                                                                     DEPLOYMENT. D ISPATCH INCLUDES ACCEPTANCE , PATH HANDLING , AND
+compute the same real-arithmetic sum in a different floating-                               STATE COMMITMENT.
+point order. The fused implementation therefore retains the
+ordered tap operations and conversion points while replacing                       Metric                       Value
+repeated history construction with prepared data movement.                         Accepted drafts per event     4.05
+Each layer still records and replays its own operands.                             Target span (ms)            114.89
+                                                                                   Drafter span (ms)            54.76
+D. Fuse draft selection without changing proposals                                 Dispatch span (ms)           20.15
+   At each MTP head depth, LumoTree computes one full-
+vocabulary logits tensor and reuses it for the principal token and
+sibling candidates. A fused CUDA kernel writes the spine token
+and three ordered candidate indices directly into reusable graph     and four fail tests; agent durations range from approximately
+buffers, replacing separate argmax/top-k reductions and their        2 to 41 minutes. Appendix B gives the task-level outcomes.
+output copies. The principal chain advances through captured            For completed request r, let nr be the output-token count,
+MTP iterations; sibling selection reuses its scores, and suffix      `r the server-recorded end-to-end latency, and fr the time to
+prediction extends selected paths within the fixed verification      first output. We report the pooled decode rate
+capacity.
+   The subtlety is that argmax and top-k do not have inter-                                    PR
+changeable tie behavior. The reference argmax chooses the                                            (nr − 1)
+                                                                                       Dpool = PRr=1          .                  (5)
+lowest maximal token index, while its top-k operation orders
+                                                                                                r=1 r − fr )
+                                                                                                    (`
+selected ties differently. Simply taking the first top-k result
+as the spine token can change the proposal tree. Our fused
+selection preserves both reference outputs, including duplicate      Counts and durations cover the same completed requests,
+proposals where produced by the reference. Exact-output and          including internal compaction requests. The numerator counts
+captured-replay tests check this component. The optimization         output intervals, and the denominator excludes first-output
+removes redundant score preparation and selection work while         latency and between-request agent/tool work. Overlapping
+retaining the vocabulary projection.                                 requests contribute their durations separately. Thus, Dpool
+                                                                     measures token production over accumulated request durations
+                   VI. E VALUATION S ETUP                            rather than aggregate wall-clock throughput.
+   We evaluate Qwen3.8-27B NVFP4 on a single GB10/DGX               The ten-task deployment attains 25.63 pooled tokens/s
+Spark with ten SWE-bench Verified Astropy tasks [8], using one over 265 completed requests. On two additional Astropy tasks
+attempt per task. Qwen Code performs repository edits and tool (12907 and 13033), three earlier LumoTree revisions recorded
+calls, and the benchmark evaluator tests the resulting patches. 27.27–29.09 pooled tokens/s, while two SGLang EAGLE runs
+Decode rates pool token counts and decode durations over the recorded 26.89 and 30.70 tokens/s.1 These deployments use
+same completed requests, excluding time to first output. Agent different serving configurations (Appendix A); comparison
+duration additionally includes tools and repository operations; limits are discussed in Section IX.
+server startup and evaluation are measured separately.
+   The evaluated tree has 27 draft candidates and one root,
+padded to 32 verification rows. A five-depth MTP head supplies
+15 candidates; suffix prediction adds a six-token principal tail
+                                                                 B. Acceptance and execution costs
+and rescue branches of four and two tokens. Maximum draft
+depth is eleven, and four post-root MTP forwards construct
+the head. Attention groups query heads in pairs and divides         The ten-task deployment emits an average of 4.05 accepted
+the context into four partitions. The model has 48 GDN drafts per speculative event. This counter measures output draft
+layers and sixteen full-attention layers. All LumoTree workload length after filtering, excluding the correction or bonus token.
+deployments use this geometry and the patched FlashAttention- It does not identify the branch published into persistent state.
+2 path. Appendix A gives the serving configuration; the Physical draft slots also include padding and are distinct from
+accompanying artifact identifies each source and kernel version. logical candidates.
+                                                                    Table III summarizes the phase measurements. Each timer
+                          VII. R ESULTS
+                                                                 is reduced using its own duration sum and span count, with
+A. SWE-bench Verified coding-agent workload                      no outstanding samples at task boundaries. Dispatch combines
+   We deploy LumoTree with Qwen Code on ten Astropy tasks sampling and native replay; the spans do not form an isolated
+from SWE-bench Verified. The agent inspects repositories, edits critical-path decomposition. SGLang’s saved acceptance statis-
+files, executes tools, and produces a patch for each task. Model tics are window gauges, so a comparable task-total acceptance
+serving runs on a single GB10. Six patches resolve their tasks estimate is unavailable.
+                             TABLE IV                                                                             TABLE V
+GDN COMPONENT CHECKS ON GB10. B ITWISE COLUMNS COMPARE WITH                        C ROSS - PROCESS NATIVE - REFERENCE AGREEMENT, IN PATHS OUT OF 84.
+THE NATIVE CHAIN ; THE PAIRED RULE COMPARES BOTH IMPLEMENTATIONS                  S TATE / LOGITS REQUIRES IDENTICAL PUBLISHED TARGET STATE AND FULL
+ WITH A FLOAT 64 REFERENCE . C OUNTS ARE PER BLOCK AND PROCESS .                  TARGET LOGITS . J OINT CHOICES REQUIRES THE NEXT TARGET DECISION
+                                                                                  AND THE ACTUAL MTP SPINE AND ORDERED TOP - THREE SELECTIONS AT
+                         BF16 output                                                 EVERY TESTED PHASE . A DASH DENOTES AN UNTESTED JOINT MTP
+                                          FP32 state Paired rule
+                                                                                                                 CONDITION .
+        Operand sets       bitwise         bitwise     passed
+        Calibration       3,004/3,072 2,688/2,688 5,760/5,760                                                                          State/ Joint
+        Held-out          3,018/3,072 2,688/2,688 5,760/5,760                     Starting-state control                        Greedy logits choices
+                                                                                  Natural prefill                                70/84 0/84         –
+                                                                                  Common target state                            84/84 84/84        –
+                                                                                  Common target and MTP state                    84/84 65/84    68/84
+C. Numerical and candidate-selection validation                                     With fixed kernel selection                  84/84 65/84    68/84
+   We test GDN verification and accepted recurrent-state
+publication on two calibration and two held-out synthetic
+operand sets. Each set supplies 48 recurrent instances with the            reproduces identical target state, logits, and greedy decisions on
+evaluated tree geometry: 32 physical output rows, including                all paths. When MTP continuation is included, greedy decisions
+padding, and 28 accepted publication paths. Each block runs                remain stable on all paths, but target state and full logits agree
+twice in each of two fresh processes. These repetitions check              on only 65, and joint target/draft choices on 68. Holding kernel
+reproducibility; they do not increase the number of distinct               selection fixed yields the same aggregate counts.
+inputs.                                                                       All sixteen paths with differing joint choices have long
+   For each head, we compare both implementations with                     prefixes. Their within-process repetitions agree, and every
+a float64 recurrence. We require both root-mean-square and                 principal MTP spine remains stable; the disagreements affect
+maximum absolute errors to satisfy                                         secondary top-three membership or order. The tested phases
+                                                                           include initial MTP continuation, a follow-up, and continuation
+           Etree ≤ 1.10Enative + 2−24 M64 + 2−149 ,                    (6) after consuming the pending target token. Common imported
+                                                                           state and matched tokens and positions do not guarantee
+where M64 is the corresponding root-mean-square or maximum
+                                                                           identical intermediate hidden tensors.
+magnitude of the reference. Table IV reports all enumerated
+                                                                              The full-model tree-candidate comparison requires repro-
+cases passing in both processes. All published recurrent states
+                                                                           ducible joint target/draft choices. Because sixteen paths differ
+are bitwise equal to the native chain, while 68 calibration and
+                                                                           across native processes, that comparison was not executed.
+54 held-out output tensors differ in BF16 rounding. Native
+                                                                              The fused full-vocabulary selection test compares the
+and candidate results reproduce bitwise across repeats and
+                                                                           two output tensors against the reference argmax and top-k
+processes.
+                                                                           operations. Across 1,368 input cases and five block-count
+   Calibration controls detect sibling substitution, swapped state
+                                                                           settings (6,840 configurations), it records zero byte mismatches;
+rings, and stale publication metadata. Poisoning an off-path
+                                                                           planted negative controls fire. A separate captured four-level
+branch leaves the tested selected-path state unchanged, and a
+                                                                           selection graph completes 24 replays with zero mismatches.
+zero-replay control is rejected. These results support the tested
+                                                                           The reference selection outputs match exactly on these inputs
+GDN scan and recurrent publication mechanism.
+                                                                           and graph replays.
+      a) Full-model native reference: Before comparing the
+                                                                              Attention tests use the same kernel build as the ten-task
+tree route with native continuation, we test whether the
+                                                                           deployment. They show bit-identical repeated output and log-
+native reference reproduces the state and decisions that define
+                                                                           sum-exp values within each of sixteen determinism cases,
+that comparison. Each condition covers 84 paths: a root-
+                                                                           with matching digests across two processes. On synthetic
+only continuation and 27 candidate paths for each of three
+                                                                           query/key/value tensors drawn at scales measured from mea-
+calibration prefixes. Every path is repeated twice in each of
+                                                                           sured model operands, 93.31% of output elements agree with
+two independent processes. The conditions distinguish natural
+                                                                           the reference kernel within two ULP, the maximum absolute
+prefill from an imported common starting state and separate
+                                                                           output difference is 0.00390625, and maximum log-sum-exp
+target continuation from continuation coupled to the MTP
+                                                                           disagreement is four ULP. All nine checks pass, including
+drafter.
+                                                                           comparisons against a float64 dense reference and checks for
+   Natural-prefill continuation reproduces within each process
+                                                                           non-finite disagreements. Split-K changes the reduction order,
+but changes the greedy winner on fourteen paths across
+                                                                           so its bounded error accompanies the repeatability result.
+processes. The target-only control with common starting state
+                                                                              Runtime traces confirm execution of the specialized kernel in
+  1 The two-task comparison was selected retrospectively from completed    all sixteen attention layers, fused selection, device acceptance,
+SGLang records. All three LumoTree revisions and the 26.89 tokens/s SGLang and captured state publication during the workload runs.
+run resolved task 12907 and produced a test-failing patch for task 13033. The
+30.70 tokens/s SGLang run resolved task 12907 but produced an empty patch         D. Recurrent agreement under distinct references
+for task 13033 after a thinking-only response reached its 32,768-token cap;
+that task did not reach test evaluation. Restricting the comparison to normally     We compare recurrent verification and accepted-state publi-
+completed, nonempty-patch attempts excludes this run.                             cation using held-out synthetic operands spanning 48 recurrent
+                            TABLE VI                               retain sequential arithmetic, while native replay pays accepted-
+   R ECURRENT AGREEMENT ON GB10 UNDER DISTINCT SEQUENTIAL          path update work to return persistent state to the serving
+REFERENCES . C OUNTS GIVE CELLS OUTSIDE THE PAIRED ERROR BOUNDS
+      AMONG 64,512 OUTPUT CELLS AND 6,912 STATE CELLS PER          representation.
+CONFIGURATION , WITH IDENTICAL COUNTS IN BOTH REPEATS . T HE TWO      For coding agents, decoding rate and task completion
+    REFERENCE GROUPS ARE NOT A COMMON ACCURACY RANKING .
+                                                                   measure different effects. Additional tokens can reflect more
+                                                                   reasoning or a longer tool loop, and tool execution contributes
+         Configuration           Output cells State cells
+                                                                   to agent duration without entering the decode denominator. Task
+         Native GPU recurrence reference                           outcomes and GPU spans therefore complement the pooled
+         LumoTree                        0             0
+                                                                   rate: they describe application behavior and the work performed
+         Sequential software references                            by the serving cycle.
+         Weaver author-default         53,745      1,154
+         Weaver aligned-local          57,707        388
+                                                                                          IX. L IMITATIONS
+         TreeWY author-default         37,528      6,912
+                                                                        a) Numerical scope: The component results cover recur-
+                                                                  rent verification and publication, attention error, and candidate
+instances and 48 value heads. Verification covers the tree’s selection. The full-model tree route has not been compared
+28 active nodes. Three accepted-path publications produce a with a reproducible joint native reference: across processes,
+history of 1, 6, and 11 updates, including Weaver’s accepted native target/draft choices agree on 68 of 84 paths despite
+replay and TreeWY’s final deferred commit. Each configuration stable greedy decisions. Multi-cycle continuation, prefix-cache
+is evaluated twice in one process, with a fresh initial state for cold/hit behavior, row reuse, stale-state refusal, and distribution
+each cycle. A numerical cell fixes the recurrent instance, output preservation remain open. The recurrent results for LumoTree,
+node or publication, and value head; errors are reduced over TreeWY, and Weaver use different sequential comparators and
+the remaining vector or matrix entries.                           preprocessing conventions; they measure agreement with those
+   Each cell must satisfy both root-mean-square and maximum references, not a common accuracy or timing ranking. Matching
+absolute error bounds,                                            starting states, tokens, and positions also does not guarantee
+                                                                  identical intermediate hidden tensors, so the observed native
+           Emethod ≤ 1.10Eseq + 2−24 M64 + 2−149 ,            (7) differences do not identify a kernel-level cause.
+where errors are measured against the specified float64 re-             b) Performance and task scope: The ten-task deployment
+currence and M64 is its corresponding root-mean-square or contains one attempt per selected task and no matched native-
+maximum magnitude. For LumoTree, the sequential comparator decoding control. The two-task observations were selected ret-
+is the native GPU recurrence. Weaver and TreeWY use rospectively and span different implementation revisions, check-
+sequential software comparators that do not emulate every point conversions, attention kernels, scheduling, context limits,
+tensor-core rounding operation.                                   and proposal budgets. Cross-stack weight/tokenizer identity
+   TreeWY retains the author implementation’s normalization and graph/cache execution parity are unverified; SGLang also
+floor of 10−12 and BF16 dot products. Weaver uses TF32 processes overlapping requests in one run. Other development
+verification, FP32 elementwise accepted replay, and an additive records include degeneration, budget-capped responses, and
+normalization constant of 10−6 . We report both its author- incomplete evaluations. The task outcomes therefore provide no
+default preparation and a separately labeled local FP32- benchmark-wide quality estimate, and the decode rates provide
+preparation variant. The two Weaver variants retain their no controlled application speedup. Fixed-build repetitions,
+respective preprocessing conventions.                             same-stack controls, and per-optimization ablations are needed
+   Table VI reports the cells outside each implementation’s to quantify those effects. GPU instrumentation overhead has
+paired bounds. All configurations produce finite tensors and not been measured, and logical state-storage formulas are not
+reproduce bitwise between repeats. TreeWY’s BF16 compact measurements of allocated scratch memory.
+commit and its sequential comparator’s FP32 outer-product
+updates, for example, are different floating-point computations.                          X. C ONCLUSION
+The normalization and arithmetic conventions are part of the         LumoTree combines path-parallel recurrent scans with
+numerical comparison and must be interpreted alongside its immediate native replay and a shared mapping for convolution,
+reference choice (Section IX).                                    attention, acceptance, and drafter continuation. The implementa-
+                                                                  tion integrates fused selection, device-resident acceptance, and
+                      VIII. D ISCUSSION                           grouped split-K attention. Component evaluation characterizes
+   The design couples tree geometry, physical layout, and exact selection outputs, bounded recurrent error, and attention
+continuation publication. Optimizing any one of these in repeatability. The ten-task Qwen3.8-27B NVFP4 deployment
+isolation can move work elsewhere or invalidate another on GB10 records 25.63 pooled tokens/s, with six tasks
+stage’s mapping. Transient cut states, graph buffers, and native resolved and four patches failing tests. These results provide an
+persistent rows serve different purposes: their separation makes empirical foundation for studying coordinated tree verification
+the storage and recomputation tradeoff explicit. Path scans in recurrent hybrid models.
+                      A PPENDIX A
+      S ERVING C ONFIGURATION AND M EASUREMENT
+   The accompanying artifact [37] provides the paper source,
+evaluated implementation versions, launch settings, task meta-
+data, and raw measurements, including failed, excluded, and
+incomplete attempts. It preserves the complete records behind
+the summaries in the paper.
+   Workload rates use Eq. 5; token counts and latency sums
+cover the same completed requests. Metric counters are
+checked for continuity, resets, and outstanding requests at
+task boundaries. First-output latency, tools, and evaluator time
+remain distinct from decode duration. GPU phase times divide
+each timer’s duration sum by its own span count. Output-side
+acceptance counters describe emitted draft lengths and do not
+identify the committed tree path.
+   For target probabilities p and proposal probabilities q,
+ordinary rejection sampling combines accepted mass min(p, q)
+with residual mass proportional to (p − q)+ . This gives the
+target marginal for the probabilities actually supplied [1], [2].
+Serving additionally requires that subsequent forwards consume
+the state associated with the accepted path.
+                      A PPENDIX B
+            A DDITIONAL W ORKLOAD R ESULTS
+  Table VIII reports the ten-task deployment, with one attempt
+per task. All attempts use tools and produce nonempty
+patches. Agent time includes model service and tool execution,
+excluding server startup and subsequent evaluation.
+                                                             TABLE VII
+   S ERVING CONFIGURATIONS . T HE L UMOT REE COLUMN DESCRIBES THE TEN - TASK DEPLOYMENT; EARLIER TWO - TASK REVISIONS USE THE SAME
+   PROPOSAL GEOMETRY AND A 32,768- TOKEN RESPONSE CAP. E XACT SOFTWARE VERSIONS AND LAUNCH SETTINGS ACCOMPANY THE ARTIFACT.
+
+
+Setting                             LumoTree / patched vLLM                                        SGLang EAGLE
+Target                              Qwen3.8-27B; ModelOpt mixed NVFP4, BF16 execution           Qwen3.8-27B; as-shipped NVFP4 checkpoint
+Proposals                           27 drafts plus root, padded to 32 rows; maximum depth 11 Steps/top-k/draft tokens: 3/1/4
+Attention                           Patched FlashAttention-2; head grouping 2, split-K 4        FlashInfer
+Context/scheduling                  131,072-token context; 4,096 scheduled tokens; one active   262,144-token context; 8,192-token prefill chunks
+                                    sequence
+Response cap                        24,000 tokens                                               24,000 or 32,768 tokens
+Sampling                            Temperature 0.6; top-p 0.95; top-k 20; min-p 0; presence penalty 1.0
+Agent                               Qwen Code 0.19.4; one task at a time
+
+
+
+                                 TABLE VIII                                       [9] Z. Chen, A. May, R. Svirschevski, Y. Huang, M. Ryabinin, Z. Jia,
+TASK - LEVEL RESULTS FOR THE TEN - TASK L UMOT REE DEPLOYMENT. TASK                   and B. Chen, “Sequoia: Scalable and robust speculative decoding,” in
+ID S HAVE PREFIX A S T R O P Y __ A S T R O P Y -. D URATIONS ARE ROUNDED TO          Advances in Neural Information Processing Systems, vol. 37, 2024, pp.
+                                    MINUTES .                                         129 531–129 563. [Online]. Available: https://doi.org/10.52202/079017-
+                                                                                      4116
+            Task suffix     Agent time (min)        Evaluation                   [10] Y. Li, F. Wei, C. Zhang, and H. Zhang, “EAGLE-2: Faster inference of
+                                                                                      language models with dynamic draft trees,” in Proceedings of the 2024
+            13977                            25     Failed tests                      Conference on Empirical Methods in Natural Language Processing.
+            14096                            23     Resolved                          Association for Computational Linguistics, 2024, pp. 7421–7432.
+            14182                             7     Failed tests                      [Online]. Available: https://aclanthology.org/2024.emnlp-main.422/
+            14309                             2     Resolved                     [11] J. Wang, Y. Su, J. Li, Q. Xia, Z. Ye, X. Duan, Z. Wang, and M. Zhang,
+                                                                                      “OPT-Tree: Speculative decoding with adaptive draft tree structure,”
+            14365                             7     Failed tests                      2025. [Online]. Available: https://arxiv.org/abs/2406.17276
+            14369                            28     Resolved                     [12] Y. Li, F. Wei, C. Zhang, and H. Zhang, “EAGLE-3: Scaling up Inference
+            14508                            41     Resolved                          Acceleration of Large Language Models via Training-Time Test,” 2025.
+            14539                            19     Resolved                          [Online]. Available: https://arxiv.org/abs/2503.01840
+            14598                            26     Failed tests                 [13] J. Chen, Y. Liang, and Z. Liu, “DFlash: Block Diffusion for
+            14995                             5     Resolved                          Flash Speculative Decoding,” 2026. [Online]. Available: https:
+                                                                                      //arxiv.org/abs/2602.06036
+                                                                                 [14] W. Kwon, Z. Li, S. Zhuang, Y. Sheng, L. Zheng, C. H. Yu, J. E.
+                                                                                      Gonzalez, H. Zhang, and I. Stoica, “Efficient memory management for
+                              R EFERENCES                                             large language model serving with PagedAttention,” in Proceedings of
+ [1] Y. Leviathan, M. Kalman, and Y. Matias, “Fast inference from                     the 29th Symposium on Operating Systems Principles. ACM, 2023, pp.
+     transformers via speculative decoding,” in Proceedings of the 40th               611–626. [Online]. Available: https://doi.org/10.1145/3600006.3613165
+     International Conference on Machine Learning, ser. Proceedings of           [15] L. Zheng, L. Yin, Z. Xie, C. Sun, J. Huang, C. H. Yu,
+     Machine Learning Research, vol. 202. PMLR, 2023, pp. 19 274–19 286.              S. Cao, C. Kozyrakis, I. Stoica, J. E. Gonzalez, C. Barrett, and
+     [Online]. Available: https://proceedings.mlr.press/v202/leviathan23a.html        Y. Sheng, “SGLang: Efficient execution of structured language
+ [2] C. Chen, S. Borgeaud, G. Irving, J.-B. Lespiau, L. Sifre, and J. Jumper,         model programs,” in Advances in Neural Information Processing
+     “Accelerating Large Language Model Decoding with Speculative                     Systems, vol. 37, 2024, pp. 62 557–62 583. [Online]. Available:
+     Sampling,” 2023. [Online]. Available: https://arxiv.org/abs/2302.01318           https://doi.org/10.52202/079017-2000
+ [3] X. Miao, G. Oliaro, Z. Zhang, X. Cheng, Z. Wang, Z. Zhang,                  [16] R. Pan, Z. Wang, Z. Jia, C. Karakus, L. Zancato, T. Dao, Y. Wang, and
+     R. Y. Y. Wong, A. Zhu, L. Yang, X. Shi, C. Shi, Z. Chen,                         R. Netravali, “Marconi: Prefix Caching for the Era of Hybrid LLMs,”
+     D. Arfeen, R. Abhyankar, and Z. Jia, “SpecInfer: Accelerating large              2025. [Online]. Available: https://arxiv.org/abs/2411.19379
+     language model serving with tree-based speculative inference and            [17] SGLang Team, “Hybrid Models Meet SGLang: More than Full Attention,”
+     verification,” in Proceedings of the 29th ACM International Conference           https://pytorch.org/blog/hybrid-models-meet-sglang-more-than-full-
+     on Architectural Support for Programming Languages and Operating                 attention/, 2025.
+     Systems, Volume 3. ACM, 2024, pp. 932–949. [Online]. Available:             [18] SGLang Project, “Qwen3-Next SGLang documentation,” https://lmsyso
+     https://doi.org/10.1145/3620666.3651335                                          rg.mintlify.app/cookbook/autoregressive/Qwen/Qwen3-Next, 2026.
+ [4] S. Yang, J. Kautz, and A. Hatamizadeh, “Gated delta networks:               [19] T. Dao, D. Haziza, F. Massa, and G. Sizov, “Flash-Decoding for long-
+     Improving Mamba2 with delta rule,” in The Thirteenth International               context inference,” https://pytorch.org/blog/flash- decoding/, 2023,
+     Conference on Learning Representations, 2025. [Online]. Available:               October 13, 2023.
+     https://openreview.net/forum?id=r8H7xhYPwz                                  [20] Z. Ye, L. Chen, R. Lai, W. Lin, Y. Zhang, S. Wang, T. Chen, B. Kasikci,
+ [5] Y. Wu, Z. Qin, A. Wong, and S. Soatto, “STree: Speculative tree                  V. Grover, A. Krishnamurthy, and L. Ceze, “FlashInfer: Efficient and
+     decoding for hybrid state-space models,” 2025. [Online]. Available:              customizable attention engine for LLM inference serving,” in Proceedings
+     https://arxiv.org/abs/2505.14969                                                 of Machine Learning and Systems, vol. 7. MLSys, 2025.
+ [6] Z. Wang, X. Han, Z. Yang, F. Liu, X. Li, R. Gu, S. Zhong, and C. Tian,      [21] J. Yao, K. Chen, K. Zhang, J. You, B. Yuan, Z. Wang, and
+     “SpecLA: Efficient Speculative Decoding for Linear-Attention Models,”            T. Lin, “DeFT: Decoding with flash tree-attention for efficient
+     2026. [Online]. Available: https://arxiv.org/abs/2607.16673v1                    tree-structured LLM inference,” in The Thirteenth International
+ [7] Y. Oda, R. Mathieu, R. Knyazhitskiy, and A. Chakhvadze, “Trees                   Conference on Learning Representations, 2025. [Online]. Available:
+     from Marginals: Autoregressive drafting with factorized priors,” 2026,           https://openreview.net/forum?id=2c7pfOqu9k
+     technical report. [Online]. Available: https://arxiv.org/abs/2607.06763     [22] Z. Pan, Y. Ding, Y. Guan, Z. Wang, Z. Yu, X. Tang, Y. Wang, and
+ [8] C. E. Jimenez, J. Yang, A. Wettig, S. Yao, K. Pei, O. Press,                     Y. Ding, “FastTree: Optimizing Attention Kernel and Runtime for Tree-
+     and K. Narasimhan, “SWE-bench: Can language models resolve                       Structured LLM Inference,” in Proceedings of Machine Learning and
+     real-world GitHub issues?” in The Twelfth International Conference               Systems, vol. 7. MLSys, 2025.
+     on Learning Representations, 2024. [Online]. Available: https:
+     //openreview.net/forum?id=VTF8yNQM66
+[23] T. Dao, “FlashAttention-2: Faster attention with better parallelism              https://github.com/vllm- project/vllm/issues/54080, 2026, author
+     and work partitioning,” in The Twelfth International Conference                  implementation RFC; accessed September 26, 2026.
+     on Learning Representations, 2024. [Online]. Available: https:              [31] Dao AI Lab and NVIDIA, “ReplaySSM: Cache SSM Inputs Instead of
+     //openreview.net/forum?id=mZn2Xyh9Ec                                             State,” https://dao-lab.ai/blog/2026/replayssm/, 2026, author technical
+[24] S. Yang, B. Wang, Y. Zhang, Y. Shen, and Y. Kim, “Parallelizing linear           report; accessed September 26, 2026.
+     transformers with the delta rule over sequence length,” in Advances         [32] X. Yang, C. Peng, Y. Zhao, L. Zeng, A. Hu, J. Yang, S. Wang, J. Lv,
+     in Neural Information Processing Systems, vol. 37, 2024, pp. 115 491–            X. Liang, C. Yang, J. Liu, and Y. Qiu, “OneLA: Scaling Linear-Attention
+     115 522. [Online]. Available: https://doi.org/10.52202/079017-3668               Decoding to Large Beams in Generative Recommendation,” 2026.
+[25] Y. Wu, Y. Dukler, M. Trager, A. Achille, W. Xia, and S. Soatto, “Snakes          [Online]. Available: https://arxiv.org/abs/2609.12399v1
+     and Ladders: Accelerating SSM Inference with Speculative Decoding,”         [33] H. He, “Defeating Nondeterminism in LLM Inference,” https://thinki
+     in Proceedings of the 4th NeurIPS Efficient Natural Language and                 ngmachines.ai/blog/defeating-nondeterminism-in-llm-inference/, 2025,
+     Speech Processing Workshop, vol. 262. PMLR, 2024, pp. 292–304.                   Thinking Machines Lab, September 10, 2025.
+     [Online]. Available: https://proceedings.mlr.press/v262/wu24a.html          [34] G. Oliaro, Z. Jia, D. Campos, and A. Qiao, “SuffixDecoding: Extreme
+[26] L. Zhong, S. Xu, H. Wen, T. Xie, Q. Guo, Y. Wang, and M. Li,                     Speculative Decoding for Emerging AI Applications,” 2025. [Online].
+     “SpecMamba: Accelerating Mamba inference on FPGA with speculative                Available: https://arxiv.org/abs/2411.04975v3
+     decoding,” 2025. [Online]. Available: https://arxiv.org/abs/2509.19873      [35] Snowflake Arctic Inference, “Suffix Decoding,” https://arcticinferenc
+[27] H. Borobia, E. Seguí-Mas, and G. Tormo-Carbó, “Component-aware                   e.readthedocs.io/en/latest/suffix-decoding.html, 2026, implementation
+     self-speculative decoding in hybrid language models,” 2026. [Online].            documentation; accessed September 24, 2026.
+     Available: https://arxiv.org/abs/2605.01106                                 [36] Y. Hu, K. Wang, X. Zhang, F. Zhang, C. Li, H. Chen, and J. Zhang,
+[28] L. Wang, Y. Su, X. Wu, C. You, Y. Liu, Z. Qiu, J. Zhang, J. Zheng,               “SAM Decoding: Speculative Decoding via Suffix Automaton,” 2024.
+     F. Liu, J. Zhang, C. Tian, and C. Huan, “Bole: Efficient Tree Speculation        [Online]. Available: https://arxiv.org/abs/2411.10666v3
+     for Hybrid-Attention Language Models,” 2026. [Online]. Available:           [37] Z. Ma, “LumoTree: Implementation and Experiment Artifact,” https:
+     https://arxiv.org/abs/2608.01651                                                 //github.com/MaCoredroid/Lumo_FlyWheel/tree/codex/lumotree-
+[29] S. M. Ghantasala, “TreeWY: Speculative Verification for Gated DeltaNet           academic-review2-20260930/papers/gdn-tree-scan-mlsys/v2, 2026, paper
+     Hybrids,” 2026. [Online]. Available: https://arxiv.org/abs/2608.20961            source, evaluated implementations, and supporting experiment records.
+[30] ——, “TreeWY: Tree Speculative Decoding for Hybrid GDN Models,”
+

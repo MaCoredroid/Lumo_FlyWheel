@@ -1,0 +1,45 @@
+Table~\ref{tab:request-replay} reports eighteen complete configuration runs, each containing all 43 requests. Across three runs per arm, \sys{} records 28.79 pooled tokens/s and five-token native MTP records 26.12, a 10.2\% difference on this corpus. Their individual run rates range from 28.38 to 29.41 and from 26.04 to 26.23 tokens/s, respectively. Plain autoregressive decoding records 10.54 tokens/s in one run. The native MTP sweep uses one, three, five, or seven draft tokens; five-token MTP has the highest observed pooled rate among these settings.
+
+\begin{table}[t]
+\caption{Sampled replay of 43 recorded requests, capped at 1,024 output tokens. Rates pool matched token and time totals across all runs. Ranges describe individual run rates, not confidence intervals. SGLang rows use a different stack with unresolved prompt-token accounting.}
+\label{tab:request-replay}
+\centering\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Configuration & Runs & Tokens/s & Run range \\
+\midrule
+vLLM autoregressive & 1 & 10.54 & --- \\
+vLLM MTP, 1 token & 1 & 15.37 & --- \\
+vLLM MTP, 3 tokens & 1 & 22.06 & --- \\
+vLLM MTP, 5 tokens & 3 & 26.12 & 26.04--26.23 \\
+vLLM MTP, 7 tokens & 1 & 25.72 & --- \\
+\sys{} & 3 & 28.79 & 28.38--29.41 \\
+\midrule
+SGLang EAGLE, 3/4 & 1 & 26.32 & --- \\
+SGLang EAGLE, 5/6 & 3 & 29.28 & 29.23--29.36 \\
+SGLang EAGLE, 7/8 & 3 & 30.05 & 29.18--30.69 \\
+SGLang EAGLE, 9/10 & 1 & 28.81 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For SGLang, the paired setting denotes speculative steps and draft-token capacity; EAGLE top-$k$ is one throughout. Seven steps and eight draft tokens yield 30.05 pooled tokens/s over three runs. Differences in prompt-token counts, attention, prefill settings, and tool parsing limit this cross-stack comparison (Section~\ref{sec:limitations}). The sweep is exploratory and has unequal repetition counts.
+
+Three additional runs disable individual \sys{} optimizations (Table~\ref{tab:replay-variants}). Each variant completes all 43 requests once. The stock-attention variant records 27.11 tokens/s, while disabling fused draft selection or precomputed tap-operand preparation records 29.40 and 29.02. Stochastic output lengths and limited replication prevent attributing these differences to the individual transformations. The variants do not yet provide a per-optimization latency or memory decomposition.
+
+\begin{table}[t]
+\caption{Exploratory replay variants, one complete run each. These measurements do not establish isolated optimization effects.}
+\label{tab:replay-variants}
+\centering\small
+\begin{tabular}{@{}lr@{}}
+\toprule
+Disabled optimization & Tokens/s \\
+\midrule
+Grouped split-K tree attention & 27.11 \\
+Fused draft top-$k$ selection & 29.40 \\
+Precomputed tap-operand preparation & 29.02 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Output-side counters pooled over the repeated vLLM runs report 4.47 accepted drafts per speculative event for \sys{} and 3.17 for five-token MTP. These counters describe emitted drafts, excluding the correction or bonus token, and do not identify the committed path. SGLang reports only windowed acceptance averages, so no corresponding cumulative acceptance comparison is reported.

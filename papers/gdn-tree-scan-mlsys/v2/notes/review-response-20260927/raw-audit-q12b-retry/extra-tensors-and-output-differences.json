@@ -1,0 +1,3442 @@
+{
+  "run_id": "q12b-calibration-retry-20260928T010045Z",
+  "input_sha256": {
+    "procA/result.json": "a745b55a9d3c590d2d0d2181d73e548244634737290fef57e230645985de3448",
+    "procB/result.json": "b4ebc28e91e9a1f0b018f574792963a1bdccb19124ee43792da54ac3b57c3c03",
+    "procA/raw_inventory.jsonl": "b67a86822603156c6db6d79d6f1a957782fe55d158a1b637b3c9af2bf65f8c10",
+    "policy.snapshot.json": "4a103df013439ae02977d10a42c3cf2eeb916a7dcb1a61c19e6b929da620f7b3",
+    "expected_observations.snapshot.json": "c5df3aefd4b838ef2098b03cfc54775b1cb467510c5956edb9e868c725ef7448"
+  },
+  "scope": "metadata only; no tensor byte rehash or numerical tensor recomputation",
+  "referenced_objects": 5832,
+  "store_objects": 6216,
+  "extra_objects": 384,
+  "extra_bytes": 1207959552,
+  "extra_native_nodes": [
+    18,
+    23,
+    25,
+    27
+  ],
+  "extra_native_states": [
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 0,
+      "node": 18,
+      "sha256": "260b56bf23a4207ca0f0ca558cb7d61adf9c6253f18c78d834d22e3a9fc2248a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 0,
+      "node": 23,
+      "sha256": "d1199da34d865cb39317a73f07e1e8596d7dd00dc3eca7521086dac1b6d9901a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 0,
+      "node": 25,
+      "sha256": "91cf2957d371a1293d64bfc4116093056328ff0825b5b1ef63635c67a12bd535",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 0,
+      "node": 27,
+      "sha256": "0874e5ffd2e333b9f60d76cf45493197b23ee79776f0b3883339e0aa915fa039",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 1,
+      "node": 18,
+      "sha256": "891b5c8faf6c25dff99cfdca7e50743da7203c2719b0a0556464a8eea090d687",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 1,
+      "node": 23,
+      "sha256": "e0447b03df2c999e96d784850ea85bf591b817bc62ef1169becddb14f213cde8",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 1,
+      "node": 25,
+      "sha256": "0cd544a479c3f060841e56b8faea13d166b66378782f6674411edb1bc15ea61f",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 1,
+      "node": 27,
+      "sha256": "767b838b88f64ae36af3f6b7f372e33a593201fcf43a7ba89d421b0e85e11cb3",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 2,
+      "node": 18,
+      "sha256": "6c4c6ab69d55ed8d7edcc31aa353ed9d5a419614bf042433549ad793f567ea0f",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 2,
+      "node": 23,
+      "sha256": "ded708c3b0889970f98bd502065045b9c936f2eb6219dbbda2dc38818d7bd4ae",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 2,
+      "node": 25,
+      "sha256": "8f4dbd9cbe58e3fe66efce1b754322921a4c280b69771ad213b41681a5ea3d2a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 2,
+      "node": 27,
+      "sha256": "270f2561e849cfa0b454adb6083247da9bb988f2709f072e801e28ca9f118137",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 3,
+      "node": 18,
+      "sha256": "a9e8ba3474a7636e523eaa83d401336cc1803c0282344e382d821eb92946aa01",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 3,
+      "node": 23,
+      "sha256": "3574db3e64a34077c4715e74bb91e23ed72d1c0a71f2cd0e6da20cf1ac7d6d6c",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 3,
+      "node": 25,
+      "sha256": "b715780d7d2599a649bae97be0fd7d8bbf2aceff719c92b78d3e6df4ee0148ed",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 3,
+      "node": 27,
+      "sha256": "36583fc778bd0ecba623db147af75ca56de7254245e616459f417c4b8b5787c6",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 4,
+      "node": 18,
+      "sha256": "17f6cf1e05a6188cb9e8613ccd22ee327b3892dcf7e7bf9965d12d26c31e8d5f",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 4,
+      "node": 23,
+      "sha256": "c10120926624e20bf89199133d60c5e3b59033294dc641038daf7958d92110fd",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 4,
+      "node": 25,
+      "sha256": "ec7f171837521d747afb297c0e80d1710fb76f0cf205fe1e44f6a64744487e06",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 4,
+      "node": 27,
+      "sha256": "73c9429f1b718e5c65e97cec147697e2ea1c7c65d0a90dcdf6c7bb1df24d0993",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 5,
+      "node": 18,
+      "sha256": "3a0a6e5bf27a8dbba8648c0e01cb278b4baba1b534f87af6759497f2870bca13",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 5,
+      "node": 23,
+      "sha256": "6209c279d50a2261d689b45ab93a86b4aa0c84ff047ec66b5ffb920c4c0447f7",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 5,
+      "node": 25,
+      "sha256": "ac9c8188d0b1445f6c92ec3132563073159c1b855e08d0f4ea8f66e1577193c0",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 5,
+      "node": 27,
+      "sha256": "2bb7b071484d4676711298db4ef097d49f9c71764b0b852245336d32a6e35c71",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 6,
+      "node": 18,
+      "sha256": "e34b5b144852ab17c000e48c4025d45c49cb64764e2a271ccf4eb4f2d48fecaa",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 6,
+      "node": 23,
+      "sha256": "8772fd6bc4ca1bd8be6b89e3ff4297f34cbe9cfd53bce3318129b518823710ae",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 6,
+      "node": 25,
+      "sha256": "daab338692b4b7902df4cb3b6cff5aaa5bc3d005cf5aa6b015afa7435677325d",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 6,
+      "node": 27,
+      "sha256": "6a388ca118a87bbf185b0e377b00386a7bbe81e3e91238d56904f12864ecc9fd",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 7,
+      "node": 18,
+      "sha256": "4d675c34d4e043e20e4d5cc2f306730b7c45089a844e84bb6f60a8a41094b6ee",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 7,
+      "node": 23,
+      "sha256": "eca0cee8338bfc0dcbc6450b745fe527fb242c60866a575b670f6f47a2f7b1b1",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 7,
+      "node": 25,
+      "sha256": "2ad96cdebd78571763eceaed08058fde5649f9ad794decfb2c02c11211c13ecf",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 7,
+      "node": 27,
+      "sha256": "319f0351cbb9eb0a3f56935f89705727cb868fbaa101545e68adbb27bbeebded",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 8,
+      "node": 18,
+      "sha256": "5015b74ef35ca9264caadfafec8661c27226c2041e522c97cb087a04727028c3",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 8,
+      "node": 23,
+      "sha256": "f593059179d55fc1887bab3a2788c6d6502fd9afb928474f608438ede3712662",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 8,
+      "node": 25,
+      "sha256": "aa5c1f317e44c35947a79c13899b509cec27df165df6ed0b4c5a9ceea4470c96",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 8,
+      "node": 27,
+      "sha256": "8b1c1f962138a93da79ddbfb752318ab3b61827f92686c3e128ce2639031abba",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 9,
+      "node": 18,
+      "sha256": "d1a12d7bc9f97e52755511037de82ff1e35d95f24263aeb908e041e9d61dd7e0",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 9,
+      "node": 23,
+      "sha256": "ce2679e3148d2a9359048c9ca66b88706b0df5e838e50c638d4e76926a83906a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 9,
+      "node": 25,
+      "sha256": "add9630f6c5d06f3cdaf7682545b7bed6b32863233f57e9519298e1c8cd534d4",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 9,
+      "node": 27,
+      "sha256": "affa31319d967997d4d3895a429ace5a48eb68d273eabc2616f945410abd201d",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 10,
+      "node": 18,
+      "sha256": "a884251b0db89938246296a98291a1efac88a085f57424811afe61ca3abf9d8b",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 10,
+      "node": 23,
+      "sha256": "dbaeeb16fd4c3c568e1cf90d753ee352c6f749df8603ae2c916d71daa852925b",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 10,
+      "node": 25,
+      "sha256": "d700eb6eba5177fc3b3cd8c9228fc5d996553d7305e35069046be034e95d3372",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 10,
+      "node": 27,
+      "sha256": "c89f130f98d750b5ad2f0288dbed4c1056ecdb4fcb6c357cb6ec0c04143bbbc1",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 11,
+      "node": 18,
+      "sha256": "6b4ba3a725792810f0d6305777af7f396bff1082de49d285542cddc924740296",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 11,
+      "node": 23,
+      "sha256": "65e9697a5c4476469f6500a15440e982b38bd58c91283155637a28422b8098e5",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 11,
+      "node": 25,
+      "sha256": "1814cd0a175f9e8a44795e70f674dea03a69fd4557c37d0c95e99b8aa14b732f",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 11,
+      "node": 27,
+      "sha256": "ec7dfeda062cda3bdd3786a23c3253e6e8170b7c35691b6918aa3bbe3b886bf4",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 12,
+      "node": 18,
+      "sha256": "ed7bd51ae26b343f00b9301ffb4fc7b5b76b9e3702915ae8d88ef37b996c6e76",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 12,
+      "node": 23,
+      "sha256": "3f7311e071e4ff5ef699b157680751ec512443b0995315ee51fe2fa71bdf5656",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 12,
+      "node": 25,
+      "sha256": "7f18df0e90ba962d35e7c2ea29527cafa66cbcb4657c612d6dd3aff10e280937",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 12,
+      "node": 27,
+      "sha256": "9c3e4c3c18c31bf31a8a9a7c6b5fa019d5a8218e6758797611503562201eeea3",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 13,
+      "node": 18,
+      "sha256": "1291c7a6c15fec299e74f66e5a2b4f0d15b57724b99e8c6215668199a5929a24",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 13,
+      "node": 23,
+      "sha256": "4b50e53843e68a4fa95b455e4ccbe977fff092b657ce1e2ed47b1aeccdd5840a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 13,
+      "node": 25,
+      "sha256": "4189f03df38379fefc2401fccc53100ed9c2848f513606da7bde6593bd0205d1",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 13,
+      "node": 27,
+      "sha256": "3591a0f7f98762f6e51ae3e639f3591cae9744ec5fde4bf330b93733455f5abb",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 14,
+      "node": 18,
+      "sha256": "b1b45a0de15828b41eea1dbf60d5dca2795b69022850b547cdcf90ae4b108161",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 14,
+      "node": 23,
+      "sha256": "728ad8579c781ad28c0cc26d0d0d3fd6921a6aa70a1af99577ff11837ba21017",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 14,
+      "node": 25,
+      "sha256": "f63e3460e3189eed4b1540b80adb61b45f513af93d03cd9e9a71e101387e7f88",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 14,
+      "node": 27,
+      "sha256": "d65f4ce267a2db6a0cbd83bdb7f3c3b7c255fcd8d922811292729b158310b9f8",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 15,
+      "node": 18,
+      "sha256": "456e13f75d5499fb0abb819d6cc8d19b032cf4440d0c0166426a6e5f120db05b",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 15,
+      "node": 23,
+      "sha256": "3aa71843e77d7a2cb6a709b3a283b3f1d39e63b506a75c064de52c4ac958de47",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 15,
+      "node": 25,
+      "sha256": "27fc7655e7f5e63d67315b0141e48a7fcc256fb31fe67723c338ecd575710b00",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 15,
+      "node": 27,
+      "sha256": "8a1a111dcc76543282f0410adcf1414c08477c64f4b6dbead91604b42d9f549f",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 16,
+      "node": 18,
+      "sha256": "88840b05f739977b8aa31103b19b7ff36a30a2e9149ddcd66dd98e2cfbabb2b0",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 16,
+      "node": 23,
+      "sha256": "9a57b3f646f04e4ea4bcaa47b97a32f75f54937869b6f278152030ee84c974af",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 16,
+      "node": 25,
+      "sha256": "37442652bcf11b356ad4a0ef8ff1d826d6f2bc6061cf43efab3a7695df554918",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 16,
+      "node": 27,
+      "sha256": "4352de548c6222e8bb884f6c5c5a47b0586d137bc78700fc774832b3e74a0f54",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 17,
+      "node": 18,
+      "sha256": "47eedd0d1290bbeab4a6e7483cdd2cc8f05bd736bdb1bc0d2bfe042354aebc7a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 17,
+      "node": 23,
+      "sha256": "483b4cb2214b153825e4aca16d77c6656128c9a1526ea0ac96b9f0f5b243173c",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 17,
+      "node": 25,
+      "sha256": "212225b42dee3857d11a9401021568a3d9f7fedbc73f120c806f2637b5a388a0",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 17,
+      "node": 27,
+      "sha256": "fa8e8a1a8cd90bcccd6146fd73de3f2fb44a47e4d2064d09b25640e670791a74",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 18,
+      "node": 18,
+      "sha256": "3692b1cc0d5d91feb64f7ac404d76bdae51607dbf9593fd59f7440bbc066b6d1",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 18,
+      "node": 23,
+      "sha256": "9eef885bdd63d9d429e1c45aa91cc32e397887e9a67cf00c0b144ea1c4f3fa08",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 18,
+      "node": 25,
+      "sha256": "7597aad5d5f4e6c7177fb3c36d7fc3814064a9b0dda8711eb99c9abfc80e9449",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 18,
+      "node": 27,
+      "sha256": "954a6668906e899bf4a9e7d00bbf165d9f34bb6ee65fdbb38f5dc07952a184ca",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 19,
+      "node": 18,
+      "sha256": "54b44896ea066a3d7ad8d87209296bf08b368d5164c958d0c85696caef71b2b8",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 19,
+      "node": 23,
+      "sha256": "7887b477115300e41778c4bf970ae7e2eae341aa1ad180b678ec91f168aa2546",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 19,
+      "node": 25,
+      "sha256": "fcff4759b2b9ba3c44a501da3c115f2c8f8b368d70441fa51d478584a779c0f3",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 19,
+      "node": 27,
+      "sha256": "3f7a82338f5413e27e30fcc4d77b4c4d0b4de7096ec72e1e931ef23f776d8dfb",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 20,
+      "node": 18,
+      "sha256": "64fb9070ecbbc2139eb41f4704eeaac720a9ce7701ee88180d195220b4a5d838",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 20,
+      "node": 23,
+      "sha256": "2a7a1cd4acc877acb3afe3d19114394e11cf80f975c4ddb854dfa0d2610fda33",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 20,
+      "node": 25,
+      "sha256": "45277c1a4de15243aacac2a07ad1706d41416e7f753fd2f014dabfb2a21271b1",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 20,
+      "node": 27,
+      "sha256": "398319fcc37a30f541958b11df01df99e25e699b36452b36ed6614544ee5f8b1",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 21,
+      "node": 18,
+      "sha256": "e6f46921703f290e03f4c3781082c00f14d02b03fc07d9d971a3d31e5c60314e",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 21,
+      "node": 23,
+      "sha256": "ca29c1654bad0dd877befe897d9ebed712c1beb4a5a2fb03ea05604ddafd3ca1",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 21,
+      "node": 25,
+      "sha256": "42e5db828187e55c544b8013da88f27f63350895ca7fbf133c80d7aa47f64a78",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 21,
+      "node": 27,
+      "sha256": "779e3fb76b9df91599916fa7e97fad53489678034630babc510df9c37b1c3f16",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 22,
+      "node": 18,
+      "sha256": "caf427cb5b0c1a2c267d191b997be98b0e235628a02afdb366a491ae19b884d4",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 22,
+      "node": 23,
+      "sha256": "55b61972926362b281ea21ca2fa5274168dcdb1a35b2e3b09e4847735c76da86",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 22,
+      "node": 25,
+      "sha256": "a40e85e43e4bc08a0830ed6e71b0f581d9fec8ae24f8319c0c98c63a032b8725",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 22,
+      "node": 27,
+      "sha256": "45d5d4f45109cf6345d72c35e0ba444ab7828dc58ac6487490af3645b8ce9529",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 23,
+      "node": 18,
+      "sha256": "5135d7c7bfba34bb990f6853d630ddb10ba18d6b787f0e8dc73ff444139febfa",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 23,
+      "node": 23,
+      "sha256": "63ccf62a2364a114b1033b3079f397a87cbee9f6ab163d49fa5455b8953ba96a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 23,
+      "node": 25,
+      "sha256": "b4b361df1bbcf0fee3a47915b2f982f343c7555ef00257e0e948ed32806d31a2",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 23,
+      "node": 27,
+      "sha256": "4b77f80ddbd8f1aec443f1871c27daf349b3f2917f6fe2a676ea5898fa6ab809",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 24,
+      "node": 18,
+      "sha256": "68d3b4560316f5a931776ec417f9b5d24a0a0b827ddc833340bf6e8fca664cc0",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 24,
+      "node": 23,
+      "sha256": "c21c0bf883b9aab33d33a0e16cedc84cb8a18a45474de907f954f8d4ccccd4f2",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 24,
+      "node": 25,
+      "sha256": "ba19914a273c28cd10d44e36bb90ce17a8afd6bd2d76d2b1643f73026db30b22",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 24,
+      "node": 27,
+      "sha256": "6c74c6f5fbe7e26112804953aa6d500376f26e70adbfd74278c5a19375fbd110",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 25,
+      "node": 18,
+      "sha256": "42f7229f2d1e697b639709096dfa0c477169ac38f20c8fb3f668082b91c42e02",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 25,
+      "node": 23,
+      "sha256": "707c2052fcf5347a6bfd08203bc1384548b7825e96042a23c5618bd656feb3b3",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 25,
+      "node": 25,
+      "sha256": "c46cb7caa0cad264ea3561ef17e58aa5e4c3711ed0719cfe3ad0b03622f55710",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 25,
+      "node": 27,
+      "sha256": "67cc63c8eaf6f5e1284c0474f2923db4f51edb47cdfaec2f2b72cec139201167",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 26,
+      "node": 18,
+      "sha256": "3b5aac016bea246f03eb6e76a90046c96c96e9ae54bc32226d4a9c3cd2790aff",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 26,
+      "node": 23,
+      "sha256": "fc441ed91020b8c64bd5f991259368dd709bba28df68c0e7138826054e098d07",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 26,
+      "node": 25,
+      "sha256": "bce1a5d829cb1ebe85a26d385b55dfabcb8620c283c8ddcadb748aa1ba760080",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 26,
+      "node": 27,
+      "sha256": "f9eb7f1af2e69777dc235526942485fb2fcd20b43b2cc57fee989613f6a2fd9f",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 27,
+      "node": 18,
+      "sha256": "af7527891d13c1494ef0a506cc1f056381b7f62286f35c6d4aa1cbf66e08f8d4",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 27,
+      "node": 23,
+      "sha256": "9d504d0c10c8d80d27724b5a8e7b765f7fe79e730a5a6f3d909df133a8bfbff8",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 27,
+      "node": 25,
+      "sha256": "6d6b1e0b642910273277e99b13140f7d245a44fa56743d539b93a5e45cec2c37",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 27,
+      "node": 27,
+      "sha256": "e68c9dc7b439b7e78be2d37a38b9ccd1ce67474bad297231df290a225d95538d",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 28,
+      "node": 18,
+      "sha256": "919448216715b027c028ad0676a8159ba4ff1327d3f74599f367f9826f65a6b2",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 28,
+      "node": 23,
+      "sha256": "fb2cfe3cfca7b3538e50293da7dd3b27f1827fc033fd3643c078d27a8b1699c1",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 28,
+      "node": 25,
+      "sha256": "1cdf07089a19b39b400c858cdff3e61119fc6a29a2b36950cd51abec1be917f4",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 28,
+      "node": 27,
+      "sha256": "9c4f2686e3b83003a3f02008e69bb648edb43bd5fb8fbde3245b932660c15fdb",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 29,
+      "node": 18,
+      "sha256": "475ead8a24b2f54a38b19827c13199cdf3d0beacf955c9a75142c3f7cce9b149",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 29,
+      "node": 23,
+      "sha256": "c752fbc4a66bb269bb53ea2a353b1b95a963cb73ccd40a0abc1d639bc936dabe",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 29,
+      "node": 25,
+      "sha256": "1e700595561fd2f01d7aa19c01a8770c4e58de20488bc97b7589cf97fecdd5ba",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 29,
+      "node": 27,
+      "sha256": "895e8908a16ad92c0f36683ddc51b8ace0554530c4b59500172506bb0a881f54",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 30,
+      "node": 18,
+      "sha256": "eabc70f0ef76e6ea3d4a80409530bd2b333938bb84f0e04a261604d30e2fde90",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 30,
+      "node": 23,
+      "sha256": "95a1b7fd150fdeaec00e01122363c4e64e25cb19891b7c37a919f16ebec5ab5f",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 30,
+      "node": 25,
+      "sha256": "584549cc328cbb1ad9a947945ae8596be2f51cecf66bd59b7d6577775ff94ff9",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 30,
+      "node": 27,
+      "sha256": "c7b6a4a17818afa6ec6b88ffc8448f1c20164fcf1a5d25dcaeda6b0be3e70c6d",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 31,
+      "node": 18,
+      "sha256": "16f920d23416a20657bf59b701e6d4d13fc87c9fdeb9d962aacf1eda9dd6ef2b",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 31,
+      "node": 23,
+      "sha256": "4f2616c1c2c2d319b1dcdfcf633ced9ce80f72234b9fc5113bb8397129a49fb2",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 31,
+      "node": 25,
+      "sha256": "bb3ba8f5224373e0cd6ee434b98f2058faaec867ab372b028644800d415d2f66",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 31,
+      "node": 27,
+      "sha256": "19f4775f7eec6d9defe9531e4971a16f8eaab20814a0f3197825a4aa0cc8a222",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 32,
+      "node": 18,
+      "sha256": "c988ed6143c7bcbecd3e7ab1a72d68b05df9ff2a60a29795f8b04a3068fc9f33",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 32,
+      "node": 23,
+      "sha256": "f9d852e53e6bd0eb42e33b5ca5a11b7943506389d2509799c7a091ec5660640a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 32,
+      "node": 25,
+      "sha256": "387f92b18e53e544e604b4659f2139ac8241520067ce57f5b08f4a360f517ac7",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 32,
+      "node": 27,
+      "sha256": "43f1c31f36638c209e5a1ef39c366e14fe2d8aa6c0bf49fe82f9290650f2a6fe",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 33,
+      "node": 18,
+      "sha256": "4835f7cf21425f2b31ce529cb245dd74ae7e28a4a5dd5e891d6acbd48527574f",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 33,
+      "node": 23,
+      "sha256": "822a9b5d2431a908191c147a371de10bef2074369e90dda0e852ce31b7a0dd6e",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 33,
+      "node": 25,
+      "sha256": "e6a3376374e373ac9f2387b54fceef75e439f9cce997307fa520f43ba8e83700",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 33,
+      "node": 27,
+      "sha256": "aac67a2f9fffae6f44a2199db2910210d8e38132539bc8d5efc0164769f3148c",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 34,
+      "node": 18,
+      "sha256": "7d5a04c32b874ae98886424c62b5b4017e2abda31430c7a243ef1a1c230c3c0c",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 34,
+      "node": 23,
+      "sha256": "afbcb3877d9b539bcedb547ddc1055aa1dcd7fb2d5316faabe8014c99909a8f6",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 34,
+      "node": 25,
+      "sha256": "c36b09c9fa378fa7e0b4dcb1e76e3a927604ffc6c88195fa95c12181600e5fc0",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 34,
+      "node": 27,
+      "sha256": "1dc36032795384ce23282bc853aab1b8d83d03b119c76df701a504dea0d02f43",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 35,
+      "node": 18,
+      "sha256": "07a10f0988dd2fcb161b693cf9dcac45aa0fea9b384969a4a87099ae3b0b9dd8",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 35,
+      "node": 23,
+      "sha256": "e63d986de43c9bf8f75022819298c7a519fd0a7c4d999f857ad94eed7083ecdd",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 35,
+      "node": 25,
+      "sha256": "87d582befa23c5565076096b86430347832e9622b10282ae84ab077e1be17662",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 35,
+      "node": 27,
+      "sha256": "d5d5eadda88712b2316a57ac82a130908ea702bec5474432a36f7d89861f220d",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 36,
+      "node": 18,
+      "sha256": "248d52153d4d2c3283557cab9605d63d12056ddabe9d676610266007beb945aa",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 36,
+      "node": 23,
+      "sha256": "7ad62f4cd1432e77a9de9e616fac8dcd9ebb9dc13d028a0ae94591989e4ccfaf",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 36,
+      "node": 25,
+      "sha256": "b0e04d1878220822355ef86c0fe7c6a1d79f952651e3f5d92e10361f52a674fc",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 36,
+      "node": 27,
+      "sha256": "1b821fa2f3d7c938072e3242e3881652abf29b42332492ed74b0c97e8d166029",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 37,
+      "node": 18,
+      "sha256": "d8e39de7db646b016999989c32482d8ae96dec84e9e6055b7503ae617e47bd61",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 37,
+      "node": 23,
+      "sha256": "5bdfb0fb92e704ded9ed68c01f6c3c6daa75e30c3f76bf8a2d1554b39f8a4562",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 37,
+      "node": 25,
+      "sha256": "012031c4c7c7f41dac0a2c1d605b57945a6b43749397535e01f7bd82c8f7c3bd",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 37,
+      "node": 27,
+      "sha256": "2abfe1b6e9db3bd6616887bcfc6a4817335b0b006d8e8d8ce0be85530ab548f9",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 38,
+      "node": 18,
+      "sha256": "0138913db0945de75e6025202584f299bcaf4757e5a77831452e5e0cee28890d",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 38,
+      "node": 23,
+      "sha256": "badf33c0e0bd48b2f58af8e3a2c46c3fd41e467b71014aded2993a6de293e60e",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 38,
+      "node": 25,
+      "sha256": "af8f39020c8ea3261b81cab3eac9793bbae6d39fedb6d19bbebbba64b9620740",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 38,
+      "node": 27,
+      "sha256": "0270d0494c18813decd34cc6e974301bfd453f888a04251c95bc6f2ec4ab7b0c",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 39,
+      "node": 18,
+      "sha256": "5a5fc565148d12e14f4c1732dba6ab63a8cfc09a38062b9122ff9053ec08c717",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 39,
+      "node": 23,
+      "sha256": "a57abe8933dc3cbba8f1c1c1c227bc87794f19de23584d4d85f9666afecdd3d1",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 39,
+      "node": 25,
+      "sha256": "3c0718b3fca869f72a323b51f0d27b7796dc9f452a29f045e8e1d3b3db22e5cf",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 39,
+      "node": 27,
+      "sha256": "a1ef85615c347d8bc8256f509427da52c18cb6296148f844a78084fb3e4c0ac4",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 40,
+      "node": 18,
+      "sha256": "aec2c6d1b57940492cb5ea851d345fb59534daca272339ca6be5ec0fcb5a5f90",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 40,
+      "node": 23,
+      "sha256": "018f4f3e3f862985a98e0f0b6c9cdadc471c18b3371b489905c9148e3aa2f2da",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 40,
+      "node": 25,
+      "sha256": "fd37407616da553d5c6e4b0cd0b334c12cadd849b0ef900041f31adca19b9038",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 40,
+      "node": 27,
+      "sha256": "a92ff241260927fb0e6c5faa0bd88347e4d3f274a8ea2c44caa3fc7e3c1efb5b",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 41,
+      "node": 18,
+      "sha256": "34605e7cdd627390533fab52fd35dd8b3b59575cd53403d0fa1f8364d788f22c",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 41,
+      "node": 23,
+      "sha256": "e8f434e9cd769b3a3052c9867fbbd23b55a9eb3787eed1ebbe101d113b5a261e",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 41,
+      "node": 25,
+      "sha256": "ebefc6f8b2e390fbb4cd21233e2c007706d1a2572e1d2196aa503b0a81d3c1c3",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 41,
+      "node": 27,
+      "sha256": "d5ec26d1df2c66f56437b6ca161e7bd9b4390ae8d78af51a09b20fcad64c7e60",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 42,
+      "node": 18,
+      "sha256": "e4b9265a692b57f07b571e92d26c013266a7de9b63a535fadb3f5947312f0576",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 42,
+      "node": 23,
+      "sha256": "937b0fccc9b32283a7f3432dcb2b432981b4e728b4186eb7949b61e0963ef8f2",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 42,
+      "node": 25,
+      "sha256": "07b5aa1a5352110215af3724f7b258f88748e00f556b680b7702bcc86336bb8b",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 42,
+      "node": 27,
+      "sha256": "74778df7431af7ec39344a0a754ee435bc6e3adfb8a766c8068727a2e9c5266b",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 43,
+      "node": 18,
+      "sha256": "03a2bf620f712db4bd5afa84206277487c8653a5633b3810cb37668939bc9ed2",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 43,
+      "node": 23,
+      "sha256": "26a4c3e444a4d634c804a1e063e9858d6cad2b865030c175ca380c2ef389edab",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 43,
+      "node": 25,
+      "sha256": "18f0db41130b979432ab9312a6641f27c084f57e091142c1e66a70695695772a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 43,
+      "node": 27,
+      "sha256": "8453baeb9394f6b15cb09b284763a7ab8d9377f3820f30184aa9036ab07ac963",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 44,
+      "node": 18,
+      "sha256": "edd74481fd956e8ff2e42de1287c2857ef97760cc6469549c30e307bed562c2e",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 44,
+      "node": 23,
+      "sha256": "0367a099316d3514634f67fb4252c72a0f8de50df4e9fb3ae183b4ce94b33a76",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 44,
+      "node": 25,
+      "sha256": "759b62ec748fb5149ae2f2378a02d9627d5d9c51279f5a0944765a25c7863de4",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 44,
+      "node": 27,
+      "sha256": "a8887fbef12fe20d7503d96df18dbc42e967f5e876d1d1e75b95d138ce776bec",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 45,
+      "node": 18,
+      "sha256": "3a4a5392bc1cc7e7f462c930e8dc1f2e2b844b430cb28c474d86d3a2ce06b30d",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 45,
+      "node": 23,
+      "sha256": "feff9db71762aeecc3451da3a75ef05d8b964f324daa1dacf29da5af73d2dd14",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 45,
+      "node": 25,
+      "sha256": "b7a95ad36c1455fbfd16ac2a2adb29dc1517934e2df5b1cd0bf00edf83e77b10",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 45,
+      "node": 27,
+      "sha256": "e1b6790b554253630cb2af93f065328f01085ad9cb9038d30ffccd5b7e8a0a11",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 46,
+      "node": 18,
+      "sha256": "e9a37c52c5662d0cf03d0bbd597bdd379125de69e7eb29394cca71b6cd662486",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 46,
+      "node": 23,
+      "sha256": "7e1b1669982b6fa3653bdf3b096e50feef9353040adf7f58ac0966d5566f2fe3",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 46,
+      "node": 25,
+      "sha256": "6b9bf2d0ffcb784db5fa47228d1f831bcfb4de321e9f9c3debebfabe77dd4bb0",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 46,
+      "node": 27,
+      "sha256": "34b33205734e5b86748bd37793988319180825f036dbfd063f071eb263842c85",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 47,
+      "node": 18,
+      "sha256": "b8199a84edc2ee1f602d08e75b8ef639a871dd627833e4acd5ff96642dcc7a59",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 47,
+      "node": 23,
+      "sha256": "4ad3a557f657ef181b71c3873f19e62e064ca69bd51e7aa99a201a8440325ae1",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 47,
+      "node": 25,
+      "sha256": "4972de3b54d5a3c50df924dc37bb8621652b038be4f486322d2f625fe6a70f07",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx0_ordinary-random",
+      "instance": 47,
+      "node": 27,
+      "sha256": "468e243f07e2785e9d312a1ec8099b932da52f5c43af3181887bdc3d0716d35c",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 0,
+      "node": 18,
+      "sha256": "2699886f18c369e9f9ec3de2182651eac15b5b3be38aa467862af57b5cf244cc",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 0,
+      "node": 23,
+      "sha256": "064f75106fb64d2e0d31f38e046e26ee9e692008b0fafda1e5ce3cc75b88d5f8",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 0,
+      "node": 25,
+      "sha256": "9071c738257a432843d2579936f7f58aedaa6b58e052b48e2a3b805609765767",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 0,
+      "node": 27,
+      "sha256": "fdd4a0c42e1eec47f533c61bcd44457b7a2991579493afa3983f00d66915ace4",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 1,
+      "node": 18,
+      "sha256": "1f407fac7d37f4c97dffaadfc07ece5af156c0422ab7bfbb5625b0b6cec43c4f",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 1,
+      "node": 23,
+      "sha256": "2e02b85bb7de17aed0fb041603d51010146dd2f488245b11f9af58efc27048eb",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 1,
+      "node": 25,
+      "sha256": "a982e71f00c34f7827c9376cf8c64d15d0b768af1649280064afc3be2d13a4a7",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 1,
+      "node": 27,
+      "sha256": "ad3fbe6e9e4a4e25d1da1dc587f4d32bd731c45fb46272a970206be367ce00ae",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 2,
+      "node": 18,
+      "sha256": "f12d6633fdb039e9ada0b83251b50a44d06724ad2f553c7dcf59eec6632860cc",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 2,
+      "node": 23,
+      "sha256": "4848710085f68472ea12949906cdaf44acbc97213b343ed5ecdfd159a17799b7",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 2,
+      "node": 25,
+      "sha256": "0859fafc6bcdbb611084a0361788eb632b4371c6b38662348bb6e6baa06b86d3",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 2,
+      "node": 27,
+      "sha256": "cdb5c1ff67c4594bbab7c60ff5b10bb8ea3b773b9f558533b9ef27b692bc9132",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 3,
+      "node": 18,
+      "sha256": "9bf73aa750a90927bcfc50c5e8764ae6f6fabd8cf119bbe4e7ab2c0c512c4df6",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 3,
+      "node": 23,
+      "sha256": "6d3cd35d2dd729abc1df9a59bc1dc1dc071bc338046c81a6386b0da3eb253621",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 3,
+      "node": 25,
+      "sha256": "75ccaae07e28f6442f9f74c7ac35bae186bd28731f72850ae62b1cb1ec603769",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 3,
+      "node": 27,
+      "sha256": "62d195ee5be2963a6701c8f027078def968a035a46efa1fe192f8d710803fb56",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 4,
+      "node": 18,
+      "sha256": "21f31b86f2d4f305a04a1da2988e424ffb01a940dbf75452e401059b200d1a2f",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 4,
+      "node": 23,
+      "sha256": "4337bce5f95644f9f5d4dcfa642fa1db4e0c0ea98d6cec111f795e3d90fe7b44",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 4,
+      "node": 25,
+      "sha256": "0ba7de9dd73f9195e251ac57250c2b796a550310488b900216015705765456ab",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 4,
+      "node": 27,
+      "sha256": "ebc56b44f6c66f59c2d5b65011d0750eaf518966dabbcd809003dca4e007f457",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 5,
+      "node": 18,
+      "sha256": "07ac9f035edebd344d9261979550c12ba7466a2b4c34762f7680cec0a16c7f6b",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 5,
+      "node": 23,
+      "sha256": "707b03b6b8f464409fdedd6f80ff509033fed18374cc283bab521f6902314f41",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 5,
+      "node": 25,
+      "sha256": "95b96a16151f050c83e2b23175ce27e02b942d91a739a922796b9b5b42191752",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 5,
+      "node": 27,
+      "sha256": "f73af9d7abd65614a1e9f9c63dda28e33b8071d16dce2f3cffb1b747c367156e",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 6,
+      "node": 18,
+      "sha256": "79afaac9a7437d3da82d28e6c1d36b4294b2bf140692ce73e648c72466549473",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 6,
+      "node": 23,
+      "sha256": "1e56bbda16478e18acbd8dc574e279b9eba619c47d0170f73509266fa243980f",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 6,
+      "node": 25,
+      "sha256": "abbd883d12d571df488c15b54233f0e28328c9056690c4efdccc16bab098fa53",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 6,
+      "node": 27,
+      "sha256": "b0ebb06f2e59d0e417526bf458f279e1b76e317da126bed817fa552b22ebfe2a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 7,
+      "node": 18,
+      "sha256": "b5ddfe362178bfcca892ead926a16e23b408fdb70a34aecb5c6c9c05052cb351",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 7,
+      "node": 23,
+      "sha256": "ae61a87944f6056b08cf1b9b9ef88175579efb33c968892b2e9c477335d6f18e",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 7,
+      "node": 25,
+      "sha256": "c7610dd2ba972a76db95e62179d07e3f656ddea3d9a52248fc2ac9285e21f765",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 7,
+      "node": 27,
+      "sha256": "3920c0519cd408b2a94fb27386f23c2ded1fcbeb1ba24c9357bf4a6e36f1c3d2",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 8,
+      "node": 18,
+      "sha256": "a5d98b2b9f73c2aa8872ff5e8c133ecba9b0fa02b968a2ceb064d161161e5b9e",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 8,
+      "node": 23,
+      "sha256": "0e6ce70cedc92082292c8a6d05f46685a2d6ce85df38402721afbed01ea44af1",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 8,
+      "node": 25,
+      "sha256": "c1d1cd9c11509b25f8a0a203e895808f689cae2578ebd09583c17a3535820e8f",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 8,
+      "node": 27,
+      "sha256": "277b594ba3d1748f7dcc76b52059f5416f93b938cceb5c1a87113d9459566e56",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 9,
+      "node": 18,
+      "sha256": "0742e01f78362bd439c85c068f773af4fb089bb066d91966ab1c1eb2df702901",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 9,
+      "node": 23,
+      "sha256": "7bef790381f9bc03953b02f440bdae1e5f29581b093dfb455f50188a6f824bdc",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 9,
+      "node": 25,
+      "sha256": "4e47f2a4a37b1ce1cfde396b17eebc3b319022db6fec760f304e5a9cc6bf5e6b",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 9,
+      "node": 27,
+      "sha256": "03c3f6c3fad86c2bd3cf43bfdfd40c44ce8d6fc1b323f07d629e5d9def1d6df0",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 10,
+      "node": 18,
+      "sha256": "e1a26658c908a5bf53be5f050eade8e387b16e32e975e21318e4ea690ebeac0a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 10,
+      "node": 23,
+      "sha256": "9d07174dba10af45430ad8d067935e10f7c18d43daa3764739068380f2f0012e",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 10,
+      "node": 25,
+      "sha256": "edf53c6efdbbca98813d5689cd090db4e1de7c304760c8ccff09ed205a918d63",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 10,
+      "node": 27,
+      "sha256": "c74838350c54ecb6b61ff508e1c20e33bc80839fb385e9b1b6997263494e0949",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 11,
+      "node": 18,
+      "sha256": "3a029d91198a2b0312774c427e72cc5f1222be25263725400d34a130408f699a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 11,
+      "node": 23,
+      "sha256": "d2c62d9a7bdea32e6fde318e68fbcb1ffd369bf8e3454451b9376057a116efca",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 11,
+      "node": 25,
+      "sha256": "0eb3c17e84d6453bd7b0f65bdad99c731bd34fe9c06d3340952dec5110fef055",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 11,
+      "node": 27,
+      "sha256": "8781b2c8b2b4b95a41c3cfd50046aea9e03edd3d8bb922431faf35fcad63ebea",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 12,
+      "node": 18,
+      "sha256": "7c0a7768a8e744e15c1b7b9f17726eee80cbd4768d39d8c6712215d55ca65047",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 12,
+      "node": 23,
+      "sha256": "b4647f89e0848d3e3b6e41906983f4e6d5df25b2cf8f546e4f794cf6b3243b46",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 12,
+      "node": 25,
+      "sha256": "868ed94efac7b31a46e2fa3a2d90a12f6616706040492afce16d43c9d8c44b9c",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 12,
+      "node": 27,
+      "sha256": "82bd360ffa7a52ca289219185792b0d655a3a953ea511944c1afc15f081a2393",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 13,
+      "node": 18,
+      "sha256": "7da20ecc00afe1a35090a9f66740daffdffaa23ab14ce969a3570ce245f9bc6b",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 13,
+      "node": 23,
+      "sha256": "969848347fa16ad6213f87cb0268220555e96b4b4fb26b9b3b5043363097d4d9",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 13,
+      "node": 25,
+      "sha256": "0e3d15bc961d4a8383266bde2499e223802b9294981d9389ee0def17838baf3c",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 13,
+      "node": 27,
+      "sha256": "3be9de648266b6ed62d3288111f5d2fc37eda6894482f44ce0685ec30c2fdd92",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 14,
+      "node": 18,
+      "sha256": "ba774160c13bf7cb5736fb7beeeaf5e5663ccd2f292273fd3d5ef5392ba01c5a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 14,
+      "node": 23,
+      "sha256": "2f85e46f5d7558c4053d8b1a96aa148b1bb8d43498064d333a0d0f2a70a27943",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 14,
+      "node": 25,
+      "sha256": "afb70aba2018183e76aeb7a4cbbc12325a5332eb1eecdf482f51e194f57c1187",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 14,
+      "node": 27,
+      "sha256": "98438a1c2904a071007dc07b537b7a256c9f1cec96dc40124ceb644da9b4c36d",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 15,
+      "node": 18,
+      "sha256": "f772d39a4f404791f34ce274ed82dc4dc7ff8a5731291782f20b28b12b1c8224",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 15,
+      "node": 23,
+      "sha256": "50c39ace2dfb239004322ec2118959f5c3031eeadeffb3afddfc120135d334fa",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 15,
+      "node": 25,
+      "sha256": "18f767c196fb0dc297fbcb059cda2ee21042412435a21e896c5a24172f49030a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 15,
+      "node": 27,
+      "sha256": "3e3646690ea06603b0da40232a6b8cb249572b2ca0577eda98dfcfa377800244",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 16,
+      "node": 18,
+      "sha256": "3eaf7b50448f4dbc0b883d111beef8a8f48e213bc21e82f53bf5f11091c7add4",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 16,
+      "node": 23,
+      "sha256": "d2024496baf0de865a327bf6322df2ca1197c97ca6fa537b6ca361e0cb7c9ce5",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 16,
+      "node": 25,
+      "sha256": "94bf8ba76bc64b6d7246accd4bca1ff03d1c6ab247c71ff9e94f7c504b3fdfdf",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 16,
+      "node": 27,
+      "sha256": "3827a8737a52c93347cd8e3260aa4fd6940dff36e72cc5c4fd89185f83d99628",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 17,
+      "node": 18,
+      "sha256": "704a8ed948037161c25761fe468af14030bd99b78643ba1a851f3560b6d6506c",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 17,
+      "node": 23,
+      "sha256": "bb6570b36a19b989e584eeabafb82b38ec9f7764592161bbe88a3e1f38f51eaf",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 17,
+      "node": 25,
+      "sha256": "4fd037678516cab97f178b67c7bb0f5bd88396c5590390835ea1ec151168b70c",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 17,
+      "node": 27,
+      "sha256": "40f40dad3f83304c1c5b2c2aaff9d25f5023626b2af69834c751af77fa720f03",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 18,
+      "node": 18,
+      "sha256": "66ce87922df0547e8d464ef74e629d92bc3b9705a2e9a2366953d198e5fbc98f",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 18,
+      "node": 23,
+      "sha256": "ac077bd2cdbcda01f3610ff615aa6e9091d7b06269e00892c68325e2aa5e9ce0",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 18,
+      "node": 25,
+      "sha256": "fbb403db2c4c86c6c5654df64a2273933eebacecad54442e489534f6625e24b1",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 18,
+      "node": 27,
+      "sha256": "6b6131c38cc5e71e752244eddaff3c8329fd192326b68d2c1eef9abfae3b37e3",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 19,
+      "node": 18,
+      "sha256": "4fd673788a15caad4fbb74e4b846ce07858c59a471ec2ed9fefa165ea31d6693",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 19,
+      "node": 23,
+      "sha256": "1e6e7bb4d790b7949ca0d6e36700ba09fd5b9fe8d05c8ab7e5e6e8769fe8e194",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 19,
+      "node": 25,
+      "sha256": "20c475273f4e1f0a0dcc5e8dc472694b68a2460b31c0cba5a1c02f0e920a08c8",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 19,
+      "node": 27,
+      "sha256": "6c434a5ea3e826b8711449c72c732ecbd585adefd7c69f4668a44f41785b6b2f",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 20,
+      "node": 18,
+      "sha256": "e2b2ac9fa6c45bca07e298950e0dcd38c79d56c939fa13b96a16f37ee2fd1617",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 20,
+      "node": 23,
+      "sha256": "3961b334db4c9598a55dbe11842e8b77d7d93573f14f716cc425049d94d331a9",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 20,
+      "node": 25,
+      "sha256": "93ee7c0b9b5578d2b1784f4a53341025093e893bc2ce81210f174e79a4f9b45b",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 20,
+      "node": 27,
+      "sha256": "861a91445dfd7978ff19400878352c4e0b2b4b4a901e32cc96adc35727fa5b17",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 21,
+      "node": 18,
+      "sha256": "b0a90ae01e4289cc6691a0586d14a0fd0d10033f0a9edfcc01801e046c1d4594",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 21,
+      "node": 23,
+      "sha256": "53e1d9c77adfb415746cafccaaff0e01d626c4e2f0151fead433b4df2674399c",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 21,
+      "node": 25,
+      "sha256": "0f91783c0575ea1674da073762e424b9746abecbf696483d03e554bb714c0a7a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 21,
+      "node": 27,
+      "sha256": "961c0df6cac74f578643a59a4caaf83add2bc9803f50fdfc1e8db9b569b7d779",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 22,
+      "node": 18,
+      "sha256": "7e73f43bdd6f62037299c5095d44c4b5bf4d1992381d396d69b63f8a6f45a266",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 22,
+      "node": 23,
+      "sha256": "be796f6887617dddc8c8becbace4b1894aa315422ea463826a7552d87867724c",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 22,
+      "node": 25,
+      "sha256": "8d041b4aee63c48695b8f3abb6349c0de601f735345572acd9db2b96b1c2a8a1",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 22,
+      "node": 27,
+      "sha256": "4ba601a8d390c729112e347ab7cd6bffcce998bec80aa17186b53f78d2a40054",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 23,
+      "node": 18,
+      "sha256": "48cff8b654e0fcbb7d7ad5cfeb67ea7ad4aba8fd2dcfabe79c9a41432defa0aa",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 23,
+      "node": 23,
+      "sha256": "5cf927200af290fec3ab5b071660047b8221e673e8fe0b69157b243d09cd50aa",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 23,
+      "node": 25,
+      "sha256": "a66915ebef11e86e0f6b6e2b1aaadd1cf4bf13b071f4dc1c98f19e45f01ffaa5",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 23,
+      "node": 27,
+      "sha256": "18d45613f2cc64f807d92833fb99f095846ecca1c8f1ca13111d92a9a90605b0",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 24,
+      "node": 18,
+      "sha256": "a7ca93d37f247350485e5d0839911f282f52cf643fd65789df7bf488d4940f21",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 24,
+      "node": 23,
+      "sha256": "ca0a78e5e9eddce12d33897d245d4d7413cf442c9f9ad4e0652c790f450411b1",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 24,
+      "node": 25,
+      "sha256": "ab3057734546e4ae059b01ce1cc8eff91f94d858b2587a5d8f8f9e358dcfb30c",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 24,
+      "node": 27,
+      "sha256": "c3ff9dbe05aa460f6a6f98b253cd29e7bdf1cc5aa0e3dd06bbf15581dcee565a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 25,
+      "node": 18,
+      "sha256": "6a1a0fb5ef96ee0a7c0d9c7edc3bd427731aa5c389e7b4a70c6594af7620d2b4",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 25,
+      "node": 23,
+      "sha256": "387f8ef184092c4610c930338456ae228c29550c8e727969a558c84bd5253425",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 25,
+      "node": 25,
+      "sha256": "ab00998c556fe496e94122f14516a4fc880e2da4d73964a33af73f8542b72a65",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 25,
+      "node": 27,
+      "sha256": "3af03e512c34ac71c4efdfa55ef252cd8fed675519d96e0c8fb76b2ff1d6f70e",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 26,
+      "node": 18,
+      "sha256": "82bd2bbfd4dcc1b6dd93e4220a542d4081091a3d820500b46871b4ef124bc508",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 26,
+      "node": 23,
+      "sha256": "2becc39852c1d930cc28c9aeff9eed0feafd4ee20bd8f7ac934a67d6caf5c6e9",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 26,
+      "node": 25,
+      "sha256": "c2f8e9975018812cadb0c650323ca2bf9c9bf4be8b0339110285015aa025a824",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 26,
+      "node": 27,
+      "sha256": "b95f4a33ea4d1df22daeb6433bc87b098acba6cafe7dd5ba6d56598ef431a349",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 27,
+      "node": 18,
+      "sha256": "d78a030e58cc6b430651a6716b0be04eb3d46518dd7cba77543903e9b1ba3b25",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 27,
+      "node": 23,
+      "sha256": "f780e41deb8a4b7fff81e25ecbfd06f4064bce71084f716c929021ff427d8765",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 27,
+      "node": 25,
+      "sha256": "f7742dfa8d23093d7f58b043dc22cd42c556e8b29a05d24d206d563403a027a9",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 27,
+      "node": 27,
+      "sha256": "b63f9066a0c5011deb345574e30ed963921d591fa3aa00c24379c78d2616a011",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 28,
+      "node": 18,
+      "sha256": "490e4ea8c322f492b54e0e5b997419cb564016d3a1fd30665919507707d2f1a3",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 28,
+      "node": 23,
+      "sha256": "622da3c0591f3660f8eda6b617d557eb0c4d8ac1a14b4af64c3b04fc9d43e25a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 28,
+      "node": 25,
+      "sha256": "9e7324c0568b2cc365424c964ef87c2d28476f4fa9cfa3f6e779f518500ef622",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 28,
+      "node": 27,
+      "sha256": "e8052605b79b785bcca03f341dd145985a99ab989487b970212478b1da389277",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 29,
+      "node": 18,
+      "sha256": "01c4065c959fbfe4125ffcbb1b3a50f7e29201fcfc5d9a186c4bf75f78807757",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 29,
+      "node": 23,
+      "sha256": "f297f75d2994031ac9443e8bd919988261652ce9afdb4392c5f029532ccb0010",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 29,
+      "node": 25,
+      "sha256": "2c02e6e0567c19e66bda0ada45b2462512f553dc934ee322e9cd8ab8d7a07a3e",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 29,
+      "node": 27,
+      "sha256": "22f80cf110ded491aee8647083c1570a2502c8bfeb809b630c7fa85259a9f96c",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 30,
+      "node": 18,
+      "sha256": "caf88c45e0732438f7a62bf517a53dcc71aee8815938ceeb8368a942ff144eed",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 30,
+      "node": 23,
+      "sha256": "725e0d8900ea87b7960e49c4da7461f1d33694544e1e1ea2f03e11482481075a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 30,
+      "node": 25,
+      "sha256": "1806d7b1a260cac358c076cac656651004199a4049132e049e2e39c96c9b1808",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 30,
+      "node": 27,
+      "sha256": "a9364dc055a09d8b52987e187632290da735f75796a42163222974ccc9dcb0c8",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 31,
+      "node": 18,
+      "sha256": "f75a59a178fda332a56fc4e9c0b90bd7bd6f7fbcf7432ab2613e11c350e3f96b",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 31,
+      "node": 23,
+      "sha256": "74450cb7526d4890ba8464b0766d6be94c34fa4ae13c37e6749d884a1330b112",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 31,
+      "node": 25,
+      "sha256": "39e421af9d39770abb23fe65085eb3d14754cd3638b36a9805e8e16fdc0363ef",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 31,
+      "node": 27,
+      "sha256": "39e71600c30df142a6d64fd7e2126bcda57ee86e733c85c80a4e7fe0a1b22965",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 32,
+      "node": 18,
+      "sha256": "3eef2c6af5fdbcbe2e8d5dbb572b5f145a881d71a28aad7a033c2eadce092949",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 32,
+      "node": 23,
+      "sha256": "35fbee88f00257a91abf15514fcc5e50f5aa09613e425ddb66d50f52f01a0c9f",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 32,
+      "node": 25,
+      "sha256": "d54a5d9801e6d558c24b74e446472178dad9fead5af2e4f5ff0a4975445ccafd",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 32,
+      "node": 27,
+      "sha256": "03a492f43cf83da4741371a27fb15c0b771241b158edf549f61acc37967149a6",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 33,
+      "node": 18,
+      "sha256": "2211ed911999029181370d711285ad2b6fef181e12c53e2407c46e6441e67138",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 33,
+      "node": 23,
+      "sha256": "111f17ca6b373267cd44502687ac6a9c2d82e0795f2dc1a5ca10a5cfb3fe3db2",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 33,
+      "node": 25,
+      "sha256": "ddba724c35ad3df1e75261f2d8ee5b65c169011fb145b8322780248f366f5354",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 33,
+      "node": 27,
+      "sha256": "5a460e364c9357e5ad2790213f0780bfc10f0be32404c13569c1c207a9b485e4",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 34,
+      "node": 18,
+      "sha256": "cff4403a8b6e2a2ef49d12b18bc88c56642ec0e5d216e66c48b85ef33651d0a1",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 34,
+      "node": 23,
+      "sha256": "f1a3206f4b47266102e4c79301a1a06eed9e0b696b0561cc3d678a8b5b7f672c",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 34,
+      "node": 25,
+      "sha256": "5034ee6c3732b5b21a5ddc8b62f467a9e19392176f48213762f06edc310a295a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 34,
+      "node": 27,
+      "sha256": "65f2c47a61693271c1042b79704948f18b00c6aadd880fea0166c5fb47aa3dc1",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 35,
+      "node": 18,
+      "sha256": "d796ef3bd7d1e392ead90feee90359f8b1deaad77065eb2e4eef817f738471c3",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 35,
+      "node": 23,
+      "sha256": "8421c9b106b863c512e2bdcea44b6c7ddad36944829c0b90413661afa2adc6c6",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 35,
+      "node": 25,
+      "sha256": "3cecf224e95b55e1f323ad0693fcaabdaa2fdf2697d606426ce64019ac543875",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 35,
+      "node": 27,
+      "sha256": "3f28ec6502def1edf60a2a4ef7bacc23f35965a530e7abbf61067aaeffce4ae2",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 36,
+      "node": 18,
+      "sha256": "1b7d644965fc300eddd855e09167e1a0a6c308540026c5b1312a87775fb23370",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 36,
+      "node": 23,
+      "sha256": "ec4068b5038baaa37bad82f4239fe1fe5dda66ec232ae90b271e85ef144531df",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 36,
+      "node": 25,
+      "sha256": "22a86d07405a672fc513055b63eb16becb2932053e43ed567a127647e1144cc8",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 36,
+      "node": 27,
+      "sha256": "78c42ab250c1db723c92373de32fd81f6079e4f05ad560aeeffeeda8738335c0",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 37,
+      "node": 18,
+      "sha256": "67263cc263d6003819cf2e0c1948a60690ce097be42ec09658b6d6f6e76c4011",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 37,
+      "node": 23,
+      "sha256": "9a18070ec644b355bee02b48a67d62acfae9a258aad843f93d911b4f9196fe0f",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 37,
+      "node": 25,
+      "sha256": "98565d698fc5ed6300f9fba33157a487d0624c456ad005c4b0af147d96463e0b",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 37,
+      "node": 27,
+      "sha256": "e7ea5a06bd2a1e814a6b0366493956aee6dc9bbb2b7786e8b96c9d3b0bfde688",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 38,
+      "node": 18,
+      "sha256": "3deccf910444b8e6ec6df878d2d6ffd10c54272a786bb1e9522470c067d87098",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 38,
+      "node": 23,
+      "sha256": "3906b8d59ae55ce9e903633ada85695b047d02f500be3b46599e53e14679f5ce",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 38,
+      "node": 25,
+      "sha256": "55bea252feca2007ca55125b82a260890821692a7115f27576eb33205a7ba9d3",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 38,
+      "node": 27,
+      "sha256": "41dea4c5a950a5e087c94d661dc4a58d65e0ec1e109d58a1502ea59315df4aa2",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 39,
+      "node": 18,
+      "sha256": "411d7a59c0cea5395f93b6360bdcf5ec4494d373e7162afc8c150cb8b89fa91a",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 39,
+      "node": 23,
+      "sha256": "5e4a224fdcb5d40f8e707963bde0d6bc9e92b4b23c26bd261f22ee48fcb1bdc1",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 39,
+      "node": 25,
+      "sha256": "4451c68aaafba2983c6b2de94b1df96f1f21c6711f4c3b331118c71286352ac9",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 39,
+      "node": 27,
+      "sha256": "352ce33c76956a7760570987854aa3ac9b3de23381d9c74965a1c6f69c971f37",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 40,
+      "node": 18,
+      "sha256": "892842ca1bead02670bad0e6407c4976843740ac1b042f3771acf39d7d3aaa44",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 40,
+      "node": 23,
+      "sha256": "02c367fb6c0f633aacb3456f6b893c5d8a8f219f4ff3d16e62a0cd17612701a5",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 40,
+      "node": 25,
+      "sha256": "a2dfbe04e5f642dd37ca060debc93be5a4d8ba159a1eb6eaf209ad684bbcda49",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 40,
+      "node": 27,
+      "sha256": "98bac205624c1cd378540b5feca08a6e01cbc6b233008551ec89691a659c4560",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 41,
+      "node": 18,
+      "sha256": "c993be04f35732c29d13cee03d6b9a5cc4e577cfd322738b0ad70a1033da72fc",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 41,
+      "node": 23,
+      "sha256": "c36e3ed0e598ba6ef8565afe1d9b16f9219b2f03513eef2ae4d04e2c643352aa",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 41,
+      "node": 25,
+      "sha256": "fda6a56b3064fbcdb79f9892725a520f4b6cf658704cf6fc8b8a42b20a3bb740",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 41,
+      "node": 27,
+      "sha256": "8ef066252f86a8a3386dfda4a6dfc93ee623034421cb8c612a11c748080dbedc",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 42,
+      "node": 18,
+      "sha256": "f9421bba1f4b409f9497aca4a1a6b617893f2025d36dfc752e759b11adcabde0",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 42,
+      "node": 23,
+      "sha256": "32e1644fa43c851fb19d8e8a39a2f1ab2bc5e4f1b241986d4f74024ab6f7afc8",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 42,
+      "node": 25,
+      "sha256": "aa69a8fb00497a357cb5b60f1d16d27ebde1bb87afb6c5c746ebf053bcafedcf",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 42,
+      "node": 27,
+      "sha256": "a8bfc0e502f586be3694ea6d627a6d5fbe03f6a3d031628f1f86ea4e97f2b468",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 43,
+      "node": 18,
+      "sha256": "c0cae884478a159bb4050dd5083c59bbbe942237ddfcfe0239cb15eaed957a14",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 43,
+      "node": 23,
+      "sha256": "a8dff37806b4e7c739a524748f9e7ff554ea1af254cd9f6b11eff125e900af71",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 43,
+      "node": 25,
+      "sha256": "ff72d2464219183e7d7dac5c67b84fe0ef0cc0cbd0a5f1495f89ce1308f4be59",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 43,
+      "node": 27,
+      "sha256": "ec4bf389e032f9069676f6573e487aedf6f926297f087ea99578e6e1c51fcef5",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 44,
+      "node": 18,
+      "sha256": "b4f250f1642fb5cc4b083fe0cc06ed072cc58dc9a5933126b6e82d6033e4b69e",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 44,
+      "node": 23,
+      "sha256": "2018eb4cb9add310809a814de46b8070223ced0a4851ffc84ccdde766d6039f5",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 44,
+      "node": 25,
+      "sha256": "c228469e8f8c4832dd0b5a67815c386ac356d78915e86b82dc20663d51e9c900",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 44,
+      "node": 27,
+      "sha256": "79e22e003ff2ad5f7351318536fffef039e5e2fa1fc04faa47829e6d7a933bea",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 45,
+      "node": 18,
+      "sha256": "161330f25d32aac6a1b1378294ec1808a8bfc04c293b8b938931b60e99c84a72",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 45,
+      "node": 23,
+      "sha256": "88660893d9826930b70c84bcbebc7991bce91adae5f10d69d704901f47e54016",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 45,
+      "node": 25,
+      "sha256": "d93c966d3db3ebf491a31e0b90187c966498abd6fd713a189ae57eaee6b2e187",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 45,
+      "node": 27,
+      "sha256": "296f270573d7eb52acb98c1ffc04fb864de6daf79c5114c524ba506b74bec354",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 46,
+      "node": 18,
+      "sha256": "e6482ab27365cd1183ced94c4d699982f2b43085ed0774e5301714ce2baf2a20",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 46,
+      "node": 23,
+      "sha256": "6e912c76255b0a2a254a21835d4c67a4968fa936d619008252c29cd7ddce9879",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 46,
+      "node": 25,
+      "sha256": "f7bc6ad6f6425d216989f7fb92488948d2ee86c67ddb5207556fd60e35393da6",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 46,
+      "node": 27,
+      "sha256": "bf6de43a01d0537670e950532c2159ed8803624c4fd1007e86c2d62e0e83e460",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 47,
+      "node": 18,
+      "sha256": "dd4a6fe95d60fb401a5d736dedf4a601475156693333a1df16a09ff7b64c0b07",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 47,
+      "node": 23,
+      "sha256": "b10b2a2b161976f4eb0a33fe9541567f796a72b98847a9d39d7aa0623e7de775",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 47,
+      "node": 25,
+      "sha256": "a2419a4309d8bac7f7519c5093c5cf7e6550310d452520c4732f7f68fa4e3205",
+      "bytes": 3145728
+    },
+    {
+      "fixture_id": "calibration/fx1_mixed-stress",
+      "instance": 47,
+      "node": 27,
+      "sha256": "b70bfef15827cd55c729f7e1c7c2a14d7c1e1315bdab6ed18b836f772b527478",
+      "bytes": 3145728
+    }
+  ],
+  "nonbitwise_output_case_count": 68,
+  "by_fixture": {
+    "calibration/fx0_ordinary-random": 32,
+    "calibration/fx1_mixed-stress": 36
+  },
+  "by_depth": {
+    "6": 12,
+    "9": 2,
+    "3": 7,
+    "4": 9,
+    "12": 3,
+    "5": 9,
+    "7": 6,
+    "10": 2,
+    "11": 6,
+    "8": 10,
+    "2": 1,
+    "1": 1
+  },
+  "by_node": {
+    "19": 4,
+    "28": 2,
+    "4": 2,
+    "12": 1,
+    "20": 1,
+    "31": 3,
+    "17": 1,
+    "14": 4,
+    "10": 4,
+    "24": 2,
+    "22": 1,
+    "8": 4,
+    "29": 2,
+    "13": 2,
+    "30": 6,
+    "27": 5,
+    "6": 1,
+    "16": 1,
+    "23": 6,
+    "26": 5,
+    "25": 4,
+    "18": 3,
+    "11": 1,
+    "3": 1,
+    "9": 1,
+    "0": 1
+  },
+  "max_rms_fraction_of_frozen_bound": 0.9090678024409594,
+  "max_maxabs_fraction_of_frozen_bound": 0.9090780908477382,
+  "all_nonbitwise_output_cases": [
+    {
+      "case_id": "calibration/fx0_ordinary-random|L3|out|node19",
+      "depth": 6,
+      "candidate_sha256": "fb5494f229b5f7dd44524553714e649860aa20141cc415bb4c80e52499c874bf",
+      "native_sha256": "3fe7c75039a928d52119ca0ea2536293dc23f936d52e6ce7d8d85165a241341c",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L3__out__node19.json",
+      "raw_file_sha256": "66f62256d25cba182bd99cfef0eaf0da6147d7cf3e987fff6853f24e645b1132",
+      "max_rms_fraction_of_frozen_bound": 0.909064823190456,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090765609384976
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L3|out|node28",
+      "depth": 9,
+      "candidate_sha256": "720d46a0b6beebbad502628baa6f51af8f47e0a442364a006da906820bfddef9",
+      "native_sha256": "ec3a4ce02b0c0168c3a2f32788bd1e04914b37082b1a6aec9b8c7884bc3177d4",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L3__out__node28.json",
+      "raw_file_sha256": "27bcb68ed65d8e38b18dfce9caa5f997396458d04d2a04c5503c7fea7a547078",
+      "max_rms_fraction_of_frozen_bound": 0.9090652637073411,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090771036072925
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L5|out|node04",
+      "depth": 3,
+      "candidate_sha256": "781df68dd547e334e0387fc86ce2d3197b4ebb354b949efe7fbfe27a0f17c4df",
+      "native_sha256": "9187a3e26c29c7d5545056d950c01f0546fac8602655cce2f97cc419371af87c",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L5__out__node04.json",
+      "raw_file_sha256": "f4a07a99d8bad125e47aefe4b855cb2beec8ef5296ad3b7f5bf5260561f36b0e",
+      "max_rms_fraction_of_frozen_bound": 0.9090671852789308,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090750835126864
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L7|out|node12",
+      "depth": 4,
+      "candidate_sha256": "c8d7bf8f1ec853979a966ea35f05fa2e700c81938aa4bcc9a3c11eea419e4e0d",
+      "native_sha256": "52f702e767981544078f8972b2df0b303bd2dcc8f22310d95e58d160575ed96b",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L7__out__node12.json",
+      "raw_file_sha256": "be4c710852fb06cca25f3214781622a1442995032f8676d07189c63b5ec196b2",
+      "max_rms_fraction_of_frozen_bound": 0.9090659926131291,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090754099952955
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L7|out|node20",
+      "depth": 6,
+      "candidate_sha256": "a9264406afb980d95c9abb4745d8bdf09182ff5ba55881869bdc8b3ceec5d67c",
+      "native_sha256": "4b777ec2e718722425a156a3816de9a9097a726a293a3a8f21d011cad29dce71",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L7__out__node20.json",
+      "raw_file_sha256": "bc5852e0edede89e770686e12bbf34a02d788ae86563dfae8225d81454ae0559",
+      "max_rms_fraction_of_frozen_bound": 0.9090654642607743,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090776422745821
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L7|out|node31",
+      "depth": 12,
+      "candidate_sha256": "bb58713766e7bef3d118c0ddaa4983fa4039c4fd67c03ce690077d7e1e71c020",
+      "native_sha256": "8be3a5d6e76f765d98cda9e173ff5c38847285819fe711048f1c162d7a10bd23",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L7__out__node31.json",
+      "raw_file_sha256": "3a59bde4206b023dfe3a1315d624d2a2a2e40232200ac5978015597ee5a27e64",
+      "max_rms_fraction_of_frozen_bound": 0.9090662707827067,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090754760669935
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L9|out|node17",
+      "depth": 5,
+      "candidate_sha256": "d043fd47bedc2c5632c5d82966760adebd5cf207ad392edb1f73e3757dee77d2",
+      "native_sha256": "b083472bcbcf5906dbd63ad333732d7b5935bd7b04406ac017ffddfd73b491f3",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L9__out__node17.json",
+      "raw_file_sha256": "b9380be24d06c67b00d181e5c03318ed90c4858b4f4f7b10293f4b83e423a3fe",
+      "max_rms_fraction_of_frozen_bound": 0.9090660441577968,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090772886536332
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L10|out|node14",
+      "depth": 5,
+      "candidate_sha256": "ae3aa049483c3c695fc341db7fbf8b73ac2ed0992d52ca14059d67aafd8a7bb1",
+      "native_sha256": "62df504164f2068c0dd13983ad1cbec315b34c21b80f37e8da88a2efaf476f4d",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L10__out__node14.json",
+      "raw_file_sha256": "48b53bf160f94bce233d8e3d11948995a530fae9bb4ea7c3a578d3351055e0f9",
+      "max_rms_fraction_of_frozen_bound": 0.9090646231296774,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090759106120886
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L13|out|node14",
+      "depth": 5,
+      "candidate_sha256": "6889b3338af69186a6adfc5ea0834711b953bf7f5692df5f864ee0c0f0afae50",
+      "native_sha256": "dabbd471ecf7383c172c7bb289b79f6a58bb3550b9a256651e388c971ce28e5d",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L13__out__node14.json",
+      "raw_file_sha256": "7bac7854ed2407522d5acc80ff83acf14e1a70f4a238bfb1d62d1472ffd060d7",
+      "max_rms_fraction_of_frozen_bound": 0.9090655948539499,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090772315700683
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L15|out|node10",
+      "depth": 4,
+      "candidate_sha256": "401036ddc27ff3255190dbdeb89573545430280721e8d1730484df79da4ea2ad",
+      "native_sha256": "0047c92c09054960a76dd67e70d540390bcaf5a1de0b4708a42d9a062d7f8006",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L15__out__node10.json",
+      "raw_file_sha256": "e3363da7544f25655d7b67867a0231e87d2809001a15a4e55314227aff9aab7e",
+      "max_rms_fraction_of_frozen_bound": 0.9090678024409594,
+      "max_maxabs_fraction_of_frozen_bound": 0.909076922483964
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L16|out|node24",
+      "depth": 7,
+      "candidate_sha256": "b15857fc9aaa9cacde5d02bb0afa93d678c6aee2dc93e57d484fd09383aaf555",
+      "native_sha256": "685e38987adb23e419f82099d6d19761362ed2541b3cec9fa42430c14d3914c3",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L16__out__node24.json",
+      "raw_file_sha256": "61e1687099df002621c60238860f2bd04f317d015d2910500e9f7867bb4c6fbc",
+      "max_rms_fraction_of_frozen_bound": 0.9090655970281948,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090765370252217
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L17|out|node10",
+      "depth": 4,
+      "candidate_sha256": "192eb679f796778bf132ca53be9884821e954f34a0ac741672e8262df948f658",
+      "native_sha256": "db1f5e82e09004b17c76e85a2ee4d7016083390782acd7a2717887857eff5297",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L17__out__node10.json",
+      "raw_file_sha256": "64940900ae5e77d36f1e8d7579244f56e870a3aa875682e5e11d3c8bdbc60354",
+      "max_rms_fraction_of_frozen_bound": 0.9090663066318647,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090763128698313
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L18|out|node04",
+      "depth": 3,
+      "candidate_sha256": "ff342d882e4abf6c786c5b359e7fe4bb6815c01c48fe01873cc938ee84e37499",
+      "native_sha256": "cb18de1925636b9e5571542e3b4837c2e088683a852ee7e2cd172a11371cb507",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L18__out__node04.json",
+      "raw_file_sha256": "8928ff371b102b29808ef047789a665664d0fedd8e2cc659af76b23bc55fe46f",
+      "max_rms_fraction_of_frozen_bound": 0.9090647744044927,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090768613649662
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L19|out|node22",
+      "depth": 6,
+      "candidate_sha256": "6ce348f7a0afcb46c84a58c2b60fe283c71555c03db06a310db069e931d4428b",
+      "native_sha256": "5c4f2eb0eb3398805872b4666c935b78c8bdcb5c7092c631a85ec58bf55518c5",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L19__out__node22.json",
+      "raw_file_sha256": "dfa2d86cdcc30a82d026d020dfdc17f5f798302341b454099dd3cd480720db44",
+      "max_rms_fraction_of_frozen_bound": 0.9090658651189039,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090747674974419
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L21|out|node10",
+      "depth": 4,
+      "candidate_sha256": "d2638dffed7715ca790c613ea44d0b8846c7ee825e47052253433409456b8c68",
+      "native_sha256": "da41eea9a8e2ecd9bfbb9fb90c6dcde9e2722d33fa09c3b533f57be0b9410f43",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L21__out__node10.json",
+      "raw_file_sha256": "0387760791140249b81fef749224be02f656f73584b99a8d2b47e0bfb2b69a9a",
+      "max_rms_fraction_of_frozen_bound": 0.9090656601097078,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090772605140768
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L22|out|node08",
+      "depth": 3,
+      "candidate_sha256": "127cc8b053ff7120be86409c54b78be6f4011056e762614099b607f35e00af07",
+      "native_sha256": "21e0a5c9c4f2f74010250485ee483816787b2c619651d489ab90bfbd2318280a",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L22__out__node08.json",
+      "raw_file_sha256": "f5c258a5b694611cf7e82756c33fa4a405acd4825329fce3b977961a86a4c6f6",
+      "max_rms_fraction_of_frozen_bound": 0.9090677085217613,
+      "max_maxabs_fraction_of_frozen_bound": 0.909076567016123
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L26|out|node29",
+      "depth": 10,
+      "candidate_sha256": "d6fd6c03c452c988db9e665d250fd45e3d579c8484f63404d6e55e8a54dbcd9f",
+      "native_sha256": "d39d83264d575db95821d9eb0a2b0b80d74bbdeeea39f0774d4be4c437469ab6",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L26__out__node29.json",
+      "raw_file_sha256": "fc6aab25f42a72880e256531be51cd57ac623e03d61e37a274ef329fcc6880f8",
+      "max_rms_fraction_of_frozen_bound": 0.9090657649532051,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090769245508966
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L28|out|node13",
+      "depth": 4,
+      "candidate_sha256": "90eda39ec8dd54e3f1a39cbfe451e9d6820c37e818daa1dfbd2db3910dc7b2b6",
+      "native_sha256": "826d4ff9a79bf3937ea6dd41f1e8800021499b6a426223bceeaef65ac62ed2df",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L28__out__node13.json",
+      "raw_file_sha256": "5bee7c566d8989b9d7900cabe93e9c0e0aa29bae680082e2a22200acb33e0390",
+      "max_rms_fraction_of_frozen_bound": 0.9090652021397941,
+      "max_maxabs_fraction_of_frozen_bound": 0.909075647757957
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L29|out|node30",
+      "depth": 11,
+      "candidate_sha256": "243f255d6e002b81a1b66dba6daada7f50b541ea3af626c01dc1dd81a6899b81",
+      "native_sha256": "eec4e22bcf32ebbffa785869ec25bc88e3f40474e222253d80fd98d04bceebed",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L29__out__node30.json",
+      "raw_file_sha256": "acc256136f3eba0a96251056c906c1d1284be52158c257dbf176ba69b1e48e81",
+      "max_rms_fraction_of_frozen_bound": 0.9090665452454776,
+      "max_maxabs_fraction_of_frozen_bound": 0.909075617966578
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L31|out|node27",
+      "depth": 8,
+      "candidate_sha256": "35ef59dec9dce9ebacc816494a6a5bdbde39b6d4ade776b5de6332efa425fc5e",
+      "native_sha256": "61f1462aa2521fee214ceaba224c6d1acafa3abd79e0f4a027584f72248af083",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L31__out__node27.json",
+      "raw_file_sha256": "caa16f48d635ba479e8ce5a00216e2beb90d11d776cbe67e004bf7bc12e98548",
+      "max_rms_fraction_of_frozen_bound": 0.9090661798366476,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090750887825733
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L31|out|node30",
+      "depth": 11,
+      "candidate_sha256": "67d23147923e9988f18590b12312b58ffec7a056c5b1751343c770c2ecf14bb4",
+      "native_sha256": "b082f3f11d5d7a8ba59af594e97152272f154665b1bb632d623ed6ab4485d822",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L31__out__node30.json",
+      "raw_file_sha256": "95fa428a784891dd53158ccaf94423b1038dbf9759b3a2aba0ffee1449e7edda",
+      "max_rms_fraction_of_frozen_bound": 0.9090644834309967,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090749323601334
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L32|out|node27",
+      "depth": 8,
+      "candidate_sha256": "263758cf9ec95f1481fae0da9e5fe8402d0add602368a0f095e153c0e09b99e2",
+      "native_sha256": "763ac18bc9a891c279c380eaf20378567a0760ff2b7543fe5fa5f4a4d82b009a",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L32__out__node27.json",
+      "raw_file_sha256": "1be3e01dbc548446e52dfd6f2dcb31ee85bb66f5edf68910da925fe620c81d2c",
+      "max_rms_fraction_of_frozen_bound": 0.909065588075147,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090759372401996
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L34|out|node14",
+      "depth": 5,
+      "candidate_sha256": "12e4696627696988215f4663d8d0e2c1dfee37f375cffa2000e3c9dcac356dea",
+      "native_sha256": "2747cf38a3f9645e9467660c944f46ffdbb39af3b9eee52cf7936193c6b25602",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L34__out__node14.json",
+      "raw_file_sha256": "0c99bb92b1f66d20839fe234fb769108169996a45c5d0222573c9f1f8be95cb9",
+      "max_rms_fraction_of_frozen_bound": 0.9090654858173113,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090765458773021
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L34|out|node27",
+      "depth": 8,
+      "candidate_sha256": "e8ccc42b10d92b820068695285c6984047a12d621b21e893c1173b712c093c3b",
+      "native_sha256": "9c3a5b1b4f998c667f04b5be089123fbeaa5ba1da8552e2c46fd7a10e5e9a9da",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L34__out__node27.json",
+      "raw_file_sha256": "4b81d437cb2ae2a99c1b456f8004f4f5711e872318b58b4467865af8e3729b73",
+      "max_rms_fraction_of_frozen_bound": 0.9090649043922654,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090768591923508
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L38|out|node27",
+      "depth": 8,
+      "candidate_sha256": "4513f20c71dc5eaffe4b8590d1ad5f0905249b4f3056dfd8cf2a2a28722d6dba",
+      "native_sha256": "60546d4a44704e002901d6440892012c507fd02cf3c937da4b8d4843f8920829",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L38__out__node27.json",
+      "raw_file_sha256": "baaa32007c1e3d58360ac2f2683cedb2d8426c15cbed4cd2c6c157fe984a28b0",
+      "max_rms_fraction_of_frozen_bound": 0.9090644741571361,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090759246721203
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L40|out|node06",
+      "depth": 3,
+      "candidate_sha256": "1b56e78acb7a84d453f4e9f1ca01c843d39bb1b6314cb137d97785af808b77e9",
+      "native_sha256": "2d8001a4a7ce6239ee5f145d0ee5c1cc3af3a0a1776592af4f0145eee556f8c9",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L40__out__node06.json",
+      "raw_file_sha256": "b8f178d9abfc5eca180df83d979fb05960c65e0410fb57a3e3909bddb84dc134",
+      "max_rms_fraction_of_frozen_bound": 0.9090667067650846,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090777492757137
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L40|out|node14",
+      "depth": 5,
+      "candidate_sha256": "dec66193eb0a19ecc356ded77da1018d718ba965c822b9ed808cf4f43650ffed",
+      "native_sha256": "446bc1fc95ba7ef51554abec10e05442eeecacea2ee2faacccca2347b8139722",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L40__out__node14.json",
+      "raw_file_sha256": "a84eacf703029ea67b3082f329f58365b9274cc6c440ec38fadcf11e2f08a585",
+      "max_rms_fraction_of_frozen_bound": 0.9090652072762411,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090763633776416
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L42|out|node13",
+      "depth": 4,
+      "candidate_sha256": "26d0140676bbc2407946379fc6db1a1f3d86b88815e798010a3bed7aaeefd7ec",
+      "native_sha256": "9ace26bd78bf73401a27c32223895430ca81f9f8783eb2541269a0c93e9ef04a",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L42__out__node13.json",
+      "raw_file_sha256": "e14590ceb0edf49843a5de1fd5c7bad61a95310dcf800b548d412a8e7c561419",
+      "max_rms_fraction_of_frozen_bound": 0.9090652229554181,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090768885612007
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L42|out|node16",
+      "depth": 5,
+      "candidate_sha256": "c700bb7b57304bd0335bf8101742b73f226aa47be799348480473562f3f60e91",
+      "native_sha256": "ce31058aaca73afcfa60fae13f1ad30c5fbee1e016726dc026d3881fd7865214",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L42__out__node16.json",
+      "raw_file_sha256": "de9de5266c855db5f56683581b3114486780785e75f3804cfb35557e39a5ca4f",
+      "max_rms_fraction_of_frozen_bound": 0.9090670744979306,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090765027850812
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L44|out|node23",
+      "depth": 6,
+      "candidate_sha256": "8bd470abb2ed8f567f7fff31b90fe16cd4fb9c35e802321310ce5fdd87f823d6",
+      "native_sha256": "f22b9251e094d49058ab6ab8d19eec93c4bba2d8e6b5eb48a6f38757708ff94a",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L44__out__node23.json",
+      "raw_file_sha256": "87a2f96f163cd5e97a6daccf8f38d2507b045ab0730d80e747cc09029eb1ed92",
+      "max_rms_fraction_of_frozen_bound": 0.9090655503054289,
+      "max_maxabs_fraction_of_frozen_bound": 0.909077005500386
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L46|out|node26",
+      "depth": 8,
+      "candidate_sha256": "6dd815f185079694fe85244d23c91183b1caf626d7df58ce6b8d3d1a123e608d",
+      "native_sha256": "d4a76164975505fb10e6cd771525bb68fbbc7f369b304b0362466014500289a4",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L46__out__node26.json",
+      "raw_file_sha256": "de66047351301181b72a3822058406d33337837ea8a775f8de8b02266799a174",
+      "max_rms_fraction_of_frozen_bound": 0.9090666389655453,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090779010118951
+    },
+    {
+      "case_id": "calibration/fx0_ordinary-random|L47|out|node25",
+      "depth": 7,
+      "candidate_sha256": "bac776ac929a6dd831fa1584ba99a25ad6e406059bb24d3a1966dff1c803ebb3",
+      "native_sha256": "0e9e5c34a153f0178666f83f03d66060b8f1337032fcd9cd461390394b822aa7",
+      "raw_record_path": "raw/calibration__fx0_ordinary-random/L47__out__node25.json",
+      "raw_file_sha256": "30f923ed6214846cedb7a28f1f3d9b7f77b864e68a94f5fe670fbbe9940dd377",
+      "max_rms_fraction_of_frozen_bound": 0.9090645733615798,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090761036095787
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L0|out|node18",
+      "depth": 5,
+      "candidate_sha256": "9f72f31f5c33a5c450efdc3c2c01ff199fb95e57a3aeef7195232ee9b2a35459",
+      "native_sha256": "5e9463a6916b3c479e7aa215998facf9070c2baa08ccd8bfe959eca96966b436",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L0__out__node18.json",
+      "raw_file_sha256": "40032d89dd5604ae8939db7b14af1d7f381f565a722930a8507a9bbd0e03c6ca",
+      "max_rms_fraction_of_frozen_bound": 0.9090649164248266,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090771978804724
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L2|out|node30",
+      "depth": 11,
+      "candidate_sha256": "391048444efff692462b6c8c36e751b54048a59430dcec3e42ff478157e2497c",
+      "native_sha256": "acd00feed301f031a286c0aac0b150663279b676aedbda0ad19ae5cdc6a96327",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L2__out__node30.json",
+      "raw_file_sha256": "946b0f4ee35f736e4da36f66ef5956b9fea35796a071e5115b72ba56b87a41be",
+      "max_rms_fraction_of_frozen_bound": 0.9090670844433193,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090774870889324
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L2|out|node31",
+      "depth": 12,
+      "candidate_sha256": "5f31e8cde33a02859edfc363592ced71a76718f5bd37c0eea8d248335735c387",
+      "native_sha256": "69496d85969952fc58637c89201714e39eac8c7de091220f61d3ed2924341169",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L2__out__node31.json",
+      "raw_file_sha256": "d7995bec939c6eb0d68f588faddd2de0cfb3d4fb66139094e9d593a8f8f86637",
+      "max_rms_fraction_of_frozen_bound": 0.9090646703312885,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090768832162869
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L4|out|node08",
+      "depth": 3,
+      "candidate_sha256": "9ff6372cf7473cd71a4a4ab5a02699d07987b67b483bf84b0d16c9bac4fec821",
+      "native_sha256": "8e68d4d06ae1d6db7c300026545bef814fe337115751f984ccc01c9fe378b42e",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L4__out__node08.json",
+      "raw_file_sha256": "4064bf34b38a296a77ff4419fc77a2ae6e82c04d7da548845902bccbe17091a0",
+      "max_rms_fraction_of_frozen_bound": 0.9090653129032149,
+      "max_maxabs_fraction_of_frozen_bound": 0.909076303777028
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L5|out|node25",
+      "depth": 7,
+      "candidate_sha256": "e3296f2c935ffe044da6d3a23554b879392c74c5709164cb2165ffa1c592b024",
+      "native_sha256": "d1242c8075238d73d0d8835ed856499c7def832afe114dfd58aa056ee2f5f717",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L5__out__node25.json",
+      "raw_file_sha256": "d87952899d61889e46ae589fbae888c594f1528a6c5263bfef9a643294f2dc9a",
+      "max_rms_fraction_of_frozen_bound": 0.9090669817143326,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090776395311431
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L5|out|node27",
+      "depth": 8,
+      "candidate_sha256": "57be32deb041a1a911399172feb6178011d9ea53ce4971a44dbc3e1915d03c21",
+      "native_sha256": "908f155198c611d1d3e9603f1ccd1be6d68449ca5d495c18b30fe620a3d33e4f",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L5__out__node27.json",
+      "raw_file_sha256": "1547d764a1c517d872d68c5e2873a15343a5c1d5b9df2b43247d6d0c4b7ab647",
+      "max_rms_fraction_of_frozen_bound": 0.9090653051021756,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090742475080283
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L6|out|node28",
+      "depth": 9,
+      "candidate_sha256": "105dab58d5588e047b31abbd62285b4fdc8ed4807c100a30634d90c50ecf2f36",
+      "native_sha256": "499fb5b837940c3709ae45a6d6179c641b56cfad296ec1904c0e0611c63b93fb",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L6__out__node28.json",
+      "raw_file_sha256": "b3c6f112c52be1a03bfded56977f7b24560edd4456c8e6ac942878e2ef1939c1",
+      "max_rms_fraction_of_frozen_bound": 0.9090662762399289,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090768468191354
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L8|out|node31",
+      "depth": 12,
+      "candidate_sha256": "c3971a40ffb344d91b548147ed8f0f5aa92a5cac592794c7b3a07bebd7faff03",
+      "native_sha256": "b2f7a02f50f96c319410c83dcca7a82d52d13e7337f7451587172448188b23ac",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L8__out__node31.json",
+      "raw_file_sha256": "7f14abdcd585d6babba3c9abc2c03a427fb4e8f65b69d245c9ad4c7a7b94ca2e",
+      "max_rms_fraction_of_frozen_bound": 0.9090649137347449,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090779731250724
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L9|out|node19",
+      "depth": 6,
+      "candidate_sha256": "dc984cb5ef2af6b4ec6993f98dc85bfbef2655941f30bcb21182aeb531808a24",
+      "native_sha256": "2a24706c4f126ec1a9959ed7255cfbbf136c8a2b6b44b487b62cfc520dd1a59c",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L9__out__node19.json",
+      "raw_file_sha256": "c3fd54b05ec498454e0fe3af7887aab1029e22391e10116253aa9a4648797b9e",
+      "max_rms_fraction_of_frozen_bound": 0.9090653957887153,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090770865430688
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L10|out|node24",
+      "depth": 7,
+      "candidate_sha256": "0a7c6b9020d1c4a86f319c6673fc6efb3682c4180d6457a3a7b893d29a7f8b12",
+      "native_sha256": "3bfc9fdcbc1c53e20b9ef21ab81602ceb91aeddd465c0eec54e2897544af4657",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L10__out__node24.json",
+      "raw_file_sha256": "9f26bacb436696f07894b49326f2517ee61a1571d5b068faacc8b5032610ec1b",
+      "max_rms_fraction_of_frozen_bound": 0.9090652456597563,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090752639433868
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L10|out|node25",
+      "depth": 7,
+      "candidate_sha256": "90121a5055447e2f7d38c3d0b6e356dc815dac8b76d8024fb7780815113a2d5e",
+      "native_sha256": "9566df178e98e7ece8b89d16ec6fac97c5fe5a46a54f499d61f1f1b105e0ac24",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L10__out__node25.json",
+      "raw_file_sha256": "a3ee5c6c3590150e7c302e10539097927616946fb3578ce7b3f6a68b2a205f60",
+      "max_rms_fraction_of_frozen_bound": 0.9090649620118106,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090751236901216
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L13|out|node19",
+      "depth": 6,
+      "candidate_sha256": "7f69d1299809112ae3dda73f320840f292ef15b7fe40bacea26bf24af431c9d0",
+      "native_sha256": "349dbe6bdca6143111e8cd69572b1438461f6b9da8cbb4c55d7c8db884068cb1",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L13__out__node19.json",
+      "raw_file_sha256": "c26ca4ba4c88cf0ab70f5ae435a90b99d4c862f9ff7169f1bf9346d5b0dbe042",
+      "max_rms_fraction_of_frozen_bound": 0.9090670623454993,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090780908477382
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L14|out|node11",
+      "depth": 4,
+      "candidate_sha256": "408ede6b1784aafc65ad9914a42ee5f9a698a8052cf93b358a7a1cd8ac494e7a",
+      "native_sha256": "d1c2655c55d62ded8e61480687a736840d0661d1da5b3f60ee2ff862f7e4e4ac",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L14__out__node11.json",
+      "raw_file_sha256": "8640724e8baa1aa6e701754c7fcebc8777a63f4e55d1db3868ca93596adb7bc4",
+      "max_rms_fraction_of_frozen_bound": 0.9090665925528747,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090772741086031
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L14|out|node29",
+      "depth": 10,
+      "candidate_sha256": "06c6de58d8079f175a1ca82249d6762a17d52c6772504c42e0a7fe2cc1f578dc",
+      "native_sha256": "45fb1c59863ce82e789cbfa8bf8d2e0d934953938155c4308b48b8526213dd7b",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L14__out__node29.json",
+      "raw_file_sha256": "5031f30a0cef654dc20023a1ea30a28abc3cf2f9ea12afc4e9e85059fe62d339",
+      "max_rms_fraction_of_frozen_bound": 0.9090640145651109,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090742470417117
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L20|out|node08",
+      "depth": 3,
+      "candidate_sha256": "134467bfb2cb29333174de548e6088c2ade1da60b517fcf1b45729d0d4c0bba2",
+      "native_sha256": "5cc16a29cea50c544514a19f54003f7c6412e1b9ccc5dba3fedcef91ae9a5cb4",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L20__out__node08.json",
+      "raw_file_sha256": "c37e0d3a2822376bc8bf3336d4315e6dc897cb98dcf0464d63e7e79047f5999a",
+      "max_rms_fraction_of_frozen_bound": 0.9090645880840926,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090760696277328
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L20|out|node26",
+      "depth": 8,
+      "candidate_sha256": "da512fdae88149486e2c6fdb631ca61ec27d4078e6a0a7b4b5e4c568758520e0",
+      "native_sha256": "2d7c9afa6f7c1f801d051e8499d00d4e41dc2ce5566ad39f95cae2eb0303c1b9",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L20__out__node26.json",
+      "raw_file_sha256": "49eee0112cff806186929370cda3e2da2ed78bb9069d09d58a9575ae3b6f2456",
+      "max_rms_fraction_of_frozen_bound": 0.9090654559487961,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090768705778863
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L20|out|node30",
+      "depth": 11,
+      "candidate_sha256": "f9e26e8aef6885855ed4f26c93387bfc1715dc2ce3cf3d9b8d1e17dd0e72c011",
+      "native_sha256": "7ba937a801a9e92bc63751793ff3d63f5987828c174dd50702832180c4f408cc",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L20__out__node30.json",
+      "raw_file_sha256": "2e64fca5336c5f5553a96aad63a18f520f4a6d782f21470fa04cfdc60f4a3ae1",
+      "max_rms_fraction_of_frozen_bound": 0.9090663568710866,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090769910475007
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L21|out|node19",
+      "depth": 6,
+      "candidate_sha256": "21ad1b7f2906494581d0038cc1f2c5339e10727486afe46187026a574a903c3b",
+      "native_sha256": "8e30b69615d88e8e1a9d3ba61ee60cacdd85d1b4f628dd07795748d7dec17098",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L21__out__node19.json",
+      "raw_file_sha256": "9efc3c85531bd7d653eb0ad03ff4bb18a4a785751e13e9ffe5900a5d102d8135",
+      "max_rms_fraction_of_frozen_bound": 0.9090662237895906,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090766101858827
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L21|out|node23",
+      "depth": 6,
+      "candidate_sha256": "380c7f97231140ab02acba2c5bdf9e4d4b6b0820adac6c50b2f5ed61c11d4048",
+      "native_sha256": "64aa38ce072d6b4b752d5c926909536ffe0572b252014a3c8d87a7a1c6d6e3ec",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L21__out__node23.json",
+      "raw_file_sha256": "69ab543f473ef3da34da8a1e854df62de3028fd2cde85828a46a8077eaf29274",
+      "max_rms_fraction_of_frozen_bound": 0.9090659239027281,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090757110321018
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L21|out|node26",
+      "depth": 8,
+      "candidate_sha256": "8864ad26d85e199fe0d0f681b7426c6da490469a96b05ecc0a105e115c4a388d",
+      "native_sha256": "a22f41fb3f9682dfa73670b2fd2e0ee3b7ac0b315d7c7be823d9daa6b8cada73",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L21__out__node26.json",
+      "raw_file_sha256": "19c0476a0c3257abf29607f82d5cad4fd2f326bea3a8bed5f1f620e9689cc966",
+      "max_rms_fraction_of_frozen_bound": 0.9090644128377346,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090768159548406
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L23|out|node03",
+      "depth": 2,
+      "candidate_sha256": "0e929a63b583fc836aee43fbcc1aeb4ebcc29fa38f1881b30d2a83ffd4ff8e52",
+      "native_sha256": "86ba883dfb45ed088fd10c7718709d2258dd99596c50ce9be4e794142173b8d6",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L23__out__node03.json",
+      "raw_file_sha256": "4d76db2de40e82871b0a80df54681586f43cbd6bd25662a8b0710088efc78464",
+      "max_rms_fraction_of_frozen_bound": 0.9090657912175922,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090769895824852
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L26|out|node09",
+      "depth": 4,
+      "candidate_sha256": "15bc987bc5eb0e2083bcc43ac10770fdc4c920acc15af1b8ed7511188bd113f1",
+      "native_sha256": "5c3f1626c31032a664dd588e181bb9f90dc6b5cf721a321d99985dfb16a2d1ab",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L26__out__node09.json",
+      "raw_file_sha256": "c56894e292122fcda8b32ea3f2b2ed180e75a0acdfc1ed971d256b59be083158",
+      "max_rms_fraction_of_frozen_bound": 0.9090650986005868,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090771217139161
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L28|out|node18",
+      "depth": 5,
+      "candidate_sha256": "c3f458ea8d1fee37e686eaf88c318d68cc2d759b46d41844a0909e1e28272ca8",
+      "native_sha256": "f8ee16e706808c39bbcd7d02bc7f358599f6fb1aef4954041bac7843d47bd13a",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L28__out__node18.json",
+      "raw_file_sha256": "7b871cb3416e4b3bbaa7261dac1dc6dc1527e59749f994785a90e539aecd90ad",
+      "max_rms_fraction_of_frozen_bound": 0.909064279836819,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090771654877066
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L28|out|node26",
+      "depth": 8,
+      "candidate_sha256": "7671d3c38fb95112b4e128e843e2f69b1ea8665d1859c500f630351c4ed8dbc9",
+      "native_sha256": "680daddfad065ca52921b596131f374d06fe33b9e46d756e4777b963fb311287",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L28__out__node26.json",
+      "raw_file_sha256": "1b155b32659c81ed8732cfa8180d71b7be7c71f3d94a34b613b78c5db474fc3e",
+      "max_rms_fraction_of_frozen_bound": 0.9090659245545631,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090756646025329
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L29|out|node30",
+      "depth": 11,
+      "candidate_sha256": "1cc225c734ef82b330a1e3afb996d79b2d3218c7f5f1de37214ca571758960af",
+      "native_sha256": "3f665196efa65a9c2726dc3b89e415aa9af2d080ce79a131f0acc423aaaee4ad",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L29__out__node30.json",
+      "raw_file_sha256": "8c054643213cab7d4d4f92e3b9c7fe8958139803132d527874379f371328dcf0",
+      "max_rms_fraction_of_frozen_bound": 0.9090665790930482,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090754571482258
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L32|out|node23",
+      "depth": 6,
+      "candidate_sha256": "60fdb41b205f238be0cc2eac0355910a16d3db37e9cf4e3e02d51dcc17deadce",
+      "native_sha256": "da7aba5e7d4bcef6507bfa1588301b0504872fc132840e3d289e53845eb73912",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L32__out__node23.json",
+      "raw_file_sha256": "addb0c4195d2aab906a33b67059e8de5147efcd6251c1f1ae6f8965c6c63e83c",
+      "max_rms_fraction_of_frozen_bound": 0.9090658251942059,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090759237994215
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L33|out|node18",
+      "depth": 5,
+      "candidate_sha256": "bb1adfc4d09195773ec4946fa7a4268df6fd3666f016662c068042bc7979339d",
+      "native_sha256": "0d9a8e394cabbc5445aa26efe46f0913bfe5eb634d495190cdac8194817f97fc",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L33__out__node18.json",
+      "raw_file_sha256": "18a37135ef23b10693a6365115e673b2ca33b9e0adefd5032ddfbe7800b24e6e",
+      "max_rms_fraction_of_frozen_bound": 0.9090647887274078,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090761335910593
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L33|out|node23",
+      "depth": 6,
+      "candidate_sha256": "58919c216adf901408bc23c144baf5bdb2d7b5e5b88a5f51138d79fa0ed14c84",
+      "native_sha256": "26f94e715fa86254d9db72726095f79cbf51fd944c3708ae291a6831591a8fb0",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L33__out__node23.json",
+      "raw_file_sha256": "131b655493c797c8708aa9a88d970286d1b70b96ec73af5d297ae12d895ec70e",
+      "max_rms_fraction_of_frozen_bound": 0.9090655564989374,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090776412402483
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L34|out|node23",
+      "depth": 6,
+      "candidate_sha256": "22647228da9e09f30893fa012f72e1e549f97408b54aaafab317bfdf1235fb26",
+      "native_sha256": "9537e9c5c2e0e7b23e5f508f71f2aa6683fac2cc7b8f9dafc31e012d47b8bde2",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L34__out__node23.json",
+      "raw_file_sha256": "c31472140e0c10b288926332da78ea0d7ee7c26c3376011baea49c9c27c82f56",
+      "max_rms_fraction_of_frozen_bound": 0.9090647196097887,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090744709383594
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L35|out|node00",
+      "depth": 1,
+      "candidate_sha256": "588861a4f9eb5edba2a3af4dc23eab7f4c67f51d0506adccee31bc89ad6127c4",
+      "native_sha256": "7880704f0f5eb263cd4065c16d35b958f875e10aab6d484e74d7373f30663164",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L35__out__node00.json",
+      "raw_file_sha256": "1682147e953dd5c3f2590948f83f472419546b83dc8ea1b9ec09dad4a2af66bb",
+      "max_rms_fraction_of_frozen_bound": 0.9090663568737876,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090756403174921
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L36|out|node10",
+      "depth": 4,
+      "candidate_sha256": "582c2306b8b4d58193559baf8af2f72006dc98a560a35e14019843819b3eb17c",
+      "native_sha256": "e537f390a0a3cee50efabaa323ce47d92074220f39f770d7c2d6b5eb8e358b05",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L36__out__node10.json",
+      "raw_file_sha256": "e067fd0e80159051bff21e4cd9a4a497d1330350fc0184ce96af3c857c633d14",
+      "max_rms_fraction_of_frozen_bound": 0.9090643991794511,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090766422182854
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L40|out|node30",
+      "depth": 11,
+      "candidate_sha256": "fd36b1d1d3d44c29cc6c279bd26712ac545b76ed78c163fdc1260e1d9d435d0b",
+      "native_sha256": "470f0b73cfbdc3197b42c274c31f21d02b3f556f28d84366ed4c5a3669901f24",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L40__out__node30.json",
+      "raw_file_sha256": "1a8f5bfa3b7d4314a1d83d8efa7762d10336650b18a15599f342fe6dd435c75a",
+      "max_rms_fraction_of_frozen_bound": 0.9090661344193695,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090769391076466
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L41|out|node25",
+      "depth": 7,
+      "candidate_sha256": "0ec29ba41c6583b938b3e2ef0071401b90464db9e0da728dde3099ecdba997bd",
+      "native_sha256": "25f3a7f83429d3200e255e0dbf5c8be7f65649112059cc9a1a0770d01107bbef",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L41__out__node25.json",
+      "raw_file_sha256": "d114ff6e7746350711f5ef4fc04a3ec0d0c1ad64bb830b4859c72dd343093aab",
+      "max_rms_fraction_of_frozen_bound": 0.9090648198490617,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090757582662886
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L41|out|node26",
+      "depth": 8,
+      "candidate_sha256": "77c8fe0027745992a639582556f0f02e8114a8eae44173282a5cd0d9988fcbbd",
+      "native_sha256": "d940426f7f92d570f686b9904fab7bdd5fb44bd2b28f35cb3451d1bc6b9f790d",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L41__out__node26.json",
+      "raw_file_sha256": "20e751c6b64ec7b98f5e1f9b9d8b454771c4d968fc87c2466e83bc9f7279e74a",
+      "max_rms_fraction_of_frozen_bound": 0.9090646541920027,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090756136142146
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L43|out|node08",
+      "depth": 3,
+      "candidate_sha256": "a5ce19faa2f460098a980e93f87b90907aa255bad2cbffc3637bcb82fbaa9d28",
+      "native_sha256": "91585c83f206c127ffa8d4beaaa55e180cb3733101892ff382d884300e209040",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L43__out__node08.json",
+      "raw_file_sha256": "9e15190cbb95b0984c96f3adacc895d3e9d42b7eb4177b2b3b40c25d830428e1",
+      "max_rms_fraction_of_frozen_bound": 0.9090671674240219,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090771574444569
+    },
+    {
+      "case_id": "calibration/fx1_mixed-stress|L43|out|node23",
+      "depth": 6,
+      "candidate_sha256": "ff3be74fb32654289d8348c9bf47dc4f752854ea9e3565a0cb35f8a8ad4be83c",
+      "native_sha256": "6bd3dcddc8a2740951a7321f884daf45ecd014443848eb80b1104f06691dce2d",
+      "raw_record_path": "raw/calibration__fx1_mixed-stress/L43__out__node23.json",
+      "raw_file_sha256": "00a9a3b35b63733b6dc748966d83f956af228a55530ee4c0643994025d2ecb23",
+      "max_rms_fraction_of_frozen_bound": 0.9090658506558791,
+      "max_maxabs_fraction_of_frozen_bound": 0.9090769963692055
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "scope": "CPU AST/render/explicitly injected failure controls only; no Torch or production remap execution",
+  "hashes": {
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_hooks_v9.py": "905e35898a504357b8a96f2315395e0bec37d5b2509d2ae0a0709b827271317c",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_patch_candidate_v9.py": "93894ce2758c8283f60dd90f64b364fd1efd6f310ab63ff3f5e25814928ab202",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_mtp_kv_publication_witness_v1.py": "9239e35fa10395cd01e7e2a9a7c4a34b42fea753b1f0b064ac16909937ace976",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_hidden_publication_live_v1.py": "e634c349434f29cbc5d5045fdd2098144a56871a4a66721a1ff85dfd0bab3eae"
+  },
+  "controls": {
+    "runner_inverse_v8_exact": true,
+    "rejection_inverse_v8_exact": true,
+    "eagle_inverse_v8_exact": true,
+    "original_remap_call_once_exact_AST_and_adjacent_before_after": true,
+    "before_operand_failure_retains_partial_record_and_raises": true,
+    "after_operand_failure_retains_partial_record_and_raises": true
+  },
+  "rendered_sha256": {
+    "runner": "1eb4cb97a1d44066e78735ec7917172904ea9cbdc8f470ac9d79299b4307f2f5",
+    "rejection": "dc2eca29f1329fbdd56bcd75e3cd6f8a30535d504d3efe32ecb7bf56341d43e2",
+    "eagle": "ff6c97fe5f3db9ce14361d3960d2c6716516ccb0fbdb41f37a29e7445a7330a0"
+  }
+}

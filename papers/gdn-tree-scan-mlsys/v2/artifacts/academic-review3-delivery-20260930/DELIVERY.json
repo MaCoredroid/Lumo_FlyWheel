@@ -1,0 +1,40 @@
+{
+  "schema": "lumotree-academic-review3-delivery-v1",
+  "created_at_utc": "2026-10-01T01:33:39.210120+00:00",
+  "scope": "academic editorial and citation revision only; scientific disposition unchanged",
+  "published": false,
+  "new_inference_or_workload_attempts": 0,
+  "pdf": {
+    "path": "main.pdf",
+    "sha256": "987e6dc21fc34c81dfa8d91b2ab2b3016384bded3adf0da8c739a6a7241b7392",
+    "bytes": 285597,
+    "pages": 11
+  },
+  "source_archive": {
+    "path": "lumotree-source.tar.gz",
+    "sha256": "553ea2c1efed0a1a942fc336ac56ce7fd2cffa601a42d5e33ac11ad59a429f5b"
+  },
+  "checks": {
+    "method_tables_unchanged": true,
+    "figures_unchanged": true,
+    "algorithms_unchanged": true,
+    "GDN_component_unchanged": true,
+    "native_table_unchanged": true,
+    "acceptance_timing_table_unchanged": true,
+    "ten_task_outcomes_unchanged": true,
+    "recurrent_counts_unchanged": true,
+    "native_study_in_appendix": true,
+    "one_artifact_self_citation": true,
+    "one_workload_outcome_table": true,
+    "removed_historical_narrative": true,
+    "clean_compilation": true,
+    "clean_bundle_compilation": true,
+    "workspace_clean_pdf_text_equal": true,
+    "visual_review_all_11_pages": true,
+    "unresolved_references": 0,
+    "overflow_warnings": 0
+  },
+  "artifact_tag": "lumotree-v2-artifact-r1",
+  "review_notes": "notes/academic-review3-20260930/REVIEW.md",
+  "previous_snapshot": "artifacts/before-academic-review3-20260930/MANIFEST.json"
+}

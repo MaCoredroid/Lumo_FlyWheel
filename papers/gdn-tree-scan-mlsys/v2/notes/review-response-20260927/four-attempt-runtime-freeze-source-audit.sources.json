@@ -1,0 +1,103 @@
+{
+  "files": [
+    {
+      "bytes": 3751,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-case-study-v1/SCOPE.json",
+      "sha256": "f9a9d7cd4a0be3da43a9f6a92f6125a199af96515707863aafee4acb9e3ac822"
+    },
+    {
+      "bytes": 229690,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-case-study-v1/CONFIGURATIONS-v3.3.json",
+      "sha256": "a08a31e3c2ea9bac2c101cc3ac6af69b87f048128e6c71e40cc9367a30fe55cd"
+    },
+    {
+      "bytes": 7896,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/tools/identity-adapter/runtime-freeze.DRAFT.json",
+      "sha256": "c0775d4630c07a4b2bb66c9d8d25386f079dd7971095a54bb9e04df2c986a315"
+    },
+    {
+      "bytes": 35279,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/tools/identity-adapter/e3_preflight_v4.py",
+      "sha256": "bb8bfceb095ea0742f38825745f3631205d249f1db274c8b89bc873b1ec84b7b"
+    },
+    {
+      "bytes": 21178,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/tools/identity-adapter/known-locks.json",
+      "sha256": "8ace7c4c3270f45c39cc4e247373c58579716a947b822792f585ef3dd03d493f"
+    },
+    {
+      "bytes": 65879,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/tools/attempt-runtime/sole_executor_v3_7.py",
+      "sha256": "4fe88d9bd4a23cca788487fdec61a9fb17318f7407e691df9b54b99a24a4a101"
+    },
+    {
+      "bytes": 21878,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/tools/attempt-runtime/runtime_v3_3.py",
+      "sha256": "3c2da10b0c2325b51522f99d2a42c8d3783920ecebbbbc1c137caa85771a498b"
+    },
+    {
+      "bytes": 1285,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/tools/attempt-runtime/dependencies_v3_3.py",
+      "sha256": "e6fc21f41a2c39c82ab28cba7c7c0118e5f2e0074e9e808430405d9a64e4a31c"
+    },
+    {
+      "bytes": 7406,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/tools/attempt-runtime/agent_v2.py",
+      "sha256": "162e19ae11fbb70e22eb726344825b5709b3b356abfc1305792795b72b17588a"
+    },
+    {
+      "bytes": 43471,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/tools/attempt-runtime/boot_v3_3.py",
+      "sha256": "25396c11918a00b1334e5aa9c343ef83504dd835fb62ae88f163de60e23bf78f"
+    },
+    {
+      "bytes": 39824,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/tools/attempt-runtime/two_host_v1.py",
+      "sha256": "9af64943fa3c1398856e4af2c0382f8500226a617e7c5221e4322e792ae860f8"
+    },
+    {
+      "bytes": 15607,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/tools/attempt-runtime/settings_observation_v1.py",
+      "sha256": "6453881bec7b7abd7b0c9dec38155a98f0b90231099daabe0a979a5d3adf7196"
+    },
+    {
+      "bytes": 22150,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/tools/attempt-runtime/patch_transport_v1.py",
+      "sha256": "a8d07736e9f278a0b7e9c112ab44992e675b2acc0491fc74cdf501d997e88052"
+    },
+    {
+      "bytes": 26279,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/tools/attempt-runtime/tunnel_owner_v2.py",
+      "sha256": "bb2f0c081dbb6a932d26c03fdb5f2b04ce3124db6f77f62845955c163906c968"
+    },
+    {
+      "bytes": 33292,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/tools/runtime-collectors/collectors_v3.py",
+      "sha256": "f145c7443d9fe2cdaae58541c3d000843e83d7c7c13094251284174c0fdfd13e"
+    },
+    {
+      "bytes": 11050,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/tools/runtime-collectors/runtime_projection_v1_2.py",
+      "sha256": "e9af014f68bfd2197db549ae8ef59b189471a0c431f16a69cc2ab7669df131b3"
+    },
+    {
+      "bytes": 55962,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/tools/attempt-closure/closure_v3_3.py",
+      "sha256": "791a983b6cc0f7600b5554cad10fa3f9ef42d650a8de2619c5911a1ed4372d23"
+    },
+    {
+      "bytes": 2027,
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/WORKLOAD-PROSPECTIVE-READINESS-DECISIONS.json",
+      "sha256": "e0835abed7061b7d264ccc2144c3073f6dc0037f4c8d88ce5062d981585c861a"
+    },
+    {
+      "bytes": 11978,
+      "path": "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/inspections/codex-two-host-readiness-20260929T012026Z/READS.json",
+      "sha256": "37d427727f3bcdf4950014722efc293b71274d40e2aed46426f2e01820772870"
+    }
+  ],
+  "observed_at_utc": "2026-09-29T01:26:26.886605+00:00",
+  "schema": "source-review-bindings-v1",
+  "scope": "Read-only inspected sources; parent may continue versioned repair concurrently; no live operations or launch authority.",
+  "tests": "Source inspection only; no runtime tests performed."
+}

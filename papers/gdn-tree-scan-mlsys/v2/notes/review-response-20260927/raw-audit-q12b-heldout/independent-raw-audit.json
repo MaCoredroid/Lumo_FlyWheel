@@ -1,0 +1,358 @@
+{
+  "run_id": "q12b-heldout-20260928T013539Z",
+  "scope": "independent record and referenced-tensor SHA/declared-array audit; no tensor numerical recomputation; original reducer failure preserved",
+  "binding_sha256": "cb67d9e996b81078160d8828e3b052c28ec5387f039b1de3ebe61b8e7385d3d8",
+  "gate_sha256": "4ef2a52886edfdccea5812bbdc6dd3d05a4237ec41a6d9c8f5d58627519e883e",
+  "cases_per_process": 5760,
+  "head_observations_per_process": 276480,
+  "negative_records_per_process": 0,
+  "processes": {
+    "A": {
+      "status": "COMPLETED_RAW_RECORD_CENSUS_VERIFIED",
+      "result_sha256": "1097fd0b4a1423325c79954e8c88d98fcdca1d27357dd621dea32044b02cd71d",
+      "inventory_sha256": "49e91f9b53e0d7a87e012ff19e42f146b545e4cdda8523763ac84a6551f20a94",
+      "record_counts": {
+        "ref": 5760,
+        "eligibility": 5760,
+        "metrics": 5760,
+        "negative": 0
+      },
+      "container_id": "c8b27d825b28df884d2e22f67dd6279a4b97c056e32cc4f2bbda6360ed430abc",
+      "pid": 1,
+      "utc": "2026-09-28T01:36:22.720697+00:00",
+      "case_verdicts_by_surface": {
+        "output": {
+          "PASS": 3072
+        },
+        "state": {
+          "PASS": 2688
+        }
+      },
+      "head_verdicts_by_surface": {
+        "output": {
+          "PASS": 147456
+        },
+        "state": {
+          "PASS": 129024
+        }
+      },
+      "negative_verdicts": {},
+      "n5_exact_clean_hash_matches": 0,
+      "first_failure_examples": [],
+      "fixtures": [
+        {
+          "fixture_id": "evaluation/fx0_ordinary-random",
+          "phase": {
+            "R_started_utc": "2026-09-28T01:36:24.488586+00:00",
+            "R_sealed_utc": "2026-09-28T01:37:17.957429+00:00",
+            "C_first_scan_utc": "2026-09-28T01:37:17.964923+00:00",
+            "C_ended_utc": "2026-09-28T01:37:41.815397+00:00"
+          },
+          "eligibility": {
+            "eligible": 2880,
+            "uncovered": 0,
+            "malformed": 0
+          },
+          "route_stamp_after_first_scan": [
+            {
+              "cache_key": "('subtree', 32, 48, 128, 128, 'cuda:0')",
+              "schedule": "fixed32",
+              "critical": 12,
+              "last_executed_gdn": null
+            }
+          ],
+          "negative_census": [],
+          "state_bitwise_native": true
+        },
+        {
+          "fixture_id": "evaluation/fx1_mixed-stress",
+          "phase": {
+            "R_started_utc": "2026-09-28T01:37:42.007468+00:00",
+            "R_sealed_utc": "2026-09-28T01:38:11.689850+00:00",
+            "C_first_scan_utc": "2026-09-28T01:38:11.697367+00:00",
+            "C_ended_utc": "2026-09-28T01:38:31.896166+00:00"
+          },
+          "eligibility": {
+            "eligible": 2880,
+            "uncovered": 0,
+            "malformed": 0
+          },
+          "route_stamp_after_first_scan": [
+            {
+              "cache_key": "('subtree', 32, 48, 128, 128, 'cuda:0')",
+              "schedule": "fixed32",
+              "critical": 12,
+              "last_executed_gdn": null
+            }
+          ],
+          "negative_census": [],
+          "state_bitwise_native": true
+        }
+      ],
+      "tensor_store_reported": {
+        "path": "/out/tensors",
+        "written": 6198,
+        "reused": 17610,
+        "bytes_written": 9702088704
+      },
+      "boot_sequence": {
+        "sequence": [
+          "subtree_preseed",
+          "register_fixed32_conv_col0_ssi_group x3",
+          "preseed_fixed32_committer_graphs_all_batches",
+          "preseed_fixed32_conv_col0_pregather",
+          "selfcheck_fixed32_conv_col0_ssi_sources",
+          "audit_fixed32_conv_commit_lease",
+          "warm_fixed32_committer_graphs_all_batches"
+        ],
+        "warm_ready": true,
+        "restoration_flags": {
+          "bank_state_restored": true,
+          "conv_bank_state_restored": true,
+          "conv_staging_state_restored": true,
+          "input_state_restored": true,
+          "measured_state_restored": true,
+          "route_lease_current": true
+        },
+        "measured_counters_zero": true,
+        "boundary": "conv warm/setup executed through the public production lifecycle; NO conv qualification cases; convolution numerics remain out of Q1.2b scope"
+      },
+      "loaded_sources": {
+        "q1_component_runner_v2_1.py": "b7241e8b925a9b5d9e921673d84f84b701f9b1404ed71d727bc5ade37d15cb65",
+        "q1_oracle.py": "645944992d116115976eea5a925f1ebf9a23562d8d8a3ebd693116daa0ec5d82",
+        "q1_2b_fixtures.py": "eba98d7ccabf8ad602b5274070b92b901ee571af1fba48a82bcf3297cb220039",
+        "q1_policy_evaluator.py": "84830b2a9f4bcacc6344c2762af027a178bd3267e369d41fde06cd3a08f332d6",
+        "q1_policy_evaluator_v2.py": "a65f492b0b576221de328852c84b5b367a89dca2d542b9dde7062c410ed3ff0f",
+        "q1_policy_evaluator_v2_1.py": "2d25e4c9bb669a4c66a5a3caa5093b614e5aba136eb424efb0e410f0b0b61061",
+        "q1_bf16_ulp.py": "b6158c4de483dc014c52df8b1a9ad9158aa8a25a5810c749a4a172325a12e00c",
+        "scripts/fr13_fixed32_topology.py": "c02703b4bc777e5edfa01623b446a289cba8f1023e31d8efd7fc8126666b38bc",
+        "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "d9dd0c697b466180ab5d834a52555c1516edb534e0a3d1bd3094e0d1489c24c8",
+        "src/lumo_flywheel_serving/fr13_tree_conv_fused.py": "564c7dc7ba61ccd9579f2fb7a4af9a2cdaaa1753dfb98434f2011457d90d9a6e"
+      },
+      "known_helper_map_failure": {
+        "q1_component_runner_v2_1.py": {
+          "bound": null,
+          "attested": "b7241e8b925a9b5d9e921673d84f84b701f9b1404ed71d727bc5ade37d15cb65"
+        },
+        "q1_component_runner_v2_2.py": {
+          "bound": "ab27fc9cf680bdd2b7c3ad994fc9f7bffe0f9ff1b0f35dc2cc36018f364dea29",
+          "attested": null
+        }
+      }
+    },
+    "B": {
+      "status": "COMPLETED_RAW_RECORD_CENSUS_VERIFIED",
+      "result_sha256": "4509588c3c7a9f98fcd39f262a66d4af07364e4703dcd40c40bff23d894427ca",
+      "inventory_sha256": "93254a23fd66dff12c39506d597589ab546c1493759d07b94c821545bce7c9d0",
+      "record_counts": {
+        "ref": 5760,
+        "eligibility": 5760,
+        "metrics": 5760,
+        "negative": 0
+      },
+      "container_id": "b7e6337ac4769b26280a09c65b485171821c8cc621be344e3ce69f7dcbfc3a40",
+      "pid": 1,
+      "utc": "2026-09-28T01:38:35.652761+00:00",
+      "case_verdicts_by_surface": {
+        "output": {
+          "PASS": 3072
+        },
+        "state": {
+          "PASS": 2688
+        }
+      },
+      "head_verdicts_by_surface": {
+        "output": {
+          "PASS": 147456
+        },
+        "state": {
+          "PASS": 129024
+        }
+      },
+      "negative_verdicts": {},
+      "n5_exact_clean_hash_matches": 0,
+      "first_failure_examples": [],
+      "fixtures": [
+        {
+          "fixture_id": "evaluation/fx0_ordinary-random",
+          "phase": {
+            "R_started_utc": "2026-09-28T01:38:37.549218+00:00",
+            "R_sealed_utc": "2026-09-28T01:39:31.525240+00:00",
+            "C_first_scan_utc": "2026-09-28T01:39:31.532468+00:00",
+            "C_ended_utc": "2026-09-28T01:39:57.324821+00:00"
+          },
+          "eligibility": {
+            "eligible": 2880,
+            "uncovered": 0,
+            "malformed": 0
+          },
+          "route_stamp_after_first_scan": [
+            {
+              "cache_key": "('subtree', 32, 48, 128, 128, 'cuda:0')",
+              "schedule": "fixed32",
+              "critical": 12,
+              "last_executed_gdn": null
+            }
+          ],
+          "negative_census": [],
+          "state_bitwise_native": true
+        },
+        {
+          "fixture_id": "evaluation/fx1_mixed-stress",
+          "phase": {
+            "R_started_utc": "2026-09-28T01:39:57.508056+00:00",
+            "R_sealed_utc": "2026-09-28T01:40:26.113231+00:00",
+            "C_first_scan_utc": "2026-09-28T01:40:26.120488+00:00",
+            "C_ended_utc": "2026-09-28T01:40:46.276566+00:00"
+          },
+          "eligibility": {
+            "eligible": 2880,
+            "uncovered": 0,
+            "malformed": 0
+          },
+          "route_stamp_after_first_scan": [
+            {
+              "cache_key": "('subtree', 32, 48, 128, 128, 'cuda:0')",
+              "schedule": "fixed32",
+              "critical": 12,
+              "last_executed_gdn": null
+            }
+          ],
+          "negative_census": [],
+          "state_bitwise_native": true
+        }
+      ],
+      "tensor_store_reported": {
+        "path": "/out/tensors",
+        "written": 0,
+        "reused": 23808,
+        "bytes_written": 0
+      },
+      "boot_sequence": {
+        "sequence": [
+          "subtree_preseed",
+          "register_fixed32_conv_col0_ssi_group x3",
+          "preseed_fixed32_committer_graphs_all_batches",
+          "preseed_fixed32_conv_col0_pregather",
+          "selfcheck_fixed32_conv_col0_ssi_sources",
+          "audit_fixed32_conv_commit_lease",
+          "warm_fixed32_committer_graphs_all_batches"
+        ],
+        "warm_ready": true,
+        "restoration_flags": {
+          "bank_state_restored": true,
+          "conv_bank_state_restored": true,
+          "conv_staging_state_restored": true,
+          "input_state_restored": true,
+          "measured_state_restored": true,
+          "route_lease_current": true
+        },
+        "measured_counters_zero": true,
+        "boundary": "conv warm/setup executed through the public production lifecycle; NO conv qualification cases; convolution numerics remain out of Q1.2b scope"
+      },
+      "loaded_sources": {
+        "q1_component_runner_v2_1.py": "b7241e8b925a9b5d9e921673d84f84b701f9b1404ed71d727bc5ade37d15cb65",
+        "q1_oracle.py": "645944992d116115976eea5a925f1ebf9a23562d8d8a3ebd693116daa0ec5d82",
+        "q1_2b_fixtures.py": "eba98d7ccabf8ad602b5274070b92b901ee571af1fba48a82bcf3297cb220039",
+        "q1_policy_evaluator.py": "84830b2a9f4bcacc6344c2762af027a178bd3267e369d41fde06cd3a08f332d6",
+        "q1_policy_evaluator_v2.py": "a65f492b0b576221de328852c84b5b367a89dca2d542b9dde7062c410ed3ff0f",
+        "q1_policy_evaluator_v2_1.py": "2d25e4c9bb669a4c66a5a3caa5093b614e5aba136eb424efb0e410f0b0b61061",
+        "q1_bf16_ulp.py": "b6158c4de483dc014c52df8b1a9ad9158aa8a25a5810c749a4a172325a12e00c",
+        "scripts/fr13_fixed32_topology.py": "c02703b4bc777e5edfa01623b446a289cba8f1023e31d8efd7fc8126666b38bc",
+        "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "d9dd0c697b466180ab5d834a52555c1516edb534e0a3d1bd3094e0d1489c24c8",
+        "src/lumo_flywheel_serving/fr13_tree_conv_fused.py": "564c7dc7ba61ccd9579f2fb7a4af9a2cdaaa1753dfb98434f2011457d90d9a6e"
+      },
+      "known_helper_map_failure": {
+        "q1_component_runner_v2_1.py": {
+          "bound": null,
+          "attested": "b7241e8b925a9b5d9e921673d84f84b701f9b1404ed71d727bc5ade37d15cb65"
+        },
+        "q1_component_runner_v2_2.py": {
+          "bound": "ab27fc9cf680bdd2b7c3ad994fc9f7bffe0f9ff1b0f35dc2cc36018f364dea29",
+          "attested": null
+        }
+      }
+    }
+  },
+  "AB_raw_hash_identity": "exact for every retained ordinary/reference/negative tensor identity",
+  "tensor_refs_unique_stat_verified": 5814,
+  "tensor_ref_bytes_unique": 8494129152,
+  "tensor_bytes_rehashed_here": true,
+  "calibration_power_receipts_verified": {
+    "manifest": {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/heldout-calibration-power/MANIFEST.json",
+      "sha256": "a9c1cdc3cc561b90b91ef45129f0e6c986ac39d4a0702132455b9f71936d1505",
+      "bytes": 3114
+    },
+    "calibration-summary.json": {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/heldout-calibration-power/calibration-summary.json",
+      "sha256": "68408fc1f530ca7f8de37eb4689f5becc541adfea0b2a21905838ce60e1141f6",
+      "bytes": 36588
+    },
+    "calibration-terminal-receipt.json": {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/heldout-calibration-power/calibration-terminal-receipt.json",
+      "sha256": "4deaafb73996aca5260ce0b2d1aeccd45edf6dc7daa42c3799eab47d68262583",
+      "bytes": 6183490
+    },
+    "calibration-parent-acceptance.json": {
+      "path": "papers/gdn-tree-scan-mlsys/v2/p0/monitor/review-response-20260927/heldout-calibration-power/calibration-parent-acceptance.json",
+      "sha256": "9d56a48cd15bc981536a2059451af0d638fc39da899b892636ce7e2d5e3963cc",
+      "bytes": 2781
+    }
+  },
+  "summary.v2.json": {
+    "sha256": "646a07b7c57e540e512042d2dcf0f3bba04bba228564806d0a0fb9a693b46745",
+    "data": {
+      "schema": "lumo.review-response.q1-2b-summary.v2.1",
+      "run": "/runs/q12b-heldout-20260928T013539Z",
+      "findings": {
+        "malformed": [
+          "procA: loaded helper q1_component_runner_v2_2.py hash != launch-bound helper map",
+          "procB: loaded helper q1_component_runner_v2_2.py hash != launch-bound helper map"
+        ],
+        "structural": [],
+        "numerical": [],
+        "uncovered": []
+      },
+      "note": "component verification/publication only; not full-model Q1; no timing",
+      "reducer_runtime": {
+        "python": "3.12.13",
+        "hostname": "07a0a8ba58bf",
+        "OMP_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "CUDA_VISIBLE_DEVICES": "",
+        "container_name_env": "lumotree-review-q12b-reduce",
+        "pid": 1,
+        "torch": "2.11.0+cu130",
+        "torch_threads": 1,
+        "cuda_available": false
+      },
+      "policy": {
+        "sha256": "4a103df013439ae02977d10a42c3cf2eeb916a7dcb1a61c19e6b929da620f7b3",
+        "version": "v2.1",
+        "integrity_ok": true,
+        "approved_ok": true,
+        "problems": [],
+        "auth_problems": []
+      }
+    }
+  },
+  "RUN-RECEIPT.json": {
+    "sha256": "7746dd7ba4eeb74c61e9e0c328a24653dfaf54f59667fcca67d27e726bf6e427",
+    "data": {
+      "schema": "lumo.review-response.q1-2b-run-receipt.v2",
+      "run": "/home/mark/lumotree-review-20260927/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1.2b-heldout/q12b-heldout-20260928T013539Z",
+      "status": "COMPLETED_reduce_rc=2",
+      "utc": "2026-09-28T01:40:49.090453+00:00",
+      "tensor_store": {
+        "objects": 6198,
+        "bytes": 9702088704
+      },
+      "proc_exit": {
+        "A": "exit=0",
+        "B": "exit=0"
+      },
+      "reduce_exit": "exit=2"
+    }
+  }
+}

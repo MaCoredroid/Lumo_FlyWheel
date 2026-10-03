@@ -1,0 +1,56 @@
+{
+  "schema": "lumo.paper.native-joint-A.v1",
+  "summary": "p0/monitor/review-response-20260927/native-joint-common-o0-A-full-independent/A-FINAL-SUMMARY.json",
+  "summary_sha256": "bdde823f4d7fb4595f72e32d622ce20d290fe87887b4bae94b3fcdd3d267a39e",
+  "review": "notes/review-response-20260927/q1-native-joint-common-o0-A-full-raw-review.md",
+  "review_sha256": "ace00b05f4d5e7c90dfb344e0fc97ffe0febad3b020881ca31b5a8a3cc28a5c7",
+  "seal": "p0/monitor/review-response-20260927/native-joint-common-o0-A-full-independent/REVIEW-SEAL.json",
+  "seal_sha256": "2047ecc8d1aef269ede30a25507bc8bcc5a553ef50581aad17d22bf99ea04372",
+  "corpus_sha256": "ac3f1248aeb5343714334b402c9f0cd6ecaca856c68cae8c625a5c9b5b7b8f61",
+  "cases": 84,
+  "observations": 168,
+  "processes": 1,
+  "repeats": 2,
+  "target_counts": {
+    "o0": 84,
+    "o1": 84,
+    "winner": 84,
+    "ties": 84,
+    "margin": 84,
+    "raw_sha256": 84,
+    "natural_bootstrap_o0": 84,
+    "mtp_initial_digest": 84,
+    "joint_source_digest": 84
+  },
+  "phase_counts": {
+    "before_z_first": {
+      "inputs_matched": 84,
+      "categorical_stable": 84,
+      "raw_logits_identical": 84,
+      "hidden_source_raw_identical": 84
+    },
+    "before_z_follow": {
+      "inputs_matched": 84,
+      "categorical_stable": 84,
+      "raw_logits_identical": 84,
+      "hidden_source_raw_identical": 0
+    },
+    "after_z_first": {
+      "inputs_matched": 84,
+      "categorical_stable": 84,
+      "raw_logits_identical": 84,
+      "hidden_source_raw_identical": 84
+    },
+    "target_o2": {
+      "inputs_matched": 84,
+      "categorical_stable": 84,
+      "raw_logits_identical": 84,
+      "hidden_source_raw_identical": 0
+    }
+  },
+  "A_B_baseline_qualified": false,
+  "candidate_qualified": false,
+  "full_Q1_qualified": false,
+  "performance_claim": false,
+  "tex_sha256": "bc20cf6113d85db98cd4abdd8faa6f0b522a09d73c7696d55ea2776a814bdfe7"
+}

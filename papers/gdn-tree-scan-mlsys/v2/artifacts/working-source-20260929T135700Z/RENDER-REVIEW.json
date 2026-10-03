@@ -1,0 +1,43 @@
+{
+  "schema": "lumo.paper.changed-page-render-review.v1",
+  "reviewed_utc": "2026-09-29T13:56:14.835854+00:00",
+  "scope": "Changed page 11 only; bounded current-result integration review, not all-page or campaign qualification",
+  "status": "PASS",
+  "pages_inspected": [
+    11
+  ],
+  "renderer": "Poppler pdftoppm",
+  "render_command": [
+    "pdftoppm",
+    "-f",
+    "11",
+    "-l",
+    "11",
+    "-singlefile",
+    "-r",
+    "160",
+    "-png",
+    "clean-build/main.pdf",
+    "render-review/page-11"
+  ],
+  "pdf": "clean-build/main.pdf",
+  "pdf_sha256": "ed307644a7314407fdc2d445dd707c244e9760290b5ab0cb5046453cadbd1cce",
+  "rendered_png": "render-review/page-11.png",
+  "rendered_png_sha256": "d6dd3acff8533d06c4dab3f017cc4887cc4ced31857d1026b25906368b54c043",
+  "verification_sha256": "dea910961a8469b8b75292b346a419a12f0ec571d2817f610cdcacfd33522d7d",
+  "reviewed_source_matches_clean_build": [
+    "main.tex",
+    "results/review-response-20260927/native-common-o0.tex",
+    "results/review-response-20260927/native-reference.tex"
+  ],
+  "checks": {
+    "new_paragraph_readable": true,
+    "old_adverse_result_visible": true,
+    "within_process_and_pending_limits_visible": true,
+    "no_clipping_or_overlap": true,
+    "tables_and_column_flow_readable": true
+  },
+  "issues": [],
+  "campaign_complete": false,
+  "published": false
+}

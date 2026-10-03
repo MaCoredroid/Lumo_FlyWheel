@@ -1,0 +1,42 @@
+{
+ "ar-v3s21": {
+  "arm": "AR",
+  "path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-v3s21-sampled-20261002T045136Z/dist.jsonl"
+ },
+ "ar-v3s22": {
+  "arm": "AR",
+  "path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-v3s22-sampled-20261002T065217Z/dist.jsonl"
+ },
+ "ar-v3s23": {
+  "arm": "AR",
+  "path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-v3s23-sampled-20261002T085736Z/dist.jsonl"
+ },
+ "ar-v3s24": {
+  "arm": "AR",
+  "path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-v3s24-sampled-20261002T105902Z/dist.jsonl"
+ },
+ "tree-v3a": {
+  "arm": "TREE",
+  "path": "/home/mark/shared/lumotree-v2exp-runs/dist/tree-v3a-sampled-20261002T053459Z/dist.jsonl"
+ },
+ "tree-v3b": {
+  "arm": "TREE",
+  "path": "/home/mark/shared/lumotree-v2exp-runs/dist/tree-v3b-sampled-20261002T073525Z/dist.jsonl"
+ },
+ "tree-v3c": {
+  "arm": "TREE",
+  "path": "/home/mark/shared/lumotree-v2exp-runs/dist/tree-v3c-sampled-20261002T101930Z/dist.jsonl"
+ },
+ "mtp5-v3s31": {
+  "arm": "MTP5",
+  "path": "/home/mark/shared/lumotree-v2exp-runs/dist/mtp5-v3s31-sampled-20261002T061400Z/dist.jsonl"
+ },
+ "mtp5-v3s32": {
+  "arm": "MTP5",
+  "path": "/home/mark/shared/lumotree-v2exp-runs/dist/mtp5-v3s32-sampled-20261002T094045Z/dist.jsonl"
+ },
+ "ar-v3neg": {
+  "arm": "NEG",
+  "path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-v3neg-sampled-20261002T081456Z/dist.jsonl"
+ }
+}

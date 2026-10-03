@@ -1,0 +1,81 @@
+{
+  "schema": "lumotree.closure-paper-delivery.v1",
+  "created_utc": "2026-10-03T05:17:08.781687+00:00",
+  "paper": {
+    "pdf": "main.pdf",
+    "pages": 15,
+    "sha256": "63a9ac3f2ab9ae9cc4e7c496d84ece3004ec8dc8f1f732f4e53d6f902b14652a"
+  },
+  "source_package": {
+    "path": "artifacts/closure-delivery-20261002/lumotree-source-closure-20261002.tar.gz",
+    "sha256": "30428727d0a073a9ec363b00873f7dbdc8e21ef500f286c53d429a86f632698a",
+    "dependency_files": 21,
+    "all_dependency_hashes_match": true,
+    "clean_build_success": true,
+    "clean_build_text_equal": true,
+    "critical_latex_warnings": 0
+  },
+  "data_supplement": {
+    "path": "artifacts/closure-delivery-20261002/lumotree-results-closure-20261002.tar.gz",
+    "sha256": "a363bfa52fe95e51d0c2c1a4cebdcc7507a78443d55c3da07182551be92fc7fe",
+    "files": 1213,
+    "all_archive_file_hashes_verified": true,
+    "manifest_sha256": "5b71e7be33b39ce3f34419bb564903c27616812c333831abcfa96b64bb7491d3",
+    "large_tensor_objects_included": false
+  },
+  "audit": {
+    "path": "results/claude-closure-20261002/AUDIT.json",
+    "sha256": "6cd7e13bf33866a8922ce8cc79e66319d7888585375dbf371bf34c06eb2562a1",
+    "remote_head": "c14584f7b142ca2f4557e7dc03be8c4dbab2815b",
+    "remote_files_sha_verified": 350,
+    "original_tensor_norms_recomputed_locally": false
+  },
+  "review": {
+    "path": "notes/closure-update-20261002/REVIEW.md",
+    "sha256": "5b828970b37dd30d949957cee75431a60e7ed3980249728d702c883c5ed518ec",
+    "final_render_pages": 15,
+    "all_pages_visually_reviewed": true,
+    "new_pages_individually_reviewed": [
+      1,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14
+    ]
+  },
+  "scientific_disposition": {
+    "fullmodel_cycles": 126,
+    "fullmodel_schedules": 18,
+    "fullmodel_boots": 5,
+    "all_numerical_bounds_pass": true,
+    "faults_detected": 10,
+    "greedy_matches": 122,
+    "strict_greedy_or_bitwise_equality_established": false,
+    "cache_restoration_observations": 30,
+    "disjoint_replay_runs_per_vllm_arm": 3,
+    "pooled_tree_tokens_s": 30.735913725867707,
+    "pooled_mtp5_tokens_s": 27.51982039102265,
+    "rate_difference_percent": 11.686461935973202,
+    "penalty_history_rows_audited": 2480,
+    "sampling_scope": "penaltyfree minp0 matchingfilters/ties conditionalcorrecttargetrows",
+    "measured_penalty1_disposition": "approximate after first token each step",
+    "task_study_resolved": {
+      "LumoTree": 5,
+      "native_MTP5": 6,
+      "SGLang": 5
+    },
+    "workload_attempts": 30,
+    "new_inference_or_unit_tests_for_paper_update": false,
+    "sampling_defect_repaired": false,
+    "bitwise_equality_or_lossless_deployment_or_task_speedup_claim": false
+  },
+  "external_actions": {
+    "git_push": false,
+    "release_tag_changed": false,
+    "arxiv_action": false
+  }
+}

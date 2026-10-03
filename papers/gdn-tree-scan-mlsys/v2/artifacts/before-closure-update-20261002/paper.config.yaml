@@ -1,0 +1,56 @@
+topic: LumoTree
+paper_type: empirical
+status: "completed_result_backfill_fullmodel_and_distribution_inconclusive"
+format: IEEEtran conference
+main_tex: main.tex
+bibliography: ref.bib
+performance_scope: "two_fixed_request_corpora_separate_from_live_agent_trajectories"
+application_case: "ten_Astropy_tasks_three_arms_30_attempts"
+performance_estimator: "pooled_completed_request_decode_rate_client_replay_and_server_workload"
+performance_formula: (total_output_tokens - completed_requests) / (summed_E2E_latency - summed_TTFT)
+performance_evidence: "results/claude-results-20261002/AUDIT.json"
+excluded_performance: local_document_E1_E8_and_superseded_rate_proxies
+runtime:
+  python: "/Users/zhiyuanma/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3"
+  experiment_execution: "completed_snapshot_no_new_GPU_launches_in_paper_update"
+  remote_worktree: "/home/mark/shared/lumotree-v2exp-20260930"
+  remaining_claim_gap: "sensitive_independent_fullmodel_and_distribution_qualification_no_controlled_task_speedup"
+  historical_campaign: "review_response_20260927_closed_with_supported_narrowing; not the new 30-attempt study"
+
+current_method: NVFP4_Hydra27_fixed32_patched_FA2_splitK4_graph_cache
+replay_evidence: results/claude-replay-20261001/AUDITED-RATES.json
+replay_protocol: 43_recorded_requests_two_Astropy_sessions_sampled_B1_cap1024
+replay_scope: same_vllm_stack_rate_comparison_not_task_completion_or_fullmodel_correctness
+replay_runtime: /home/mark/shared/lumotree-v2exp-20260930
+replay_primary_configuration_runs: 13
+replay_variant_runs: 5
+replay_stock_attention_repetitions: 3
+replay_other_variant_repetitions: 1
+replay_cross_stack_input_status: SGLang_receives_vLLM_token_IDs_43_requests_verified_streaming_timer_boundaries_differ
+new_experiment_plan: results/claude-followup-20261001/REVIEW.md
+historical_runtime_section_scope: closed_review_response_20260927_campaign_not_the_new_Claude_replay_campaign
+component_evidence: results/current-production/audit.json
+excluded_current_method_results: superseded_Cat10_E2_E7a_E7b_E8_and_July22_FP8
+historical_evidence: results/history-recovery-20260930/audit.json
+historical_evidence_scope: era_bound_task_outcomes_and_serving_coverage_no_current_qualification_transfer
+
+author_component_evidence: experiments/author-code-20260926/RUN-RECEIPT.json
+
+review_response_evidence: results/review-response-20260927/p0-evidence.json
+review_response_status: experiments/review-response-20260927/status.json
+m1_numerical_evidence: results/review-response-20260927/m1-qualification.json
+m1_performance_disposition: unreported_three_author_policy_numerical_prerequisites_failed
+
+followup_evidence: results/claude-followup-20261001/AUDIT.json
+followup_mechanism_scope: isolated_GDN_timing_and_named_scratch_under_distinct_numerical_policies
+followup_main_timed_cells: 12
+followup_shape_sweep_cells_summary_only: 40
+followup_distribution_status: "10boots8000continuations_completed_sensitivity_failed_uninformative"
+followup_fullmodel_status: "5completed_boots_33schedules147cycles_frozen_INCONCLUSIVE_1of10faults_detected"
+followup_agent_study: "completed30_attempts_same10_Astropy_tasks_once_per_arm_resolved_tree5_MTP6_SG5"
+current_results_evidence: "results/claude-results-20261002/AUDIT.json"
+current_results_manifest: "results/claude-results-20261002/SYNC-MANIFEST.json"
+disjoint_replay: "43requests_four_additional_tasks_five_conversations_one_run_each_tree30.67_MTP27.41_SG30.24"
+disjoint_sglang_input_status: "chat_API_prompt_counts33to156tokens_longer_not_exact_ID_parity"
+drafting_pass_sweep: "2deployed_repeats_1each_repaired_threepass_and_conditionalpolicy_no_convincing_gain; proposed_new_topologies_not_executed"
+posthoc_analysis: "descriptive_after_outcomes; state ratios <1.30 and 8statefaults >2.83; original_inconclusive_verdict_preserved"

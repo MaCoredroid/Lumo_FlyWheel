@@ -1,0 +1,32 @@
+\begin{table}[t]
+\centering
+\caption{Recurrent agreement on GB10 under distinct sequential references. Counts give cells outside the paired error bounds among 64,512 output cells and 6,912 state cells per configuration, with identical counts in both repeats. The two reference groups are not a common accuracy ranking.}
+\label{tab:m1-qualification}
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Configuration & Output cells & State cells \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Native GPU recurrence reference}} \\
+\sys{} & 0 & 0 \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Sequential software references}} \\
+Weaver author-default & 53,745 & 1,154 \\
+Weaver (FP32 preparation) & 57,707 & 388 \\
+TreeWY author-default & 37,528 & 6,912 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+We compare recurrent verification and accepted-state publication using held-out synthetic operands spanning 48 recurrent instances and 48 value heads. Verification covers the tree's 28 active nodes. Three accepted-path publications produce a history of 1, 6, and 11 updates, including Weaver's accepted replay and TreeWY's final deferred commit. Each configuration is evaluated twice in one process, with a fresh initial state for each cycle. A numerical cell fixes the recurrent instance, output node or publication, and value head; errors are reduced over the remaining vector or matrix entries.
+
+Each cell must satisfy both root-mean-square and maximum absolute error bounds,
+\begin{equation}
+ E_{\mathrm{method}} \leq 1.10 E_{\mathrm{seq}} + 2^{-24}M_{64}+2^{-149},
+\end{equation}
+where errors are measured against the specified float64 recurrence and $M_{64}$ is its corresponding root-mean-square or maximum magnitude. For \sys{}, the sequential comparator is the native GPU recurrence. Weaver and TreeWY use sequential software comparators that do not emulate every tensor-core rounding operation.
+
+TreeWY retains the author implementation's normalization floor of $10^{-12}$ and BF16 dot products. Weaver uses TF32 verification, FP32 elementwise accepted replay, and an additive normalization constant of $10^{-6}$. We report both its author-default preparation and a variant with FP32 preparation. The two Weaver variants retain their respective preprocessing conventions.
+
+Table~\ref{tab:m1-qualification} reports the cells outside each implementation's paired bounds. All configurations produce finite tensors and reproduce bitwise between repeats. TreeWY's BF16 compact commit and its sequential comparator's FP32 outer-product updates, for example, are different floating-point computations. The normalization and arithmetic conventions are part of the numerical comparison and must be interpreted alongside its reference choice (Section~\ref{sec:limitations}).

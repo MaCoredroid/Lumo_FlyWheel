@@ -1,0 +1,20 @@
+# Native joint categorical projection/reducer review
+
+2026-09-29. **PASS for the bounded native-only helper, under its explicit fully authenticated raw-input precondition.** No material implementation defect found. No GPU, model, container, network or implementation changes; no candidate/full-Q1 or launch qualification.
+
+Reviewed helper `experiments/review-response-20260927/tools/q1_joint_categorical_v1.py` SHA-256 `45187dfa879c79bbdcb2bffe963cce3ca913702628086c235bb98062ce3f40f4`; tests `b03cbf4047e9b40cb4b8d28ebf573d1e73e49bee829311645aeeb44072689c89`. The exact accepted policy remains `4dad3bf5918c31d734214d8d2579ca1bb5b75500b575dbf2c0718287a287c593`.
+
+- Lines22–29 load exact policy bytes and check authority/phase identity; lines88–92 enforce its exact ordered84 population and aligned/nonpacked native arm.
+- Lines36–80 uniquely select before-z first/follow at P+1+L and after-z first at P+2+L. They preserve the actual captured exact-k3 IDs and independent spine decision, operator/dtype, full-score hash, ties and margin. Request and generation joins, shifted z, genuine first/follow record connection, and actual target-O2 input are checked. Hidden-source evidence stays labeled by phase. No top32 slicing, re-sorting, or candidate selector fabrication is performed.
+- Lines94–117 require exactly A/B × r0/r1 for each case, common joint source, matched phase inputs/operator/k/dtype, and exact stable spine plus ordered-top3 IDs. Missing or duplicate observations, mismatched common source, or unstable categories leave that case baseline-unqualified in denominator84. Foreign case/arm or policy identity refuses reduction. Raw-logit equality is reported independently and cannot become a tolerance or an extra categorical requirement. Independent destination request/generation values are not wrongly required to match across processes.
+- Lines81–83 and118–120 explicitly leave candidate observation/qualification, full Q1 and launch authority false. This is a native eligibility summary, not the candidate comparison or an end-to-end gate.
+
+## CPU verification
+
+All21 supplied tests passed independently (14 categorical controls plus7 retained Joint controls). Sixteen additional private-fixture controls passed: wrong phase request/generation/shift/follow binding; duplicate actual top3; a same-sized duplicate process/repeat key set; foreign arm; changed input position/dtype/spine; candidate-flag/wrong-policy refusal; empty evidence as0/84; policy-byte mutation refusal in a temporary copy; stable exact ties with differing score bytes; and valid independently owned request/generation identifiers. Sources and policy were rehashed unchanged after testing.
+
+Evidence is in `p0/monitor/review-response-20260927/joint-categorical-v1-review/`: `supplied-tests.log`, `independent_controls.py`, `independent-controls.json`, `REVIEW-SEAL.json`. Tests ran locally with miniforge Python/Torch2.8, CUDA visibility empty and CPU thread ceilings2. These are source/CPU bookkeeping controls, not native/candidate scientific observations. One initial reviewer-only dtype control assigned the fixture's existing FP32 dtype and therefore made no mutation; changing that control to BF16 produced the intended83/84 result. No implementation change was involved.
+
+## Preserved caller boundary
+
+The helper neither reads/authenticates raw blobs nor verifies outer canonical seals, model/job/fixture/source manifests or the import transaction. Its docstrings require those checks first. The accepted joint audit separately binds source and destination import/segments; its own docstring also leaves outer seals and targetO0/O1/O2 admission to the caller. The eventual caller must run that complete chain before projecting and must construct each reducer row's case/process/repeat/joint-source identity from the same authenticated observation. This is an existing integration obligation, not a discovered helper defect. Candidate actual emitted-selector projection and the full runtime/reducer binding remain pending; a native baseline count must not be exposed as the complete policy's aggregate pass.

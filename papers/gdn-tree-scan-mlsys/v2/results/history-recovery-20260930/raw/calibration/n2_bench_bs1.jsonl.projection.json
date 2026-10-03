@@ -1,0 +1,28 @@
+{
+  "accept_length": 2.901056338028169,
+  "completed": 8,
+  "concurrency": 0.9996733075195807,
+  "dataset_name": "random",
+  "duration": 313.255807782989,
+  "max_concurrency": 1,
+  "output_rate_recomputed": 26.15115122039521,
+  "output_throughput": 26.15115122039521,
+  "random_input_len": 1024,
+  "random_output_len": 1024,
+  "scope": "SYNTHETIC_SERVING_NOT_AGENT_OR_CURRENT_TREE_COMPARISON",
+  "server_info": {
+    "attention_backend": "flashinfer",
+    "dtype": "auto",
+    "kv_cache_dtype": "auto",
+    "model_path": "/models/qwen3.8-27b-nvfp4-radixark-asshipped",
+    "random_seed": 1068101960,
+    "speculative_algorithm": "EAGLE",
+    "speculative_draft_model_path": null,
+    "speculative_eagle_topk": 1,
+    "speculative_num_draft_tokens": 4,
+    "speculative_num_steps": 3
+  },
+  "source_commit": "ae9cfc6d6f8b22cc06fdccf684f6aa0a58f8e671",
+  "source_path": "results/fr14_nvfp4_port_20260816/sglang_calibration/n2_bench_bs1.jsonl",
+  "total_output_tokens": 8192
+}

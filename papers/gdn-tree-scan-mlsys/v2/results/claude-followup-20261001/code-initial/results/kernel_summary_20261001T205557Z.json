@@ -1,0 +1,668 @@
+{
+ "schema": "lumo.v2exp.kernel-bench.summary.v1",
+ "run_dir": "/out",
+ "methods": [
+  {
+   "method": "lumo_fixed32",
+   "mode": "graph",
+   "status": "complete",
+   "step_median_ms": 17.688271522521973,
+   "step_p10_ms": 17.182200813293456,
+   "step_p90_ms": 17.841292953491212,
+   "regions": {
+    "verify": {
+     "median_ms": 12.897535800933838,
+     "p10_ms": 12.69286069869995,
+     "p90_ms": 13.338409519195556
+    },
+    "commit": {
+     "median_ms": 4.491407871246338,
+     "p10_ms": 4.47713270187378,
+     "p90_ms": 4.84178581237793
+    }
+   },
+   "first_region_per_layer_ms": 0.26869866251945496,
+   "transient_peak_allocated_bytes": 4608,
+   "peak_allocated_bytes": 2294975488,
+   "peak_reserved_bytes": 2378170368,
+   "scratch_allocated_bytes": 138923500,
+   "verify_out_max_abs": 0.00048187751636083465,
+   "verify_out_rms_max": 7.150392482709802e-05,
+   "state_max_abs": {
+    "root-only": 8.045951626067804e-07,
+    "n14": 2.3208539023933383e-06,
+    "n15": 2.3644939538547405e-06,
+    "n31": 2.6235755832271224e-06
+   },
+   "derived": {
+    "step_total_median_ms": 17.688271522521973,
+    "step_total_p10_ms": 17.182200813293456,
+    "step_total_p90_ms": 17.841292953491212,
+    "verify_median_ms": 12.897535800933838,
+    "verify_per_layer_median_ms": 0.26869866251945496,
+    "commit_median_ms": 4.491407871246338,
+    "commit_per_layer_median_ms": 0.09357099731763203,
+    "verify_layer0_median_ms": 0.2921760082244873
+   },
+   "capture": {
+    "verify": {
+     "ok": true,
+     "error": null
+    },
+    "verify_layer0": {
+     "ok": true,
+     "error": null
+    }
+   }
+  },
+  {
+   "method": "lumo_fixed32",
+   "mode": "eager",
+   "status": "complete",
+   "step_median_ms": 17.583248138427734,
+   "step_p10_ms": 17.416995239257812,
+   "step_p90_ms": 18.146704864501952,
+   "regions": {
+    "verify": {
+     "median_ms": 12.964208126068115,
+     "p10_ms": 12.92949743270874,
+     "p90_ms": 13.651340961456299
+    },
+    "commit": {
+     "median_ms": 4.491503953933716,
+     "p10_ms": 4.475852727890015,
+     "p90_ms": 4.816403388977052
+    }
+   },
+   "first_region_per_layer_ms": 0.27008766929308575,
+   "transient_peak_allocated_bytes": 4608,
+   "peak_allocated_bytes": 2294975488,
+   "peak_reserved_bytes": 2378170368,
+   "scratch_allocated_bytes": 138923500,
+   "verify_out_max_abs": 0.00048187751636083465,
+   "verify_out_rms_max": 7.150392482709802e-05,
+   "state_max_abs": {
+    "root-only": 8.045951626067804e-07,
+    "n14": 2.3208539023933383e-06,
+    "n15": 2.3644939538547405e-06,
+    "n31": 2.6235755832271224e-06
+   },
+   "derived": {
+    "step_total_median_ms": 17.583248138427734,
+    "step_total_p10_ms": 17.416995239257812,
+    "step_total_p90_ms": 18.146704864501952,
+    "verify_median_ms": 12.964208126068115,
+    "verify_per_layer_median_ms": 0.27008766929308575,
+    "commit_median_ms": 4.491503953933716,
+    "commit_per_layer_median_ms": 0.09357299904028575,
+    "verify_layer0_median_ms": 0.3157760053873062
+   },
+   "capture": null
+  },
+  {
+   "method": "naive_native_paths",
+   "mode": "graph",
+   "status": "complete",
+   "step_median_ms": 32.411231994628906,
+   "step_p10_ms": 32.35993766784668,
+   "step_p90_ms": 32.6689208984375,
+   "regions": {
+    "verify": {
+     "median_ms": 29.709888458251953,
+     "p10_ms": 29.67094440460205,
+     "p90_ms": 29.88382377624512
+    },
+    "commit": {
+     "median_ms": 2.697440028190613,
+     "p10_ms": 2.6537855863571167,
+     "p90_ms": 2.7329119205474854
+    }
+   },
+   "first_region_per_layer_ms": 0.6189560095469157,
+   "transient_peak_allocated_bytes": 0,
+   "peak_allocated_bytes": 5755598336,
+   "peak_reserved_bytes": 5779750912,
+   "scratch_allocated_bytes": 5284823040,
+   "verify_out_max_abs": 0.00048187751636083465,
+   "verify_out_rms_max": 7.150392482709802e-05,
+   "state_max_abs": {
+    "root-only": 8.045951626067804e-07,
+    "n14": 2.3208539023933383e-06,
+    "n15": 2.3644939538547405e-06,
+    "n31": 2.6235755832271224e-06
+   },
+   "derived": {
+    "step_total_median_ms": 32.411231994628906,
+    "step_total_p10_ms": 32.35993766784668,
+    "step_total_p90_ms": 32.6689208984375,
+    "verify_median_ms": 29.709888458251953,
+    "verify_per_layer_median_ms": 0.6189560095469157,
+    "commit_median_ms": 2.697440028190613,
+    "commit_per_layer_median_ms": 0.0561966672539711,
+    "verify_layer0_median_ms": 0.6284960210323334
+   },
+   "capture": {
+    "verify": {
+     "ok": true,
+     "error": null
+    },
+    "commit": {
+     "ok": true,
+     "error": null
+    },
+    "verify_layer0": {
+     "ok": true,
+     "error": null
+    }
+   }
+  },
+  {
+   "method": "naive_native_paths",
+   "mode": "eager",
+   "status": "complete",
+   "step_median_ms": 33.72574234008789,
+   "step_p10_ms": 33.68355369567871,
+   "step_p90_ms": 34.1179916381836,
+   "regions": {
+    "verify": {
+     "median_ms": 31.026127815246582,
+     "p10_ms": 30.97857036590576,
+     "p90_ms": 31.31777572631836
+    },
+    "commit": {
+     "median_ms": 2.700816035270691,
+     "p10_ms": 2.6539680480957033,
+     "p90_ms": 2.7422975063323975
+    }
+   },
+   "first_region_per_layer_ms": 0.6463776628176371,
+   "transient_peak_allocated_bytes": 393216,
+   "peak_allocated_bytes": 5755991552,
+   "peak_reserved_bytes": 5779750912,
+   "scratch_allocated_bytes": 5284823040,
+   "verify_out_max_abs": 0.00048187751636083465,
+   "verify_out_rms_max": 7.150392482709802e-05,
+   "state_max_abs": {
+    "root-only": 8.045951626067804e-07,
+    "n14": 2.3208539023933383e-06,
+    "n15": 2.3644939538547405e-06,
+    "n31": 2.6235755832271224e-06
+   },
+   "derived": {
+    "step_total_median_ms": 33.72574234008789,
+    "step_total_p10_ms": 33.68355369567871,
+    "step_total_p90_ms": 34.1179916381836,
+    "verify_median_ms": 31.026127815246582,
+    "verify_per_layer_median_ms": 0.6463776628176371,
+    "commit_median_ms": 2.700816035270691,
+    "commit_per_layer_median_ms": 0.05626700073480606,
+    "verify_layer0_median_ms": 0.6593439877033234
+   },
+   "capture": null
+  },
+  {
+   "method": "naive_torch_node",
+   "mode": "graph",
+   "status": "complete",
+   "step_median_ms": 55.023183822631836,
+   "step_p10_ms": 54.94329566955567,
+   "step_p90_ms": 59.26664505004883,
+   "regions": {
+    "verify": {
+     "median_ms": 52.31564712524414,
+     "p10_ms": 52.26258926391601,
+     "p90_ms": 56.537743377685544
+    },
+    "commit": {
+     "median_ms": 2.69595205783844,
+     "p10_ms": 2.6485503911972046,
+     "p90_ms": 2.733676815032959
+    }
+   },
+   "first_region_per_layer_ms": 1.089909315109253,
+   "transient_peak_allocated_bytes": 0,
+   "peak_allocated_bytes": 5791382016,
+   "peak_reserved_bytes": 5865734144,
+   "scratch_allocated_bytes": 5284823040,
+   "verify_out_max_abs": 0.00048187751636083465,
+   "verify_out_rms_max": 7.150392482709802e-05,
+   "state_max_abs": {
+    "root-only": 1.8365761733640795e-07,
+    "n14": 4.474923760433569e-07,
+    "n15": 5.189500653646206e-07,
+    "n31": 6.514270922686194e-07
+   },
+   "derived": {
+    "step_total_median_ms": 55.023183822631836,
+    "step_total_p10_ms": 54.94329566955567,
+    "step_total_p90_ms": 59.26664505004883,
+    "verify_median_ms": 52.31564712524414,
+    "verify_per_layer_median_ms": 1.089909315109253,
+    "commit_median_ms": 2.69595205783844,
+    "commit_per_layer_median_ms": 0.05616566787163416,
+    "verify_layer0_median_ms": 1.0913280248641968
+   },
+   "capture": {
+    "verify": {
+     "ok": true,
+     "error": null
+    },
+    "commit": {
+     "ok": true,
+     "error": null
+    },
+    "verify_layer0": {
+     "ok": true,
+     "error": null
+    }
+   }
+  },
+  {
+   "method": "naive_torch_node",
+   "mode": "eager",
+   "status": "complete",
+   "step_median_ms": 81.03652572631836,
+   "step_p10_ms": 80.89814758300781,
+   "step_p90_ms": 81.74634857177735,
+   "regions": {
+    "verify": {
+     "median_ms": 78.3284797668457,
+     "p10_ms": 78.22765197753907,
+     "p90_ms": 79.06114349365234
+    },
+    "commit": {
+     "median_ms": 2.6977280378341675,
+     "p10_ms": 2.650963306427002,
+     "p90_ms": 2.7393312454223633
+    }
+   },
+   "first_region_per_layer_ms": 1.6318433284759521,
+   "transient_peak_allocated_bytes": 1061376,
+   "peak_allocated_bytes": 5792443392,
+   "peak_reserved_bytes": 5865734144,
+   "scratch_allocated_bytes": 5284823040,
+   "verify_out_max_abs": 0.00048187751636083465,
+   "verify_out_rms_max": 7.150392482709802e-05,
+   "state_max_abs": {
+    "root-only": 1.8365761733640795e-07,
+    "n14": 4.474923760433569e-07,
+    "n15": 5.189500653646206e-07,
+    "n31": 6.514270922686194e-07
+   },
+   "derived": {
+    "step_total_median_ms": 81.03652572631836,
+    "step_total_p10_ms": 80.89814758300781,
+    "step_total_p90_ms": 81.74634857177735,
+    "verify_median_ms": 78.3284797668457,
+    "verify_per_layer_median_ms": 1.6318433284759521,
+    "commit_median_ms": 2.6977280378341675,
+    "commit_per_layer_median_ms": 0.05620266745487849,
+    "verify_layer0_median_ms": 1.6148799657821655
+   },
+   "capture": null
+  },
+  {
+   "method": "treewy_author_default",
+   "mode": "graph",
+   "status": "complete",
+   "step_median_ms": 11.014911651611328,
+   "step_p10_ms": 10.997395133972168,
+   "step_p90_ms": 11.036243438720703,
+   "regions": {
+    "fused_commit_prev_and_verify": {
+     "median_ms": 11.014911651611328,
+     "p10_ms": 10.997395133972168,
+     "p90_ms": 11.036243438720703
+    }
+   },
+   "first_region_per_layer_ms": 0.229477326075236,
+   "transient_peak_allocated_bytes": 0,
+   "peak_allocated_bytes": 955837952,
+   "peak_reserved_bytes": 991952896,
+   "scratch_allocated_bytes": 202211328,
+   "verify_out_max_abs": 0.0006312656972183167,
+   "verify_out_rms_max": 0.00013266138945212266,
+   "state_max_abs": {
+    "root-only": 0.004452448562040523,
+    "n14": 0.005272192288406363,
+    "n15": 0.0052246800527716575,
+    "n31": 0.005098525272769161
+   },
+   "derived": {
+    "step_total_median_ms": 11.014911651611328,
+    "step_total_p10_ms": 10.997395133972168,
+    "step_total_p90_ms": 11.036243438720703,
+    "fused_commit_prev_and_verify_median_ms": 11.014911651611328,
+    "fused_commit_prev_and_verify_per_layer_median_ms": 0.229477326075236,
+    "verify_only_median_ms": 10.635295867919922,
+    "commit_estimate_median_ms": 0.37961578369140625,
+    "commit_estimate_note": "derived: steady fused step minus sentinel (commit-skipped) step; not separately measurable",
+    "final_flush_median_ms": 10.50984001159668,
+    "layer0_step_median_ms": 0.2526879906654358
+   },
+   "capture": {
+    "step": {
+     "ok": true,
+     "error": null
+    },
+    "flush": {
+     "ok": true,
+     "error": null
+    },
+    "layer0": {
+     "ok": true,
+     "error": null
+    }
+   }
+  },
+  {
+   "method": "treewy_author_default",
+   "mode": "eager",
+   "status": "complete",
+   "step_median_ms": 11.712255954742432,
+   "step_p10_ms": 11.696381092071533,
+   "step_p90_ms": 11.737183666229248,
+   "regions": {
+    "fused_commit_prev_and_verify": {
+     "median_ms": 11.712255954742432,
+     "p10_ms": 11.696381092071533,
+     "p90_ms": 11.737183666229248
+    }
+   },
+   "first_region_per_layer_ms": 0.24400533239046732,
+   "transient_peak_allocated_bytes": 393216,
+   "peak_allocated_bytes": 956231168,
+   "peak_reserved_bytes": 991952896,
+   "scratch_allocated_bytes": 202211328,
+   "verify_out_max_abs": 0.0006312656972183167,
+   "verify_out_rms_max": 0.00013266138945212266,
+   "state_max_abs": {
+    "root-only": 0.004452448562040523,
+    "n14": 0.005272192288406363,
+    "n15": 0.0052246800527716575,
+    "n31": 0.005098525272769161
+   },
+   "derived": {
+    "step_total_median_ms": 11.712255954742432,
+    "step_total_p10_ms": 11.696381092071533,
+    "step_total_p90_ms": 11.737183666229248,
+    "fused_commit_prev_and_verify_median_ms": 11.712255954742432,
+    "fused_commit_prev_and_verify_per_layer_median_ms": 0.24400533239046732,
+    "verify_only_median_ms": 11.314576148986816,
+    "commit_estimate_median_ms": 0.39767980575561523,
+    "commit_estimate_note": "derived: steady fused step minus sentinel (commit-skipped) step; not separately measurable",
+    "final_flush_median_ms": 10.62508773803711,
+    "layer0_step_median_ms": 0.2983199954032898
+   },
+   "capture": null
+  },
+  {
+   "method": "weaver_aligned_local",
+   "mode": "graph",
+   "status": "complete",
+   "step_median_ms": 5.445216178894043,
+   "step_p10_ms": 5.418112087249756,
+   "step_p90_ms": 5.4980544090271,
+   "regions": {
+    "verify": {
+     "median_ms": 4.045087814331055,
+     "p10_ms": 4.039193725585937,
+     "p90_ms": 4.053827238082886
+    },
+    "commit": {
+     "median_ms": 1.3984479904174805,
+     "p10_ms": 1.3699519634246826,
+     "p90_ms": 1.4450239658355712
+    }
+   },
+   "first_region_per_layer_ms": 0.08427266279856364,
+   "transient_peak_allocated_bytes": 0,
+   "peak_allocated_bytes": 786539008,
+   "peak_reserved_bytes": 811597824,
+   "scratch_allocated_bytes": 32658440,
+   "verify_out_max_abs": 0.0005181787443594432,
+   "verify_out_rms_max": 8.701718093970958e-05,
+   "state_max_abs": {
+    "root-only": 1.9522488226009216e-07,
+    "n14": 5.739497013212969e-07,
+    "n15": 4.855323605390538e-07,
+    "n31": 8.545226182210541e-07
+   },
+   "derived": {
+    "step_total_median_ms": 5.445216178894043,
+    "step_total_p10_ms": 5.418112087249756,
+    "step_total_p90_ms": 5.4980544090271,
+    "verify_median_ms": 4.045087814331055,
+    "verify_per_layer_median_ms": 0.08427266279856364,
+    "commit_median_ms": 1.3984479904174805,
+    "commit_per_layer_median_ms": 0.02913433313369751,
+    "verify_layer0_median_ms": 0.10931199789047241,
+    "topology_rebuild_median_ms": 0.019967999309301376
+   },
+   "capture": {
+    "verify": {
+     "ok": true,
+     "error": null
+    },
+    "commit": {
+     "ok": true,
+     "error": null
+    },
+    "verify_layer0": {
+     "ok": true,
+     "error": null
+    },
+    "topology_rebuild": {
+     "ok": true,
+     "error": null
+    }
+   }
+  },
+  {
+   "method": "weaver_aligned_local",
+   "mode": "eager",
+   "status": "complete",
+   "step_median_ms": 9.129263877868652,
+   "step_p10_ms": 9.087247943878173,
+   "step_p90_ms": 9.214390087127686,
+   "regions": {
+    "verify": {
+     "median_ms": 7.7147040367126465,
+     "p10_ms": 7.696505784988403,
+     "p90_ms": 7.778403091430664
+    },
+    "commit": {
+     "median_ms": 1.4048320055007935,
+     "p10_ms": 1.3844031810760498,
+     "p90_ms": 1.4704320430755615
+    }
+   },
+   "first_region_per_layer_ms": 0.1607230007648468,
+   "transient_peak_allocated_bytes": 1185792,
+   "peak_allocated_bytes": 787724800,
+   "peak_reserved_bytes": 813694976,
+   "scratch_allocated_bytes": 32658440,
+   "verify_out_max_abs": 0.0005181787443594432,
+   "verify_out_rms_max": 8.701718093970958e-05,
+   "state_max_abs": {
+    "root-only": 1.9522488226009216e-07,
+    "n14": 5.739497013212969e-07,
+    "n15": 4.855323605390538e-07,
+    "n31": 8.545226182210541e-07
+   },
+   "derived": {
+    "step_total_median_ms": 9.129263877868652,
+    "step_total_p10_ms": 9.087247943878173,
+    "step_total_p90_ms": 9.214390087127686,
+    "verify_median_ms": 7.7147040367126465,
+    "verify_per_layer_median_ms": 0.1607230007648468,
+    "commit_median_ms": 1.4048320055007935,
+    "commit_per_layer_median_ms": 0.029267333447933197,
+    "verify_layer0_median_ms": 0.18823999911546707,
+    "topology_rebuild_median_ms": 0.035631999373435974
+   },
+   "capture": null
+  },
+  {
+   "method": "weaver_author_default",
+   "mode": "graph",
+   "status": "complete",
+   "step_median_ms": 3.4544479846954346,
+   "step_p10_ms": 3.4302015781402586,
+   "step_p90_ms": 3.506118369102478,
+   "regions": {
+    "verify": {
+     "median_ms": 2.068368077278137,
+     "p10_ms": 2.0570847034454345,
+     "p90_ms": 2.084662413597107
+    },
+    "commit": {
+     "median_ms": 1.3851680159568787,
+     "p10_ms": 1.3667232275009156,
+     "p90_ms": 1.428662395477295
+    }
+   },
+   "first_region_per_layer_ms": 0.04309100160996119,
+   "transient_peak_allocated_bytes": 0,
+   "peak_allocated_bytes": 780116480,
+   "peak_reserved_bytes": 817889280,
+   "scratch_allocated_bytes": 26366984,
+   "verify_out_max_abs": 0.0005279203455401948,
+   "verify_out_rms_max": 0.00010848877169886416,
+   "state_max_abs": {
+    "root-only": 0.00514623110918877,
+    "n14": 0.005051833916671744,
+    "n15": 0.005086695300116628,
+    "n31": 0.005063284260564238
+   },
+   "derived": {
+    "step_total_median_ms": 3.4544479846954346,
+    "step_total_p10_ms": 3.4302015781402586,
+    "step_total_p90_ms": 3.506118369102478,
+    "verify_median_ms": 2.068368077278137,
+    "verify_per_layer_median_ms": 0.04309100160996119,
+    "commit_median_ms": 1.3851680159568787,
+    "commit_per_layer_median_ms": 0.02885766699910164,
+    "verify_layer0_median_ms": 0.07238399982452393,
+    "topology_rebuild_median_ms": 0.019807999953627586
+   },
+   "capture": {
+    "verify": {
+     "ok": true,
+     "error": null
+    },
+    "commit": {
+     "ok": true,
+     "error": null
+    },
+    "verify_layer0": {
+     "ok": true,
+     "error": null
+    },
+    "topology_rebuild": {
+     "ok": true,
+     "error": null
+    }
+   }
+  },
+  {
+   "method": "weaver_author_default",
+   "mode": "eager",
+   "status": "complete",
+   "step_median_ms": 5.883824110031128,
+   "step_p10_ms": 5.853280067443848,
+   "step_p90_ms": 5.932720041275024,
+   "regions": {
+    "verify": {
+     "median_ms": 4.4792640209198,
+     "p10_ms": 4.466908645629883,
+     "p90_ms": 4.5060224533081055
+    },
+    "commit": {
+     "median_ms": 1.3955360054969788,
+     "p10_ms": 1.3781119585037231,
+     "p90_ms": 1.4500287771224976
+    }
+   },
+   "first_region_per_layer_ms": 0.09331800043582916,
+   "transient_peak_allocated_bytes": 1185792,
+   "peak_allocated_bytes": 781302272,
+   "peak_reserved_bytes": 819986432,
+   "scratch_allocated_bytes": 26366984,
+   "verify_out_max_abs": 0.0005279203455401948,
+   "verify_out_rms_max": 0.00010848877169886416,
+   "state_max_abs": {
+    "root-only": 0.00514623110918877,
+    "n14": 0.005051833916671744,
+    "n15": 0.005086695300116628,
+    "n31": 0.005063284260564238
+   },
+   "derived": {
+    "step_total_median_ms": 5.883824110031128,
+    "step_total_p10_ms": 5.853280067443848,
+    "step_total_p90_ms": 5.932720041275024,
+    "verify_median_ms": 4.4792640209198,
+    "verify_per_layer_median_ms": 0.09331800043582916,
+    "commit_median_ms": 1.3955360054969788,
+    "commit_per_layer_median_ms": 0.029073666781187057,
+    "verify_layer0_median_ms": 0.1273599937558174,
+    "topology_rebuild_median_ms": 0.03587200120091438
+   },
+   "capture": null
+  }
+ ],
+ "lumo_cut_state": {
+  "cut_state_buffer": {
+   "tensor": "kernel._FR13_SUBTREE_CACHE[...]['export'] (fp32 [32,48,128,128], shared by all 48 layers, reused every layer)",
+   "allocated_bytes": 100663296,
+   "shape": [
+    32,
+    48,
+    128,
+    128
+   ],
+   "dtype": "torch.float32",
+   "logical_cut_nodes": [
+    0,
+    1,
+    4,
+    9,
+    14
+   ],
+   "N_c": 5,
+   "level1_parent_cut_nodes": [
+    0,
+    1,
+    4,
+    9,
+    14
+   ],
+   "logical_bytes_written_per_layer": 15728640,
+   "logical_bytes_written_per_step": 754974720,
+   "note": "transient: overwritten by the next layer's level-0 launch; only N_c rows are ever written/read"
+  },
+  "paper_formula": {
+   "N_c": 5,
+   "B_v": 8,
+   "d_k": 128,
+   "bytes_per_head_value_tile": 20480,
+   "head_value_tiles_per_layer": 768,
+   "bytes_per_layer": 15728640,
+   "bytes_all_layers_if_resident": 754974720,
+   "formula": "M_cut = 4 * N_c * B_v * d_k (bytes, fp32) per head/value-tile"
+  }
+ },
+ "statuses": {
+  "lumo_fixed32": "complete",
+  "naive_native_paths": "complete",
+  "naive_torch_node": "complete",
+  "treewy_author_default": "complete",
+  "weaver_aligned_local": "complete",
+  "weaver_author_default": "complete"
+ },
+ "sweeps": {
+  "authors": "complete",
+  "lumo_generic": "complete",
+  "naive": "complete"
+ }
+}

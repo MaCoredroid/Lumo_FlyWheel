@@ -1,0 +1,67 @@
+{
+  "created_at_utc": "2026-10-01T01:33:39.203175+00:00",
+  "pdf_sha256": "987e6dc21fc34c81dfa8d91b2ab2b3016384bded3adf0da8c739a6a7241b7392",
+  "pages": 11,
+  "all_pages_reviewed": true,
+  "contact_sheets": [
+    {
+      "path": "artifacts/academic-review3-render-20260930/contact-1.png",
+      "sha256": "ebb6f89a6e99313784c0cbda56afc108e8e676161e405b0428161c5dcc93ecac"
+    },
+    {
+      "path": "artifacts/academic-review3-render-20260930/contact-2.png",
+      "sha256": "582ad1895e371b66c97d5cb0cd44f9d60d5b27cdd9d5afd039dcc6e746e3305d"
+    },
+    {
+      "path": "artifacts/academic-review3-render-20260930/contact-3.png",
+      "sha256": "9359e75fa365e5210ee28b80f5d3700133f905c0d2c5d57ce05bc088b581e8b5"
+    }
+  ],
+  "page_renders": [
+    {
+      "path": "artifacts/academic-review3-render-20260930/page-01.png",
+      "sha256": "91d8515381062a3a7ab5b551c9f242143e6b339851e790e8bf5d5651e1463174"
+    },
+    {
+      "path": "artifacts/academic-review3-render-20260930/page-02.png",
+      "sha256": "83aa9ebea95f89303eb73649c4b457013bdce2d2f208c30f799086089ad6b031"
+    },
+    {
+      "path": "artifacts/academic-review3-render-20260930/page-03.png",
+      "sha256": "9e31bc52c924ca14efd3db43f1295566519dfa3b97770305da8614e7d258cd24"
+    },
+    {
+      "path": "artifacts/academic-review3-render-20260930/page-04.png",
+      "sha256": "90f413751cfdb29f947d530b27c4c7bed0bd569c1792590d5eb4e26513820a6c"
+    },
+    {
+      "path": "artifacts/academic-review3-render-20260930/page-05.png",
+      "sha256": "438b91c60ff30534f3b95d1e25516ac077e07869d2b49da4ba9913530df4cf55"
+    },
+    {
+      "path": "artifacts/academic-review3-render-20260930/page-06.png",
+      "sha256": "9fd985a5f5db7526fdc9f201eee3e46510f56c213413296913b0616ec615ac8f"
+    },
+    {
+      "path": "artifacts/academic-review3-render-20260930/page-07.png",
+      "sha256": "0707cd8f5ac94f0380ec018e5706eeec3e759a3c519b325bd940dda507021f8f"
+    },
+    {
+      "path": "artifacts/academic-review3-render-20260930/page-08.png",
+      "sha256": "f4d948b41be53c5f52fe5668b08f282d8eb4df5b334e55defdb7c457eb7c70dd"
+    },
+    {
+      "path": "artifacts/academic-review3-render-20260930/page-09.png",
+      "sha256": "37ae13e26ec7c54698e6a0612900487eaed3e2615ea658404c2cdc3edc267eec"
+    },
+    {
+      "path": "artifacts/academic-review3-render-20260930/page-10.png",
+      "sha256": "b81bc31e0b38c2191495c0cdcf8b372ac31e7d6498702a8878e435896e0addad"
+    },
+    {
+      "path": "artifacts/academic-review3-render-20260930/page-11.png",
+      "sha256": "293b1af1f7dfa1d8e8448ca04739c270640ff5bc5efb8a5f0874b6db75ba182c"
+    }
+  ],
+  "findings": "No clipping, overlap, overflow, unreadable tables, or broken column flow. Bibliography columns are manually divided at reference 31."
+}

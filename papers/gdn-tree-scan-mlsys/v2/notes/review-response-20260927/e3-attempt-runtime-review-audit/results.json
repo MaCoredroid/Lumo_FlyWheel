@@ -1,0 +1,57 @@
+{
+  "empty_missing_patch_control": {
+    "missing_patch_refused": true,
+    "missing_prediction_created": false,
+    "observed_empty_patch": ""
+  },
+  "pins_verified": {
+    "MANIFEST.json": "2f15cfc427e081001d934b868c82b63973f449bea63f504a2a6a6683a60170f1",
+    "evaluator.py": "71ee0a8fda59d3bf1f57912a1de359b4931639dcafd11e8fff7f218abdb84882",
+    "runtime.py": "1dd34ef9d30dec24c1b594c148928499e10bb655222f8c3c67b342cda4745d45"
+  },
+  "real_gate_documented_sequence": {
+    "exception_type": "Refusal",
+    "injected_start_calls": 0,
+    "launch": "IDENTITY_GATE_PASS",
+    "manual_fixture_transition": null,
+    "reason": "actual agent hook phase differs from bound identity"
+  },
+  "real_gate_manual_transition_positive_control": {
+    "closure_status": "CLOSABLE",
+    "injected_start_calls": 1,
+    "launch": "IDENTITY_GATE_PASS",
+    "manual_fixture_transition": "stage_and_observed_boot",
+    "terminal_observed": true
+  },
+  "real_gate_stage_only_diagnostic": {
+    "exception_type": "Refusal",
+    "injected_start_calls": 0,
+    "launch": "IDENTITY_GATE_PASS",
+    "manual_fixture_transition": "stage_only",
+    "reason": "'boot_started_at_utc'"
+  },
+  "recovery_control": {
+    "recovery_mutating_calls": [],
+    "status": "CLOSABLE"
+  },
+  "scope": "INJECTED_CPU_ONLY_NO_DOCKER_SSH_MODEL_EVALUATOR_TASK",
+  "unbound_testspec": {
+    "closure_resolved": true,
+    "closure_status": "CLOSABLE",
+    "forwarded_spec": {
+      "FAIL_TO_PASS": [
+        "unbound_test"
+      ],
+      "eval_script": "UNBOUND_EVAL_SCRIPT_SENTINEL",
+      "instance_id": "scikit-learn__scikit-learn-9288",
+      "repo": "wrong/repository",
+      "version": "wrong-version"
+    },
+    "injected_evaluator_return": {
+      "completed": true,
+      "resolved": true
+    },
+    "scope": "official body/source check are fixture doubles; no task tests execute",
+    "selected_record_calls": 0
+  }
+}

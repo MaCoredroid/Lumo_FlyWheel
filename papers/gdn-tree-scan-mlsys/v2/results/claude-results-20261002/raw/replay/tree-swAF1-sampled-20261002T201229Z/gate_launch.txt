@@ -1,0 +1,1 @@
+[launch] SUFFIX PASS GATE ON -> /logs/fr14_suffix_pass_gate.cfg (ngram=1 min_agree=0 min_history=1)

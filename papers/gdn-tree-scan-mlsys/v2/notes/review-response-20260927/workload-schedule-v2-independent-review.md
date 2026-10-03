@@ -1,0 +1,24 @@
+# Four-attempt schedule v2: independent bounded review
+
+**Disposition: accept the four-row schedule-authority component, with one small declaration-wording correction before its final prospective freeze.** This closes the schedule definition/cap portion of the earlier readiness delta. It does **not** establish that the accepted eight-row adapter has already been replaced in the runtime call graph, or authorize WP. That known successor/caller/config/transport work remains separate; no accepted F1/F2 finding is reopened.
+
+Reviewed snapshot: `p0/monitor/review-response-20260927/workload-schedule-v2-reviewed-20260928T0450Z`. MANIFEST-v2 SHA256 **`bb6bcde6f746996d846612e94f6f497997fca3b566df3b1a939486c5a151ce03`**. Independently verified all **35 unique payload hashes**, including six new component files and the bound historical/accepted sources. `schedule_authority_v2.py` SHA256 `40ce35f52124b53b98733c44dbedd13fbe6d41aec7c4ef263a4df2d7a9756838`. Snapshot, accepted bundles, source and gates were not changed.
+
+## What is closed
+
+- `validate_rows` binds the exact SCOPE bytes/metadata and four rows: `scikit-learn__scikit-learn-9288`, **AR → CHAIN_MTP → SGLANG_EAGLE → LUMOTREE**, one configuration and run each, zero additional tuning/confirmation. Fifth, reordered, wrong-task and forbidden-kind rows refuse.
+- `validate_freeze_order` binds the scope and schedule digest, exact four-row order and one configuration per arm. `ordinal_allowed` refuses ordinal five, zero and non-integer ordinals; `next_ordinal(4)` returns no next row. The retained accepted closed-prefix/attempt-identity machinery remains responsible for preventing repeated execution of an earlier ordinal; this stateless component does not claim to replace it.
+- `consult` refuses the shipped pending schedule and a supplied closed WP; a synthetic frozen declaration plus approved-gate fixture permits ordinal four but always returns `launch_authorized:false`. The real caller must supply and enforce the parent's gate/freeze; a schedule consult is deliberately necessary, not sufficient.
+- Historical pilot/tuning/confirmation files remain hash-checked history. The README correctly states that the unchanged accepted adapter **still refuses** the four-row freeze and lists the versioned successor/loader pins to replace. I reproduced that exact-count refusal. The metadata status `REPLACED_FOR_SCHEDULE_SOURCE_ONLY_FILE_UNCHANGED` must be read with this explicit boundary: replacement authority is specified, executable dependency replacement is still pending. No new integration blocker is inferred from that known pending state.
+
+## One minimal correction for the chosen absence mode
+
+The parent has now selected `declared_absent_compatibility_mode` in [the prospective decision](../../p0/monitor/review-response-20260927/WORKLOAD-PROSPECTIVE-READINESS-DECISIONS.json). The validator supports that selection, keeps root `26092700` an unverified scheduling label, forbids a paired-seed/reproducibility claim, and separates pre-agent probe facts. The unselected shipped document is therefore a draft to finalize, not a new blocker or a request for another seed decision.
+
+**Correct the required declaration phrase** `each attempt is one independent draw under the requested sampling settings` in `REQUIRED_ABSENT_CONSEQUENCES` (source line134), and its generated schedule/description, to the parent's narrower statement: **one separate attempt per method; no request-root injection; actual engine defaults disclosed**. Request-seed omission alone does not establish independent draws when engine PRNG initialization may repeat. This is a small claim/schema wording correction, not additional inference, repetition or qualification work. The prospective choice otherwise has no conflict with this schedule component. Real transport must later substantiate the omission as already required; the document's syntactic declaration checks are not empirical seed-delivery evidence.
+
+## Bounded checks and limits
+
+Configured Python independently exercised **22 controls**, all with expected outcomes: four allowed ordinals, end-after-four, valid draft/four-row freeze, original eight-row refusal, synthetic ordinal-four consult; and rejection of ordinal five/Boolean ordinal, fifth row, wrong task/order, tuning/confirmation row, nonzero tuning, scope mismatch, seed relabel, closed WP and shipped pending consult. Only temporary metadata/approval fixtures were used; no real approval was created. The original pytest suite was not rerun because configured Python lacks pytest (`No module named pytest`); no package was installed. The 22 controls used only the standard library.
+
+No Docker/SSH/GPU/model/evaluator/task operation occurred. Preserve accepted runtime repairs and proceed with the already-assigned actual successor/caller/config/raw-rate integration after the small wording correction; this review requests no new experiment, scope or gate.

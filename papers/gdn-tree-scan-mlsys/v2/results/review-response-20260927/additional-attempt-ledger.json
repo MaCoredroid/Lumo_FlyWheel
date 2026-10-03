@@ -1,0 +1,634 @@
+{
+  "current_comparison_supplement": [
+    {
+      "arm": "SGLang_earlier",
+      "reason": "No complete per-task pre/post metrics in the recovered shared-pair bundle; old console average not substituted.",
+      "source": "results/fr14_nvfp4_port_20260816/ablation_a_step2.json",
+      "status": "resolved in contemporaneous campaign summary",
+      "task": "astropy__astropy-13236",
+      "task_bracket_pooled_rate": null
+    },
+    {
+      "arm": "SGLang_earlier",
+      "reason": "No complete per-task pre/post metrics in the recovered shared-pair bundle; old console average not substituted.",
+      "source": "results/fr14_nvfp4_port_20260816/ablation_a_step2.json",
+      "status": "stopped in flight at GPU budget",
+      "task": "astropy__astropy-13398",
+      "task_bracket_pooled_rate": null
+    },
+    {
+      "arm": "SGLang_later",
+      "reason": "Distinct partial attempt retained; never counted as a completed verdict or silently combined with later retry.",
+      "run": "run1",
+      "source": "results/fr14_nvfp4_port_20260816/sglang16_evidence/run1/swe_out/verified/per_task/astropy__astropy-13033/qwen_trace.jsonl",
+      "status": "interrupted trace; missing terminal metadata/evaluation/post bracket",
+      "task": "astropy__astropy-13033",
+      "task_bracket_pooled_rate": null
+    },
+    {
+      "arm": "SGLang_later",
+      "reason": "Distinct partial attempt retained; never counted as a completed verdict or silently combined with later retry.",
+      "run": "r1",
+      "source": "results/fr14_nvfp4_port_20260816/sglang16_evidence/r1/swe_out/verified/per_task/astropy__astropy-13236/qwen_trace.jsonl",
+      "status": "interrupted trace; missing terminal metadata/evaluation/post bracket",
+      "task": "astropy__astropy-13236",
+      "task_bracket_pooled_rate": null
+    },
+    {
+      "arm": "Cqc16",
+      "metric_boundary_projection": {
+        "post": [
+          {
+            "line": 139,
+            "raw": "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 142,
+            "raw": "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 221,
+            "raw": "vllm:generation_tokens_total{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 59552.0"
+          },
+          {
+            "line": 227,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"stop\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 36.0"
+          },
+          {
+            "line": 228,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"length\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 1.0"
+          },
+          {
+            "line": 229,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"abort\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 230,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"error\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 231,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"repetition\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 282,
+            "raw": "vllm:request_generation_tokens_count{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 37.0"
+          },
+          {
+            "line": 283,
+            "raw": "vllm:request_generation_tokens_sum{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 59552.0"
+          },
+          {
+            "line": 394,
+            "raw": "vllm:time_to_first_token_seconds_count{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 37.0"
+          },
+          {
+            "line": 395,
+            "raw": "vllm:time_to_first_token_seconds_sum{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 152.41754913330078"
+          },
+          {
+            "line": 477,
+            "raw": "vllm:e2e_request_latency_seconds_count{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 37.0"
+          },
+          {
+            "line": 478,
+            "raw": "vllm:e2e_request_latency_seconds_sum{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 2283.0429861545563"
+          },
+          {
+            "line": 593,
+            "raw": "vllm:request_decode_time_seconds_count{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 37.0"
+          },
+          {
+            "line": 594,
+            "raw": "vllm:request_decode_time_seconds_sum{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 2130.6339876856655"
+          }
+        ],
+        "pre": [
+          {
+            "line": 139,
+            "raw": "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 142,
+            "raw": "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 221,
+            "raw": "vllm:generation_tokens_total{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 26239.0"
+          },
+          {
+            "line": 227,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"stop\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 35.0"
+          },
+          {
+            "line": 228,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"length\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 229,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"abort\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 230,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"error\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 231,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"repetition\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 282,
+            "raw": "vllm:request_generation_tokens_count{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 35.0"
+          },
+          {
+            "line": 283,
+            "raw": "vllm:request_generation_tokens_sum{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 26239.0"
+          },
+          {
+            "line": 394,
+            "raw": "vllm:time_to_first_token_seconds_count{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 35.0"
+          },
+          {
+            "line": 395,
+            "raw": "vllm:time_to_first_token_seconds_sum{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 122.29720187187195"
+          },
+          {
+            "line": 477,
+            "raw": "vllm:e2e_request_latency_seconds_count{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 35.0"
+          },
+          {
+            "line": 478,
+            "raw": "vllm:e2e_request_latency_seconds_sum{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 1048.7886128425598"
+          },
+          {
+            "line": 593,
+            "raw": "vllm:request_decode_time_seconds_count{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 35.0"
+          },
+          {
+            "line": 594,
+            "raw": "vllm:request_decode_time_seconds_sum{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 926.5007082826924"
+          }
+        ]
+      },
+      "metric_projection_source": "papers/gdn-tree-scan-mlsys/v2/notes/rate-candidates-2026-09-24/nvfp4-b1-cohort-brackets-20260924.json",
+      "original_source_bindings": {
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-13236/vllm_metrics_post.txt": {
+          "bytes": 69120,
+          "sha256": "61711f051eab6c265faaff452b38578494780129792f9fb546841c81217729ab"
+        },
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-13236/vllm_metrics_pre.txt": {
+          "bytes": 69070,
+          "sha256": "71672a9a83eb9cd469bd17555e6edaae794e49ade4dafab72ba2525ca452eb59"
+        }
+      },
+      "reason": "Engine bracket is idle/population-aligned but task has no terminal metadata or verdict; not a completed-agent outcome.",
+      "recorded_trace_diagnostic": {
+        "degeneration_flag": "   <<< DEGENERATION SUSPECTED (no visible output, no tools, 70755 thinking chars) -- confirm with c5",
+        "malformed_tool_calls": 0,
+        "thinking_chars": 70755,
+        "tool_calls": 0,
+        "visible_chars": 0
+      },
+      "source": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/audit-projections/nvfp4-b1-cohort-config-behavior-20260924.json",
+      "status": "degeneration heuristic fired; no terminal agent metadata/evaluation",
+      "task": "astropy__astropy-13236",
+      "task_bracket_pooled_rate": null,
+      "trace": {
+        "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc16_20260819T222438Z/hydra27_fixed32_promoab_Cqc16/swe_out/verified/per_task/astropy__astropy-13236/qwen_trace.jsonl",
+        "sha256": "676bf2a7b79328052a9d4f7d1c40e60dbdd91173d5b0892634fca0bf53bb057a"
+      }
+    },
+    {
+      "arm": "Cqc15",
+      "metric_boundary_projection": {
+        "post": [
+          {
+            "line": 139,
+            "raw": "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 1.0"
+          },
+          {
+            "line": 142,
+            "raw": "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 221,
+            "raw": "vllm:generation_tokens_total{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 275894.0"
+          },
+          {
+            "line": 227,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"stop\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 201.0"
+          },
+          {
+            "line": 228,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"length\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 1.0"
+          },
+          {
+            "line": 229,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"abort\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 230,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"error\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 231,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"repetition\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 282,
+            "raw": "vllm:request_generation_tokens_count{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 202.0"
+          },
+          {
+            "line": 283,
+            "raw": "vllm:request_generation_tokens_sum{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 274036.0"
+          },
+          {
+            "line": 394,
+            "raw": "vllm:time_to_first_token_seconds_count{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 203.0"
+          },
+          {
+            "line": 395,
+            "raw": "vllm:time_to_first_token_seconds_sum{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 920.0244057178497"
+          },
+          {
+            "line": 477,
+            "raw": "vllm:e2e_request_latency_seconds_count{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 202.0"
+          },
+          {
+            "line": 478,
+            "raw": "vllm:e2e_request_latency_seconds_sum{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 11838.220677375793"
+          },
+          {
+            "line": 593,
+            "raw": "vllm:request_decode_time_seconds_count{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 202.0"
+          },
+          {
+            "line": 594,
+            "raw": "vllm:request_decode_time_seconds_sum{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 10920.382636397379"
+          }
+        ],
+        "pre": [
+          {
+            "line": 139,
+            "raw": "vllm:num_requests_running{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 142,
+            "raw": "vllm:num_requests_waiting{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 221,
+            "raw": "vllm:generation_tokens_total{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 70424.0"
+          },
+          {
+            "line": 227,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"stop\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 53.0"
+          },
+          {
+            "line": 228,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"length\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 229,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"abort\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 230,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"error\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 231,
+            "raw": "vllm:request_success_total{engine=\"0\",finished_reason=\"repetition\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 0.0"
+          },
+          {
+            "line": 282,
+            "raw": "vllm:request_generation_tokens_count{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 53.0"
+          },
+          {
+            "line": 283,
+            "raw": "vllm:request_generation_tokens_sum{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 70424.0"
+          },
+          {
+            "line": 394,
+            "raw": "vllm:time_to_first_token_seconds_count{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 53.0"
+          },
+          {
+            "line": 395,
+            "raw": "vllm:time_to_first_token_seconds_sum{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 269.1670525074005"
+          },
+          {
+            "line": 477,
+            "raw": "vllm:e2e_request_latency_seconds_count{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 53.0"
+          },
+          {
+            "line": 478,
+            "raw": "vllm:e2e_request_latency_seconds_sum{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 2849.883605480194"
+          },
+          {
+            "line": 593,
+            "raw": "vllm:request_decode_time_seconds_count{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 53.0"
+          },
+          {
+            "line": 594,
+            "raw": "vllm:request_decode_time_seconds_sum{engine=\"0\",model_name=\"qwen3.8-27b-nvfp4-radixark\"} 2580.723862912273"
+          }
+        ]
+      },
+      "metric_projection_source": "papers/gdn-tree-scan-mlsys/v2/notes/rate-candidates-2026-09-24/nvfp4-b1-cohort-brackets-20260924.json",
+      "original_source_bindings": {
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-13398/vllm_metrics_post.txt": {
+          "bytes": 69349,
+          "sha256": "c2c454d6879e0c80a7f8ab00c1da3098d9c0d439ceb69bbe1a95aeb5e20ee798"
+        },
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-13398/vllm_metrics_pre.txt": {
+          "bytes": 69132,
+          "sha256": "e29b323a815fce63f4f101f477943e03e1c381e01daca0ea411844cee5b05736"
+        }
+      },
+      "reason": "Final running-request gauge is nonzero; token and completion/TTFT populations differ. No completed-request rate can be inferred from global generation delta.",
+      "recorded_trace_diagnostic": {
+        "degeneration_flag": "",
+        "malformed_tool_calls": 0,
+        "thinking_chars": 340679,
+        "tool_calls": 147,
+        "visible_chars": 6861
+      },
+      "source": "papers/gdn-tree-scan-mlsys/v2/results/agent-workload/raw/shared-tasks-20260924/audit-projections/nvfp4-b1-cohort-config-behavior-20260924.json",
+      "status": "incomplete evaluation; one request running at final bracket",
+      "task": "astropy__astropy-13398",
+      "task_bracket_pooled_rate": null,
+      "trace": {
+        "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc15_20260823T193658Z/hydra27_fixed32_promoab_Cqc15/swe_out/verified/per_task/astropy__astropy-13398/qwen_trace.jsonl",
+        "sha256": "d71b02c39e4150685e084ea7842c46bc5940fda0f80d66b61d392cd28ec10d8e"
+      }
+    }
+  ],
+  "development_lineage_provenance_only": [
+    {
+      "arm": "Cp1",
+      "evaluation_projection": {
+        "elapsed_s": null,
+        "error": null,
+        "instance_id": "astropy__astropy-12907",
+        "verdict": "resolved"
+      },
+      "original_source_bindings": {
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/swe_out/verified/per_task/astropy__astropy-12907/eval/eval_report.json": {
+          "bytes": 506,
+          "sha256": "57a842f0624cb38d8fc9c89a24aa87c71dc279a27d41be68bd4c0a2774ee61b5"
+        },
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/swe_out/verified/per_task/astropy__astropy-12907/runner_metadata.json": {
+          "bytes": 30926,
+          "sha256": "52b3de8c3777482eabe920dcacb181af30f8110afc99f89fbb7f3c6d381a8a68"
+        },
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_post.txt": {
+          "bytes": 69016,
+          "sha256": "9fdaf50b2db6805e42e36b1e8b4a59d6654b949bf2c680bc28c1d2e681e63835"
+        },
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/swe_out/verified/per_task/astropy__astropy-12907/vllm_metrics_pre.txt": {
+          "bytes": 67166,
+          "sha256": "ab24b76f0f38bf462a6a20795a744af145b1a9ef6831cb86505d4c7ba63c007e"
+        }
+      },
+      "pooled_decode_rate": null,
+      "runner_metadata_projection": {
+        "agent": {
+          "budget_capped": false,
+          "campaign_budget_s": 9000.0,
+          "elapsed_s": 365.058,
+          "exit_code": 0,
+          "fr14_network_boundary": {
+            "bridge": "fr14agent0",
+            "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4",
+            "gateway": "172.31.99.1",
+            "net": "fr14-agent-isolated",
+            "proxy_port": "8023",
+            "rules": "9"
+          },
+          "timed_out": false
+        },
+        "ended_at": "2026-08-18T08:31:31Z",
+        "instance_id": "astropy__astropy-12907",
+        "patch_bytes": 504,
+        "started_at": "2026-08-18T08:24:30Z"
+      },
+      "scope": "Earlier development lineage retained as provenance only; not a current-build performance claim or a pooled campaign denominator.",
+      "source": "papers/gdn-tree-scan-mlsys/v2/notes/rate-candidates-2026-09-24/nvfp4-b1-cohort-brackets-20260924.json",
+      "task": "astropy__astropy-12907"
+    },
+    {
+      "arm": "Cp1",
+      "evaluation_projection": {
+        "elapsed_s": null,
+        "error": null,
+        "instance_id": "astropy__astropy-13033",
+        "verdict": "failed"
+      },
+      "original_source_bindings": {
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/swe_out/verified/per_task/astropy__astropy-13033/eval/eval_report.json": {
+          "bytes": 505,
+          "sha256": "89f256e65bcb109aa69dbf97155e6126a71d221e58c0bfe309ba147f252aea1f"
+        },
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/swe_out/verified/per_task/astropy__astropy-13033/runner_metadata.json": {
+          "bytes": 30953,
+          "sha256": "0100aa2c855615b3e5e75feb3f09e5219a5238aadd1699b4f6bcbfa92c084304"
+        },
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_post.txt": {
+          "bytes": 69076,
+          "sha256": "db9848be9eb3e85436bbf7fc1fcf02049310975789683a8cf20c360e16effda6"
+        },
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/swe_out/verified/per_task/astropy__astropy-13033/vllm_metrics_pre.txt": {
+          "bytes": 69029,
+          "sha256": "791d01ace7834820dd32e946881e53597a4a8dc0ac45c3ad2ab9414a7e0b8c73"
+        }
+      },
+      "pooled_decode_rate": null,
+      "runner_metadata_projection": {
+        "agent": {
+          "budget_capped": false,
+          "campaign_budget_s": 9000.0,
+          "elapsed_s": 1267.008,
+          "exit_code": 0,
+          "fr14_network_boundary": {
+            "bridge": "fr14agent0",
+            "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4",
+            "gateway": "172.31.99.1",
+            "net": "fr14-agent-isolated",
+            "proxy_port": "8023",
+            "rules": "9"
+          },
+          "timed_out": false
+        },
+        "ended_at": "2026-08-18T08:53:35Z",
+        "instance_id": "astropy__astropy-13033",
+        "patch_bytes": 1092,
+        "started_at": "2026-08-18T08:31:31Z"
+      },
+      "scope": "Earlier development lineage retained as provenance only; not a current-build performance claim or a pooled campaign denominator.",
+      "source": "papers/gdn-tree-scan-mlsys/v2/notes/rate-candidates-2026-09-24/nvfp4-b1-cohort-brackets-20260924.json",
+      "task": "astropy__astropy-13033"
+    },
+    {
+      "arm": "Cp1",
+      "evaluation_projection": {
+        "elapsed_s": null,
+        "error": null,
+        "instance_id": "astropy__astropy-13236",
+        "verdict": "failed"
+      },
+      "original_source_bindings": {
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/swe_out/verified/per_task/astropy__astropy-13236/eval/eval_report.json": {
+          "bytes": 505,
+          "sha256": "954a1353138bedf6b9d2919d7d89beff836a967863238553763f99572ed02e96"
+        },
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/swe_out/verified/per_task/astropy__astropy-13236/runner_metadata.json": {
+          "bytes": 30965,
+          "sha256": "420ced628e239628191bbbbb37d8b48ff0202e53497d84e95570a162a082c9af"
+        },
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/swe_out/verified/per_task/astropy__astropy-13236/vllm_metrics_post.txt": {
+          "bytes": 69121,
+          "sha256": "2523c07d0ca84ef9deb24dd94864c47c6b14d232bcf313b7fe68186211e49bf9"
+        },
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/swe_out/verified/per_task/astropy__astropy-13236/vllm_metrics_pre.txt": {
+          "bytes": 69089,
+          "sha256": "10ad204d3c85d5c5f8f440b1236607d1576141d35207b5431cf68d3539d5cd97"
+        }
+      },
+      "pooled_decode_rate": null,
+      "runner_metadata_projection": {
+        "agent": {
+          "budget_capped": false,
+          "campaign_budget_s": 9000.0,
+          "elapsed_s": 1431.243,
+          "exit_code": 0,
+          "fr14_network_boundary": {
+            "bridge": "fr14agent0",
+            "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4",
+            "gateway": "172.31.99.1",
+            "net": "fr14-agent-isolated",
+            "proxy_port": "8023",
+            "rules": "9"
+          },
+          "timed_out": false
+        },
+        "ended_at": "2026-08-18T09:18:25Z",
+        "instance_id": "astropy__astropy-13236",
+        "patch_bytes": 1809,
+        "started_at": "2026-08-18T08:53:35Z"
+      },
+      "scope": "Earlier development lineage retained as provenance only; not a current-build performance claim or a pooled campaign denominator.",
+      "source": "papers/gdn-tree-scan-mlsys/v2/notes/rate-candidates-2026-09-24/nvfp4-b1-cohort-brackets-20260924.json",
+      "task": "astropy__astropy-13236"
+    },
+    {
+      "arm": "Cp1",
+      "evaluation_projection": null,
+      "original_source_bindings": {
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/swe_out/verified/per_task/astropy__astropy-13398/vllm_metrics_post.txt": {
+          "bytes": 69332,
+          "sha256": "81d29982e39a692eb7ff80ee3c29ebcf32893298a298e23bb8200ebbbe39ae86"
+        },
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/swe_out/verified/per_task/astropy__astropy-13398/vllm_metrics_pre.txt": {
+          "bytes": 69121,
+          "sha256": "a64981136ff9f05af64506db965f338ed50d84432d6924735933b6f857812c14"
+        }
+      },
+      "pooled_decode_rate": null,
+      "runner_metadata_projection": null,
+      "scope": "Earlier development lineage retained as provenance only; not a current-build performance claim or a pooled campaign denominator.",
+      "source": "papers/gdn-tree-scan-mlsys/v2/notes/rate-candidates-2026-09-24/nvfp4-b1-cohort-brackets-20260924.json",
+      "task": "astropy__astropy-13398"
+    },
+    {
+      "arm": "Cqc12",
+      "evaluation_projection": {
+        "elapsed_s": null,
+        "error": null,
+        "instance_id": "astropy__astropy-13453",
+        "verdict": "resolved"
+      },
+      "original_source_bindings": {
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc12_20260824T021301Z/hydra27_fixed32_promoab_Cqc12/swe_out/verified/per_task/astropy__astropy-13453/eval/eval_report.json": {
+          "bytes": 506,
+          "sha256": "2c9475e7f351372f3a75ee1c974abdace96c5ce7c7fb910664fe89bae7d3d571"
+        },
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc12_20260824T021301Z/hydra27_fixed32_promoab_Cqc12/swe_out/verified/per_task/astropy__astropy-13453/runner_metadata.json": {
+          "bytes": 30965,
+          "sha256": "57f5400be5c757f30c54e532b62dd448aa5a00b95abfdd62126eff12499c74e8"
+        },
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc12_20260824T021301Z/hydra27_fixed32_promoab_Cqc12/swe_out/verified/per_task/astropy__astropy-13453/vllm_metrics_post.txt": {
+          "bytes": 69078,
+          "sha256": "4c3cf22a337c33acee772c6b52837dbd945b75bfd0f620cc8cba50bbf4c0eaed"
+        },
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc12_20260824T021301Z/hydra27_fixed32_promoab_Cqc12/swe_out/verified/per_task/astropy__astropy-13453/vllm_metrics_pre.txt": {
+          "bytes": 67165,
+          "sha256": "70792f6e4512db3b4771f34bbd1f3464833c43629bff44a8acdac9f5de12b094"
+        }
+      },
+      "pooled_decode_rate": null,
+      "runner_metadata_projection": {
+        "agent": {
+          "budget_capped": false,
+          "campaign_budget_s": 9000.0,
+          "elapsed_s": 886.401,
+          "exit_code": 0,
+          "fr14_network_boundary": {
+            "bridge": "fr14agent0",
+            "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4",
+            "gateway": "172.31.99.1",
+            "net": "fr14-agent-isolated",
+            "proxy_port": "8023",
+            "rules": "9"
+          },
+          "timed_out": false
+        },
+        "ended_at": "2026-08-24T02:34:04Z",
+        "instance_id": "astropy__astropy-13453",
+        "patch_bytes": 1047,
+        "started_at": "2026-08-24T02:18:21Z"
+      },
+      "scope": "Earlier development lineage retained as provenance only; not a current-build performance claim or a pooled campaign denominator.",
+      "source": "papers/gdn-tree-scan-mlsys/v2/notes/rate-candidates-2026-09-24/nvfp4-b1-cohort-brackets-20260924.json",
+      "task": "astropy__astropy-13453"
+    },
+    {
+      "arm": "Cqc12",
+      "evaluation_projection": null,
+      "original_source_bindings": {
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc12_20260824T021301Z/hydra27_fixed32_promoab_Cqc12/swe_out/verified/per_task/astropy__astropy-13579/vllm_metrics_post.txt": {
+          "bytes": 69295,
+          "sha256": "bac9494e0363426e60e860de0d9c98c163dcf2f8cfca43afceaf030a4d85da1e"
+        },
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc12_20260824T021301Z/hydra27_fixed32_promoab_Cqc12/swe_out/verified/per_task/astropy__astropy-13579/vllm_metrics_pre.txt": {
+          "bytes": 69078,
+          "sha256": "624f8c77347d2a2145ec53a7411a7113c056308896458477702c7958e57be934"
+        }
+      },
+      "pooled_decode_rate": null,
+      "runner_metadata_projection": null,
+      "scope": "Earlier development lineage retained as provenance only; not a current-build performance claim or a pooled campaign denominator.",
+      "source": "papers/gdn-tree-scan-mlsys/v2/notes/rate-candidates-2026-09-24/nvfp4-b1-cohort-brackets-20260924.json",
+      "task": "astropy__astropy-13579"
+    },
+    {
+      "arm": "Cqc12_unharvested",
+      "evaluation_projection": null,
+      "original_source_bindings": {
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc12_20260824T000712Z/hydra27_fixed32_promoab_Cqc12/swe_out/verified/per_task/astropy__astropy-13453/vllm_metrics_post.txt": {
+          "bytes": 69074,
+          "sha256": "50c515f08f6a21090bba7c6652a87a1d067afb81aebe06edba37b70ba1df7297"
+        },
+        "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_Cqc12_20260824T000712Z/hydra27_fixed32_promoab_Cqc12/swe_out/verified/per_task/astropy__astropy-13453/vllm_metrics_pre.txt": {
+          "bytes": 67172,
+          "sha256": "1be8ebd1cb4f9cb2fd803df770cca6f10f71ec667a886b041a06d27ad96d84db"
+        }
+      },
+      "pooled_decode_rate": null,
+      "runner_metadata_projection": null,
+      "scope": "Earlier development lineage retained as provenance only; not a current-build performance claim or a pooled campaign denominator.",
+      "source": "papers/gdn-tree-scan-mlsys/v2/notes/rate-candidates-2026-09-24/nvfp4-b1-cohort-brackets-20260924.json",
+      "task": "astropy__astropy-13453"
+    }
+  ],
+  "scope": "Adverse, incomplete and earlier records remain visible; absent terminal metrics/verdicts are not invented."
+}

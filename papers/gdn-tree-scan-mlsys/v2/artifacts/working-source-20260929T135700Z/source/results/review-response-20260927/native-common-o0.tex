@@ -1,0 +1,13 @@
+% Bound source and independent review are in native-common-o0.json.
+A subsequent controlled reference run imports the same archived starting state
+for each path before native continuation. In its first process, all 168
+observations (84 predetermined paths, two repetitions each) pass the source,
+raw-data, finiteness, and ownership checks. The two repetitions reproduce
+identical imported state for 84 of 84 paths, identical published target
+state for 84, and identical full-vocabulary logits for
+84; 84 retain the same greedy decision.
+There are 2 exact-tie observations. This is a within-process result;
+independent-process repeatability remains pending. The import controls the
+starting target state, but does not yet establish compatible MTP state,
+candidate continuation, or lifecycle behavior. The earlier natural-prefill
+result remains a separate adverse observation.

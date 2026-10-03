@@ -1,0 +1,35 @@
+{
+ "schema": "q1v3.patch-receipt.v1",
+ "mode": "cand",
+ "applied": true,
+ "problems": [],
+ "files": {
+  "runner": {
+   "path": "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py",
+   "pre_sha256": "3d9df101ebb1b2d5e8bc0ca844451b47a935f4adf48f7c6ab4ef81438ce21b79",
+   "reference_sha256": "3d9df101ebb1b2d5",
+   "matches_reference_copy": true,
+   "anchor_lines": {
+    "import": 50,
+    "pre_forward": 5910,
+    "logits": 5968,
+    "sampled": 6784,
+    "drafts": 7426,
+    "sealed": 7475
+   },
+   "post_sha256": "f3f96d22dddcc0d2315d2ad3dff3db8c6c529b770a9512083390425825913a45"
+  },
+  "rejection_sampler": {
+   "path": "/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py",
+   "pre_sha256": "7e4691a6e48fdd9426117beb9b91ef1fdd1053578f792b4d670234efba7b0e52",
+   "reference_sha256": null,
+   "matches_reference_copy": null,
+   "anchor_lines": {
+    "import": 1,
+    "taw": 2562
+   },
+   "post_sha256": "253c27c1c2d7c07c07b5c94924a94302439a06bac6a0e6eda8dbb42221d241bb"
+  }
+ },
+ "hooks_sha256": "d4b219a6bf7f7ecf3eccf8672e5a43573206433a803763b42e8d9851ff3b4ccc"
+}

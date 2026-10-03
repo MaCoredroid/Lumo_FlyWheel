@@ -1,0 +1,7 @@
+# Pinned full native startup failure and bounded retry
+
+Run q1-native-joint-kernel-pin-20260930T010000Z-aligned_nonpacked-A exited before health at 01:08:33Z after starting at01:04:12Z. Its terminal receipt and all31 metadata members are byte-verified; zero raw objects, observations or healthy boots were added. Cleanup stopped and removed only the owned engine. All evidence remains at its original run path.
+
+Independent read-only review locates the first failure at engine.log130–161: Triton binary loading during layer0 GDN profiling reports CUDA operation not permitted. Native gdn_linear_attn.py755–774 catches this warmup exception and continues; the subsequent CUTLASS FP4 initialization error may be cascading. The resolved engine configuration and65-entry cache-load receipt match the successful one-case pinned diagnostic. No request or bulk capture executed. No new-source blocker was found; the underlying CUDA failure remains unexplained. This is not evidence of a bad pinned tactic or of an established external cause.
+
+Parent admits one fresh-process retry using unchanged source, model settings, cache selection and numerical criteria. The new cohort has the identical84cases, two repeats and A/B processes; the failed boot remains separate and cannot contribute to336observations. Source/artifact Git backup must include the complete failed metadata and fresh launch/recovery packet before recovery. This record grants no candidate, timing or workload qualification. No unit tests were added.

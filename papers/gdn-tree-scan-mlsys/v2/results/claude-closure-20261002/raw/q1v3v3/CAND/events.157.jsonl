@@ -1,0 +1,89 @@
+{"utc": "2026-10-03T01:21:59Z", "what": "hooks_import", "pid": 157, "hooks_sha256": "d4b219a6bf7f7ecf3eccf8672e5a43573206433a803763b42e8d9851ff3b4ccc", "cases_sha256": "1e8d2ffc628a35c6518291a280006e75a786f8fb69878eb01452f9ed72b91609"}
+{"utc": "2026-10-03T01:21:59Z", "what": "control", "obs_id": "CAND__p1__N__r0"}
+{"utc": "2026-10-03T01:21:59Z", "what": "bind", "obs_id": "CAND__p1__N__r0", "rid": "chatcmpl-fr13-chat-b786038f1604ba7d4653d75436d2f254", "P": 23376, "prompt_sha256": "de8b4227bfcfc38e6f105b8f6fd5a628c467321279cfab0032513096e1a9691d"}
+{"utc": "2026-10-03T01:21:59Z", "what": "wrappers_installed", "kv16": true, "prepare_input_ids": true}
+{"utc": "2026-10-03T01:22:42Z", "what": "sealed", "obs_id": "CAND__p1__N__r0", "valid": true}
+{"utc": "2026-10-03T01:22:42Z", "what": "control", "obs_id": "CAND__p1__Nb__r0"}
+{"utc": "2026-10-03T01:22:42Z", "what": "bind", "obs_id": "CAND__p1__Nb__r0", "rid": "chatcmpl-fr13-chat-a009485af15ac8bfe3eefc75cf7590a7", "P": 23376, "prompt_sha256": "de8b4227bfcfc38e6f105b8f6fd5a628c467321279cfab0032513096e1a9691d"}
+{"utc": "2026-10-03T01:22:57Z", "what": "sealed", "obs_id": "CAND__p1__Nb__r0", "valid": true}
+{"utc": "2026-10-03T01:22:57Z", "what": "control", "obs_id": "CAND__p1__Nr__r0"}
+{"utc": "2026-10-03T01:22:57Z", "what": "bind", "obs_id": "CAND__p1__Nr__r0", "rid": "chatcmpl-fr13-chat-61daa313993fddb545b7afb420d8a099", "P": 23376, "prompt_sha256": "de8b4227bfcfc38e6f105b8f6fd5a628c467321279cfab0032513096e1a9691d"}
+{"utc": "2026-10-03T01:23:02Z", "what": "sealed", "obs_id": "CAND__p1__Nr__r0", "valid": true}
+{"utc": "2026-10-03T01:23:02Z", "what": "control", "obs_id": "CAND__p2__N__r0"}
+{"utc": "2026-10-03T01:23:02Z", "what": "bind", "obs_id": "CAND__p2__N__r0", "rid": "chatcmpl-fr13-chat-db550dc49c6c001d6a293a6b945f5f79", "P": 28146, "prompt_sha256": "ace0810667de737ea78d7b7cbc8e2ca6edadea8167fcf31814d5c8cfb8d4cd31"}
+{"utc": "2026-10-03T01:23:25Z", "what": "sealed", "obs_id": "CAND__p2__N__r0", "valid": true}
+{"utc": "2026-10-03T01:23:25Z", "what": "control", "obs_id": "CAND__p2__Nb__r0"}
+{"utc": "2026-10-03T01:23:25Z", "what": "bind", "obs_id": "CAND__p2__Nb__r0", "rid": "chatcmpl-fr13-chat-58a79f425f22b35572721a26b5ee7372", "P": 28146, "prompt_sha256": "ace0810667de737ea78d7b7cbc8e2ca6edadea8167fcf31814d5c8cfb8d4cd31"}
+{"utc": "2026-10-03T01:23:36Z", "what": "sealed", "obs_id": "CAND__p2__Nb__r0", "valid": true}
+{"utc": "2026-10-03T01:23:36Z", "what": "control", "obs_id": "CAND__p2__Nr__r0"}
+{"utc": "2026-10-03T01:23:36Z", "what": "bind", "obs_id": "CAND__p2__Nr__r0", "rid": "chatcmpl-fr13-chat-a4fd5065321f116cc6e762b0a2d766ff", "P": 28146, "prompt_sha256": "ace0810667de737ea78d7b7cbc8e2ca6edadea8167fcf31814d5c8cfb8d4cd31"}
+{"utc": "2026-10-03T01:23:41Z", "what": "sealed", "obs_id": "CAND__p2__Nr__r0", "valid": true}
+{"utc": "2026-10-03T01:23:42Z", "what": "control", "obs_id": "CAND__p3__N__r0"}
+{"utc": "2026-10-03T01:23:42Z", "what": "bind", "obs_id": "CAND__p3__N__r0", "rid": "chatcmpl-fr13-chat-a03c0c7c4309bd054e5bd8011421d793", "P": 27482, "prompt_sha256": "6b4134140362e1ad00e92d8cdc165c564d9c85e876353746f43d03b941f31983"}
+{"utc": "2026-10-03T01:24:03Z", "what": "sealed", "obs_id": "CAND__p3__N__r0", "valid": true}
+{"utc": "2026-10-03T01:24:03Z", "what": "control", "obs_id": "CAND__p3__Nb__r0"}
+{"utc": "2026-10-03T01:24:03Z", "what": "bind", "obs_id": "CAND__p3__Nb__r0", "rid": "chatcmpl-fr13-chat-5bd434a936568f28b6b0c69648c1cdba", "P": 27482, "prompt_sha256": "6b4134140362e1ad00e92d8cdc165c564d9c85e876353746f43d03b941f31983"}
+{"utc": "2026-10-03T01:24:14Z", "what": "sealed", "obs_id": "CAND__p3__Nb__r0", "valid": true}
+{"utc": "2026-10-03T01:24:14Z", "what": "control", "obs_id": "CAND__p3__Nr__r0"}
+{"utc": "2026-10-03T01:24:14Z", "what": "bind", "obs_id": "CAND__p3__Nr__r0", "rid": "chatcmpl-fr13-chat-6f3bc1e37f548bcfc353852101c93a15", "P": 27482, "prompt_sha256": "6b4134140362e1ad00e92d8cdc165c564d9c85e876353746f43d03b941f31983"}
+{"utc": "2026-10-03T01:24:19Z", "what": "sealed", "obs_id": "CAND__p3__Nr__r0", "valid": true}
+{"utc": "2026-10-03T01:24:20Z", "what": "control", "obs_id": "CAND__p4__N__r0"}
+{"utc": "2026-10-03T01:24:20Z", "what": "bind", "obs_id": "CAND__p4__N__r0", "rid": "chatcmpl-fr13-chat-0c704db4e81adf7e3ebf1191a0292767", "P": 34234, "prompt_sha256": "eddf314162ff17f8d7a980f05d5f938dcd25e4a710e9d77668f7377bc99ad5c4"}
+{"utc": "2026-10-03T01:24:47Z", "what": "sealed", "obs_id": "CAND__p4__N__r0", "valid": true}
+{"utc": "2026-10-03T01:24:47Z", "what": "control", "obs_id": "CAND__p4__Nb__r0"}
+{"utc": "2026-10-03T01:24:47Z", "what": "bind", "obs_id": "CAND__p4__Nb__r0", "rid": "chatcmpl-fr13-chat-986fa3b3a4fb81807fc7dc98de8c0c60", "P": 34234, "prompt_sha256": "eddf314162ff17f8d7a980f05d5f938dcd25e4a710e9d77668f7377bc99ad5c4"}
+{"utc": "2026-10-03T01:24:55Z", "what": "sealed", "obs_id": "CAND__p4__Nb__r0", "valid": true}
+{"utc": "2026-10-03T01:24:56Z", "what": "control", "obs_id": "CAND__p4__Nr__r0"}
+{"utc": "2026-10-03T01:24:56Z", "what": "bind", "obs_id": "CAND__p4__Nr__r0", "rid": "chatcmpl-fr13-chat-c49bf97af441e7e32d68d17e8df3e93d", "P": 34234, "prompt_sha256": "eddf314162ff17f8d7a980f05d5f938dcd25e4a710e9d77668f7377bc99ad5c4"}
+{"utc": "2026-10-03T01:25:01Z", "what": "sealed", "obs_id": "CAND__p4__Nr__r0", "valid": true}
+{"utc": "2026-10-03T01:25:01Z", "what": "control", "obs_id": "CAND__p5__N__r0"}
+{"utc": "2026-10-03T01:25:01Z", "what": "bind", "obs_id": "CAND__p5__N__r0", "rid": "chatcmpl-fr13-chat-c0c84bd900b46318d108b257caeab871", "P": 28298, "prompt_sha256": "3ebef5e6e4faa2c0ea5ba43a35921919acb80a465b3ab282fabd58dbd226c9bd"}
+{"utc": "2026-10-03T01:25:24Z", "what": "sealed", "obs_id": "CAND__p5__N__r0", "valid": true}
+{"utc": "2026-10-03T01:25:24Z", "what": "control", "obs_id": "CAND__p5__Nb__r0"}
+{"utc": "2026-10-03T01:25:24Z", "what": "bind", "obs_id": "CAND__p5__Nb__r0", "rid": "chatcmpl-fr13-chat-a3b87c292182e75fb78fea9438545625", "P": 28298, "prompt_sha256": "3ebef5e6e4faa2c0ea5ba43a35921919acb80a465b3ab282fabd58dbd226c9bd"}
+{"utc": "2026-10-03T01:25:35Z", "what": "sealed", "obs_id": "CAND__p5__Nb__r0", "valid": true}
+{"utc": "2026-10-03T01:25:35Z", "what": "control", "obs_id": "CAND__p5__Nr__r0"}
+{"utc": "2026-10-03T01:25:35Z", "what": "bind", "obs_id": "CAND__p5__Nr__r0", "rid": "chatcmpl-fr13-chat-6e54a5ed8670b2d26bee2379dd9e6611", "P": 28298, "prompt_sha256": "3ebef5e6e4faa2c0ea5ba43a35921919acb80a465b3ab282fabd58dbd226c9bd"}
+{"utc": "2026-10-03T01:25:41Z", "what": "sealed", "obs_id": "CAND__p5__Nr__r0", "valid": true}
+{"utc": "2026-10-03T01:25:41Z", "what": "control", "obs_id": "CAND__p6__N__r0"}
+{"utc": "2026-10-03T01:25:41Z", "what": "bind", "obs_id": "CAND__p6__N__r0", "rid": "chatcmpl-fr13-chat-fa76f297a0f7cc8056b5b64911ae24ea", "P": 46234, "prompt_sha256": "8f9574c7f747c3be371a124cdd5b16673e636bb436cbd9e45f3d37c8d401c99e"}
+{"utc": "2026-10-03T01:26:19Z", "what": "sealed", "obs_id": "CAND__p6__N__r0", "valid": true}
+{"utc": "2026-10-03T01:26:20Z", "what": "control", "obs_id": "CAND__p6__Nb__r0"}
+{"utc": "2026-10-03T01:26:20Z", "what": "bind", "obs_id": "CAND__p6__Nb__r0", "rid": "chatcmpl-fr13-chat-b38eca385f06bf17a161c76ac8a910c1", "P": 46234, "prompt_sha256": "8f9574c7f747c3be371a124cdd5b16673e636bb436cbd9e45f3d37c8d401c99e"}
+{"utc": "2026-10-03T01:26:49Z", "what": "sealed", "obs_id": "CAND__p6__Nb__r0", "valid": true}
+{"utc": "2026-10-03T01:26:50Z", "what": "control", "obs_id": "CAND__p6__Nr__r0"}
+{"utc": "2026-10-03T01:26:50Z", "what": "bind", "obs_id": "CAND__p6__Nr__r0", "rid": "chatcmpl-fr13-chat-085031e25f67a85a824fa10e6388a242", "P": 46234, "prompt_sha256": "8f9574c7f747c3be371a124cdd5b16673e636bb436cbd9e45f3d37c8d401c99e"}
+{"utc": "2026-10-03T01:26:56Z", "what": "sealed", "obs_id": "CAND__p6__Nr__r0", "valid": true}
+{"utc": "2026-10-03T01:26:56Z", "what": "control", "obs_id": "CAND__p1__N__r1"}
+{"utc": "2026-10-03T01:26:56Z", "what": "bind", "obs_id": "CAND__p1__N__r1", "rid": "chatcmpl-fr13-chat-33228400df3c7a06f417c1c35d84557e", "P": 23376, "prompt_sha256": "de8b4227bfcfc38e6f105b8f6fd5a628c467321279cfab0032513096e1a9691d"}
+{"utc": "2026-10-03T01:27:06Z", "what": "sealed", "obs_id": "CAND__p1__N__r1", "valid": true}
+{"utc": "2026-10-03T01:27:06Z", "what": "control", "obs_id": "CAND__p1__N__NC_CONV"}
+{"utc": "2026-10-03T01:27:06Z", "what": "bind", "obs_id": "CAND__p1__N__NC_CONV", "rid": "chatcmpl-fr13-chat-49dc09dbaa69bf017624e4c98e16bd8e", "P": 23376, "prompt_sha256": "de8b4227bfcfc38e6f105b8f6fd5a628c467321279cfab0032513096e1a9691d"}
+{"utc": "2026-10-03T01:27:10Z", "what": "sealed", "obs_id": "CAND__p1__N__NC_CONV", "valid": true}
+{"utc": "2026-10-03T01:27:11Z", "what": "control", "obs_id": "CAND__p3__N__NC_CONV"}
+{"utc": "2026-10-03T01:27:11Z", "what": "bind", "obs_id": "CAND__p3__N__NC_CONV", "rid": "chatcmpl-fr13-chat-477a1549d6817ea108d4ca5cc8edefad", "P": 27482, "prompt_sha256": "6b4134140362e1ad00e92d8cdc165c564d9c85e876353746f43d03b941f31983"}
+{"utc": "2026-10-03T01:27:17Z", "what": "sealed", "obs_id": "CAND__p3__N__NC_CONV", "valid": true}
+{"utc": "2026-10-03T01:27:18Z", "what": "control", "obs_id": "CAND__p1__N__NC_GDN"}
+{"utc": "2026-10-03T01:27:18Z", "what": "bind", "obs_id": "CAND__p1__N__NC_GDN", "rid": "chatcmpl-fr13-chat-3a6e46af0266d3e50711f1a415c0a3b8", "P": 23376, "prompt_sha256": "de8b4227bfcfc38e6f105b8f6fd5a628c467321279cfab0032513096e1a9691d"}
+{"utc": "2026-10-03T01:27:22Z", "what": "sealed", "obs_id": "CAND__p1__N__NC_GDN", "valid": true}
+{"utc": "2026-10-03T01:27:22Z", "what": "control", "obs_id": "CAND__p3__N__NC_GDN"}
+{"utc": "2026-10-03T01:27:22Z", "what": "bind", "obs_id": "CAND__p3__N__NC_GDN", "rid": "chatcmpl-fr13-chat-4d9fcce241f4fc74dc36a13d07b72c10", "P": 27482, "prompt_sha256": "6b4134140362e1ad00e92d8cdc165c564d9c85e876353746f43d03b941f31983"}
+{"utc": "2026-10-03T01:27:28Z", "what": "sealed", "obs_id": "CAND__p3__N__NC_GDN", "valid": true}
+{"utc": "2026-10-03T01:27:28Z", "what": "control", "obs_id": "CAND__p1__N__NC_KV"}
+{"utc": "2026-10-03T01:27:28Z", "what": "bind", "obs_id": "CAND__p1__N__NC_KV", "rid": "chatcmpl-fr13-chat-98189ca9794cd7956ed5918869e985b0", "P": 23376, "prompt_sha256": "de8b4227bfcfc38e6f105b8f6fd5a628c467321279cfab0032513096e1a9691d"}
+{"utc": "2026-10-03T01:27:33Z", "what": "sealed", "obs_id": "CAND__p1__N__NC_KV", "valid": true}
+{"utc": "2026-10-03T01:27:33Z", "what": "control", "obs_id": "CAND__p3__N__NC_KV"}
+{"utc": "2026-10-03T01:27:33Z", "what": "bind", "obs_id": "CAND__p3__N__NC_KV", "rid": "chatcmpl-fr13-chat-936904d16107323b0060d71b8134f8ef", "P": 27482, "prompt_sha256": "6b4134140362e1ad00e92d8cdc165c564d9c85e876353746f43d03b941f31983"}
+{"utc": "2026-10-03T01:27:38Z", "what": "sealed", "obs_id": "CAND__p3__N__NC_KV", "valid": true}
+{"utc": "2026-10-03T01:27:39Z", "what": "control", "obs_id": "CAND__p1__N__NC_STALE"}
+{"utc": "2026-10-03T01:27:39Z", "what": "bind", "obs_id": "CAND__p1__N__NC_STALE", "rid": "chatcmpl-fr13-chat-0163af0f0b926ce65013eef240e375a5", "P": 23376, "prompt_sha256": "de8b4227bfcfc38e6f105b8f6fd5a628c467321279cfab0032513096e1a9691d"}
+{"utc": "2026-10-03T01:27:43Z", "what": "sealed", "obs_id": "CAND__p1__N__NC_STALE", "valid": true}
+{"utc": "2026-10-03T01:27:44Z", "what": "control", "obs_id": "CAND__p3__N__NC_STALE"}
+{"utc": "2026-10-03T01:27:44Z", "what": "bind", "obs_id": "CAND__p3__N__NC_STALE", "rid": "chatcmpl-fr13-chat-5586cc1085ffe8215b83c461c65fca82", "P": 27482, "prompt_sha256": "6b4134140362e1ad00e92d8cdc165c564d9c85e876353746f43d03b941f31983"}
+{"utc": "2026-10-03T01:27:49Z", "what": "sealed", "obs_id": "CAND__p3__N__NC_STALE", "valid": true}
+{"utc": "2026-10-03T01:27:49Z", "what": "control", "obs_id": "CAND__p1__N__NC_SIB"}
+{"utc": "2026-10-03T01:27:49Z", "what": "bind", "obs_id": "CAND__p1__N__NC_SIB", "rid": "chatcmpl-fr13-chat-f4b5372ca877a705737d17d10c471905", "P": 23376, "prompt_sha256": "de8b4227bfcfc38e6f105b8f6fd5a628c467321279cfab0032513096e1a9691d"}
+{"utc": "2026-10-03T01:27:54Z", "what": "sealed", "obs_id": "CAND__p1__N__NC_SIB", "valid": true}
+{"utc": "2026-10-03T01:27:54Z", "what": "control", "obs_id": "CAND__p3__N__NC_SIB"}
+{"utc": "2026-10-03T01:27:54Z", "what": "bind", "obs_id": "CAND__p3__N__NC_SIB", "rid": "chatcmpl-fr13-chat-a5ad2d637fec3532574140f78766739f", "P": 27482, "prompt_sha256": "6b4134140362e1ad00e92d8cdc165c564d9c85e876353746f43d03b941f31983"}
+{"utc": "2026-10-03T01:27:59Z", "what": "sealed", "obs_id": "CAND__p3__N__NC_SIB", "valid": true}

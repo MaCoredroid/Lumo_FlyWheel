@@ -1,0 +1,27 @@
+{
+  "scope": "stdlib AST controls only; no Torch, GPU, parser import, model, launch or gate operation",
+  "source_sha256": {
+    "scripts/fr13_device_multidraft_kernel.py": "648ff0e33e8a7cdd0fbe8ebb3d2befaa27002a3347f94f9bdc0668365ed2e8e9",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/native_source/vllm__v1__worker__gpu_model_runner.py": "904d7d357ba076c93cefee5f7f030e2be577dc12599aebdf56395b894e2077b0",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/inspections/cpu-lumotree-source-20260929T012000Z/result/sources/v1/worker/gpu_input_batch.py": "2d6d6d4293ce70b1bc7a7fe47217727148959706c8ad6245e4ad060cd6a9a2bf",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/generated_source/probe-20260928T035847Z/logs/generated/gpu_model_runner.patched.py": "3d9df101ebb1b2d5e8bc0ca844451b47a935f4adf48f7c6ab4ef81438ce21b79",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/identity/generated_source/probe-20260928T035847Z/logs/generated/rejection_sampler.patched.py": "7e4691a6e48fdd9426117beb9b91ef1fdd1053578f792b4d670234efba7b0e52",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/inspections/cpu-lumotree-source-20260929T012000Z/result/sources/v1/worker/gpu_worker.py": "3b2fc4e3a2610c67e7c7d2017d04b4f50a8560aec8b85a486a5451f9db97744a",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_job_v1_2.py": "2560965556574b53cbcc6b914f00119723d3407af8763d77d34af0e362d731b7",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_driver_v1_1.py": "269efee771cfd5032c21a3c53505d9ee2fad39d146f8e239d09ef1d345b183d4",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_hooks_v1_2.py": "af4595e4b03d8f5c44a5ae0bca5125677e00b827666d8062fec7b43fdb2ac516",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_reference_driver_v2.py": "47314063eaa46b59eaa4fa60978353caef570bd8b39ebe5f127c56ff94702159",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/run_q1_candidate_stage1_v2_7.sh": "08190b5176bb1ba81a8b55c69ab54412f4ea5afc9bd2708a105de8f1af639591",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-candidate-stage1/q1-candidate-stage1-20260929T080536Z/engine.log": "da2cfc272e5a9066ea9926083c7c0afa97c5e180d531aef188373d21cae16cd4",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-candidate-stage1/q1-candidate-stage1-20260929T080536Z/q1_effective_serve_settings.txt": "bd1ee1452130be7f1d1b5a1759edf5ff4af132c1d40fbc2f0d2f61e7cb854a48",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-candidate-stage1/q1-candidate-stage1-20260929T080536Z/driver/response.q1-candidate-stage1-20260929T080536Z__candidate_fixed32__pA__r0__calibration-short_available__c0__root-only.json": "bb46a09fcef9d8bec2071a6b67db986e45ba0cb76f5aaa7ea59f6fbf169cf875",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-candidate-stage1/q1-candidate-stage1-20260929T080536Z/q1_cand/cases/q1-candidate-stage1-20260929T080536Z__candidate_fixed32__pA__r0__calibration-short_available__c0__root-only.json": "cc28d95e65c01dfa7dd81dca6fc5eafd0edda941be472eda41c509120ce33ac2"
+  },
+  "controls": [
+    "nonempty_map_refuses_before_draw_or_generator_creation",
+    "none_and_empty_maps_each_draw_once_and_reuse_single_engine_seeded_generator",
+    "actual_native_runner_branch_creates_request_generator_only_for_RANDOM_SEED",
+    "actual_input_batch_branch_excludes_requests_with_generator_None"
+  ],
+  "limitation": "SamplingParams and OpenAI request parser not in the inspected local source exports; actual null-to-RANDOM parser resolution is an integration obligation, not established by stubs."
+}

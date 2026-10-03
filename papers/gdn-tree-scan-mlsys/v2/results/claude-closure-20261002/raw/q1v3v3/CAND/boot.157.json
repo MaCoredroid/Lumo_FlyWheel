@@ -1,0 +1,102 @@
+{
+ "arm": "CAND",
+ "attention_backend": "TREE_ATTN",
+ "cache_config": {
+  "block_size": "1024",
+  "enable_prefix_caching": "True",
+  "gpu_memory_utilization": "0.7",
+  "kv_cache_memory_bytes": "None",
+  "mamba_block_size": "1024",
+  "mamba_cache_mode": "align",
+  "mamba_ssm_cache_dtype": "float32",
+  "num_gpu_blocks": "795"
+ },
+ "cases_sha256": "1e8d2ffc628a35c6518291a280006e75a786f8fb69878eb01452f9ed72b91609",
+ "env": {
+  "FR13_FIXED32_MODE": "hydra27_fixed32",
+  "FR14_FUSED_DRAFT_TOPK": "1",
+  "FR14_FUSED_DRAFT_TOPK_BLOCKS": "64",
+  "FR14_FUSED_DRAFT_TOPK_SHA256": "8f7a99e78c0898a4221f045aa8e15a8085883dbc41b08f609da0da71e66a449e",
+  "FR14_FUSED_DRAFT_TOPK_SO": "/workspace/output/fr14_fused_draft_topk_build/fr14_dfwd_full_topk_sm121a.abi3.so",
+  "Q1V3_ARM": "CAND",
+  "Q1V3_ARM_KIND": "cand",
+  "Q1V3_CASES": "/q1v3/cases.json",
+  "Q1V3_OUT": "/q1run/CAND",
+  "Q1V3_RUN": "/q1run",
+  "VLLM_BATCH_INVARIANT": "0"
+ },
+ "hooks_sha256": "d4b219a6bf7f7ecf3eccf8672e5a43573206433a803763b42e8d9851ff3b4ccc",
+ "kind": "cand",
+ "kv_cache": {
+  "groups": [
+   {
+    "block_size": 1024,
+    "layers": 16,
+    "spec": "MambaSpec"
+   },
+   {
+    "block_size": 1024,
+    "layers": 16,
+    "spec": "MambaSpec"
+   },
+   {
+    "block_size": 1024,
+    "layers": 16,
+    "spec": "MambaSpec"
+   },
+   {
+    "block_size": 1024,
+    "layers": 17,
+    "spec": "FullAttentionSpec"
+   }
+  ],
+  "num_blocks": 795,
+  "tensor_bytes_total": 56686018560
+ },
+ "layers": {
+  "attention": 16,
+  "gdn": 48,
+  "mtp_layers": [
+   "mtp.layers.0.self_attn.attn"
+  ]
+ },
+ "packed_recurrent_decode": [
+  "True"
+ ],
+ "pid": 157,
+ "shapes": {
+  "conv": [
+   795,
+   34,
+   10240
+  ],
+  "conv_dtype": "torch.bfloat16",
+  "kv": [
+   2,
+   795,
+   1024,
+   4,
+   256
+  ],
+  "kv_dtype": "torch.bfloat16",
+  "kv_stride": [
+   1048576,
+   2097152,
+   1024,
+   256,
+   1
+  ],
+  "ssm": [
+   795,
+   48,
+   128,
+   128
+  ],
+  "ssm_dtype": "torch.float32"
+ },
+ "speculative": {
+  "k": 31,
+  "method": "mtp"
+ },
+ "utc": "2026-10-03T01:21:59Z"
+}

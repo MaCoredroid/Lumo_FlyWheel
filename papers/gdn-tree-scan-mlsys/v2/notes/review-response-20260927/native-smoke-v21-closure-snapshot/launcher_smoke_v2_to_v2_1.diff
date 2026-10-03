@@ -1,0 +1,92 @@
+--- tools/run_q1_native_smoke_v2.sh	2026-09-28 02:06:33.019313731 +0000
++++ tools/run_q1_native_smoke_v2_1.sh	2026-09-28 02:16:10.486238479 +0000
+@@ -1,5 +1,9 @@
+ #!/usr/bin/env bash
+-# Q1 full-model NATIVE SMOKE launcher v2 (Q1-NATIVE-SMOKE-DESIGN.json, sha 8e5f96be...): ONE fresh spec-off reference engine (aligned_nonpacked
++# Q1 full-model NATIVE SMOKE launcher v2.1 = v2 + the reviewer's cleanup-contract fix (v2 stop_engine ignored a failed docker stop/rm, wrote engine_stopped_utc
++# anyway and the terminal exit used only the driver rc): stop_engine/finish_run now live in the sourced q1_native_smoke_cleanup_v2_1.sh (gate-bound):
++# terminal state is VERIFIED after stop, logs/inspect and cleanup failures are preserved, the stopped timestamp is written only after a verified stopped
++# state, an owned container that cannot be stopped/removed makes the terminal status non-zero, and the trap never masks a driver failure.
++# (Q1-NATIVE-SMOKE-DESIGN.json, sha 8e5f96be...): ONE fresh spec-off reference engine (aligned_nonpacked
+ # primary arm, patched FA2 fork through the ordinary one-token causal FLASH_ATTN path, mamba_cache_mode align), ONE case
+ # calibration-short_available__c0__root-only (shortest frozen prefix, |P| = 13487; chain [r, z] = [11352, 25559] at positions [13487, 13488]),
+ # R = 2 requests driven by q1_reference_driver_v2 with hash+length authentication of every sealed observation and raw object.
+@@ -26,14 +30,16 @@
+ PREFIX=$REPO/$C/prefix-plan/selected/calibration-short_available/token-ids.u32le
+ sha() { sha256sum "$1" | cut -d' ' -f1; }
+ CONTAINER=lumotree-q1-ref-$ARM-$RUN_ID
++CLEANUP_LIB=$TOOLS/q1_native_smoke_cleanup_v2_1.sh
++. "$CLEANUP_LIB"
+ echo "RUN_ID=$RUN_ID"; echo "OUT=$OUT"; echo "ARM=$ARM PROCESS=$PROCESS CASE=$CASE REPEATS=$REPEATS EXPECTED_REQUESTS=$EXPECTED_REQUESTS"; echo "CONTAINER=$CONTAINER (port 9950)"
+ echo "STEPS: gate+hash check -> contention/port/image/fork/prefix checks -> job (q1_reference_job.py --smoke) -> config render (q1_spec_off_engine_config_v2.py) -> LAUNCH-BINDING -> docker run -d (fa2 install + runner patch + vllm serve) -> /health wait -> q1_reference_driver_v2.py (R=2) -> docker stop + logs -> RUN-RECEIPT"
+ if [[ $DRY == 1 ]]; then echo "(dry-run: nothing launched, nothing written)"; exit 0; fi
+ if [[ "$RUN_ID" == "UNSET" ]]; then echo "RUN_ID must be set to the gate's approved_run_id"; exit 3; fi
+ if [[ -e "$OUT" ]]; then echo "output run directory already exists: $OUT"; exit 7; fi
+-python3 - "$GATE" "$DESIGN" "$IMAGE" "$FORK_SO" "$FORK_SHA" "$FORK_SIZE" "$TOOLS" "$FIX" "$PREFIX" "$0" "$RUN_ID" "$REPO" "$C" "$ARM" "$REPEATS" "$CASE" "$EXPECTED_REQUESTS" <<'PY'
++python3 - "$GATE" "$DESIGN" "$IMAGE" "$FORK_SO" "$FORK_SHA" "$FORK_SIZE" "$TOOLS" "$FIX" "$PREFIX" "$0" "$RUN_ID" "$REPO" "$C" "$ARM" "$REPEATS" "$CASE" "$EXPECTED_REQUESTS" "$CLEANUP_LIB" <<'PY'
+ import json, sys, hashlib, os
+-gate, design, image, fork, fork_sha, fork_size, tools, fix, prefix, launcher, run_id, repo, c, arm, repeats, case, expected_requests = sys.argv[1:18]
++gate, design, image, fork, fork_sha, fork_size, tools, fix, prefix, launcher, run_id, repo, c, arm, repeats, case, expected_requests, cleanup_lib = sys.argv[1:19]
+ def sha(p):
+     h = hashlib.sha256()
+     with open(p, 'rb') as f:
+@@ -56,7 +62,7 @@
+           "fa2_source_index": sha(os.path.join(camp, "identity", "native_source", "fa2_source_index.json")), "token_fixtures": sha(fix), "prefix_token_ids": sha(prefix),
+           "stock_runner_copy": sha(os.path.join(camp, "identity", "native_source", "vllm__v1__worker__gpu_model_runner.py")),
+           "fa2_patcher": sha(os.path.join(repo, "scripts", "fr13_patch_fa2_tree_bias.py")), "lm_head_shim": sha(os.path.join(repo, "scripts", "fr14_patch_nvfp4_lmhead.py")),
+-          "fork_binary": sha(fork) if os.path.exists(fork) else None, "launcher": sha(launcher)}
++          "fork_binary": sha(fork) if os.path.exists(fork) else None, "launcher": sha(launcher), "cleanup_lib": sha(cleanup_lib)}
+ for k, v in expect.items():
+     if rh.get(k) != v: problems.append(f"reviewed_hashes.{k} = {rh.get(k)} != current {v}")
+ if expect["fork_binary"] != fork_sha or (os.path.exists(fork) and os.path.getsize(fork) != int(fork_size)): problems.append("fork binary sha/size != pinned")
+@@ -102,23 +108,14 @@
+     p = os.path.join(out, rel); return open(p).read().strip() if os.path.exists(p) else None
+ rc = {"schema": "lumo.q1.fullmodel.native-smoke-run-receipt.v2", "run": out, "status": status, "utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+       "files_recursive_excluding_object_store": files, "object_store": {"objects": objs, "bytes": obytes},
+-      "engine": {"started_utc": rd("engine_started_utc.txt"), "healthy_utc": rd("engine_healthy_utc.txt"), "stopped_utc": rd("engine_stopped_utc.txt"), "exit": rd("engine_exit.txt")},
++      "engine": {"started_utc": rd("engine_started_utc.txt"), "healthy_utc": rd("engine_healthy_utc.txt"), "stopped_utc": rd("engine_stopped_utc.txt"), "exit": rd("engine_exit.txt"),
++                 "cleanup_state": rd("engine_cleanup_state.txt"), "cleanup_err": rd("engine_cleanup.err"), "cleanup_contract": "stopped_utc only after verified stopped state; non-zero terminal status if the owned container could not be stopped/removed"},
+       "driver": {"started_utc": rd("driver_started_utc.txt"), "ended_utc": rd("driver_ended_utc.txt"), "exit": rd("driver_exit.txt")},
+       "note": "native instrumentation/calibration smoke only: no candidate, no held-out, no timing claim, no qualification"}
+ json.dump(rc, open(os.path.join(out, "RUN-RECEIPT.json"), "w"), indent=1); print("receipt:", status, "files:", len(files), "objects:", objs)
+ PY
+ }
+-stop_engine() {
+-  if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER"; then
+-    docker stop -t 60 "$CONTAINER" > /dev/null 2>&1 || true
+-    docker logs "$CONTAINER" > "$OUT/engine.log" 2>&1 || true
+-    docker inspect -f '{{.State.ExitCode}}' "$CONTAINER" > "$OUT/engine_exit.txt" 2>/dev/null || true
+-    docker rm "$CONTAINER" > /dev/null 2>&1 || true
+-    date -u +%FT%TZ > "$OUT/engine_stopped_utc.txt"
+-  fi
+-  nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv > "$OUT/gpu_contention_after.txt" 2>&1
+-}
+-trap 'stop_engine; if [[ $RECEIPT_WRITTEN -eq 0 ]]; then write_receipt "ABORTED_OR_FAILED"; fi' EXIT
++trap 'rc=$?; stop_engine; crc=$?; if [[ $RECEIPT_WRITTEN -eq 0 ]]; then write_receipt "ABORTED_OR_FAILED_rc=${rc}_cleanup_rc=${crc}"; fi; if [[ $rc -eq 0 && $crc -ne 0 ]]; then exit $crc; fi' EXIT   # cleanup failure never masks a failure and never lets a clean-looking exit hide an unstopped engine
+ # ---- job (hash-bound; the engine refuses to boot without it) ----
+ python3 "$TOOLS/q1_reference_job.py" --fixtures "$FIX" --run-id "$RUN_ID" --arm "$ARM" --process "$PROCESS" --repeats "$REPEATS" --smoke --out-dir-in-container /logs/q1_ref --control-path-in-container /logs/q1_ref_control.json --out "$OUT/q1_ref_hooks_job.json" || { echo "job build failed"; exit 5; }
+ JOB_SHA=$(sha "$OUT/q1_ref_hooks_job.json")
+@@ -161,7 +158,7 @@
+   if (( $(date +%s) - t0 > HEALTH_TIMEOUT_S )); then echo "health timeout"; break; fi
+   sleep 10
+ done
+-if [[ $healthy -ne 1 ]]; then docker logs "$CONTAINER" > "$OUT/engine.log" 2>&1 || true; RECEIPT_WRITTEN=1; stop_engine; write_receipt "ENGINE_NOT_HEALTHY"; exit 6; fi
++if [[ $healthy -ne 1 ]]; then RECEIPT_WRITTEN=1; stop_engine; crc=$?; write_receipt "ENGINE_NOT_HEALTHY_cleanup_rc=${crc}"; exit 6; fi
+ date -u +%FT%TZ > "$OUT/engine_healthy_utc.txt"
+ # install + patch receipts must exist and be clean before any request
+ python3 - "$OUT" <<'PY'
+@@ -175,12 +172,10 @@
+ if pr: print("BOOT RECEIPTS NOT CLEAN:", pr); sys.exit(6)
+ print("boot receipts present and clean")
+ PY
+-[[ $? -ne 0 ]] && { RECEIPT_WRITTEN=1; stop_engine; write_receipt "BOOT_RECEIPTS_NOT_CLEAN"; exit 6; }
++[[ $? -ne 0 ]] && { RECEIPT_WRITTEN=1; stop_engine; crc=$?; write_receipt "BOOT_RECEIPTS_NOT_CLEAN_cleanup_rc=${crc}"; exit 6; }
+ # ---- drive R=2 forced requests; the driver authenticates every seal + raw object and stops on the first failure ----
+ date -u +%FT%TZ > "$OUT/driver_started_utc.txt"
+ python3 "$TOOLS/q1_reference_driver_v2.py" --job "$OUT/q1_ref_hooks_job.json" --prefix-plan-dir "$REPO/$C/prefix-plan" --out-dir "$OUT/driver" --control-path "$OUT/q1_ref_control.json" --hooks-out-dir "$OUT/q1_ref" --url "$URL/v1/completions" > "$OUT/driver.log" 2>&1
+ DRV_RC=$?
+ echo "exit=$DRV_RC" > "$OUT/driver_exit.txt"; date -u +%FT%TZ > "$OUT/driver_ended_utc.txt"; tail -n 20 "$OUT/driver.log"
+-RECEIPT_WRITTEN=1; stop_engine
+-write_receipt "COMPLETED_driver_rc=$DRV_RC"
+-exit $DRV_RC
++finish_run "$DRV_RC"; exit $?

@@ -1,0 +1,100 @@
+{
+  "verified_files": 271,
+  "confirmation": {
+    "request_count": 43,
+    "message_overlap": 0,
+    "conversation_overlap": 0,
+    "conversations": 5,
+    "task_selection": {
+      "0b07e7083d:astropy__astropy-14508": {
+        "available": 17,
+        "selected": 12
+      },
+      "26dccaecc9:astropy__astropy-14995": {
+        "available": 17,
+        "selected": 12
+      },
+      "663dd6b6d2:astropy__astropy-14096": {
+        "available": 9,
+        "selected": 6
+      },
+      "763ee7ecb7:astropy__astropy-14309": {
+        "available": 7,
+        "selected": 5
+      },
+      "d64e7310be:astropy__astropy-14995": {
+        "available": 11,
+        "selected": 8
+      }
+    },
+    "sglang_prompt_token_delta": [
+      33,
+      146,
+      156
+    ],
+    "comparisons": {
+      "mtp5": {
+        "pooled_ratio": 1.118717778488457,
+        "requests_tree_faster": 33,
+        "median_request_ratio": 1.1298301478199437
+      },
+      "sglang": {
+        "pooled_ratio": 1.0142851668177562,
+        "requests_tree_faster": 18,
+        "median_request_ratio": 0.9385679973595307
+      }
+    },
+    "runs": {
+      "tree": "tree-cfT1-sampled-20261002T212537Z",
+      "mtp5": "mtp5-cfM1-sampled-20261002T214201Z",
+      "sglang": "sglang-s7k1d8-cfS1-sampled-20261002T220022Z"
+    },
+    "scope": "one run per arm; SGLang chat API, NOT exact token-ID parity"
+  },
+  "fullmodel": {
+    "cells": 147,
+    "frozen_verdict": "INCONCLUSIVE",
+    "faults_detected_frozen": 1,
+    "faults_total": 10,
+    "posthoc_state_worst_ratio": {
+      "gdn_rel": 1.1369342821788253,
+      "conv_rel": 1.2903476725488272,
+      "kv_new_rel": 1.1744088915608812,
+      "kv_hist_rel": 1.1272802510166489
+    },
+    "posthoc_state_fault_min_ratio": 2.832897336931706,
+    "posthoc_state_fault_observations": 8,
+    "next_logit_KL": {
+      "candidate": {
+        "median": 0.042684844619268456,
+        "p90": 0.11284063235725261,
+        "max": 0.49088844338380094,
+        "greedy_flips": 16
+      },
+      "B": {
+        "median": 0.0,
+        "p90": 0.04388782779624918,
+        "max": 0.1577404653593437,
+        "greedy_flips": 2
+      },
+      "V": {
+        "median": 0.0,
+        "p90": 0.0,
+        "max": 0.0,
+        "greedy_flips": 0
+      },
+      "P": {
+        "median": 0.04346132942783124,
+        "p90": 0.09341974885873496,
+        "max": 0.49031354823089507,
+        "greedy_flips": 16
+      }
+    },
+    "posthoc_status": "descriptive after inspecting outcomes; not independent qualification"
+  },
+  "workload_rates": {
+    "lumotree": 26.185679552523162,
+    "vllm_mtp5": 27.17404893718478,
+    "sglang_eagle_s7_d8": 29.888133836676108
+  }
+}

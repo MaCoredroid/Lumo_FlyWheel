@@ -1,0 +1,25 @@
+\paragraph{Full-model native reference}
+Before comparing the tree route with native continuation, we test whether the native reference reproduces the state and decisions that define that comparison. Each condition covers 84 paths: a root-only continuation and 27 candidate paths for each of three calibration prefixes. Every path is repeated twice in each of two independent processes. The conditions distinguish natural prefill from an imported common starting state and separate target continuation from continuation coupled to the MTP drafter.
+
+\begin{table}[t]
+\caption{Cross-process native-reference agreement, in paths out of 84. State/logits requires identical published target state and full target logits. Joint choices requires the next target decision and the actual MTP spine and ordered top-three selections at every tested phase. A dash denotes an untested joint MTP condition.}
+\label{tab:native-continuation}
+\centering\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabularx}{\columnwidth}{@{}Xrrr@{}}
+\toprule
+Starting-state control & Greedy & \shortstack{State/\\logits} & \shortstack{Joint\\choices} \\
+\midrule
+Natural prefill & 70/84 & 0/84 & -- \\
+Common target state & 84/84 & 84/84 & -- \\
+Common target and MTP state & 84/84 & 65/84 & 68/84 \\
+\quad With fixed kernel selection & 84/84 & 65/84 & 68/84 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Natural-prefill continuation reproduces within each process but changes the greedy winner on fourteen paths across processes. The target-only control with common starting state reproduces identical target state, logits, and greedy decisions on all paths. When MTP continuation is included, greedy decisions remain stable on all paths, but target state and full logits agree on only 65, and joint target/draft choices on 68. Holding kernel selection fixed yields the same aggregate counts.
+
+All sixteen paths with differing joint choices have long prefixes. Their within-process repetitions agree, and every principal MTP spine remains stable; the disagreements affect secondary top-three membership or order. The tested phases include initial MTP continuation, a follow-up, and continuation after consuming the pending target token. Common imported state and matched tokens and positions do not guarantee identical intermediate hidden tensors. 
+
+The full-model tree-candidate comparison requires reproducible joint target/draft choices. Because sixteen paths differ across native processes, that comparison was not executed.

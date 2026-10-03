@@ -1,0 +1,22 @@
+{
+ "schema": "q1v3.patch-receipt.v1",
+ "mode": "native",
+ "applied": true,
+ "problems": [],
+ "files": {
+  "runner": {
+   "path": "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py",
+   "pre_sha256": "904d7d357ba076c93cefee5f7f030e2be577dc12599aebdf56395b894e2077b0",
+   "reference_sha256": "904d7d357ba076c93cefee5f7f030e2be577dc12599aebdf56395b894e2077b0",
+   "matches_reference_copy": true,
+   "anchor_lines": {
+    "import": 48,
+    "pre_forward": 4035,
+    "logits": 4070,
+    "sampled": 4168
+   },
+   "post_sha256": "42d95497756692c6687b131f3e535f6ee7de15962db7d494543fce4acfe54d52"
+  }
+ },
+ "hooks_sha256": "d4b219a6bf7f7ecf3eccf8672e5a43573206433a803763b42e8d9851ff3b4ccc"
+}

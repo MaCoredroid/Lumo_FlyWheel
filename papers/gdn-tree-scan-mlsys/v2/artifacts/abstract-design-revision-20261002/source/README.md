@@ -1,0 +1,1 @@
+LumoTree manuscript source. Compile main.tex with pdflatex and BibTeX or latexmk -pdf main.tex. The abstract revision foregrounds the system architecture; experimental results and detailed sampling limitations in the body are unchanged.

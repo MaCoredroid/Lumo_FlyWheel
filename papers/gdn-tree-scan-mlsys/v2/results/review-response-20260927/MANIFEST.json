@@ -1,0 +1,98 @@
+{
+  "evidence": "p0-evidence.json",
+  "files": [
+    {
+      "bytes": 13853,
+      "path": "P0-REPORT.md",
+      "sha256": "af14c0ff7aaf7d55874e368df168966421f39c451bd6f6dd66a48f099a840fe7"
+    },
+    {
+      "bytes": 31261,
+      "path": "additional-attempt-ledger.json",
+      "sha256": "cf3864e4894bb6a170f3f5cecf048ea3fe8ea5b12f13d5b3bf97b2ed0b1caec5"
+    },
+    {
+      "bytes": 679,
+      "path": "all-attempts-table.tex",
+      "sha256": "3ceea0a4e0e5c3180d1525dfeffd2813bf93bcb34364f4fee06a88a29aa8aeaf"
+    },
+    {
+      "bytes": 4914,
+      "path": "all-attempts.csv",
+      "sha256": "0e1cbf9fc1bfe07e4e8f48d9f4282b792ced9abc6dffe50b3fb69ef3f585008e"
+    },
+    {
+      "bytes": 692,
+      "path": "cohort-summary.csv",
+      "sha256": "f7e708c1579e3bf922984b6dd173ff921d2ed04051ea7d642a708ef76fe6e1dd"
+    },
+    {
+      "bytes": 3896,
+      "path": "gap-register.json",
+      "sha256": "2ffa6d7f5ee5fe9f99d95007908ad15e04994eb3b621489c7c3141688aa49959"
+    },
+    {
+      "bytes": 20288,
+      "path": "output-acceptance-histograms.csv",
+      "sha256": "bad7132cda48da5b4d003fdbd84e8416f522d619e1a88f78939079f0e92f4c57"
+    },
+    {
+      "bytes": 182977,
+      "path": "p0-evidence.json",
+      "sha256": "f4bd35518a34b2f2f142b2de67f30998d484aa940b9c078ebbafcbb18004f1d8"
+    },
+    {
+      "bytes": 855,
+      "path": "paired-task-outcomes.tex",
+      "sha256": "94790ae1870f19a3db62d534ec39f2d126a59429ca1a54a7e058c39023f104ec"
+    },
+    {
+      "bytes": 7087,
+      "path": "phase-counters.csv",
+      "sha256": "72e6b65e195b2696036ed142d36ec3598e0a373b0ab660905f772dcbc81bf2d2"
+    },
+    {
+      "bytes": 27274,
+      "path": "reduce_p0.py",
+      "sha256": "31d2bd3a3facd96bfc526f46a383fd6a2a761d58c68dd1b52a35e57a48b3641e"
+    },
+    {
+      "bytes": 711,
+      "path": "source-semantics/current-deployment-image/image-identity.json",
+      "sha256": "f109334fdfc48e4802cc0702fef2c10cfde3dd767938fb373ca7426655e68652"
+    },
+    {
+      "bytes": 105525,
+      "path": "source-semantics/current-deployment-image/vllm/v1/core/sched/scheduler.py",
+      "sha256": "a0d34894ff51d2fa56f48cd47d5d9db9567a5d265f846d3f4834d912f78e246d"
+    },
+    {
+      "bytes": 7661,
+      "path": "source-semantics/current-deployment-image/vllm/v1/spec_decode/metrics.py",
+      "sha256": "acf306f1b453f33f9cebd13abfa6547dea5dff4a1dc92d4e9b701daf526746ee"
+    },
+    {
+      "bytes": 664,
+      "path": "source-semantics/image-identity.json",
+      "sha256": "3b75def9809501462acdd3477622d293a621fee588d8eb5cbcdef393ff4fef5a"
+    },
+    {
+      "bytes": 106038,
+      "path": "source-semantics/vllm/v1/core/sched/scheduler.py",
+      "sha256": "9f3da2dfce94963e1e1cefc156e4239120f79c6eaf824b2829cac0ee7736b58a"
+    },
+    {
+      "bytes": 7661,
+      "path": "source-semantics/vllm/v1/spec_decode/metrics.py",
+      "sha256": "acf306f1b453f33f9cebd13abfa6547dea5dff4a1dc92d4e9b701daf526746ee"
+    },
+    {
+      "bytes": 3279,
+      "path": "test_reduce_p0.py",
+      "sha256": "2b71e56e178c8a1caf8fc050fded90a2789c8fdb6eab43633b3aa90d5e1cfb53"
+    }
+  ],
+  "reproduction": "Run reduce_p0.py with Python from paper.config.yaml; then unittest discover.",
+  "schema": "lumotree-review-response-p0-delivery-v1",
+  "source_input_count": 118
+}

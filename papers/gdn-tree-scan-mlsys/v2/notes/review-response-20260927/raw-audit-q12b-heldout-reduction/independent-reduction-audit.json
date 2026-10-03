@@ -1,0 +1,221 @@
+{
+  "scope": "independent receipt/source/metadata audit only; no tensor rehash/recompute or numerical execution",
+  "utc": "2026-09-28T02:11:14.914898+00:00",
+  "original_run_id": "q12b-heldout-20260928T013539Z",
+  "reduction_id": "q12b-heldout-reduction-20260928T020837Z",
+  "status": "COMPLETED_reduce_rc=0",
+  "reduce_exit": "exit=0",
+  "receipt_sha256": "680d468a446574d908cca3c6921dccdf4bd9f9fd9748b87784a93625d55af283",
+  "binding_sha256": "ff5a052453ab19875ffa5384e743fa4b6c7e36960fb23f47c8b5d38a960e93fc",
+  "summary_sha256": "a1a52aaf0ab290647865873e805646dcf3d87f5e3480132da8c6489c31951a71",
+  "authorization_sha256": "2a732de1ad7b18485d73638446f5d42e1f1b3ae0cdaf70d2028acec8071e2f42",
+  "receipt_members_verified": {
+    "image_inspect.json": {
+      "sha256": "7bcf44e26a6890ec2d3bb5bbac71b4457d36b06b66bcdfc819270d9a82b0ac3f",
+      "bytes": 9646
+    },
+    "reduce_exit.txt": {
+      "sha256": "19eaf43821a7660ec323a87c8457bf74823beb296c39f5e01aa8a683aa50f061",
+      "bytes": 7
+    },
+    "gpu_contention_after.txt": {
+      "sha256": "cae79969ce448872401f5d9bcd1d52bbefa1a5450cf3a5658f62f068ab59294b",
+      "bytes": 41
+    },
+    "gpu_contention_before.txt": {
+      "sha256": "cae79969ce448872401f5d9bcd1d52bbefa1a5450cf3a5658f62f068ab59294b",
+      "bytes": 41
+    },
+    "reduce_started_utc.txt": {
+      "sha256": "ad7fc8ca45ab83cc104e07d249e698ee144d50f1d54b63339c713a7b31f0ff9f",
+      "bytes": 21
+    },
+    "AUTHORIZATION.snapshot.json": {
+      "sha256": "2a732de1ad7b18485d73638446f5d42e1f1b3ae0cdaf70d2028acec8071e2f42",
+      "bytes": 1422
+    },
+    "reduce.log": {
+      "sha256": "6aee8fda793a9486f1c550c079994b106d978809926c29fbfed63231efe135d0",
+      "bytes": 301
+    },
+    "command_reduce.txt": {
+      "sha256": "de1b4bccf54629e38a77562507e60ba0b8d1937fca75fc2a5a62beec0e59fd53",
+      "bytes": 1317
+    },
+    "summary.v2_2_1.json": {
+      "sha256": "a1a52aaf0ab290647865873e805646dcf3d87f5e3480132da8c6489c31951a71",
+      "bytes": 33389
+    },
+    "reduce.cid": {
+      "sha256": "e9f748a148441eb42608e222b92d5b0795bd33501f2ce3244810e70caa86184a",
+      "bytes": 64
+    },
+    "REDUCTION-BINDING.json": {
+      "sha256": "ff5a052453ab19875ffa5384e743fa4b6c7e36960fb23f47c8b5d38a960e93fc",
+      "bytes": 2131
+    },
+    "reduce_ended_utc.txt": {
+      "sha256": "da0f8c800f07f2ce471e0202e7100b8edb3dc1fa0bf0ec70e7a31678a786fcc2",
+      "bytes": 21
+    }
+  },
+  "original_evidence_rehashed_unchanged": {
+    "RUN-RECEIPT.json": "7746dd7ba4eeb74c61e9e0c328a24653dfaf54f59667fcca67d27e726bf6e427",
+    "summary.v2.json": "646a07b7c57e540e512042d2dcf0f3bba04bba228564806d0a0fb9a693b46745",
+    "LAUNCH-BINDING.json": "cb67d9e996b81078160d8828e3b052c28ec5387f039b1de3ebe61b8e7385d3d8",
+    "GATE-Q1.2b.snapshot.json": "4ef2a52886edfdccea5812bbdc6dd3d05a4237ec41a6d9c8f5d58627519e883e",
+    "procA/result.json": "1097fd0b4a1423325c79954e8c88d98fcdca1d27357dd621dea32044b02cd71d",
+    "procB/result.json": "4509588c3c7a9f98fcd39f262a66d4af07364e4703dcd40c40bff23d894427ca",
+    "procA/raw_inventory.jsonl": "49e91f9b53e0d7a87e012ff19e42f146b545e4cdda8523763ac84a6551f20a94",
+    "procB/raw_inventory.jsonl": "93254a23fd66dff12c39506d597589ab546c1493759d07b94c821545bce7c9d0"
+  },
+  "authorized_sources_current_hashes": {
+    "repaired_reducer_sha256": "a7decd00863f69b6970f7e1015a1d725681f046ebc65c63a535d5bc42da00cc8",
+    "launcher_sha256": "6aa6a9c3f374840b728d64f565c73bbd445e8843105d0bc06259fbe121c383c5",
+    "source_acceptance_sha256": "c5dcc1850e5ac812fddb357dcc1cb6a1ef00b45e2c86d7cca8f6836e5a93d640",
+    "freeze_sha256": "cd1fddb44aaae81f1e20b9bf9eb58fa0b3c671a5fec239e52a23bc5f6353565e",
+    "review_sha256": "62596ec99a6cc282e50b89a7152fdd69efc0198337235bdfcd0e01dd6173e1de"
+  },
+  "matches_independent_raw_census_and_expected_PASS_counts": true,
+  "summary": {
+    "schema": "lumo.review-response.q1-2b-summary.v2.2.1",
+    "run": "/runs/q12b-heldout-20260928T013539Z",
+    "findings": {
+      "malformed": [],
+      "structural": [],
+      "numerical": [],
+      "uncovered": []
+    },
+    "note": "component verification/publication only; not full-model Q1; no timing",
+    "reduction": {
+      "kind": "v2.2.1 separately authorized CPU re-reduction of PRESERVED evidence",
+      "original_run_id": "q12b-heldout-20260928T013539Z",
+      "original_reducer_sha256": "6475182d9e0996dd4e7c228340c57299665cd1ea641ed0b61bf291d631af9d73",
+      "original_reducer_exit": 2,
+      "original_findings": [
+        "procA: loaded helper q1_component_runner_v2_2.py hash != launch-bound helper map",
+        "procB: loaded helper q1_component_runner_v2_2.py hash != launch-bound helper map"
+      ],
+      "out_dir": "/reductions/q12b-heldout-reduction-20260928T020837Z",
+      "reconciled": "exactly the redundant self-helper map entry q1_component_runner_v2_1.py (frozen v2.1 bytes) produced by the frozen v2.2 runner; runner identity taken from attestation.runner_sha256 and every record execution.runner_sha256 == bound v2.2 bytes",
+      "claim_boundary": "does not alter, overwrite or supersede the original summary/receipt; the original reducer did NOT pass; no candidate re-execution; no numerical threshold change",
+      "binding": {
+        "repaired_reducer_sha256": "a7decd00863f69b6970f7e1015a1d725681f046ebc65c63a535d5bc42da00cc8",
+        "original_run_id": "q12b-heldout-20260928T013539Z",
+        "run_receipt_sha256": "7746dd7ba4eeb74c61e9e0c328a24653dfaf54f59667fcca67d27e726bf6e427",
+        "original_summary_sha256": "646a07b7c57e540e512042d2dcf0f3bba04bba228564806d0a0fb9a693b46745",
+        "launch_binding_sha256": "cb67d9e996b81078160d8828e3b052c28ec5387f039b1de3ebe61b8e7385d3d8",
+        "gate_snapshot_sha256": "4ef2a52886edfdccea5812bbdc6dd3d05a4237ec41a6d9c8f5d58627519e883e",
+        "procA_result_sha256": "1097fd0b4a1423325c79954e8c88d98fcdca1d27357dd621dea32044b02cd71d",
+        "procB_result_sha256": "4509588c3c7a9f98fcd39f262a66d4af07364e4703dcd40c40bff23d894427ca",
+        "procA_inventory_sha256": "49e91f9b53e0d7a87e012ff19e42f146b545e4cdda8523763ac84a6551f20a94",
+        "procB_inventory_sha256": "93254a23fd66dff12c39506d597589ab546c1493759d07b94c821545bce7c9d0",
+        "authorization_sha256": "2a732de1ad7b18485d73638446f5d42e1f1b3ae0cdaf70d2028acec8071e2f42",
+        "authorization": {
+          "schema": "lumo.parent.q12b-heldout-reduction-authorization.v1",
+          "approved": true,
+          "approved_utc": "2026-09-28T02:08:37.932493+00:00",
+          "authorizes": "CPU_REDUCTION_ONLY",
+          "run_id": "q12b-heldout-20260928T013539Z",
+          "reduction_id": "q12b-heldout-reduction-20260928T020837Z",
+          "repaired_reducer_sha256": "a7decd00863f69b6970f7e1015a1d725681f046ebc65c63a535d5bc42da00cc8",
+          "owner": "Codex parent; worker cannot approve"
+        }
+      },
+      "original_launch_binding_names_reducer": "6475182d9e0996dd4e7c228340c57299665cd1ea641ed0b61bf291d631af9d73"
+    },
+    "reducer_runtime": {
+      "python": "3.12.13",
+      "hostname": "ee2dcdd32b19",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "CUDA_VISIBLE_DEVICES": "",
+      "container_name_env": "lumotree-review-q12b-reduce-repair",
+      "pid": 1,
+      "torch": "2.11.0+cu130",
+      "torch_threads": 1,
+      "cuda_available": false
+    },
+    "policy": {
+      "sha256": "4a103df013439ae02977d10a42c3cf2eeb916a7dcb1a61c19e6b929da620f7b3",
+      "version": "v2.1",
+      "integrity_ok": true,
+      "approved_ok": true,
+      "problems": [],
+      "auth_problems": []
+    },
+    "process_independence": {
+      "independent": true,
+      "problems": [],
+      "pid_A": 1,
+      "pid_B": 1,
+      "pid_equal_allowed": true
+    },
+    "negative_power_note": {
+      "block": "evaluation",
+      "negative_mutations_executed": 0,
+      "power_source_calibration_run_id": "q12b-calibration-retry-20260928T010045Z",
+      "rule": "N1/N3/N4 power is demanded inside calibration runs only; held-out records carry no negatives by design"
+    },
+    "n5_paired_diagnostic": {
+      "A": {},
+      "B": {}
+    },
+    "rows": [
+      {
+        "fixture_id": "evaluation/fx0_ordinary-random",
+        "findings": {
+          "published_equals_native_chain_bitwise_all": true
+        },
+        "cases": 2880
+      },
+      {
+        "fixture_id": "evaluation/fx1_mixed-stress",
+        "findings": {
+          "published_equals_native_chain_bitwise_all": true
+        },
+        "cases": 2880
+      }
+    ],
+    "cases_expected": 5760,
+    "cases_evaluated": {
+      "A": 5760,
+      "B": 5760
+    },
+    "case_verdicts": {
+      "A": {
+        "PASS": 5760
+      },
+      "B": {
+        "PASS": 5760
+      }
+    },
+    "aggregate": {
+      "A": {
+        "aggregate": "PASS",
+        "cases": 5760,
+        "expected_cases": 5760
+      },
+      "B": {
+        "aggregate": "PASS",
+        "cases": 5760,
+        "expected_cases": 5760
+      }
+    },
+    "negative_power": {
+      "A": {},
+      "B": {}
+    },
+    "recomputed_records": 11520,
+    "tensors_verified": 5814
+  },
+  "cpu_container_id": "ee2dcdd32b194beb07cfd493c0b58b98b19f02942ab520f93b897cf68691a2b2",
+  "command_reduce": "docker run --rm -i --name lumotree-review-q12b-reduce-repair --cidfile /home/mark/lumotree-review-20260927/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1.2b-heldout-reduction/q12b-heldout-reduction-20260928T020837Z/reduce.cid -e Q12B_CONTAINER_NAME=lumotree-review-q12b-reduce-repair -e OMP_NUM_THREADS=1 -e MKL_NUM_THREADS=1 -e CUDA_VISIBLE_DEVICES= -e PYTHONDONTWRITEBYTECODE=1   -v /home/mark/lumotree-review-20260927:/workspace:ro -v /home/mark/lumotree-review-20260927/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1.2b-heldout/q12b-heldout-20260928T013539Z:/runs/q12b-heldout-20260928T013539Z:ro -v /home/mark/lumotree-review-20260927/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1.2b-heldout-reduction/q12b-heldout-reduction-20260928T020837Z:/reductions/q12b-heldout-reduction-20260928T020837Z --entrypoint python3 sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc   /workspace/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_2b_reduce_v2_2_1.py --run /runs/q12b-heldout-20260928T013539Z --block evaluation --recompute all --out /reductions/q12b-heldout-reduction-20260928T020837Z --authorization /reductions/q12b-heldout-reduction-20260928T020837Z/AUTHORIZATION.snapshot.json\n",
+  "image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+  "image_repo_digests": [
+    "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776"
+  ],
+  "started_utc": "2026-09-28T02:10:03Z",
+  "ended_utc": "2026-09-28T02:11:02Z",
+  "original_attestations_unchanged": true
+}

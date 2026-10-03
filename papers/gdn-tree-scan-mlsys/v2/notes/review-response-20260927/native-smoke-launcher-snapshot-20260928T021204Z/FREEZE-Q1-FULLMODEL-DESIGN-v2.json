@@ -1,0 +1,312 @@
+{
+ "schema": "lumo.review-response.q1-fullmodel-design-freeze.v2",
+ "frozen_utc": "2026-09-28T02:12:04.205577+00:00",
+ "status": "Q1 full-model native-first reference package v2 (bounded repairs CLOSED by the parent's independent review) + native-smoke launcher submitted for FINAL parent freeze/launch review; CPU-only; NO engine boot; no candidate outcomes; gate is the parent's",
+ "supersedes": [
+  "FREEZE-Q1-FULLMODEL-DESIGN.json (v1; kept, hashed here; v1 tools remain on disk, unused by the smoke)"
+ ],
+ "parent_review_bindings": {
+  "smoke_design": {
+   "path": "p0/monitor/review-response-20260927/Q1-NATIVE-SMOKE-DESIGN.json",
+   "sha256": "8e5f96be0e8cbd95973fa511c609c57af8ff5a30b5e6be4c7507ce65130d5ed4"
+  },
+  "closure_addendum": {
+   "path": "notes/review-response-20260927/q1-fullmodel-v2-repair-closure-addendum.md",
+   "sha256": "8d40cf1d94c3f1d63c386a06b0d51d3486767c58415d1f283d69e71fac0b8c87"
+  },
+  "snapshot": {
+   "dir": "notes/review-response-20260927/fullmodel-repair-preliminary-snapshot-20260928T015125Z",
+   "SNAPSHOT.json_sha256": "3401379e664426b94c41c98985087c1f82378d5f8c1ed5cf70f4d75256d09905",
+   "seven_hashes_equal_current": true
+  },
+  "prior_reviews": [
+   "q1-fullmodel-implementation-review.md",
+   "q1-fullmodel-v2-preliminary-repair-review.md",
+   "q1-fullmodel-fa2-api-addendum.md"
+  ]
+ },
+ "reviewed_seven_sources_equal_snapshot": {
+  "tools/q1_reference_hooks_v2.py": "78ebde8de667f53e012db41597f6e4ab5970fd8b7c126a0c88f55ac62e6187dd",
+  "tools/q1_reference_driver_v2.py": "47314063eaa46b59eaa4fa60978353caef570bd8b39ebe5f127c56ff94702159",
+  "tools/q1_reference_fa2_install.py": "e485a2fe8a01c3820dbfda5c65a431019ef0f4289e246ca586a9ff858ed5b6d3",
+  "tools/q1_spec_off_engine_config_v2.py": "58aadfdb56f10142599098ada8a76ff3c792c39675e22fd4f5d5fadab81cffc4",
+  "tools/q1_reference_job.py": "9a9144622375c7a895c54fa590bdb9f9e2c6e27c728076dfa5ace1580806d485",
+  "tools/q1_patch_reference_runner_v2.py": "52fd1971f7f509809c4d06e1b6cf7b721b24a24f281ab9a1812ed5dd342742e3",
+  "tools/tests/test_q1_fullmodel_v2_package.py": "213bf798b8e18d53fe2edc8456d145999c8c04c9d4f3661d07a003c74c71037c"
+ },
+ "files": {
+  "tools/q1_reference_hooks_v2.py": {
+   "sha256": "78ebde8de667f53e012db41597f6e4ab5970fd8b7c126a0c88f55ac62e6187dd",
+   "bytes": 42736
+  },
+  "tools/q1_reference_driver_v2.py": {
+   "sha256": "47314063eaa46b59eaa4fa60978353caef570bd8b39ebe5f127c56ff94702159",
+   "bytes": 9817
+  },
+  "tools/q1_reference_fa2_install.py": {
+   "sha256": "e485a2fe8a01c3820dbfda5c65a431019ef0f4289e246ca586a9ff858ed5b6d3",
+   "bytes": 6246
+  },
+  "tools/q1_spec_off_engine_config_v2.py": {
+   "sha256": "58aadfdb56f10142599098ada8a76ff3c792c39675e22fd4f5d5fadab81cffc4",
+   "bytes": 14016
+  },
+  "tools/q1_reference_job.py": {
+   "sha256": "9a9144622375c7a895c54fa590bdb9f9e2c6e27c728076dfa5ace1580806d485",
+   "bytes": 5912
+  },
+  "tools/q1_patch_reference_runner_v2.py": {
+   "sha256": "52fd1971f7f509809c4d06e1b6cf7b721b24a24f281ab9a1812ed5dd342742e3",
+   "bytes": 5954
+  },
+  "tools/tests/test_q1_fullmodel_v2_package.py": {
+   "sha256": "213bf798b8e18d53fe2edc8456d145999c8c04c9d4f3661d07a003c74c71037c",
+   "bytes": 39037
+  },
+  "tools/run_q1_native_smoke_v2.sh": {
+   "sha256": "ac1740bd08d0364d7fb56c64a9a336f68add096f5209a7333543307a8245f352",
+   "bytes": 14830
+  },
+  "tools/tests/test_q1_native_smoke_launcher_static.py": {
+   "sha256": "8d250e99c76d4cb1232af66d1b8f71fe957b691f71375cfb270706910a1db802",
+   "bytes": 5124
+  },
+  "tools/test_log.q1_fullmodel.v2.attempt1.txt": {
+   "sha256": "b70d9861e5f3d83448070b7e798fa63088e9852ed4536cfd94be68e9221e9dc5",
+   "bytes": 10205
+  },
+  "tools/test_log.q1_native_smoke_launcher.attempt1.txt": {
+   "sha256": "a44cb90f986f7119d2eab0b2c74778bee78d31001b029ff83f47b9073ccef0f2",
+   "bytes": 2420
+  },
+  "tools/test_log.q1_native_smoke_launcher.attempt2.txt": {
+   "sha256": "537d6dec1159e2079e0f4446597476a0aae336e9937bfbaf7de2bf02b5585d5b",
+   "bytes": 2510
+  },
+  "tools/test_log.q1_native_smoke_launcher.attempt3.txt": {
+   "sha256": "26a8f4dc15d4d8f819f96c4495d9fdd239b8631a22580bc0bf030b118c4cdcb5",
+   "bytes": 2378
+  },
+  "fullmodel/spec-off-engine-config.v2.json": {
+   "sha256": "ff878c480e68e304b4937eb79fd92cdddf1e261b68c6f5040818f1d08a1cfb14",
+   "bytes": 20676
+  },
+  "fullmodel/fixtures/token-fixtures.v1.json": {
+   "sha256": "607634e19235a58d2b6d73f8260dac3c49f842f9f1cba9a1789f329c56012223",
+   "bytes": 224734
+  },
+  "identity/native_source/fa2_source_index.json": {
+   "sha256": "0b060734ed11a1e41071b09bcb1b8fcc8935b520e0b843b2b913e8a6056aec08",
+   "bytes": 3170
+  },
+  "identity/native_source/vllm__vllm_flash_attn__flash_attn_interface.py": {
+   "sha256": "9caca9584061cfd60c9ebd404d9a8881a62fe7894242efefcba5b88fc086d5b6",
+   "bytes": 19815
+  },
+  "identity/native_source/vllm__vllm_flash_attn____init__.py": {
+   "sha256": "5252161dc738b1ec93c37b8313276fb159f11fc80f8308e8359e54435eb7e955",
+   "bytes": 1479
+  },
+  "identity/native_source/vllm__v1__attention__backends__fa_utils.py": {
+   "sha256": "379bdccb69048f7bf6746816d146b383adceadef5e03bcd1ab1aa216ebbdfb27",
+   "bytes": 8252
+  },
+  "identity/native_source/vllm__v1__attention__backends__flash_attn.py": {
+   "sha256": "c949e39a0b0b3dfa316017c422b1cb1368cd3a4a1328a1c691f5d7f44ed571e7",
+   "bytes": 47406
+  },
+  "identity/native_source/vllm__model_executor__layers__attention__attention.py": {
+   "sha256": "1e5894a5ddc0dcbd343ba4b3e4c6d674d87604232dabede2aed1383a5ac4e713",
+   "bytes": 31530
+  },
+  "identity/native_source/vllm__v1__worker__gpu_model_runner.py": {
+   "sha256": "904d7d357ba076c93cefee5f7f030e2be577dc12599aebdf56395b894e2077b0",
+   "bytes": 307678
+  },
+  "prefix-plan/selected/calibration-short_available/token-ids.u32le": {
+   "sha256": "20321ed78102db81290634bab97cd0e97fd096343aeec7c2ab036d9605a6315c",
+   "bytes": 53948
+  },
+  "tools/q1_fullmodel_token_fixtures.py": {
+   "sha256": "fc6c882bbcbd2d53f2e1fabea5aa84ff049314fe56c289561ecb7e4a34ba41b9",
+   "bytes": 13735
+  },
+  "FREEZE-Q1-FULLMODEL-DESIGN.json": {
+   "sha256": "149a68d342f7415bc1ad82e6720e5f0a05c1c958889a7020c6639ed13cda8d54",
+   "bytes": 3465
+  }
+ },
+ "repo_files": {
+  "scripts/fr13_patch_fa2_tree_bias.py": {
+   "sha256": "8f61b9cd6a079d0605daedb545b8a2e95225714693c775d396059bab2ce626b2",
+   "bytes": 481205
+  },
+  "scripts/fr14_patch_nvfp4_lmhead.py": {
+   "sha256": "0a673b5ad0b76467530ef33e8da36500c73b25857eda11281c2e55103ce57a71",
+   "bytes": 18318
+  },
+  "scripts/fr13_fixed32_topology.py": {
+   "sha256": "c02703b4bc777e5edfa01623b446a289cba8f1023e31d8efd7fc8126666b38bc",
+   "bytes": 54622
+  }
+ },
+ "fa2_fork_binary": {
+  "path": "/home/mark/fr14_splitk_build_20260818/_vllm_fa2_qrow32_gqa_pair_splitk_b1_sm121a.abi3.so",
+  "sha256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+  "bytes": 300123792
+ },
+ "pinned_image_fa2_sources": {
+  "flash_attn_interface_stock": {
+   "sha256": "9caca9584061cfd60c9ebd404d9a8881a62fe7894242efefcba5b88fc086d5b6",
+   "bytes": 19815,
+   "in_image_path": "/usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/flash_attn_interface.py"
+  },
+  "fa_utils": {
+   "sha256": "379bdccb69048f7bf6746816d146b383adceadef5e03bcd1ab1aa216ebbdfb27",
+   "bytes": 8252,
+   "in_image_path": "/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/fa_utils.py"
+  },
+  "flash_attn_backend": {
+   "sha256": "c949e39a0b0b3dfa316017c422b1cb1368cd3a4a1328a1c691f5d7f44ed571e7",
+   "bytes": 47406,
+   "in_image_path": "/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/flash_attn.py"
+  },
+  "attention_layer": {
+   "sha256": "1e5894a5ddc0dcbd343ba4b3e4c6d674d87604232dabede2aed1383a5ac4e713",
+   "bytes": 31530,
+   "in_image_path": "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/attention/attention.py"
+  },
+  "vllm_flash_attn_init": {
+   "sha256": "5252161dc738b1ec93c37b8313276fb159f11fc80f8308e8359e54435eb7e955",
+   "bytes": 1479,
+   "in_image_path": "/usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/__init__.py"
+  }
+ },
+ "fa2_interface_patched_sha256_expected": "dadab8aff63b7f608274834929c954335247366411382f390af92501361044a1",
+ "fa2_attestation_contract": "fa_utils.get_flash_attn_version(requires_alibi=False, head_size=None) == 2 (the pinned interface has no getter; DEFAULT_FA_VERSION/global selector alone are insufficient); interface (patched), fa_utils, flash_attn backend and attention-layer module shas == fa2_source_index; installed .so == fork 28570f83 and torch.ops._vllm_fa2_C.varlen_fwd_tree_bias present; EVERY attention layer attn_backend.get_name()==FLASH_ATTN, impl vllm.v1.attention.backends.flash_attn.FlashAttentionImpl, impl.vllm_flash_attn_version==2; mismatch is FATAL at boot and seals every admitted case INVALID",
+ "repairs_closed_per_parent_addendum": [
+  "driver hash + exact-length authentication of every referenced GDN/KV/O2 object (dedup by sha); reconstruct_logical_kv verifies",
+  "enable_packed_recurrent_decode must EXIST and be bool/0-1 int on every GDN layer (boot + snapshot); missing refuses in the primary arm",
+  "exact materialized K/V slices (full blocks + valid tail only) checked finite with block identity; declared kv dtype / kv heads / head dim enforced at extraction",
+  "FA2 selector/source/binary/per-layer impl attestation (see fa2_attestation_contract)"
+ ],
+ "smoke_plan": {
+  "design": "Q1-NATIVE-SMOKE-DESIGN.json 8e5f96be",
+  "arm": "aligned_nonpacked (VLLM_ENABLE_FLA_PACKED_RECURRENT_DECODE=0; PRIMARY)",
+  "fresh_processes": 1,
+  "process": "A",
+  "case_ids": [
+   "calibration-short_available__c0__root-only"
+  ],
+  "repeats": 2,
+  "expected_requests": 2,
+  "prefix": {
+   "prefix_id": "calibration-short_available",
+   "prefix_len": 13487,
+   "token_ids_sha256": "20321ed78102db81290634bab97cd0e97fd096343aeec7c2ab036d9605a6315c",
+   "file": "prefix-plan/selected/calibration-short_available/token-ids.u32le"
+  },
+  "chain_tokens": [
+   11352,
+   25559
+  ],
+  "chain_positions": [
+   13487,
+   13488
+  ],
+  "z_position": 13488,
+  "terminal_token_id": 248046,
+  "save_kv_bytes": true,
+  "required_evidence": "two complete VALID O0/O1/O2 seals with actual token/position trace, finite complete state/logits, hash+length-bound reusable logical state bytes, repeat-unique observation identity; report native repeat/cache differences (O0 digest equality, O2 argmax equality)",
+  "failure_rule": "any missing/invalid evidence, boot receipt problem, unhealthy engine or unauthenticated seal stops the run, preserves the receipt, exits non-zero; no automatic expansion or retry"
+ },
+ "launch": {
+  "launcher": "tools/run_q1_native_smoke_v2.sh",
+  "sha256": "ac1740bd08d0364d7fb56c64a9a336f68add096f5209a7333543307a8245f352",
+  "command": "RUN_ID=<approved_run_id> bash papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/run_q1_native_smoke_v2.sh   (from /home/mark/lumotree-review-20260927; --dry-run prints only)",
+  "steps": [
+   "gate + reviewed-hash + scope check",
+   "GPU contention / lumotree containers / port 9950 / image digest / fork sha+size / frozen prefix bytes",
+   "job: q1_reference_job.py --smoke (hash-bound)",
+   "engine config rendered for this run/log dir/job (validate() must be clean)",
+   "LAUNCH-BINDING.json + engine_launch_argv.json",
+   "docker run -d (lm-head shim, FA2 fork install + minimal interface patch receipt, stock-runner patch receipt, vllm serve)",
+   "/health wait (HEALTH_TIMEOUT_S default 2400)",
+   "install/patch receipts must exist and be clean",
+   "q1_reference_driver_v2.py R=2 (authenticates seals + raw objects; stops on first failure)",
+   "docker stop/logs/rm; RUN-RECEIPT.json"
+  ],
+  "output": "runs/q1-native-smoke/<RUN_ID>/ (q1_ref/{boot_attestation,cases,objects}, driver/DRIVER-VERDICT.aligned_nonpacked.pA.json, q1_ref_fa2_install_receipt.json, q1_ref_patch_receipt.json, engine.log, engine-config.json, LAUNCH-BINDING.json, gpu contention before/after, timings, RUN-RECEIPT.json)",
+  "gate_file": "p0/monitor/review-response-20260927/GATE-Q1-NATIVE-SMOKE.json (parent-owned; SMOKE_GATE env may override)",
+  "gate_fields_required": {
+   "gate": "Q1-NATIVE-SMOKE",
+   "approved": true,
+   "approved_run_id": "<RUN_ID>",
+   "reviewed_scope": {
+    "arm": "aligned_nonpacked",
+    "process": "A",
+    "repeats": 2,
+    "fresh_processes": 1,
+    "case_ids": [
+     "calibration-short_available__c0__root-only"
+    ],
+    "expected_requests": 2,
+    "save_kv_bytes": true,
+    "block": "calibration"
+   },
+   "reviewed_hashes": {
+    "image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+    "smoke_design": "8e5f96be0e8cbd95973fa511c609c57af8ff5a30b5e6be4c7507ce65130d5ed4",
+    "hooks_v2": "78ebde8de667f53e012db41597f6e4ab5970fd8b7c126a0c88f55ac62e6187dd",
+    "driver_v2": "47314063eaa46b59eaa4fa60978353caef570bd8b39ebe5f127c56ff94702159",
+    "patcher_v2": "52fd1971f7f509809c4d06e1b6cf7b721b24a24f281ab9a1812ed5dd342742e3",
+    "config_v2": "58aadfdb56f10142599098ada8a76ff3c792c39675e22fd4f5d5fadab81cffc4",
+    "fa2_install": "e485a2fe8a01c3820dbfda5c65a431019ef0f4289e246ca586a9ff858ed5b6d3",
+    "job_builder": "9a9144622375c7a895c54fa590bdb9f9e2c6e27c728076dfa5ace1580806d485",
+    "fa2_source_index": "0b060734ed11a1e41071b09bcb1b8fcc8935b520e0b843b2b913e8a6056aec08",
+    "token_fixtures": "607634e19235a58d2b6d73f8260dac3c49f842f9f1cba9a1789f329c56012223",
+    "prefix_token_ids": "20321ed78102db81290634bab97cd0e97fd096343aeec7c2ab036d9605a6315c",
+    "stock_runner_copy": "904d7d357ba076c93cefee5f7f030e2be577dc12599aebdf56395b894e2077b0",
+    "fa2_patcher": "8f61b9cd6a079d0605daedb545b8a2e95225714693c775d396059bab2ce626b2",
+    "lm_head_shim": "0a673b5ad0b76467530ef33e8da36500c73b25857eda11281c2e55103ce57a71",
+    "fork_binary": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+    "launcher": "ac1740bd08d0364d7fb56c64a9a336f68add096f5209a7333543307a8245f352"
+   }
+  }
+ },
+ "expected_values_for_gate": {
+  "image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+  "smoke_design": "8e5f96be0e8cbd95973fa511c609c57af8ff5a30b5e6be4c7507ce65130d5ed4",
+  "hooks_v2": "78ebde8de667f53e012db41597f6e4ab5970fd8b7c126a0c88f55ac62e6187dd",
+  "driver_v2": "47314063eaa46b59eaa4fa60978353caef570bd8b39ebe5f127c56ff94702159",
+  "patcher_v2": "52fd1971f7f509809c4d06e1b6cf7b721b24a24f281ab9a1812ed5dd342742e3",
+  "config_v2": "58aadfdb56f10142599098ada8a76ff3c792c39675e22fd4f5d5fadab81cffc4",
+  "fa2_install": "e485a2fe8a01c3820dbfda5c65a431019ef0f4289e246ca586a9ff858ed5b6d3",
+  "job_builder": "9a9144622375c7a895c54fa590bdb9f9e2c6e27c728076dfa5ace1580806d485",
+  "fa2_source_index": "0b060734ed11a1e41071b09bcb1b8fcc8935b520e0b843b2b913e8a6056aec08",
+  "token_fixtures": "607634e19235a58d2b6d73f8260dac3c49f842f9f1cba9a1789f329c56012223",
+  "prefix_token_ids": "20321ed78102db81290634bab97cd0e97fd096343aeec7c2ab036d9605a6315c",
+  "stock_runner_copy": "904d7d357ba076c93cefee5f7f030e2be577dc12599aebdf56395b894e2077b0",
+  "fa2_patcher": "8f61b9cd6a079d0605daedb545b8a2e95225714693c775d396059bab2ce626b2",
+  "lm_head_shim": "0a673b5ad0b76467530ef33e8da36500c73b25857eda11281c2e55103ce57a71",
+  "fork_binary": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+  "launcher": "ac1740bd08d0364d7fb56c64a9a336f68add096f5209a7333543307a8245f352"
+ },
+ "tests": {
+  "package": "58 passed (tools/test_log.q1_fullmodel.v2.attempt1.txt; source hashes identical start/end; the test file is one of the seven reviewed hashes)",
+  "launcher_static": "4 passed (tools/test_log.q1_native_smoke_launcher.attempt3.txt; attempts 1-2 retained: test-side ordering assertions matched informational/gate-block mentions of tool names; launcher bytes identical across the three attempts)"
+ },
+ "disclosures": [
+  "the seven reviewed sources are byte-identical to the parent snapshot 20260928T015125Z; nothing in them changed after the closure review",
+  "the launcher, its static test and the freeze are the only new files; the launcher executes the config's rendered docker argv verbatim (no shell eval) and has never been run beyond --dry-run",
+  "host torch 2.4.1 CPU ran the package tests (no vllm); the FA2 real-API test uses stub modules whose __file__ are the extracted pinned byte copies",
+  "v1 files (hooks/driver/patcher/config v1, design manifest v1) remain frozen under FREEZE-Q1-FULLMODEL-DESIGN.json and are not used by the smoke"
+ ],
+ "non_claims": [
+  "no engine/model boot; no GPU",
+  "no candidate outcomes, no held-out, no timing, no qualification",
+  "component results (Q1.2a/Q1.2b) are not full-model qualification",
+  "cycle-0 forced continuation only"
+ ],
+ "freeze_canonical_sha256": "41cf48ee5759c1776b76c27c5e98db236750f97c6ecdc994a2572d761c7dc3e3"
+}

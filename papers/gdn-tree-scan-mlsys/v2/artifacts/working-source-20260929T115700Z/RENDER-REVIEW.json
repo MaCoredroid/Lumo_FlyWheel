@@ -1,0 +1,23 @@
+{
+  "schema": "lumo.paper-native-ab-render-review.v1",
+  "utc": "2026-09-29T11:57:33.649242+00:00",
+  "reviewed_pages": [
+    11,
+    12
+  ],
+  "findings": [],
+  "new_native_reference_text_visible": true,
+  "clipping_or_overlap_observed": false,
+  "campaign_complete": false,
+  "pdf_sha256": "436be1d5c5297bac016002b91b2e25bf0062ea5aaa4a41b9a8d75942c90aa8bd",
+  "images": [
+    {
+      "path": "page-11.png",
+      "sha256": "c4c07baae33f59c500e380c932ee0d989828d069682820e0115405331b0f4f06"
+    },
+    {
+      "path": "page-12.png",
+      "sha256": "5cd1540b4163d3d86fe9d968093c98bfb7896a8dae3210fe155f5478331fa760"
+    }
+  ]
+}

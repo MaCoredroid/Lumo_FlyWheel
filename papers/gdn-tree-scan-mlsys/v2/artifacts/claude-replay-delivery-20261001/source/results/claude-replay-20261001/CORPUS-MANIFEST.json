@@ -1,0 +1,560 @@
+[
+  {
+    "path": "corpus/requests/chatreq_1787597282944.json",
+    "sha256": "d4e5f7cfc482dfe2df198671954644ab4c729912024ed81bf8fa81a9218ae099",
+    "bytes": 101023,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787597307152.json",
+    "sha256": "b55a5ee3d49c0e1561345cde3f4eb1a3c35948238a5015b3c8b7a14b618c1600",
+    "bytes": 103277,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787597309713.json",
+    "sha256": "6280eaf5dab39e25123e4b43d2c5396e47309c68705f85128d484f18a74ffe9a",
+    "bytes": 107148,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787597402587.json",
+    "sha256": "9430beb63692c079880eac3226d2038f5c41a8052b573d478569c5c021253ecd",
+    "bytes": 130101,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787597404989.json",
+    "sha256": "f0d59347716d8869129b534c091e03db1863e7f0d9dbdcfa841e373efb363973",
+    "bytes": 130905,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787597407027.json",
+    "sha256": "d4adc3183aa66721a326798525790da8d2c6ab32c511fdf2ef77a8785e65e838",
+    "bytes": 134792,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787597607897.json",
+    "sha256": "8cf1135033d0962cf33e92f41b576cc7c592b44661d85287364e9f32fa57f27a",
+    "bytes": 214828,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787597624780.json",
+    "sha256": "cfe0891cf6465dd80ee6f3dca8012c72f0ae514c51a588f65516cf5c2a41117c",
+    "bytes": 217222,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787597632003.json",
+    "sha256": "852e8b6e9f19ac9647e0546320a3130ebe7b742312116577e2e9f97ae6b2746d",
+    "bytes": 219069,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787597735027.json",
+    "sha256": "299929a7f12c5e5a29a435a4a8eda424dd2c3052e0ce3ba10a2c8221452c3e06",
+    "bytes": 243920,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787597739493.json",
+    "sha256": "b07b7d4edbc47710dbfb688c64eefe8ade57bfa8d22c24b4e05d04035acf632d",
+    "bytes": 245300,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787597743386.json",
+    "sha256": "68bc40faafdf6f19ad25959f627eb8425439bcd656e686d783e89ebf91f719d2",
+    "bytes": 248747,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787597754195.json",
+    "sha256": "62664aad114be3fc88f9f463f27394d5ae5c365469c3745f7cfcf4af5a31cfba",
+    "bytes": 251981,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787597853247.json",
+    "sha256": "3de2bc6653f7bd8285871a4fa564411dfed3b41a894f8ce13afa880318fefe2e",
+    "bytes": 273232,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787597882520.json",
+    "sha256": "f991f4d6db15caa37f974bc6fc2d4879dfdd5a1942c9e6b6e1aea4bd5b60d1a2",
+    "bytes": 281635,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787598364750.json",
+    "sha256": "9673c0a8e7c00eb9f32c270fa717b478989cad77fd91c2f36d752aa4afc62f23",
+    "bytes": 383113,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787598371432.json",
+    "sha256": "944eafa3abc8f1b378550f33e4bdcb79a9e9a278768aab563a70067433f6341b",
+    "bytes": 386075,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787598460010.json",
+    "sha256": "7900cd88d4ce435604e8e3d6b2910cca264082868ea0d8d483e5c91676007b0d",
+    "bytes": 405778,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787598478475.json",
+    "sha256": "bb455896cc4b5e59c21239be962470d8e7a22da5dd5ae8063cb9b5ca6ac05b11",
+    "bytes": 322314,
+    "keys": [
+      "model",
+      "messages",
+      "max_tokens",
+      "stream",
+      "stream_options"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787598678577.json",
+    "sha256": "6b97af1077a7a73eae492b84dd89677434d4b996ba938885e555ac484d508bf3",
+    "bytes": 169481,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787598702721.json",
+    "sha256": "82971ed74545f36d23bdc4c7201c5d0c1e62f01467e38b57fa8763df53b3c8a7",
+    "bytes": 183828,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787598726220.json",
+    "sha256": "6f7e9c8328c8e8af3b22d68c88efa90e935fc2c8792d09a0adaf21f63a13e997",
+    "bytes": 186945,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787598736476.json",
+    "sha256": "b0ea2db0c53d8e546a0666cc949bdb86787c89b6ec7582b740ef60523f604179",
+    "bytes": 189645,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787598744134.json",
+    "sha256": "981d032a641e422c033aa2827800dd6e8b399ee163e393ea978780044136ac50",
+    "bytes": 192177,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787598769288.json",
+    "sha256": "f3b63d5c302503f1e79d4f4de669b277765ff7b66390289cf47e34f24eb3a799",
+    "bytes": 137255,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787598851731.json",
+    "sha256": "154b40aa23275b1c5ce31085fefe47f0229ced22ebbf40e751fb11401871bb30",
+    "bytes": 150338,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787598884943.json",
+    "sha256": "2d3c05b02cbc9cdeb4395fb6fae07a7be3361f3161d969f1770506bf05d67dfd",
+    "bytes": 155028,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787598953625.json",
+    "sha256": "fa69d3ed4ec346e7568a645b5e0ad8a65ae3c6d6d0ba51f4e032729cdd1bdc06",
+    "bytes": 100271,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787598972855.json",
+    "sha256": "f8578a2e3594611321a9f5b59108873de9b4fdc5e869f2e91f914a630a5c87fd",
+    "bytes": 103076,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787598990204.json",
+    "sha256": "39fdf9d1dc1dca0f03414068d645c20b374312f84c92bcc84321a00fd9a99d9b",
+    "bytes": 112967,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787599034884.json",
+    "sha256": "6c7111c3674afbf0e63418b4921d8809f9296c6dc77e57999881063d5d9c787e",
+    "bytes": 127593,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787599048795.json",
+    "sha256": "3d1bfe215712d41b27caa2525b5fa89df46be1416e6de6475ec24f707a758aa2",
+    "bytes": 131201,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787599111706.json",
+    "sha256": "7823b99ca52a912a4db6cd788bf2ce6f5752e29c70d5ee594777fc879666b4f7",
+    "bytes": 147552,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787599178913.json",
+    "sha256": "10b704019d327635149267badf9a282d7bf85c6d996e3380453db61ea30a593c",
+    "bytes": 162143,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787599200933.json",
+    "sha256": "46c320932f897df8c6acb2a8db89faec3693da460360d91888c08f6a85c3d2b9",
+    "bytes": 169007,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787599268104.json",
+    "sha256": "ac042b75fbb3de355677709f201b782ace782591bf7f04fde98cb6806329fd3e",
+    "bytes": 183157,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787599273545.json",
+    "sha256": "dbceba20b0cdcaf4eebcdc2dee1367cd55e0f6fb597648c2a8f1f5857f07055f",
+    "bytes": 187244,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787599333657.json",
+    "sha256": "3b32a6cc0ceb2afdd421312989295e9273ad82b973a25250fc73232da54c556a",
+    "bytes": 198551,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787599345801.json",
+    "sha256": "2fa80754aed21be61b58ee5bf52d0da71f9d002060f51cb0cd5833c2f08307fc",
+    "bytes": 201293,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787599361377.json",
+    "sha256": "cddc2a8fdc03c747317da483453caad77883af26499e455f502127ae9cc8c370",
+    "bytes": 204877,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787599365100.json",
+    "sha256": "a3278f58aca31b0df8ac5e188cc76b47f64837772371faede42f00f4629e7c18",
+    "bytes": 205806,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787599372806.json",
+    "sha256": "cb8d6a9e9a6400e8992c083cdd68da9361223b814ee0f377007e3c3474e1c4d7",
+    "bytes": 208248,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  },
+  {
+    "path": "corpus/requests/chatreq_1787599377763.json",
+    "sha256": "e729edc2dc31373788a60ecfc98997fd15445ed2d59ba6d6329048d205ad03ab",
+    "bytes": 209438,
+    "keys": [
+      "model",
+      "messages",
+      "stream",
+      "stream_options",
+      "tools",
+      "max_tokens"
+    ]
+  }
+]

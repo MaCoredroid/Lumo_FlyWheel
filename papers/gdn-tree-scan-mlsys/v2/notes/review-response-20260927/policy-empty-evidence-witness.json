@@ -1,0 +1,52 @@
+{
+  "checked_utc": "2026-09-27T21:51:23.943311+00:00",
+  "scope": "CPU red-team synthetic malformed metadata; not a model/candidate experiment",
+  "evaluator_sha256": "73a533702029825d579ea7f1bbcc9c18f512a19ea4921775f4067ca29e7abb0f",
+  "witnesses": [
+    {
+      "case": {
+        "case_id": "no_surfaces",
+        "stratum": "ordinary-random",
+        "surfaces": {}
+      },
+      "observed": {
+        "status": "EVALUATED",
+        "case_id": "no_surfaces",
+        "stratum": "ordinary-random",
+        "counts": {
+          "PASS": 0,
+          "FAIL": 0,
+          "UNCOVERED": 0
+        },
+        "verdict": "PASS",
+        "outcomes": {},
+        "reasons": []
+      },
+      "expected": "Refuse or UNCOVERED; never aggregate PASS without required observations"
+    },
+    {
+      "case": {
+        "case_id": "empty_state_and_output",
+        "stratum": "ordinary-random",
+        "surfaces": {
+          "state": {},
+          "output": {}
+        }
+      },
+      "observed": {
+        "status": "EVALUATED",
+        "case_id": "empty_state_and_output",
+        "stratum": "ordinary-random",
+        "counts": {
+          "PASS": 0,
+          "FAIL": 0,
+          "UNCOVERED": 0
+        },
+        "verdict": "PASS",
+        "outcomes": {},
+        "reasons": []
+      },
+      "expected": "Refuse or UNCOVERED; never aggregate PASS without required observations"
+    }
+  ]
+}

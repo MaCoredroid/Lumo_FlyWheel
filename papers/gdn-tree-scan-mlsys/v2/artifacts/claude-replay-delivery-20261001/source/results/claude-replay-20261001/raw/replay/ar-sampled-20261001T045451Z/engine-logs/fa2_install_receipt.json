@@ -1,0 +1,48 @@
+{
+ "schema": "lumo.q1.fullmodel.reference-fa2-install-receipt.v1",
+ "utc": "2026-10-01T04:54:53Z",
+ "problems": [],
+ "fork": {
+  "path": "/tmp/fr13_fork_fa2.so",
+  "sha256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+  "bytes": 300123792
+ },
+ "stock_binary_before": {
+  "sha256": "d5c5c5de6eb01b2531edef5c3c31c69b60049c7bba50c90bc1cee25f733c49e3",
+  "bytes": 190663016
+ },
+ "interface_before_sha256": "9caca9584061cfd60c9ebd404d9a8881a62fe7894242efefcba5b88fc086d5b6",
+ "installed_binary": {
+  "sha256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+  "bytes": 300123792
+ },
+ "patcher": {
+  "path": "/workspace/scripts/fr13_patch_fa2_tree_bias.py",
+  "sha256": "8f61b9cd6a079d0605daedb545b8a2e95225714693c775d396059bab2ce626b2",
+  "function": "_patch_flash_attn_interface"
+ },
+ "interface_after_sha256": "dadab8aff63b7f608274834929c954335247366411382f390af92501361044a1",
+ "interface_changed": true,
+ "interface_markers": {
+  "tree_bias_param": true,
+  "chooses_tree_op_only_with_bias": true,
+  "split_guard_helper": true
+ },
+ "pinned_sources": {
+  "v1/attention/backends/fa_utils.py": {
+   "sha256": "379bdccb69048f7bf6746816d146b383adceadef5e03bcd1ab1aa216ebbdfb27",
+   "expected": "379bdccb69048f7bf6746816d146b383adceadef5e03bcd1ab1aa216ebbdfb27",
+   "match": true
+  },
+  "v1/attention/backends/flash_attn.py": {
+   "sha256": "c949e39a0b0b3dfa316017c422b1cb1368cd3a4a1328a1c691f5d7f44ed571e7",
+   "expected": "c949e39a0b0b3dfa316017c422b1cb1368cd3a4a1328a1c691f5d7f44ed571e7",
+   "match": true
+  },
+  "model_executor/layers/attention/attention.py": {
+   "sha256": "1e5894a5ddc0dcbd343ba4b3e4c6d674d87604232dabede2aed1383a5ac4e713",
+   "expected": "1e5894a5ddc0dcbd343ba4b3e4c6d674d87604232dabede2aed1383a5ac4e713",
+   "match": true
+  }
+ }
+}

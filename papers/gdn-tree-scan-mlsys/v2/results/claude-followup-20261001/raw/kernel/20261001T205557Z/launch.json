@@ -1,0 +1,3 @@
+{"utc": "20261001T205557Z", "worktree_head": "2dec2394d4abb1a7a58911dbb558d01d97424591", "review_head": "984f613d7885d9bf7898866827552b68a3199d0c",
+ "image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc", "image_digest": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776", "host_mem_available_gib": 31, "gpu_util_before": "0",
+ "kernel_dir_sha256": "0e918d7cb111b7d0b9160893937123566fe27cfeea9509d159350d60b65edbd4"}

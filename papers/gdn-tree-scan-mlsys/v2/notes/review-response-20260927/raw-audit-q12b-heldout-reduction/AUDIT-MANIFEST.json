@@ -1,0 +1,13 @@
+{
+  "scope": "read-only independent audit of completed authorized CPU re-reduction; original failure preserved",
+  "files": {
+    "independent-reduction-audit.json": {
+      "sha256": "b693b2615f7e750547511c0dd1a5f69d0c9797802399ab0e0887bd9a2d35d3ea",
+      "bytes": 10765
+    },
+    "inspect_reduction.py": {
+      "sha256": "4c1c7c4995c3e9a0ff1d2d25840f0a828e9c06d0cbe78a958b2d5f77e97d1bd3",
+      "bytes": 5867
+    }
+  }
+}

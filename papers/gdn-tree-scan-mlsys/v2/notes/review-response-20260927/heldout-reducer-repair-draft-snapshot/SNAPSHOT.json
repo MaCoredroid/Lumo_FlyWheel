@@ -1,0 +1,22 @@
+{
+  "utc": "2026-09-28T01:53:11.843311+00:00",
+  "scope": "first draft source and independent local CPU probes; no launcher or final freeze reviewed",
+  "files": {
+    "repro-results.json": {
+      "sha256": "e0fa9822108805d4a34b8e63eb9795e461269f65b79b50d271d1b6d58f48001a",
+      "bytes": 650
+    },
+    "repro_draft.py": {
+      "sha256": "9cf02a3a4c929b5c225073bcbfc06b8b7d95dbdc4e3cc6fdecdaa68883aecdb5",
+      "bytes": 2098
+    },
+    "q1_2b_reduce_v2_2.py": {
+      "sha256": "6475182d9e0996dd4e7c228340c57299665cd1ea641ed0b61bf291d631af9d73",
+      "bytes": 50832
+    },
+    "q1_2b_reduce_v2_2_1.py": {
+      "sha256": "eb117260ba4f55d47137dbe70db6dd335d566e434b26c16d66150b48448a8a24",
+      "bytes": 62237
+    }
+  }
+}

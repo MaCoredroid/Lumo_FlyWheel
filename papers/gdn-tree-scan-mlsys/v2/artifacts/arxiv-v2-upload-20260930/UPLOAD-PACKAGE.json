@@ -1,0 +1,130 @@
+{
+  "created_at_utc": "2026-10-01T01:44:44.949057+00:00",
+  "article_id": "2609.23900",
+  "replacement_submission": "8161722",
+  "title": "LumoTree: Path-Parallel Speculative Verification for Hybrid Language Models",
+  "scope": "Manuscript compilation closure only; no README, private notes, logs, evidence archives, or generated output PDF included. Full-line author comments removed; class license comments retained.",
+  "members": [
+    {
+      "path": "IEEEtran.cls",
+      "bytes": 281789,
+      "sha256": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b",
+      "original_sha256": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b"
+    },
+    {
+      "path": "abstract.tex",
+      "bytes": 966,
+      "sha256": "137509df09ad9598b7063e8d313e1f7731c6590fbdcc933e1249b556678f5465",
+      "original_sha256": "137509df09ad9598b7063e8d313e1f7731c6590fbdcc933e1249b556678f5465"
+    },
+    {
+      "path": "figures/pipeline.tikz",
+      "bytes": 4185,
+      "sha256": "461114355902eaa9bab4f98e2c86d9ef9f838d84a211d03299b402e9824aa306",
+      "original_sha256": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c"
+    },
+    {
+      "path": "figures/scan-replay.tikz",
+      "bytes": 1035,
+      "sha256": "19c984883a8b70cc5209c33fa4f62e98aba708ad2b025568d1b2d600a3e4ecd0",
+      "original_sha256": "19c984883a8b70cc5209c33fa4f62e98aba708ad2b025568d1b2d600a3e4ecd0"
+    },
+    {
+      "path": "figures/state-contract.tikz",
+      "bytes": 1056,
+      "sha256": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898",
+      "original_sha256": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898"
+    },
+    {
+      "path": "main.bbl",
+      "bytes": 12884,
+      "sha256": "392512456ceb65b6d3e8b5e06b522910508f4984792a8654bde42b0e6df67c30",
+      "original_sha256": "392512456ceb65b6d3e8b5e06b522910508f4984792a8654bde42b0e6df67c30"
+    },
+    {
+      "path": "main.tex",
+      "bytes": 42369,
+      "sha256": "7330d5efa0729fc5f66f6d6a7bd77dfa783d3031ab9f2ce0debe326d4c110bd2",
+      "original_sha256": "7330d5efa0729fc5f66f6d6a7bd77dfa783d3031ab9f2ce0debe326d4c110bd2"
+    },
+    {
+      "path": "ref.bib",
+      "bytes": 13803,
+      "sha256": "6cba931832435ef088018bcb885b1117e0154863cb081e9da974c5ec2bffa7a2",
+      "original_sha256": "6cba931832435ef088018bcb885b1117e0154863cb081e9da974c5ec2bffa7a2"
+    },
+    {
+      "path": "sections/execution-costs.tex",
+      "bytes": 1067,
+      "sha256": "e013015372bffa29c99440dbf84a2e328598367e3d19ed8b085ea284b2037706",
+      "original_sha256": "e013015372bffa29c99440dbf84a2e328598367e3d19ed8b085ea284b2037706"
+    },
+    {
+      "path": "sections/native-continuation.tex",
+      "bytes": 2388,
+      "sha256": "366222cac0b744bbc996cca7924e96ebc262a50c115cf89a83f245ecf0928266",
+      "original_sha256": "366222cac0b744bbc996cca7924e96ebc262a50c115cf89a83f245ecf0928266"
+    },
+    {
+      "path": "sections/recurrent-comparison.tex",
+      "bytes": 2777,
+      "sha256": "0ac8ea1e338af46351a0feaac63f910c8698d30ba3bfa15c898c2ee5db3f3814",
+      "original_sha256": "0ac8ea1e338af46351a0feaac63f910c8698d30ba3bfa15c898c2ee5db3f3814"
+    },
+    {
+      "path": "sections/recurrent-validation.tex",
+      "bytes": 1986,
+      "sha256": "bc1748a5cbcec41f4c13fad78e585170ca5066504a274861b11eb878936f850a",
+      "original_sha256": "4b8540c9162a2de4c44574ef10178e42674480cc579efca0cfca14fc70edc953"
+    },
+    {
+      "path": "sections/workload-configuration.tex",
+      "bytes": 868,
+      "sha256": "1b74caec948086f83a7e9140580f90670d1d8fb773f5a38746c40ae85cd5117b",
+      "original_sha256": "1b74caec948086f83a7e9140580f90670d1d8fb773f5a38746c40ae85cd5117b"
+    },
+    {
+      "path": "sections/workload-details.tex",
+      "bytes": 848,
+      "sha256": "c5d628813ab68f8cab5a4a26811536b2e2c4e38490d3215990ef1e6811a2ee3b",
+      "original_sha256": "c5d628813ab68f8cab5a4a26811536b2e2c4e38490d3215990ef1e6811a2ee3b"
+    },
+    {
+      "path": "sections/workload.tex",
+      "bytes": 1349,
+      "sha256": "146b93e7c3c331b7d24428114b0e3599a4e36331ddd1d6e235cc6a43a998c879",
+      "original_sha256": "146b93e7c3c331b7d24428114b0e3599a4e36331ddd1d6e235cc6a43a998c879"
+    }
+  ],
+  "archive_bytes": 98145,
+  "archive_sha256": "afc94dff08f54c327f8d5128cf7a736e43bd491bb0a785d844aa3f4cf74a9fbc",
+  "latest_abstract_edit_present": true,
+  "uploaded": true,
+  "submitted": false,
+  "clean_build": {
+    "success": true,
+    "text_equal_to_current_pdf": true,
+    "pages": 11,
+    "diagnostics": []
+  },
+  "agreement_accepted": true,
+  "license": "arXiv perpetual, non-exclusive",
+  "processing": "succeeded",
+  "preview_ready": true,
+  "preview_url": "https://arxiv.org/submit/8161722/preview",
+  "metadata": {
+    "title": "LumoTree: Path-Parallel Speculative Verification for Hybrid Language Models",
+    "authors": "Zhiyuan Ma",
+    "comments": "11 pages, 3 figures",
+    "primary_category": "cs.LG"
+  },
+  "arxiv_pdf": {
+    "path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/papers/gdn-tree-scan-mlsys/v2/artifacts/arxiv-v2-upload-20260930/arxiv-compiled-v2.pdf",
+    "pages": 11,
+    "sha256": "ed08e20c8ecf29608a446a5ceac4c745d41fe9086a1e2a72924710c007edd588",
+    "all_pages_visually_reviewed": true,
+    "compilation_diagnostics": []
+  },
+  "handoff": "Final Submit button left for user",
+  "checked_at_utc": "2026-10-01T01:52:43.192876+00:00"
+}

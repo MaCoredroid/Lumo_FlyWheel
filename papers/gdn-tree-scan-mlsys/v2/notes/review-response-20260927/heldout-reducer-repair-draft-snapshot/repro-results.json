@@ -1,0 +1,12 @@
+{
+  "snapshot_reducer_sha256": "eb117260ba4f55d47137dbe70db6dd335d566e434b26c16d66150b48448a8a24",
+  "original_immutable_reducer_sha256": "6475182d9e0996dd4e7c228340c57299665cd1ea641ed0b61bf291d631af9d73",
+  "F1_original_self_hash_comparison_refuses": true,
+  "F2_real_main_writes_inside_original_even_when_outside_guard_refuses": true,
+  "F2_exit": 2,
+  "F2_written_file": "<temporary-original>/summary.v2_2_1.json",
+  "F2_outside_refusal": [
+    "reduction output directory must be OUTSIDE the original run directory"
+  ],
+  "scope": "local temporary metadata tree only; actual AST main/reduce/bind; no production imports or numerical execution"
+}

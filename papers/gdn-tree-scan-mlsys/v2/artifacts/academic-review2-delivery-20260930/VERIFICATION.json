@@ -1,0 +1,24 @@
+{
+  "schema": "lumotree-manuscript-source-delivery-verification-v1",
+  "published": false,
+  "archive_sha256": "79af76acf65a2d4f88be36836f2d4b752b6f60f0ad5191588703ce1d4303a3e0",
+  "source_manifest_sha256": "1aa9ae5cb36b288b0ab669081e72eae117e68250db055d8fd434d9dbaf0754ff",
+  "command": [
+    "latexmk",
+    "-pdf",
+    "-interaction=nonstopmode",
+    "-halt-on-error",
+    "-file-line-error",
+    "-no-shell-escape",
+    "main.tex"
+  ],
+  "returncode": 0,
+  "source_members_verified": 16,
+  "build_log_sha256": "72be4b1b9553e7d04f7a3dea880acde5e719340457bb2c7fcf87e1ba3e920606",
+  "campaign_disposition": "SEPARATE_DELIVERY_RECEIPT_NOT_INFERRED_FROM_COMPILATION",
+  "unresolved_or_horizontal_overflow": [],
+  "pdf_sha256": "05e25a01455406447a147802b01f5501e923b97f0c8887290df5469afe4c7813",
+  "pdf_bytes": 286805,
+  "original_workspace_inputs": [],
+  "status": "PASS"
+}

@@ -1,0 +1,28 @@
+{
+  "schema": "lumo.swe_bench_q36_a.synthetic_no_patch_eval.v1",
+  "track": "swe_bench",
+  "instance_id": "astropy__astropy-14598",
+  "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::v2exp-mtp5",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "verdict": "failed",
+  "passed": false,
+  "failure_mode": "patch_apply_failed",
+  "error": "empty_patch",
+  "synthetic_no_patch": true,
+  "harness_invoked": false,
+  "harness_exit_code": null,
+  "patch_bytes": 0,
+  "eval_wall_clock_seconds": 0.0,
+  "arch": "x86_64",
+  "eval_host": "mark-Alienware-Aurora-ACT1250",
+  "worker_report": {
+    "instance_id": "astropy__astropy-14598",
+    "verdict": "failed",
+    "passed": false,
+    "failure_mode": "patch_apply_failed",
+    "error": "empty_patch",
+    "arch": "x86_64",
+    "eval_host": "mark-Alienware-Aurora-ACT1250",
+    "eval_wall_clock_seconds": 0.0
+  }
+}

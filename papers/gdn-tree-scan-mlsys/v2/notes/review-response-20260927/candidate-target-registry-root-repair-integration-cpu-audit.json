@@ -1,0 +1,103 @@
+{
+  "scope": "Actual CPU job builders + AST boot/counter methods with metadata stubs; no model/tensor/operational commands.",
+  "root_job_except_declared_pins_identical": true,
+  "boot_controls": [
+    {
+      "wrong_target_backend": false,
+      "fatal": false,
+      "target_attention_count": 16,
+      "mtp_recorded_separately": true
+    },
+    {
+      "wrong_target_backend": true,
+      "fatal": true,
+      "target_attention_count": 16,
+      "mtp_recorded_separately": true
+    }
+  ],
+  "counter_controls": [
+    {
+      "stage": "after",
+      "case": "missing",
+      "reached_O1": false
+    },
+    {
+      "stage": "after",
+      "case": "negative",
+      "reached_O1": false
+    },
+    {
+      "stage": "after",
+      "case": "stale",
+      "reached_O1": false
+    },
+    {
+      "stage": "after",
+      "case": "jump",
+      "reached_O1": false
+    },
+    {
+      "stage": "after",
+      "case": "correct",
+      "reached_O1": true
+    },
+    {
+      "stage": "after",
+      "case": "fractional",
+      "reached_O1": false
+    },
+    {
+      "stage": "after",
+      "case": "string",
+      "reached_O1": false
+    },
+    {
+      "stage": "after",
+      "case": "bool",
+      "reached_O1": false
+    },
+    {
+      "stage": "before",
+      "case": "missing",
+      "refused": false,
+      "recorded": 0
+    },
+    {
+      "stage": "before",
+      "case": "zero",
+      "refused": false,
+      "recorded": 0
+    },
+    {
+      "stage": "before",
+      "case": "valid",
+      "refused": false,
+      "recorded": 7
+    },
+    {
+      "stage": "before",
+      "case": "negative",
+      "refused": true,
+      "recorded": -1
+    },
+    {
+      "stage": "before",
+      "case": "fractional",
+      "refused": true,
+      "recorded": 7.75
+    },
+    {
+      "stage": "before",
+      "case": "string",
+      "refused": true,
+      "recorded": "7"
+    },
+    {
+      "stage": "before",
+      "case": "bool",
+      "refused": true,
+      "recorded": true
+    }
+  ],
+  "v3_hooks_sha256": "72a399fcddb80255d7eff9b650cc3deb88a1a48d4ee1f814721a3b297fb5bdf2"
+}

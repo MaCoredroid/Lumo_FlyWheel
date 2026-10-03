@@ -1,0 +1,1632 @@
+{
+  "schema": "codex.result-sync.v1",
+  "remote_head": "da2312962a365fc6808af6304c53436b08d7fd2e",
+  "files": [
+    {
+      "path": "code/DIST-PROTOCOL-v3.md",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/DIST-PROTOCOL-v3.md",
+      "sha256": "430d49719631d0b62d797a7961d421da5f2868de57fd9190cfcc9b53b57f1dde",
+      "bytes": 2190
+    },
+    {
+      "path": "code/DIST-PROTOCOL.md",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/DIST-PROTOCOL.md",
+      "sha256": "9147876ff9d152730b96bcbd5a8ac142bab087d305d1ceb457978a7266b3a32b",
+      "bytes": 2581
+    },
+    {
+      "path": "code/analyze.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/analyze.py",
+      "sha256": "987c14261af466a183850766493a35e375c248ebf32b6f7b9bcac78597674346",
+      "bytes": 1894
+    },
+    {
+      "path": "code/analyze_dist.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/analyze_dist.py",
+      "sha256": "fc7b667299eebd53c131c00dcc49ad74403a31071108a1df6fde5e939949e908",
+      "bytes": 3594
+    },
+    {
+      "path": "code/analyze_dist_v2.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/analyze_dist_v2.py",
+      "sha256": "52ef7880fab15f9f2896b5048c49ccbf0567241d24889b50cfff6d4569655717",
+      "bytes": 3381
+    },
+    {
+      "path": "code/analyze_dist_v3.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/analyze_dist_v3.py",
+      "sha256": "aef93d35a1dfc83a283670d63c5e6f5e30ab8d31c19f24553b589617558b96fc",
+      "bytes": 2980
+    },
+    {
+      "path": "code/build_boots_v3.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/build_boots_v3.py",
+      "sha256": "efb61c8248f1771c4520e3a8da41dc1c780755ef68dc568d3be78cc23ad46847",
+      "bytes": 1099
+    },
+    {
+      "path": "code/build_confirm_set.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/build_confirm_set.py",
+      "sha256": "9ed4cd613882bf18489c6ca02f01f9b1bf540e53acaa968dd50b69ca29af5909",
+      "bytes": 3084
+    },
+    {
+      "path": "code/confirm_queue.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/confirm_queue.sh",
+      "sha256": "d098ae2b08601d339b4c80bf85bb958c2d90730eb1bc898f413df552d329d0c5",
+      "bytes": 1356
+    },
+    {
+      "path": "code/dist_sample.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/dist_sample.py",
+      "sha256": "24dddbd8886e7761a7143b7a10eb15275149f494d91c4e52e3d99829437f71d9",
+      "bytes": 3344
+    },
+    {
+      "path": "code/final_stats.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/final_stats.py",
+      "sha256": "b8960d37953b71d14e4058f2aa8f4ffb45f202532049fba49169a93684445838",
+      "bytes": 1893
+    },
+    {
+      "path": "code/fixed32_auth.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/fixed32_auth.py",
+      "sha256": "8bdd656f415defc16cb7c1167997a3e1e491eb5e25f13672d021989b72b7543f",
+      "bytes": 1162
+    },
+    {
+      "path": "code/gatediag/analyze_trace.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/gatediag/analyze_trace.py",
+      "sha256": "3f501e45a19ae7c577873d2435e53fc1c822ad8f57a7ed80083b417c5e4c173c",
+      "bytes": 2716
+    },
+    {
+      "path": "code/gatediag/gatediag.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/gatediag/gatediag.sh",
+      "sha256": "cf74d6ef73533ff232b923ebed93dfcd097ca3b74b4b9fb379e1d99666616ebf",
+      "bytes": 3684
+    },
+    {
+      "path": "code/gatediag/q1v3_hooks.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/gatediag/q1v3_hooks.py",
+      "sha256": "2871e50d75b0471e0486cce26b97597258ee6ac737f2c1bb1b4f8a020e8e33cf",
+      "bytes": 4148
+    },
+    {
+      "path": "code/gatefix/gatefix.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/gatefix/gatefix.sh",
+      "sha256": "1ad73a91438c87420521475a8c83143a6ded188d4a2a8bd19e4b4dde5e9e19b2",
+      "bytes": 5359
+    },
+    {
+      "path": "code/gatefix/patch_runner.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/gatefix/patch_runner.py",
+      "sha256": "42e330431941713b72ee6c0dbe97c8fafe0cda99671e941e8b7eeddfc0b098bf",
+      "bytes": 2340
+    },
+    {
+      "path": "code/make_promoab_serve_only.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/make_promoab_serve_only.py",
+      "sha256": "9f46ad6149df2f0b117d69bbd522406d14d1dc7d8d814d5f3f1cf1aab6c8faf8",
+      "bytes": 1156
+    },
+    {
+      "path": "code/make_serve_only.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/make_serve_only.py",
+      "sha256": "d5064505ce849c7bae29856cc4da55724c11791499e989b70d596ab4dc3e175e",
+      "bytes": 1363
+    },
+    {
+      "path": "code/make_tail10_serve_only.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/make_tail10_serve_only.py",
+      "sha256": "90362d9f67ba450efae8a5c7f59992613ba464ce6cd697847e68e01c397e2578",
+      "bytes": 1177
+    },
+    {
+      "path": "code/offload_codex_proxy_capture.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/offload_codex_proxy_capture.sh",
+      "sha256": "f5e5f6d36aa8e26a70ba5ee167cb7b62857de91bc8171d5e20badc2b4e292121",
+      "bytes": 31535
+    },
+    {
+      "path": "code/posthoc_diversity.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/posthoc_diversity.py",
+      "sha256": "1694070b295411b83f546fe361d8a69836d37d6b551c463af3ba1703611bbb36",
+      "bytes": 743
+    },
+    {
+      "path": "code/promoab_serve_only.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/promoab_serve_only.sh",
+      "sha256": "be202c7da90e6a4d51e942f904fada6a3f7cb45347f2163a95e599a0afd2d57f",
+      "bytes": 13906
+    },
+    {
+      "path": "code/promoab_tail10_serve_only.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/promoab_tail10_serve_only.sh",
+      "sha256": "dfc9558868f0739787f64fcce5ba099227cc95c17dff12f33a3973b48f40c024",
+      "bytes": 22560
+    },
+    {
+      "path": "code/promoab_tail10_swe.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/promoab_tail10_swe.sh",
+      "sha256": "552f82fc48320cde9d0fbc5f8eb9801ba8f6f58eb7a30329e2014d575c66864e",
+      "bytes": 22507
+    },
+    {
+      "path": "code/q1v3_posthoc.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/q1v3_posthoc.py",
+      "sha256": "d7ae6be673ad0773185cb8f9ebc018a309501b678e125bcd33c6cb542dc2ddb7",
+      "bytes": 4662
+    },
+    {
+      "path": "code/queue.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/queue.sh",
+      "sha256": "194698dfaa79bbf66e7a75e08203fa41b50e9131a4bc6f7840175670cbef235b",
+      "bytes": 1405
+    },
+    {
+      "path": "code/queue_v2.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/queue_v2.sh",
+      "sha256": "34e3229fe9ef54ff277fe2179368422bda412a74c51552a81d0653c6592370f5",
+      "bytes": 1711
+    },
+    {
+      "path": "code/replay.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/replay.py",
+      "sha256": "0db092d9408ab40ccdc423d6c511a850022263bf669f4258b36c9ce2ec504abb",
+      "bytes": 6616
+    },
+    {
+      "path": "code/replay_ids.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/replay_ids.py",
+      "sha256": "e5e35b324a151e837b5f7b67fa21aaf4e1a4ffcbb4f6cf598c4e4343d92eb5e8",
+      "bytes": 3388
+    },
+    {
+      "path": "code/run_native_arm.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/run_native_arm.sh",
+      "sha256": "aec38fe09c3f4b09a4073ce16935b3f6f462ad9d6ce67dbec5483196e39946f5",
+      "bytes": 2716
+    },
+    {
+      "path": "code/run_swe_capture.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/run_swe_capture.sh",
+      "sha256": "5caabad1f788899a9beca07068231a0f33962a8096aeea5c65594362a2ab935c",
+      "bytes": 3767
+    },
+    {
+      "path": "code/run_swe_native_arm.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/run_swe_native_arm.sh",
+      "sha256": "551d12e98a806e4110d833c8897a17cc4f358d843d20fc30a7005c712432827c",
+      "bytes": 3674
+    },
+    {
+      "path": "code/run_swe_tree_arm.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/run_swe_tree_arm.sh",
+      "sha256": "8d17786735b8e536d3cee1c5fdd74bf3f856691b259e87268097720e1d2dc10f",
+      "bytes": 1831
+    },
+    {
+      "path": "code/run_tree_arm.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/run_tree_arm.sh",
+      "sha256": "e7369a7938c3e5f639e70d16e9b71ca934aed0d54618108041f8e45e1cc58ec8",
+      "bytes": 5774
+    },
+    {
+      "path": "code/serve_native.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/serve_native.sh",
+      "sha256": "c0482d72ba5d38d1e0f63ab22fcd6266f7d7c2e168f5502cd1585eb6eae43a3d",
+      "bytes": 4538
+    },
+    {
+      "path": "code/swe_pooled.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/swe_pooled.py",
+      "sha256": "9357b737ed48b1290e78d091b658b08d052dba463ef88564f3ca0cea9f92e5ed",
+      "bytes": 1528
+    },
+    {
+      "path": "code/swe_summary.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/swe_summary.py",
+      "sha256": "96e9e83753cd7353299237974f2ac553cd734756845b4b94ba402af727e5e09a",
+      "bytes": 1919
+    },
+    {
+      "path": "code/sweep_queue.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/sweep_queue.sh",
+      "sha256": "aa8debdb1ab898d48028d4ac011b374dbc2906d82478a5eac1b1f1b3cb94b395",
+      "bytes": 2000
+    },
+    {
+      "path": "code/sweep_queue2.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/sweep_queue2.sh",
+      "sha256": "65795ee5c26d989e3efc274a8c80fe01a7cfef3b8205c79c4191d7d76f4be1b2",
+      "bytes": 1321
+    },
+    {
+      "path": "code/sweep_queue3.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/sweep_queue3.sh",
+      "sha256": "bb809900a81362a588f71c48b90a75c82d9cfd0c4c220efbb4d8dde5d7811e2e",
+      "bytes": 1411
+    },
+    {
+      "path": "code/sweep_queue4.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/sweep_queue4.sh",
+      "sha256": "0d5938d8ac4bcc8cccf942b9340ef5f72d6ef7c7d350ffe4040020ffd90b55ed",
+      "bytes": 1358
+    },
+    {
+      "path": "code/sweep_queue5.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/sweep_queue5.sh",
+      "sha256": "92a9174266c2ec064db178917ceaa0ccc18d0329a66a2b398821496f664d1232",
+      "bytes": 684
+    },
+    {
+      "path": "code/sweep_queue6.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/sweep_queue6.sh",
+      "sha256": "e86380610aa17ac456569b7d8f5ebc220b9ac44fa9a02006892daaa61ff69a55",
+      "bytes": 1354
+    },
+    {
+      "path": "code/sweep_summary.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/sweep_summary.py",
+      "sha256": "720a390dd7e004d0fa0d52325e3610b797a68349ad74e745ce0da270138502a4",
+      "bytes": 3073
+    },
+    {
+      "path": "code/tokenize_corpus.py",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/tokenize_corpus.py",
+      "sha256": "d24e3c283716734e384a7b4a82fce556125aa6c702e5a682769874f283df3960",
+      "bytes": 1208
+    },
+    {
+      "path": "code/v2exp_pipeline.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/v2exp_pipeline.sh",
+      "sha256": "10d11f7aa4b6e260048d200aeee6eff1be7e654a2036008d4a7584013d421742",
+      "bytes": 2458
+    },
+    {
+      "path": "code/v2exp_pipeline_after.sh",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/v2exp_pipeline_after.sh",
+      "sha256": "59a8a179113a8c135dd2c7933050c4a6850b006dd26d8fd4402dda04122cbee7",
+      "bytes": 1577
+    },
+    {
+      "path": "raw/confirm/MANIFEST.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/MANIFEST.json",
+      "sha256": "0dc24282bb12bf485b9b3529475c6d909718e452ca3607719efd5a4fba27bb80",
+      "bytes": 8772
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790974250261.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790974250261.json",
+      "sha256": "cf5b556890ebd660101694ca708c89eb89f7370c9c5402bf1d0b883183d19a0f",
+      "bytes": 99276
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790974308675.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790974308675.json",
+      "sha256": "0ee5ad5332cc6753278a18be733f47abde5df022825f3132051685ec7a4b4c9a",
+      "bytes": 103084
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790974311895.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790974311895.json",
+      "sha256": "d31db160c77fcfa251add832668f72ae868c9320724a35a4ac4869e65d501261",
+      "bytes": 105507
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790974370080.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790974370080.json",
+      "sha256": "dbe7cec803104e5d95f5c92e541a03f6d983814f8020bdcbe7fc2fa69f639de1",
+      "bytes": 119610
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790974394553.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790974394553.json",
+      "sha256": "8529e9072a0a16a839e9e81624b19c6086aaa1b1ae6698689e87608c444ba1d0",
+      "bytes": 124943
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790974487166.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790974487166.json",
+      "sha256": "a60134260942f579baf904cf9b3e77cc0fe0775711da037b74bd0c75cda36eea",
+      "bytes": 145810
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790974866602.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790974866602.json",
+      "sha256": "4ca369b99219945dbe6f8cb6324cc52cecc687e13aeaef04f5ec26cbca672733",
+      "bytes": 103173
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790974885053.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790974885053.json",
+      "sha256": "e83d6e5218d9725b3390303913511f0d5412a2510ea1bdbfa8cb16d6976d1ec4",
+      "bytes": 123463
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790974892777.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790974892777.json",
+      "sha256": "fd9345a2f1b65469993e3091d175aa0767d9b6a92972064b9d1672a8f236ab4c",
+      "bytes": 125060
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790974896570.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790974896570.json",
+      "sha256": "8a50f992386d75e49aab861c484c39fbf509665cc6a2c5b39deab36d15ece7b9",
+      "bytes": 125958
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790974913908.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790974913908.json",
+      "sha256": "06e2846d744bb7115713be1e540aa4412fd32f614ca15ebaefbc69242d6d1191",
+      "bytes": 132843
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790974964496.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790974964496.json",
+      "sha256": "30dcbf4db209d97065578505df65a7391af797649322e68bad5e511c8188bd33",
+      "bytes": 100846
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790974976564.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790974976564.json",
+      "sha256": "b88387564b3c315198c641af34fdc402f962901305a890269037897364a39461",
+      "bytes": 104004
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975092393.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975092393.json",
+      "sha256": "7c36fe1b2288cd86094f6069e71571d89e395bc7407ed62f9397652161a9b8af",
+      "bytes": 127022
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975098057.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975098057.json",
+      "sha256": "45ae71d61e50d740e09ba00b5e486f420f8d089001831c54a6576df6e937565b",
+      "bytes": 127959
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975105189.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975105189.json",
+      "sha256": "c8ee574f43efd6b055d07a8659ba04586cb2b16ce72e99f44e383ea4b0126a4e",
+      "bytes": 129677
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975109944.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975109944.json",
+      "sha256": "94519c097f8616879b30d746322592a6a205e6a027471c03c0a2cd9961d7e6f1",
+      "bytes": 131289
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975121133.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975121133.json",
+      "sha256": "01c2e290e1244402e2254ecc21f9b3149fc861452eaebc3d6528fb370de85c32",
+      "bytes": 135931
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975145832.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975145832.json",
+      "sha256": "897dce3582b024b34ddea0a7f056a2abc2eb91c99875e3a35a98e97fb41e5dfc",
+      "bytes": 141622
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975170245.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975170245.json",
+      "sha256": "cbd78f61d49dd8a8af72a25a308f4c755451707d81c132da4127489f824c0d79",
+      "bytes": 146824
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975192276.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975192276.json",
+      "sha256": "8706b82f96e8718631317f0f8dfffb4c2c80056e259e37a408a90e76b0fe2463",
+      "bytes": 150199
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975206432.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975206432.json",
+      "sha256": "358b85946e3df1e9aa7749edeed3a2a5e0da9afe8cb54cc4aa1b7d961bffdfc3",
+      "bytes": 153051
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975225764.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975225764.json",
+      "sha256": "7880bad4a9fdf835875b7330fb28ccb196b8adaf6e8ecf43ae69303ebfe7a866",
+      "bytes": 155596
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975287592.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975287592.json",
+      "sha256": "a340fd0a5bf37f17beb7db84e8ed3bef89a263dcc0cb661e348de11c72e82956",
+      "bytes": 100651
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975303755.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975303755.json",
+      "sha256": "257c122f3472ccbed52d292607e559b9ad62e87131c8ab9cd121f5c7192dc245",
+      "bytes": 105401
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975319745.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975319745.json",
+      "sha256": "8d78d090ba7279862cc2b5e776f52c5ce3aaeafc80ae6a085daf9e0deb482fdc",
+      "bytes": 115758
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975324377.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975324377.json",
+      "sha256": "d498fbb0c3612d6d2654d84814f12b4620f2ea7c69f680887f2306fc1dfa2105",
+      "bytes": 119629
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975334814.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975334814.json",
+      "sha256": "f9d14c674f2ae8dddb01300dc11aa732cdb88a8fdb5e24b972a0e5158f2e2f3f",
+      "bytes": 126883
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975360551.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975360551.json",
+      "sha256": "3fab7db6de97632caf5ed17d9ab7023a573712f2149388e34f351b0f091c7e26",
+      "bytes": 131939
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975372794.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975372794.json",
+      "sha256": "f5844006954742b2ad3a2ad7f0147a5f62857a477c1b393c8bf5a284116b3812",
+      "bytes": 147981
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975454147.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975454147.json",
+      "sha256": "83bde665aafea7ac79af756a303ff8ba3f445393125b4cb7a025e6953a0386c8",
+      "bytes": 165719
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975574802.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975574802.json",
+      "sha256": "6e4b29ae1497f55c45345eaecd619c521526b352b5f968d02f746d9271b4b501",
+      "bytes": 193772
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975599672.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975599672.json",
+      "sha256": "77266b9261c7f6a29ef6e745ba8532f8ff293ceaf517625dcae8b6224486badb",
+      "bytes": 194529
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975643650.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975643650.json",
+      "sha256": "b6db7d6ff91ad8e974283f0553a3fed2772bbd03cd7443adba0cb8181a5b0e4c",
+      "bytes": 203582
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975651599.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975651599.json",
+      "sha256": "aae323661b6f15a326e3779b71c91dd6f4135280464cdfe48922ec07c18b08c2",
+      "bytes": 205093
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975672507.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975672507.json",
+      "sha256": "cffc2f9029b200247f0184a7b858bc66f7e43e6443eb92b9c069a9485f4f14fa",
+      "bytes": 208033
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975687891.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975687891.json",
+      "sha256": "bd1148cf6f2ee7e6fac70e78445661c56de7c22656734f679d03db48c97dfbe2",
+      "bytes": 210336
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975708683.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975708683.json",
+      "sha256": "05ad7ccdf986ba19f874471837aeabfe1df2f242e83f9de15110633aa32e1690",
+      "bytes": 215073
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975725293.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975725293.json",
+      "sha256": "ee99e6f06c17ef4d88ecb5729e7ec44d15e14054e55f704748ff9a5569dccea2",
+      "bytes": 217840
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975753660.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975753660.json",
+      "sha256": "1da86096c19db66a58fb24161e4e7eef1bb3dfb4cef66c3febe90da537e72767",
+      "bytes": 226498
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975761394.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975761394.json",
+      "sha256": "f2665948c7059dab1b1b3c8e3534f25656344dbb0637c729ae5251800cce62b0",
+      "bytes": 228263
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975853966.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975853966.json",
+      "sha256": "185c11b4df37a9cae680a10798fdcc7d548a0919afcbfa84761df3535404cc3b",
+      "bytes": 179483
+    },
+    {
+      "path": "raw/confirm/requests/chatreq_1790975902484.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/confirm/requests/chatreq_1790975902484.json",
+      "sha256": "4bec7e7cc1f1115e8c4628b73579f7958ebc24c58f07cb1d8f0e2026e9b25c49",
+      "bytes": 184905
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787597282944.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787597282944.json",
+      "sha256": "d4e5f7cfc482dfe2df198671954644ab4c729912024ed81bf8fa81a9218ae099",
+      "bytes": 101023
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787597307152.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787597307152.json",
+      "sha256": "b55a5ee3d49c0e1561345cde3f4eb1a3c35948238a5015b3c8b7a14b618c1600",
+      "bytes": 103277
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787597309713.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787597309713.json",
+      "sha256": "6280eaf5dab39e25123e4b43d2c5396e47309c68705f85128d484f18a74ffe9a",
+      "bytes": 107148
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787597402587.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787597402587.json",
+      "sha256": "9430beb63692c079880eac3226d2038f5c41a8052b573d478569c5c021253ecd",
+      "bytes": 130101
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787597404989.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787597404989.json",
+      "sha256": "f0d59347716d8869129b534c091e03db1863e7f0d9dbdcfa841e373efb363973",
+      "bytes": 130905
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787597407027.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787597407027.json",
+      "sha256": "d4adc3183aa66721a326798525790da8d2c6ab32c511fdf2ef77a8785e65e838",
+      "bytes": 134792
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787597607897.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787597607897.json",
+      "sha256": "8cf1135033d0962cf33e92f41b576cc7c592b44661d85287364e9f32fa57f27a",
+      "bytes": 214828
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787597624780.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787597624780.json",
+      "sha256": "cfe0891cf6465dd80ee6f3dca8012c72f0ae514c51a588f65516cf5c2a41117c",
+      "bytes": 217222
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787597632003.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787597632003.json",
+      "sha256": "852e8b6e9f19ac9647e0546320a3130ebe7b742312116577e2e9f97ae6b2746d",
+      "bytes": 219069
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787597735027.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787597735027.json",
+      "sha256": "299929a7f12c5e5a29a435a4a8eda424dd2c3052e0ce3ba10a2c8221452c3e06",
+      "bytes": 243920
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787597739493.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787597739493.json",
+      "sha256": "b07b7d4edbc47710dbfb688c64eefe8ade57bfa8d22c24b4e05d04035acf632d",
+      "bytes": 245300
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787597743386.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787597743386.json",
+      "sha256": "68bc40faafdf6f19ad25959f627eb8425439bcd656e686d783e89ebf91f719d2",
+      "bytes": 248747
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787597754195.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787597754195.json",
+      "sha256": "62664aad114be3fc88f9f463f27394d5ae5c365469c3745f7cfcf4af5a31cfba",
+      "bytes": 251981
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787597853247.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787597853247.json",
+      "sha256": "3de2bc6653f7bd8285871a4fa564411dfed3b41a894f8ce13afa880318fefe2e",
+      "bytes": 273232
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787597882520.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787597882520.json",
+      "sha256": "f991f4d6db15caa37f974bc6fc2d4879dfdd5a1942c9e6b6e1aea4bd5b60d1a2",
+      "bytes": 281635
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787598364750.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787598364750.json",
+      "sha256": "9673c0a8e7c00eb9f32c270fa717b478989cad77fd91c2f36d752aa4afc62f23",
+      "bytes": 383113
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787598371432.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787598371432.json",
+      "sha256": "944eafa3abc8f1b378550f33e4bdcb79a9e9a278768aab563a70067433f6341b",
+      "bytes": 386075
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787598460010.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787598460010.json",
+      "sha256": "7900cd88d4ce435604e8e3d6b2910cca264082868ea0d8d483e5c91676007b0d",
+      "bytes": 405778
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787598478475.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787598478475.json",
+      "sha256": "bb455896cc4b5e59c21239be962470d8e7a22da5dd5ae8063cb9b5ca6ac05b11",
+      "bytes": 322314
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787598678577.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787598678577.json",
+      "sha256": "6b97af1077a7a73eae492b84dd89677434d4b996ba938885e555ac484d508bf3",
+      "bytes": 169481
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787598702721.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787598702721.json",
+      "sha256": "82971ed74545f36d23bdc4c7201c5d0c1e62f01467e38b57fa8763df53b3c8a7",
+      "bytes": 183828
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787598726220.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787598726220.json",
+      "sha256": "6f7e9c8328c8e8af3b22d68c88efa90e935fc2c8792d09a0adaf21f63a13e997",
+      "bytes": 186945
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787598736476.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787598736476.json",
+      "sha256": "b0ea2db0c53d8e546a0666cc949bdb86787c89b6ec7582b740ef60523f604179",
+      "bytes": 189645
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787598744134.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787598744134.json",
+      "sha256": "981d032a641e422c033aa2827800dd6e8b399ee163e393ea978780044136ac50",
+      "bytes": 192177
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787598769288.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787598769288.json",
+      "sha256": "f3b63d5c302503f1e79d4f4de669b277765ff7b66390289cf47e34f24eb3a799",
+      "bytes": 137255
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787598851731.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787598851731.json",
+      "sha256": "154b40aa23275b1c5ce31085fefe47f0229ced22ebbf40e751fb11401871bb30",
+      "bytes": 150338
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787598884943.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787598884943.json",
+      "sha256": "2d3c05b02cbc9cdeb4395fb6fae07a7be3361f3161d969f1770506bf05d67dfd",
+      "bytes": 155028
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787598953625.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787598953625.json",
+      "sha256": "fa69d3ed4ec346e7568a645b5e0ad8a65ae3c6d6d0ba51f4e032729cdd1bdc06",
+      "bytes": 100271
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787598972855.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787598972855.json",
+      "sha256": "f8578a2e3594611321a9f5b59108873de9b4fdc5e869f2e91f914a630a5c87fd",
+      "bytes": 103076
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787598990204.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787598990204.json",
+      "sha256": "39fdf9d1dc1dca0f03414068d645c20b374312f84c92bcc84321a00fd9a99d9b",
+      "bytes": 112967
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787599034884.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787599034884.json",
+      "sha256": "6c7111c3674afbf0e63418b4921d8809f9296c6dc77e57999881063d5d9c787e",
+      "bytes": 127593
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787599048795.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787599048795.json",
+      "sha256": "3d1bfe215712d41b27caa2525b5fa89df46be1416e6de6475ec24f707a758aa2",
+      "bytes": 131201
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787599111706.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787599111706.json",
+      "sha256": "7823b99ca52a912a4db6cd788bf2ce6f5752e29c70d5ee594777fc879666b4f7",
+      "bytes": 147552
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787599178913.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787599178913.json",
+      "sha256": "10b704019d327635149267badf9a282d7bf85c6d996e3380453db61ea30a593c",
+      "bytes": 162143
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787599200933.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787599200933.json",
+      "sha256": "46c320932f897df8c6acb2a8db89faec3693da460360d91888c08f6a85c3d2b9",
+      "bytes": 169007
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787599268104.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787599268104.json",
+      "sha256": "ac042b75fbb3de355677709f201b782ace782591bf7f04fde98cb6806329fd3e",
+      "bytes": 183157
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787599273545.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787599273545.json",
+      "sha256": "dbceba20b0cdcaf4eebcdc2dee1367cd55e0f6fb597648c2a8f1f5857f07055f",
+      "bytes": 187244
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787599333657.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787599333657.json",
+      "sha256": "3b32a6cc0ceb2afdd421312989295e9273ad82b973a25250fc73232da54c556a",
+      "bytes": 198551
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787599345801.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787599345801.json",
+      "sha256": "2fa80754aed21be61b58ee5bf52d0da71f9d002060f51cb0cd5833c2f08307fc",
+      "bytes": 201293
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787599361377.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787599361377.json",
+      "sha256": "cddc2a8fdc03c747317da483453caad77883af26499e455f502127ae9cc8c370",
+      "bytes": 204877
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787599365100.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787599365100.json",
+      "sha256": "a3278f58aca31b0df8ac5e188cc76b47f64837772371faede42f00f4629e7c18",
+      "bytes": 205806
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787599372806.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787599372806.json",
+      "sha256": "cb8d6a9e9a6400e8992c083cdd68da9361223b814ee0f377007e3c3474e1c4d7",
+      "bytes": 208248
+    },
+    {
+      "path": "raw/corpus/requests/chatreq_1787599377763.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/corpus/requests/chatreq_1787599377763.json",
+      "sha256": "e729edc2dc31373788a60ecfc98997fd15445ed2d59ba6d6329048d205ad03ab",
+      "bytes": 209438
+    },
+    {
+      "path": "raw/replay/mtp5-cfM1-sampled-20261002T214201Z/container_id.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-cfM1-sampled-20261002T214201Z/container_id.txt",
+      "sha256": "3661849a8d71c0b3eacfb6319ab6e3811a166aef1365d00696989d7acbdb9c70",
+      "bytes": 65
+    },
+    {
+      "path": "raw/replay/mtp5-cfM1-sampled-20261002T214201Z/driver.log",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-cfM1-sampled-20261002T214201Z/driver.log",
+      "sha256": "fbbaf1825b65ee42d50b823636dba6b1afb538310f7e1eb35888ff14fd103c70",
+      "bytes": 4378
+    },
+    {
+      "path": "raw/replay/mtp5-cfM1-sampled-20261002T214201Z/engine.log",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-cfM1-sampled-20261002T214201Z/engine.log",
+      "sha256": "457e524c056e38c01da3f4439900fe1aeb71e5d4a96f64bfac62c9ef773ff897",
+      "bytes": 87505
+    },
+    {
+      "path": "raw/replay/mtp5-cfM1-sampled-20261002T214201Z/free_before_boot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-cfM1-sampled-20261002T214201Z/free_before_boot.txt",
+      "sha256": "d4b933c472806b715f725ae40bd931b807457ef86e65a0e3eb2db4d3fc326976",
+      "bytes": 207
+    },
+    {
+      "path": "raw/replay/mtp5-cfM1-sampled-20261002T214201Z/metrics_boot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-cfM1-sampled-20261002T214201Z/metrics_boot.txt",
+      "sha256": "4bd8bbfd1573c06f6a8add4cfca3aa51720660a8d880e7de572bff33f954c4a6",
+      "bytes": 57848
+    },
+    {
+      "path": "raw/replay/mtp5-cfM1-sampled-20261002T214201Z/metrics_end.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-cfM1-sampled-20261002T214201Z/metrics_end.txt",
+      "sha256": "aac7d527633ad58e94810617b2e0afa6897b178ae13a90bfa7a80881b63449bb",
+      "bytes": 60413
+    },
+    {
+      "path": "raw/replay/mtp5-cfM1-sampled-20261002T214201Z/replay.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-cfM1-sampled-20261002T214201Z/replay.jsonl",
+      "sha256": "7446cb4660318c1567e7edcea14a4296072a6f7d71836818430eeb0b451abe6f",
+      "bytes": 117249
+    },
+    {
+      "path": "raw/replay/mtp5-cfM1-sampled-20261002T214201Z/serve_cmd.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-cfM1-sampled-20261002T214201Z/serve_cmd.txt",
+      "sha256": "877d361964a474ee1aa30d7b4ad5b90dfe8d38254fb1727d11a12a4075a4568a",
+      "bytes": 819
+    },
+    {
+      "path": "raw/replay/mtp5-cfM1-sampled-20261002T214201Z/warmup.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-cfM1-sampled-20261002T214201Z/warmup.jsonl",
+      "sha256": "50690eee098b4e4ec93890654d44538ba8dafbe2e229b122bd19c80fd7f02d11",
+      "bytes": 1639
+    },
+    {
+      "path": "raw/replay/mtp5-swM1-sampled-20261002T191918Z/container_id.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-swM1-sampled-20261002T191918Z/container_id.txt",
+      "sha256": "e25fc082acc97058e538f045acea8df8c64c88d4017bdf90df5f48972b0d21b8",
+      "bytes": 65
+    },
+    {
+      "path": "raw/replay/mtp5-swM1-sampled-20261002T191918Z/driver.log",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-swM1-sampled-20261002T191918Z/driver.log",
+      "sha256": "0f9b52a450cb643e4736cc20c7a1bd834eb2094b3b8047f65fb07bfa9e49c28c",
+      "bytes": 4377
+    },
+    {
+      "path": "raw/replay/mtp5-swM1-sampled-20261002T191918Z/engine.log",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-swM1-sampled-20261002T191918Z/engine.log",
+      "sha256": "7e6c9cc25f04f6d56f48521cb07dc1c75172bc412170ff67e2b24dd4958f4626",
+      "bytes": 97761
+    },
+    {
+      "path": "raw/replay/mtp5-swM1-sampled-20261002T191918Z/free_before_boot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-swM1-sampled-20261002T191918Z/free_before_boot.txt",
+      "sha256": "d4b933c472806b715f725ae40bd931b807457ef86e65a0e3eb2db4d3fc326976",
+      "bytes": 207
+    },
+    {
+      "path": "raw/replay/mtp5-swM1-sampled-20261002T191918Z/metrics_boot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-swM1-sampled-20261002T191918Z/metrics_boot.txt",
+      "sha256": "9293518cfb0f10c78a1beb1de7e5febce2ad0f4a67a73f53c3972d6f9d53324d",
+      "bytes": 57825
+    },
+    {
+      "path": "raw/replay/mtp5-swM1-sampled-20261002T191918Z/metrics_end.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-swM1-sampled-20261002T191918Z/metrics_end.txt",
+      "sha256": "96ac642c55547a72de076554100250a0c19b7231be43317ff9310689b4b97f63",
+      "bytes": 60408
+    },
+    {
+      "path": "raw/replay/mtp5-swM1-sampled-20261002T191918Z/replay.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-swM1-sampled-20261002T191918Z/replay.jsonl",
+      "sha256": "736f03ffa4547d4053aec41c7da0ee27a86218f31920e4e5a8cea57ddd99e3d6",
+      "bytes": 129053
+    },
+    {
+      "path": "raw/replay/mtp5-swM1-sampled-20261002T191918Z/serve_cmd.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-swM1-sampled-20261002T191918Z/serve_cmd.txt",
+      "sha256": "877d361964a474ee1aa30d7b4ad5b90dfe8d38254fb1727d11a12a4075a4568a",
+      "bytes": 819
+    },
+    {
+      "path": "raw/replay/mtp5-swM1-sampled-20261002T191918Z/warmup.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/mtp5-swM1-sampled-20261002T191918Z/warmup.jsonl",
+      "sha256": "95324ce543717da2f791e9474db7705d1b68da4ee0fe4dcd424287232eff20e3",
+      "bytes": 1620
+    },
+    {
+      "path": "raw/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/container_id.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/container_id.txt",
+      "sha256": "ca2d169a0f9b9627c75be17d677039afbd7c8fd1007dc5d9d4f5dcc31f13dcac",
+      "bytes": 65
+    },
+    {
+      "path": "raw/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/driver.log",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/driver.log",
+      "sha256": "79d10409a73ece1fc62bea370dd4633dddb052735ad6e2aaeddb6fd566ebebb3",
+      "bytes": 4812
+    },
+    {
+      "path": "raw/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/engine.log",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/engine.log",
+      "sha256": "31e4f837cd732097686c7c22d3304a64d5e0c8c2ffd091f120aa9f81a394a4ad",
+      "bytes": 95525
+    },
+    {
+      "path": "raw/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/free_before_boot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/free_before_boot.txt",
+      "sha256": "3280c0755609084aeb728878ef2c6f92d5081f3eca0984426c22f84c39072858",
+      "bytes": 207
+    },
+    {
+      "path": "raw/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/metrics_boot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/metrics_boot.txt",
+      "sha256": "1ac8c3047d90d22452b1b53cebba04b3b6c58ae113e622c22a1abc94f2ff6f33",
+      "bytes": 63608
+    },
+    {
+      "path": "raw/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/metrics_end.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/metrics_end.txt",
+      "sha256": "e86710a8b2cebd42e267acca937a3eb2007d4f0377c6658c97139fb96b520ded",
+      "bytes": 83894
+    },
+    {
+      "path": "raw/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/replay.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/replay.jsonl",
+      "sha256": "a61254a17fc3a4ca3f52e9525cd6fcdf34240742ce86ce23d45ed9036029ae7b",
+      "bytes": 93703
+    },
+    {
+      "path": "raw/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/serve_cmd.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/serve_cmd.txt",
+      "sha256": "c3dcf294c57eac6ced0d613ac427d1b8a60fdb5ba02a256839e8e98c8a35a093",
+      "bytes": 667
+    },
+    {
+      "path": "raw/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/warmup.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-cfS1-sampled-20261002T220022Z/warmup.jsonl",
+      "sha256": "876e011dc6be52f767d5bf7df548d1c5d6eca2bdb1a56a7e6e3f2623bb20c9e7",
+      "bytes": 852
+    },
+    {
+      "path": "raw/replay/tree-cfT1-sampled-20261002T212537Z/gate_launch.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-cfT1-sampled-20261002T212537Z/gate_launch.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "raw/replay/tree-cfT1-sampled-20261002T212537Z/hydra27_fixed32_promoab_C_v2expcfT1sampled20261002T212537Z.json.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-cfT1-sampled-20261002T212537Z/hydra27_fixed32_promoab_C_v2expcfT1sampled20261002T212537Z.json.156",
+      "sha256": "709e7fe3fcd8dda2bd36ff97bd92e5d3da797b0ad4421383dace60411867dbe6",
+      "bytes": 938
+    },
+    {
+      "path": "raw/replay/tree-cfT1-sampled-20261002T212537Z/hydra27_fixed32_promoab_C_v2expcfT1sampled20261002T212537Z.json.samples.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-cfT1-sampled-20261002T212537Z/hydra27_fixed32_promoab_C_v2expcfT1sampled20261002T212537Z.json.samples.156",
+      "sha256": "8f7fb4e98099016b732c2d2e4621f6cbcb2ab4eeae914bbd8de8d2e7fe8a04e8",
+      "bytes": 177726
+    },
+    {
+      "path": "raw/replay/tree-cfT1-sampled-20261002T212537Z/hydra27_fixed32_promoab_C_v2expcfT1sampled20261002T212537Z_cfwd.json.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-cfT1-sampled-20261002T212537Z/hydra27_fixed32_promoab_C_v2expcfT1sampled20261002T212537Z_cfwd.json.156",
+      "sha256": "a32306731a12823d7d3ad72605cfa444769d8c22769abd1bad9564142a0fd23f",
+      "bytes": 109
+    },
+    {
+      "path": "raw/replay/tree-cfT1-sampled-20261002T212537Z/hydra27_fixed32_promoab_C_v2expcfT1sampled20261002T212537Z_dfwd.json.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-cfT1-sampled-20261002T212537Z/hydra27_fixed32_promoab_C_v2expcfT1sampled20261002T212537Z_dfwd.json.156",
+      "sha256": "5506025d1d850ac5c1f5923eda513521eaca821ee10f404b26bf092123be0643",
+      "bytes": 108
+    },
+    {
+      "path": "raw/replay/tree-cfT1-sampled-20261002T212537Z/metrics_boot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-cfT1-sampled-20261002T212537Z/metrics_boot.txt",
+      "sha256": "17c2424e8d838cce1b808ffad1012876c7a125c26b92233e19eec8487cec9bd8",
+      "bytes": 66578
+    },
+    {
+      "path": "raw/replay/tree-cfT1-sampled-20261002T212537Z/metrics_end.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-cfT1-sampled-20261002T212537Z/metrics_end.txt",
+      "sha256": "f6358542da1182fe7e8c5211317764f78e358532d42833410465a18c822637dc",
+      "bytes": 68397
+    },
+    {
+      "path": "raw/replay/tree-cfT1-sampled-20261002T212537Z/replay.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-cfT1-sampled-20261002T212537Z/replay.jsonl",
+      "sha256": "f4cf3ae4ca3547a658c43294a9550b7158f7352756a2f6754f25c7cbe1782df1",
+      "bytes": 141758
+    },
+    {
+      "path": "raw/replay/tree-cfT1-sampled-20261002T212537Z/serve_runroot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-cfT1-sampled-20261002T212537Z/serve_runroot.txt",
+      "sha256": "cdc7fc50c1aad3079a879964a1b5421c0d9dcac0115e16e55608ec11a9b14bc8",
+      "bytes": 108
+    },
+    {
+      "path": "raw/replay/tree-cfT1-sampled-20261002T212537Z/warmup.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-cfT1-sampled-20261002T212537Z/warmup.jsonl",
+      "sha256": "a3b07c7a57bc578fe9740a49d71341867d8b464b9acbb1730aa72e5061c70636",
+      "bytes": 1663
+    },
+    {
+      "path": "raw/replay/tree-swA1-sampled-20261002T181143Z/gate_launch.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swA1-sampled-20261002T181143Z/gate_launch.txt",
+      "sha256": "6dec8a3ba37faf656f32f5a4a6be779b13667dfc515bfcda74eaa4a2f25c247a",
+      "bytes": 100
+    },
+    {
+      "path": "raw/replay/tree-swA1-sampled-20261002T181143Z/hydra27_fixed32_promoab_G_v2expswA1sampled20261002T181143Z.json.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swA1-sampled-20261002T181143Z/hydra27_fixed32_promoab_G_v2expswA1sampled20261002T181143Z.json.156",
+      "sha256": "4ad9e222267fca8f713900b493f21b6b86eb87f11fed261c2e5e99814f80ef91",
+      "bytes": 935
+    },
+    {
+      "path": "raw/replay/tree-swA1-sampled-20261002T181143Z/hydra27_fixed32_promoab_G_v2expswA1sampled20261002T181143Z.json.samples.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swA1-sampled-20261002T181143Z/hydra27_fixed32_promoab_G_v2expswA1sampled20261002T181143Z.json.samples.156",
+      "sha256": "e7057ca036f1724c448352022b2171a1e543ad6f8f479bd5be2d748c64afb417",
+      "bytes": 313267
+    },
+    {
+      "path": "raw/replay/tree-swA1-sampled-20261002T181143Z/hydra27_fixed32_promoab_G_v2expswA1sampled20261002T181143Z_cfwd.json.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swA1-sampled-20261002T181143Z/hydra27_fixed32_promoab_G_v2expswA1sampled20261002T181143Z_cfwd.json.156",
+      "sha256": "ac071f7d79174cb05f4faa7cd5cd6530b9e5f17eb5c44f56f03041702e36b7d9",
+      "bytes": 109
+    },
+    {
+      "path": "raw/replay/tree-swA1-sampled-20261002T181143Z/hydra27_fixed32_promoab_G_v2expswA1sampled20261002T181143Z_dfwd.json.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swA1-sampled-20261002T181143Z/hydra27_fixed32_promoab_G_v2expswA1sampled20261002T181143Z_dfwd.json.156",
+      "sha256": "46469d69adfa8d41eae9b8e0110b37985c94ef4212b2e03e7cf6e3c0004f4c3d",
+      "bytes": 108
+    },
+    {
+      "path": "raw/replay/tree-swA1-sampled-20261002T181143Z/metrics_boot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swA1-sampled-20261002T181143Z/metrics_boot.txt",
+      "sha256": "600515a3240515ab7403a54dd7dee1651c584dfd0ab0159754fe7d0c55565bad",
+      "bytes": 66568
+    },
+    {
+      "path": "raw/replay/tree-swA1-sampled-20261002T181143Z/metrics_end.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swA1-sampled-20261002T181143Z/metrics_end.txt",
+      "sha256": "c58075d61cecd014ba9f009371b146216a7bb1db1b8652d3eb646c9b042d1a96",
+      "bytes": 68396
+    },
+    {
+      "path": "raw/replay/tree-swA1-sampled-20261002T181143Z/replay.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swA1-sampled-20261002T181143Z/replay.jsonl",
+      "sha256": "f24809ebf410c983cfa83afa053a71b5822b31ab45b1a3bd70f6f2008f13f09a",
+      "bytes": 151688
+    },
+    {
+      "path": "raw/replay/tree-swA1-sampled-20261002T181143Z/serve_runroot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swA1-sampled-20261002T181143Z/serve_runroot.txt",
+      "sha256": "6ba2fd18f5a5cfbd4e9b9d7dfef693172c5c93ce6ff917504680473387d10583",
+      "bytes": 108
+    },
+    {
+      "path": "raw/replay/tree-swA1-sampled-20261002T181143Z/warmup.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swA1-sampled-20261002T181143Z/warmup.jsonl",
+      "sha256": "407f35034c9cd0348bf6008618f200e797ba0241a996d154cd4103fd2ea6e7a7",
+      "bytes": 1556
+    },
+    {
+      "path": "raw/replay/tree-swAF1-sampled-20261002T201229Z/gate_launch.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAF1-sampled-20261002T201229Z/gate_launch.txt",
+      "sha256": "6dec8a3ba37faf656f32f5a4a6be779b13667dfc515bfcda74eaa4a2f25c247a",
+      "bytes": 100
+    },
+    {
+      "path": "raw/replay/tree-swAF1-sampled-20261002T201229Z/gatefix_run.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAF1-sampled-20261002T201229Z/gatefix_run.txt",
+      "sha256": "3beae6b38553a909c7697fafa69aa3b9aec77ed773cb96cc85aa6fb2b4dde476",
+      "bytes": 69
+    },
+    {
+      "path": "raw/replay/tree-swAF1-sampled-20261002T201229Z/hydra27_fixed32_promoab_G_gfswAF120261002T201229Z.json.157",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAF1-sampled-20261002T201229Z/hydra27_fixed32_promoab_G_gfswAF120261002T201229Z.json.157",
+      "sha256": "244b801dd975bc76ad6276844b6148b32078e7eaab9808c60bb71ae5e26a9d1e",
+      "bytes": 936
+    },
+    {
+      "path": "raw/replay/tree-swAF1-sampled-20261002T201229Z/hydra27_fixed32_promoab_G_gfswAF120261002T201229Z.json.samples.157",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAF1-sampled-20261002T201229Z/hydra27_fixed32_promoab_G_gfswAF120261002T201229Z.json.samples.157",
+      "sha256": "f4c7dd1282e5c89f6ed54fabcabaad1e5c98504ad9920f583a62f3ef0a893fee",
+      "bytes": 282374
+    },
+    {
+      "path": "raw/replay/tree-swAF1-sampled-20261002T201229Z/hydra27_fixed32_promoab_G_gfswAF120261002T201229Z_cfwd.json.157",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAF1-sampled-20261002T201229Z/hydra27_fixed32_promoab_G_gfswAF120261002T201229Z_cfwd.json.157",
+      "sha256": "12d316b343aff87c26751576e3018eae827c2517f0a565dfbcdcfaa0a845fce0",
+      "bytes": 109
+    },
+    {
+      "path": "raw/replay/tree-swAF1-sampled-20261002T201229Z/hydra27_fixed32_promoab_G_gfswAF120261002T201229Z_dfwd.json.157",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAF1-sampled-20261002T201229Z/hydra27_fixed32_promoab_G_gfswAF120261002T201229Z_dfwd.json.157",
+      "sha256": "558c39b05daabbbecf1863c3a75ce7caad537e7d47f98cf61cb405854fe112e4",
+      "bytes": 108
+    },
+    {
+      "path": "raw/replay/tree-swAF1-sampled-20261002T201229Z/metrics_boot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAF1-sampled-20261002T201229Z/metrics_boot.txt",
+      "sha256": "e0d5e0bbb71395ba455a747e165ab88ba94689969b00760e44de2d709de437b9",
+      "bytes": 66565
+    },
+    {
+      "path": "raw/replay/tree-swAF1-sampled-20261002T201229Z/metrics_end.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAF1-sampled-20261002T201229Z/metrics_end.txt",
+      "sha256": "af282a55e2357d461bf8444d5e9dbf52373e3fffe0550127858562027205c78b",
+      "bytes": 68386
+    },
+    {
+      "path": "raw/replay/tree-swAF1-sampled-20261002T201229Z/replay.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAF1-sampled-20261002T201229Z/replay.jsonl",
+      "sha256": "ebe0812698324521b8342796ecf87346cfc7f6c654aae241ea7b45a44df603b2",
+      "bytes": 166785
+    },
+    {
+      "path": "raw/replay/tree-swAF1-sampled-20261002T201229Z/serve_runroot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAF1-sampled-20261002T201229Z/serve_runroot.txt",
+      "sha256": "5ffd160c38b92f0c6f609551f6fcdc167d5908ff31dc65bebf555331718d1bef",
+      "bytes": 136
+    },
+    {
+      "path": "raw/replay/tree-swAF1-sampled-20261002T201229Z/warmup.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAF1-sampled-20261002T201229Z/warmup.jsonl",
+      "sha256": "4dab2f0f83d4c55354dbe8af7845b6444643651ca4beee6b5c3062a77060ff0d",
+      "bytes": 2400
+    },
+    {
+      "path": "raw/replay/tree-swAFdiag-sampled-20261002T194109Z/gate_launch.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAFdiag-sampled-20261002T194109Z/gate_launch.txt",
+      "sha256": "6dec8a3ba37faf656f32f5a4a6be779b13667dfc515bfcda74eaa4a2f25c247a",
+      "bytes": 100
+    },
+    {
+      "path": "raw/replay/tree-swAFdiag-sampled-20261002T194109Z/gatefix_run.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAFdiag-sampled-20261002T194109Z/gatefix_run.txt",
+      "sha256": "a565c85daf55978a10ed0175feab09a9476485b04ad50698db9fb147ce22cc89",
+      "bytes": 72
+    },
+    {
+      "path": "raw/replay/tree-swAFdiag-sampled-20261002T194109Z/hydra27_fixed32_promoab_G_gfswAFdiag20261002T194109Z.json.158",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAFdiag-sampled-20261002T194109Z/hydra27_fixed32_promoab_G_gfswAFdiag20261002T194109Z.json.158",
+      "sha256": "c934c93a3b8c9d7eb71366a650989d7038bdb45f03b3e436d4a0c42c6fdaaa72",
+      "bytes": 932
+    },
+    {
+      "path": "raw/replay/tree-swAFdiag-sampled-20261002T194109Z/hydra27_fixed32_promoab_G_gfswAFdiag20261002T194109Z.json.samples.158",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAFdiag-sampled-20261002T194109Z/hydra27_fixed32_promoab_G_gfswAFdiag20261002T194109Z.json.samples.158",
+      "sha256": "801d6ec4beae12c080fd2658547ba6c500c1c326a3ac89aeb3cffe4475aba27a",
+      "bytes": 20900
+    },
+    {
+      "path": "raw/replay/tree-swAFdiag-sampled-20261002T194109Z/hydra27_fixed32_promoab_G_gfswAFdiag20261002T194109Z_cfwd.json.158",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAFdiag-sampled-20261002T194109Z/hydra27_fixed32_promoab_G_gfswAFdiag20261002T194109Z_cfwd.json.158",
+      "sha256": "44a521caa24bac18083fb93151afaa8208759fe7e50f808f337abc485d02fca5",
+      "bytes": 108
+    },
+    {
+      "path": "raw/replay/tree-swAFdiag-sampled-20261002T194109Z/hydra27_fixed32_promoab_G_gfswAFdiag20261002T194109Z_dfwd.json.158",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAFdiag-sampled-20261002T194109Z/hydra27_fixed32_promoab_G_gfswAFdiag20261002T194109Z_dfwd.json.158",
+      "sha256": "4e747881926a9f2e8a8db0e9f9c7fbe960ef71f9228db71cad8108916ba11772",
+      "bytes": 106
+    },
+    {
+      "path": "raw/replay/tree-swAFdiag-sampled-20261002T194109Z/metrics_boot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAFdiag-sampled-20261002T194109Z/metrics_boot.txt",
+      "sha256": "22fb0b558ff61246419e3d3100d7248d56a90d6591b81d5deb26e647b784a881",
+      "bytes": 66564
+    },
+    {
+      "path": "raw/replay/tree-swAFdiag-sampled-20261002T194109Z/metrics_end.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAFdiag-sampled-20261002T194109Z/metrics_end.txt",
+      "sha256": "d8a13764dadb6bfd1457c61c22c48f99a4c79da35aceeaa1b25cd6dd9135795f",
+      "bytes": 68139
+    },
+    {
+      "path": "raw/replay/tree-swAFdiag-sampled-20261002T194109Z/replay.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAFdiag-sampled-20261002T194109Z/replay.jsonl",
+      "sha256": "751b13baa461121df33a446450a52072524bac6db97101962d0b84984e2e678f",
+      "bytes": 21916
+    },
+    {
+      "path": "raw/replay/tree-swAFdiag-sampled-20261002T194109Z/serve_runroot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAFdiag-sampled-20261002T194109Z/serve_runroot.txt",
+      "sha256": "2bd62a3214aa6ea867f300abcae416b02cf8e5fa62d858019a2d2e01b0932fd6",
+      "bytes": 142
+    },
+    {
+      "path": "raw/replay/tree-swAFdiag-sampled-20261002T194109Z/trace.158.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAFdiag-sampled-20261002T194109Z/trace.158.jsonl",
+      "sha256": "042fbcd80a46ce83efc6cde8771dab0e48f2a42b8a032ee079219bf3a55c0e03",
+      "bytes": 600811
+    },
+    {
+      "path": "raw/replay/tree-swAFdiag-sampled-20261002T194109Z/warmup.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swAFdiag-sampled-20261002T194109Z/warmup.jsonl",
+      "sha256": "bc79c5e6d685d191a95975fbdba9ef5f60b1daa815925fe1c3cb7c5604803198",
+      "bytes": 1587
+    },
+    {
+      "path": "raw/replay/tree-swG1-sampled-20261002T172743Z/gate_launch.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swG1-sampled-20261002T172743Z/gate_launch.txt",
+      "sha256": "aafd0a8f3a2acf04d1d32d880bbee9cb99b3d8fa896261a91906d9b45556aae8",
+      "bytes": 105
+    },
+    {
+      "path": "raw/replay/tree-swG1-sampled-20261002T172743Z/hydra27_fixed32_promoab_G_v2expswG1sampled20261002T172743Z.json.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swG1-sampled-20261002T172743Z/hydra27_fixed32_promoab_G_v2expswG1sampled20261002T172743Z.json.156",
+      "sha256": "357305cd2a11b21ab7c4c5e06b2da4f42739dd3a06713b14a791eb2d1ceebd03",
+      "bytes": 936
+    },
+    {
+      "path": "raw/replay/tree-swG1-sampled-20261002T172743Z/hydra27_fixed32_promoab_G_v2expswG1sampled20261002T172743Z.json.samples.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swG1-sampled-20261002T172743Z/hydra27_fixed32_promoab_G_v2expswG1sampled20261002T172743Z.json.samples.156",
+      "sha256": "93145e39045a0295ee9933ed9c47b16a3e743f2f7ddabd982774f8af6377db12",
+      "bytes": 271943
+    },
+    {
+      "path": "raw/replay/tree-swG1-sampled-20261002T172743Z/hydra27_fixed32_promoab_G_v2expswG1sampled20261002T172743Z_cfwd.json.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swG1-sampled-20261002T172743Z/hydra27_fixed32_promoab_G_v2expswG1sampled20261002T172743Z_cfwd.json.156",
+      "sha256": "6f643174d03f6e9e876282d6606c62ba5aedeacdddbf510feb1a54a75559413e",
+      "bytes": 109
+    },
+    {
+      "path": "raw/replay/tree-swG1-sampled-20261002T172743Z/hydra27_fixed32_promoab_G_v2expswG1sampled20261002T172743Z_dfwd.json.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swG1-sampled-20261002T172743Z/hydra27_fixed32_promoab_G_v2expswG1sampled20261002T172743Z_dfwd.json.156",
+      "sha256": "ead63e81665c274b2b8deb9bdcd55ebd5e15e5bfb83476cd37b9a067dc65402a",
+      "bytes": 108
+    },
+    {
+      "path": "raw/replay/tree-swG1-sampled-20261002T172743Z/metrics_boot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swG1-sampled-20261002T172743Z/metrics_boot.txt",
+      "sha256": "4d71c31c1c0936404ef64f21986a9d83c57e463568e20b2f73cb89751baccd4f",
+      "bytes": 66572
+    },
+    {
+      "path": "raw/replay/tree-swG1-sampled-20261002T172743Z/metrics_end.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swG1-sampled-20261002T172743Z/metrics_end.txt",
+      "sha256": "b62e1f47d42bf72a9be1f725d5d4dfff3c7c16dfc1a941a595e92530282a8742",
+      "bytes": 68390
+    },
+    {
+      "path": "raw/replay/tree-swG1-sampled-20261002T172743Z/replay.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swG1-sampled-20261002T172743Z/replay.jsonl",
+      "sha256": "ba621d65166fec444adbf0d855b2290d6992446d0bd9a1ac746e43017e039d49",
+      "bytes": 161712
+    },
+    {
+      "path": "raw/replay/tree-swG1-sampled-20261002T172743Z/serve_runroot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swG1-sampled-20261002T172743Z/serve_runroot.txt",
+      "sha256": "a77c26da0f2a5fc6d00e05803e1eb235686ac2ee5733f7d680993d5fe995d7cf",
+      "bytes": 108
+    },
+    {
+      "path": "raw/replay/tree-swG1-sampled-20261002T172743Z/warmup.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swG1-sampled-20261002T172743Z/warmup.jsonl",
+      "sha256": "e298418cc1c07e015e52498da24fce972931204ab9e35a222310d283e6f200bb",
+      "bytes": 1665
+    },
+    {
+      "path": "raw/replay/tree-swGF1-sampled-20261002T194930Z/gate_launch.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swGF1-sampled-20261002T194930Z/gate_launch.txt",
+      "sha256": "aafd0a8f3a2acf04d1d32d880bbee9cb99b3d8fa896261a91906d9b45556aae8",
+      "bytes": 105
+    },
+    {
+      "path": "raw/replay/tree-swGF1-sampled-20261002T194930Z/gatefix_run.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swGF1-sampled-20261002T194930Z/gatefix_run.txt",
+      "sha256": "ecfd1599241ab8632cff228498c129da3ede29a7ac296c9ca07e1343dc8511d7",
+      "bytes": 69
+    },
+    {
+      "path": "raw/replay/tree-swGF1-sampled-20261002T194930Z/hydra27_fixed32_promoab_G_gfswGF120261002T194930Z.json.157",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swGF1-sampled-20261002T194930Z/hydra27_fixed32_promoab_G_gfswGF120261002T194930Z.json.157",
+      "sha256": "b95cd45f90d2650f816c0b7950e2910388469b0b540fe1aee496815f92193ad8",
+      "bytes": 937
+    },
+    {
+      "path": "raw/replay/tree-swGF1-sampled-20261002T194930Z/hydra27_fixed32_promoab_G_gfswGF120261002T194930Z.json.samples.157",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swGF1-sampled-20261002T194930Z/hydra27_fixed32_promoab_G_gfswGF120261002T194930Z.json.samples.157",
+      "sha256": "5e45b979d9294fd05ca78ca3bc3d346cce464fa327560cec714af89958849814",
+      "bytes": 301343
+    },
+    {
+      "path": "raw/replay/tree-swGF1-sampled-20261002T194930Z/hydra27_fixed32_promoab_G_gfswGF120261002T194930Z_cfwd.json.157",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swGF1-sampled-20261002T194930Z/hydra27_fixed32_promoab_G_gfswGF120261002T194930Z_cfwd.json.157",
+      "sha256": "d09340d6477b89c2d0a36db73616534f5e9f5f803f9ccbf5c689d25829f7b891",
+      "bytes": 109
+    },
+    {
+      "path": "raw/replay/tree-swGF1-sampled-20261002T194930Z/hydra27_fixed32_promoab_G_gfswGF120261002T194930Z_dfwd.json.157",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swGF1-sampled-20261002T194930Z/hydra27_fixed32_promoab_G_gfswGF120261002T194930Z_dfwd.json.157",
+      "sha256": "ae01195a15bcd1a61dbab36690ec1b8b58e7fb0d4e5c7fee4dec56bef538169c",
+      "bytes": 107
+    },
+    {
+      "path": "raw/replay/tree-swGF1-sampled-20261002T194930Z/metrics_boot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swGF1-sampled-20261002T194930Z/metrics_boot.txt",
+      "sha256": "5c7c3b4f7a9daa0aecb2d97c682f036b993f4040f020fbb72a6a24c04f22711f",
+      "bytes": 66569
+    },
+    {
+      "path": "raw/replay/tree-swGF1-sampled-20261002T194930Z/metrics_end.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swGF1-sampled-20261002T194930Z/metrics_end.txt",
+      "sha256": "705a95368594e6028d26d3e09d5839e6208e7b507782a01d5e546724ae5d5ab1",
+      "bytes": 68407
+    },
+    {
+      "path": "raw/replay/tree-swGF1-sampled-20261002T194930Z/replay.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swGF1-sampled-20261002T194930Z/replay.jsonl",
+      "sha256": "2fd982733b0d17cebc110ba47c10b0399e41b2a14e22dcd31356999e3d397172",
+      "bytes": 172298
+    },
+    {
+      "path": "raw/replay/tree-swGF1-sampled-20261002T194930Z/serve_runroot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swGF1-sampled-20261002T194930Z/serve_runroot.txt",
+      "sha256": "27029b1d19e0ccc0059f5b00a7b4581be8fd47971d950cadb7db5daa08ce24cf",
+      "bytes": 136
+    },
+    {
+      "path": "raw/replay/tree-swGF1-sampled-20261002T194930Z/warmup.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swGF1-sampled-20261002T194930Z/warmup.jsonl",
+      "sha256": "75440055f39e1565eac9933baad37c655ddede2be5f971448c719b4e0dc62021",
+      "bytes": 2369
+    },
+    {
+      "path": "raw/replay/tree-swT1-sampled-20261002T174951Z/gate_launch.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT1-sampled-20261002T174951Z/gate_launch.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "raw/replay/tree-swT1-sampled-20261002T174951Z/hydra27_fixed32_promoab_C_v2expswT1sampled20261002T174951Z.json.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT1-sampled-20261002T174951Z/hydra27_fixed32_promoab_C_v2expswT1sampled20261002T174951Z.json.156",
+      "sha256": "3469138c4b2ae7bc6ba3497c8e38697ba065efce335d56e5ed25974ae2ca2fff",
+      "bytes": 936
+    },
+    {
+      "path": "raw/replay/tree-swT1-sampled-20261002T174951Z/hydra27_fixed32_promoab_C_v2expswT1sampled20261002T174951Z.json.samples.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT1-sampled-20261002T174951Z/hydra27_fixed32_promoab_C_v2expswT1sampled20261002T174951Z.json.samples.156",
+      "sha256": "fb5fa4ce8cd245a78104ff1033c3f2610dcbf6ba0ae077759806ab55c6b3a664",
+      "bytes": 273121
+    },
+    {
+      "path": "raw/replay/tree-swT1-sampled-20261002T174951Z/hydra27_fixed32_promoab_C_v2expswT1sampled20261002T174951Z_cfwd.json.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT1-sampled-20261002T174951Z/hydra27_fixed32_promoab_C_v2expswT1sampled20261002T174951Z_cfwd.json.156",
+      "sha256": "1b5033d0d4b5cac1c0901a6aa3a042b4c803ddfe1a28a86b78fb085418d7a1d7",
+      "bytes": 109
+    },
+    {
+      "path": "raw/replay/tree-swT1-sampled-20261002T174951Z/hydra27_fixed32_promoab_C_v2expswT1sampled20261002T174951Z_dfwd.json.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT1-sampled-20261002T174951Z/hydra27_fixed32_promoab_C_v2expswT1sampled20261002T174951Z_dfwd.json.156",
+      "sha256": "6839f2923e5e8c29466e2be896d188aa8f94e917b3a75cf8faae1869755cc3a9",
+      "bytes": 108
+    },
+    {
+      "path": "raw/replay/tree-swT1-sampled-20261002T174951Z/metrics_boot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT1-sampled-20261002T174951Z/metrics_boot.txt",
+      "sha256": "d48c1a4f0ba8e2ec8e39ce66180a0c007a9bcce6a12f74cd4aa7a555c513122e",
+      "bytes": 66565
+    },
+    {
+      "path": "raw/replay/tree-swT1-sampled-20261002T174951Z/metrics_end.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT1-sampled-20261002T174951Z/metrics_end.txt",
+      "sha256": "f2cb1eabdfee6219ea2ee9bcc6696cefe0a4a48c55be61e20f8425178b8dbb7e",
+      "bytes": 68388
+    },
+    {
+      "path": "raw/replay/tree-swT1-sampled-20261002T174951Z/replay.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT1-sampled-20261002T174951Z/replay.jsonl",
+      "sha256": "9e58a3341e4cc1dbaf7c0fc5fe866a5b7bedb65370ab9332179bcc0a04c7022e",
+      "bytes": 170269
+    },
+    {
+      "path": "raw/replay/tree-swT1-sampled-20261002T174951Z/serve_runroot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT1-sampled-20261002T174951Z/serve_runroot.txt",
+      "sha256": "fa1d9b5eb5c9bffad1ab18117862899ca7ab3e4ce27d2c8df9aa534cb77910ab",
+      "bytes": 108
+    },
+    {
+      "path": "raw/replay/tree-swT1-sampled-20261002T174951Z/warmup.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT1-sampled-20261002T174951Z/warmup.jsonl",
+      "sha256": "4c61352a4ea7bf8416f032c97c75baff45eb2b5a9d42c61bab138b190ffaf667",
+      "bytes": 2380
+    },
+    {
+      "path": "raw/replay/tree-swT2-sampled-20261002T185812Z/gate_launch.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT2-sampled-20261002T185812Z/gate_launch.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "raw/replay/tree-swT2-sampled-20261002T185812Z/hydra27_fixed32_promoab_C_v2expswT2sampled20261002T185812Z.json.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT2-sampled-20261002T185812Z/hydra27_fixed32_promoab_C_v2expswT2sampled20261002T185812Z.json.156",
+      "sha256": "30b1a533a1694bc9325af822d9aa6613dd6b91ba2a45d6d143566a223f8b0336",
+      "bytes": 937
+    },
+    {
+      "path": "raw/replay/tree-swT2-sampled-20261002T185812Z/hydra27_fixed32_promoab_C_v2expswT2sampled20261002T185812Z.json.samples.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT2-sampled-20261002T185812Z/hydra27_fixed32_promoab_C_v2expswT2sampled20261002T185812Z.json.samples.156",
+      "sha256": "02b80a46acad318491dc4c0054a9ab05746c62a75c6dc3d91eee35643a861e81",
+      "bytes": 260528
+    },
+    {
+      "path": "raw/replay/tree-swT2-sampled-20261002T185812Z/hydra27_fixed32_promoab_C_v2expswT2sampled20261002T185812Z_cfwd.json.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT2-sampled-20261002T185812Z/hydra27_fixed32_promoab_C_v2expswT2sampled20261002T185812Z_cfwd.json.156",
+      "sha256": "cf535cb9073b5c142e36d64b86b6c98f0f774bf87f0afc32bc475febaa3917a4",
+      "bytes": 109
+    },
+    {
+      "path": "raw/replay/tree-swT2-sampled-20261002T185812Z/hydra27_fixed32_promoab_C_v2expswT2sampled20261002T185812Z_dfwd.json.156",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT2-sampled-20261002T185812Z/hydra27_fixed32_promoab_C_v2expswT2sampled20261002T185812Z_dfwd.json.156",
+      "sha256": "29f6e65fec970b2b7a991fb7c20a7587613ddee7055ec0fe5f31a4afe0dd9c2f",
+      "bytes": 108
+    },
+    {
+      "path": "raw/replay/tree-swT2-sampled-20261002T185812Z/metrics_boot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT2-sampled-20261002T185812Z/metrics_boot.txt",
+      "sha256": "62c93132ca15522a723003f540f37e104f6b9c226522b55d029de2e58ed22403",
+      "bytes": 66590
+    },
+    {
+      "path": "raw/replay/tree-swT2-sampled-20261002T185812Z/metrics_end.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT2-sampled-20261002T185812Z/metrics_end.txt",
+      "sha256": "b05cf6b774ac406b60d06bae17f5dd9b4050b34133b8a3881b889939a16b255c",
+      "bytes": 68396
+    },
+    {
+      "path": "raw/replay/tree-swT2-sampled-20261002T185812Z/replay.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT2-sampled-20261002T185812Z/replay.jsonl",
+      "sha256": "1b83eb713ca65f359562f4008149e8c606b90ffc3a0339c4ebd387891cb9fb5b",
+      "bytes": 165001
+    },
+    {
+      "path": "raw/replay/tree-swT2-sampled-20261002T185812Z/serve_runroot.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT2-sampled-20261002T185812Z/serve_runroot.txt",
+      "sha256": "de6d63b6d1b4a0d9de160ada11d31d0dfc3d705c3d4a8c52dd36ab541c36b48f",
+      "bytes": 108
+    },
+    {
+      "path": "raw/replay/tree-swT2-sampled-20261002T185812Z/warmup.jsonl",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-swT2-sampled-20261002T185812Z/warmup.jsonl",
+      "sha256": "7065aecf9199fa185efb3cfe0294c7353b10e0ba5c25964c31be1ebd9fbaac0c",
+      "bytes": 2355
+    },
+    {
+      "path": "raw/workload/deploy_speed_promoab_C.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/deploy_speed_promoab_C.json",
+      "sha256": "d2dfebb5691d9f4d820ef6b859bf781c88d8c0c1df8795540304f91f380a3904",
+      "bytes": 19904
+    },
+    {
+      "path": "raw/workload/lumotree/metrics_after_swe.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/metrics_after_swe.txt",
+      "sha256": "29350663f4417b3f5e6e617d1e313a6958385abc166f772e0b7e18d8ae42cc12",
+      "bytes": 68639
+    },
+    {
+      "path": "raw/workload/lumotree/metrics_before_swe.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/metrics_before_swe.txt",
+      "sha256": "f6a6ffa0b7ddded6f8c588a608cf3abbe28b6c4546cc4754b06c708135439448",
+      "bytes": 66566
+    },
+    {
+      "path": "raw/workload/sglang_eagle_s7_d8/metrics_after_swe.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/swe/sglang-s7k1d8-20261002T030040Z/metrics_after_swe.txt",
+      "sha256": "070f1f05c3d8301197197290a7490b21e4fc87c296275a8e2bdca8b5d53b6e20",
+      "bytes": 84097
+    },
+    {
+      "path": "raw/workload/sglang_eagle_s7_d8/metrics_before_swe.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/swe/sglang-s7k1d8-20261002T030040Z/metrics_before_swe.txt",
+      "sha256": "d5fcf07525d1d33a43935a2fba112ada550102e0ed7515f97827e3c7dd633af7",
+      "bytes": 63626
+    },
+    {
+      "path": "raw/workload/vllm_mtp5/metrics_after_swe.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/swe/mtp5-20261002T011503Z/metrics_after_swe.txt",
+      "sha256": "5ede23ea3e801f9b464f4e82099cc948c9086ef2a65ca65b30dbe8c53c6fe06c",
+      "bytes": 60629
+    },
+    {
+      "path": "raw/workload/vllm_mtp5/metrics_before_swe.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-runs/swe/mtp5-20261002T011503Z/metrics_before_swe.txt",
+      "sha256": "3695ba7f7226a64506c8e3ed5cdcdd09a9183833c84e6c2a9f48fd8f1d864cda",
+      "bytes": 57827
+    },
+    {
+      "path": "summaries/confirm_generalization_20261002.md",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/confirm_generalization_20261002.md",
+      "sha256": "e5dd3aeb26b05ee014d0713edb9f20cc18ca67cea859a4cfdb229d4c5b0232ac",
+      "bytes": 2032
+    },
+    {
+      "path": "summaries/confirm_set_20261002/MANIFEST.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/confirm_set_20261002/MANIFEST.json",
+      "sha256": "0dc24282bb12bf485b9b3529475c6d909718e452ca3607719efd5a4fba27bb80",
+      "bytes": 8772
+    },
+    {
+      "path": "summaries/dist_v3_20261002/VERDICT.md",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/dist_v3_20261002/VERDICT.md",
+      "sha256": "ff6b6c08e3a3cf42b20e278c57e31f7a3ab32226ede9f620eb7eccd2b67533ec",
+      "bytes": 1083
+    },
+    {
+      "path": "summaries/dist_v3_20261002/analyze.log",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/dist_v3_20261002/analyze.log",
+      "sha256": "b83473d99e6c4ccfc8e58817b3e9775c3268023519e31aa7d4e3df87c4139a43",
+      "bytes": 5719
+    },
+    {
+      "path": "summaries/dist_v3_20261002/boots.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/dist_v3_20261002/boots.json",
+      "sha256": "c222e54d9f3536c8f0b934336a654a2eb54e839fefd114cb6426cb0208c17686",
+      "bytes": 1361
+    },
+    {
+      "path": "summaries/dist_v3_20261002/dist_v3_results.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/dist_v3_20261002/dist_v3_results.json",
+      "sha256": "6660f2f37e9d6cb7447fa119adc17267b4bd37a83a6963dbfea2cd4ade3595e7",
+      "bytes": 6915
+    },
+    {
+      "path": "summaries/drafter_pass_sweep_20261002.md",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/drafter_pass_sweep_20261002.md",
+      "sha256": "d48b65dff603156b40937d7981803208dada066231b4113f1820da648987e8a8",
+      "bytes": 3839
+    },
+    {
+      "path": "summaries/q1v3_v2_20261002/POSTHOC.md",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/q1v3_v2_20261002/POSTHOC.md",
+      "sha256": "d9d6516e1b1c70d658d8b4ae5153e1183e6240846672e128b40003ce32bb0a4f",
+      "bytes": 3965
+    },
+    {
+      "path": "summaries/q1v3_v2_20261002/POSTHOC_percell.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/q1v3_v2_20261002/POSTHOC_percell.json",
+      "sha256": "65f4cfd73329707d83b5c10685bbb8c6c7b6100e7405d9f56c128ac6a9f58609",
+      "bytes": 82175
+    },
+    {
+      "path": "summaries/q1v3_v2_20261002/STAGE-A.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/q1v3_v2_20261002/STAGE-A.json",
+      "sha256": "0b70be60c3630a0aa29d126bd03a7338d884d17ea1af18fb740285e7ef180fbc",
+      "bytes": 182
+    },
+    {
+      "path": "summaries/q1v3_v2_20261002/STAGE-B.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/q1v3_v2_20261002/STAGE-B.json",
+      "sha256": "a7d0b909c6a9003a158060dde7e543676137f762459d9660e7a6f383ca7a2f8a",
+      "bytes": 182
+    },
+    {
+      "path": "summaries/q1v3_v2_20261002/STAGE-CAND.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/q1v3_v2_20261002/STAGE-CAND.json",
+      "sha256": "69acb51247777cbf4989ac4b36f87b3cff33ac6d92298a060faf24bfdf95cb3d",
+      "bytes": 188
+    },
+    {
+      "path": "summaries/q1v3_v2_20261002/STAGE-P.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/q1v3_v2_20261002/STAGE-P.json",
+      "sha256": "a43fdfa946d2214d1c8cdab90c1e3b86c6efb7215602c327e75e0a5e8eef19b6",
+      "bytes": 182
+    },
+    {
+      "path": "summaries/q1v3_v2_20261002/STAGE-V.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/q1v3_v2_20261002/STAGE-V.json",
+      "sha256": "1657b127766cece68a598d6b50e5526785f610ac412141f0de3373a75445ebf9",
+      "bytes": 182
+    },
+    {
+      "path": "summaries/q1v3_v2_20261002/VERDICT.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/q1v3_v2_20261002/VERDICT.json",
+      "sha256": "2645809402b5c56878d598ea5c170a64ab8edb9d4d7f63644aaa9c9af8d1ea7b",
+      "bytes": 334027
+    },
+    {
+      "path": "summaries/q1v3_v2_20261002/VERDICT.md",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/q1v3_v2_20261002/VERDICT.md",
+      "sha256": "074d99f5ffa74bab091bccf75b629cb5d9b7d186b48be55d25414b53c8f20683",
+      "bytes": 2493
+    },
+    {
+      "path": "summaries/q1v3_v2_20261002/driver.log.txt",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/q1v3_v2_20261002/driver.log.txt",
+      "sha256": "2e2c3e2690658fbe7839e8c1d55a6eb4d1404dc3eae7dc08a17779e182fa7e5a",
+      "bytes": 18754
+    },
+    {
+      "path": "summaries/swe_study_20261001.json",
+      "remote": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/results/swe_study_20261001.json",
+      "sha256": "6adf254fb9b557958e8647627b4c5fe688ba13d60a22c0e9a5f0d39ca8b0f28a",
+      "bytes": 3500
+    }
+  ]
+}

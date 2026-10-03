@@ -1,0 +1,30 @@
+{
+  "positive_registry_counts": [
+    48,
+    16
+  ],
+  "native_name_sets_equal": true,
+  "negative_controls": [
+    "missing_mtp",
+    "missing_target",
+    "extra_mtp",
+    "unbound",
+    "wrong_prefix",
+    "generator_base_changed",
+    "generator_count_4",
+    "generator_count_6",
+    "generator_output_conflict"
+  ],
+  "generated_inverse_exact": true,
+  "generated_patch_inverse_and_ast": true,
+  "hashes": {
+    "tools/q1_candidate_layer_registry_v1.py": "3c6c4c06cffbc41a7ff7d6755b623cb01450f3fa66040b50e6c044ecdf269783",
+    "tools/q1_candidate_hooks_v1_2.py": "af4595e4b03d8f5c44a5ae0bca5125677e00b827666d8062fec7b43fdb2ac516",
+    "tools/q1_patch_candidate_v1_2.py": "e0418f8f544ae88cc1be445db98d20bcc97272fbe4363f945c22127e25771c8c",
+    "tools/q1_candidate_job_v1_2.py": "2560965556574b53cbcc6b914f00119723d3407af8763d77d34af0e362d731b7",
+    "tools/run_q1_candidate_stage1_v2_7.sh": "08190b5176bb1ba81a8b55c69ab54412f4ea5afc9bd2708a105de8f1af639591",
+    "tools/q1_make_diag_launcher_v3_2_1.py": "330e9134ef7c983dda9d654ceeee063fb1899b3a43b0220bfbb7a767e3d7796e",
+    "tools/generated/fr14_leg3_launch_nomiddleware.q1diag.v3_2_1.sh": "c5b2d634f7fe036e9d532f38a35f9e724c1d2f7085e5b6c32d74423f1bcff909",
+    "tools/q1_candidate_hooks_v3.py": "72a399fcddb80255d7eff9b650cc3deb88a1a48d4ee1f814721a3b297fb5bdf2"
+  }
+}

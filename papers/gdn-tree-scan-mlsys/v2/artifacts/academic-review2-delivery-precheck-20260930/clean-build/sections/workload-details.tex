@@ -1,0 +1,23 @@
+Table~\ref{tab:swe-tasks} reports the ten-task deployment, with one attempt per task. All attempts use tools and produce nonempty patches. Agent time includes model service and tool execution, excluding server startup and subsequent evaluation.
+
+\begin{table}[!htbp]
+\caption{Task-level results for the ten-task \sys{} deployment. Task IDs have prefix \texttt{astropy\_\_astropy-}. Durations are rounded to minutes.}
+\label{tab:swe-tasks}
+\centering\small
+\begin{tabular}{@{}lrl@{}}
+\toprule
+Task suffix & Agent time (min) & Evaluation \\
+\midrule
+13977 & 25 & Failed tests \\
+14096 & 23 & Resolved \\
+14182 & 7 & Failed tests \\
+14309 & 2 & Resolved \\
+14365 & 7 & Failed tests \\
+14369 & 28 & Resolved \\
+14508 & 41 & Resolved \\
+14539 & 19 & Resolved \\
+14598 & 26 & Failed tests \\
+14995 & 5 & Resolved \\
+\bottomrule
+\end{tabular}
+\end{table}

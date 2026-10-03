@@ -1,0 +1,19 @@
+{
+  "runner_source_sha256": "ab27fc9cf680bdd2b7c3ad994fc9f7bffe0f9ff1b0f35dc2cc36018f364dea29",
+  "actual_runner_sha256": "ab27fc9cf680bdd2b7c3ad994fc9f7bffe0f9ff1b0f35dc2cc36018f364dea29",
+  "actual_helper_map": {
+    "q1_component_runner_v2_1.py": "b7241e8b925a9b5d9e921673d84f84b701f9b1404ed71d727bc5ade37d15cb65",
+    "q1_oracle.py": "645944992d116115976eea5a925f1ebf9a23562d8d8a3ebd693116daa0ec5d82",
+    "q1_2b_fixtures.py": "eba98d7ccabf8ad602b5274070b92b901ee571af1fba48a82bcf3297cb220039",
+    "q1_policy_evaluator.py": "84830b2a9f4bcacc6344c2762af027a178bd3267e369d41fde06cd3a08f332d6",
+    "q1_policy_evaluator_v2.py": "a65f492b0b576221de328852c84b5b367a89dca2d542b9dde7062c410ed3ff0f",
+    "q1_policy_evaluator_v2_1.py": "2d25e4c9bb669a4c66a5a3caa5093b614e5aba136eb424efb0e410f0b0b61061",
+    "q1_bf16_ulp.py": "b6158c4de483dc014c52df8b1a9ad9158aa8a25a5810c749a4a172325a12e00c",
+    "scripts/fr13_fixed32_topology.py": "c02703b4bc777e5edfa01623b446a289cba8f1023e31d8efd7fc8126666b38bc",
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "d9dd0c697b466180ab5d834a52555c1516edb534e0a3d1bd3094e0d1489c24c8",
+    "src/lumo_flywheel_serving/fr13_tree_conv_fused.py": "564c7dc7ba61ccd9579f2fb7a4af9a2cdaaa1753dfb98434f2011457d90d9a6e"
+  },
+  "expected_helper_key": "q1_component_runner_v2_2.py",
+  "failure_reproduced": true,
+  "no_torch_or_candidate_execution": true
+}

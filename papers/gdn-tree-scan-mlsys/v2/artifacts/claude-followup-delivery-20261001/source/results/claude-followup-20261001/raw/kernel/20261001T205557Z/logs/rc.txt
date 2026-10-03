@@ -1,0 +1,10 @@
+lumo_fixed32 rc=0 elapsed_s=18
+weaver_author_default rc=0 elapsed_s=13
+weaver_aligned_local rc=0 elapsed_s=11
+treewy_author_default rc=0 elapsed_s=17
+naive_native_paths rc=0 elapsed_s=19
+naive_torch_node rc=0 elapsed_s=26
+sweep_lumo_generic rc=0 elapsed_s=8
+sweep_authors rc=0 elapsed_s=13
+sweep_naive rc=0 elapsed_s=33
+in_container rc=0

@@ -1,0 +1,722 @@
+[
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/container.cid",
+    "local_path": "raw/kernel/20261001T205557Z/container.cid",
+    "bytes": 65,
+    "sha256": "ff0e78f3d939ae135d2d82241d30e26fb82ed7e49cd3bb1b3b7a9756a8a984f9"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/container.log",
+    "local_path": "raw/kernel/20261001T205557Z/container.log",
+    "bytes": 495,
+    "sha256": "baa7b42bb527a9e56cdfba7b93036882d13baef7ad3773bad41e6ca57f7c064a"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/container_state.txt",
+    "local_path": "raw/kernel/20261001T205557Z/container_state.txt",
+    "bytes": 9,
+    "sha256": "32779b56ce350383fa43554a96a682f15dd00058df7e187fbe28c5087c5e265f"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/docker_run.txt",
+    "local_path": "raw/kernel/20261001T205557Z/docker_run.txt",
+    "bytes": 1576,
+    "sha256": "930bedf0b5c9ddb96dfb0aab040aa5c1cdac29ca84af72effe43d33413ba5b11"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/launch.json",
+    "local_path": "raw/kernel/20261001T205557Z/launch.json",
+    "bytes": 488,
+    "sha256": "8b5263c14a9e01e697a7dd10973b45ee03f4ddbb826a9cccbe3213acae510290"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/launcher.log",
+    "local_path": "raw/kernel/20261001T205557Z/launcher.log",
+    "bytes": 874,
+    "sha256": "7ee4bafffb6e13f835cace7590d7f7de542f42966ff389a988c8043c3356f658"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/logs/aggregate.log",
+    "local_path": "raw/kernel/20261001T205557Z/logs/aggregate.log",
+    "bytes": 4461,
+    "sha256": "4dcc2caf797b693abf8eb18ad888764f39c6c385bd9e7e5d41badcf1a43d0b76"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/logs/lumo_fixed32.log",
+    "local_path": "raw/kernel/20261001T205557Z/logs/lumo_fixed32.log",
+    "bytes": 707,
+    "sha256": "68b840fa7e476b00821b5f78afaca3d8fbe8f49cac992efe825e6a264fbfe961"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/logs/naive_native_paths.log",
+    "local_path": "raw/kernel/20261001T205557Z/logs/naive_native_paths.log",
+    "bytes": 84,
+    "sha256": "b82b0e0a9d3798633a9d598e2b7a1d74fd088ff79b41e886a8122b32cc81dda6"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/logs/naive_torch_node.log",
+    "local_path": "raw/kernel/20261001T205557Z/logs/naive_torch_node.log",
+    "bytes": 80,
+    "sha256": "b5b93bcd40787bbb0efea128e0cd10b9895b7e93db3cb1fa9547ba88e8cb853e"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/logs/nvidia_smi_after.txt",
+    "local_path": "raw/kernel/20261001T205557Z/logs/nvidia_smi_after.txt",
+    "bytes": 1689,
+    "sha256": "d3517f07b37f1856e5edf7b628c13ed72f8663a363ad096f6859a7c8c71714f9"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/logs/nvidia_smi_before.txt",
+    "local_path": "raw/kernel/20261001T205557Z/logs/nvidia_smi_before.txt",
+    "bytes": 1689,
+    "sha256": "effd13f2c6c3e8218f0bde81d1b38a106c4bb8c962335a1470ac00d582272537"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/logs/rc.txt",
+    "local_path": "raw/kernel/20261001T205557Z/logs/rc.txt",
+    "bytes": 338,
+    "sha256": "57343897c5ded77c3949b6a2f68e1c76f411b937af08da6411463f6a8ef14935"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/logs/sweep_authors.log",
+    "local_path": "raw/kernel/20261001T205557Z/logs/sweep_authors.log",
+    "bytes": 66,
+    "sha256": "abf0d9d1b4aa2d18cacee4960e3d5d8d3c41198e3ceabe48843427575d89b212"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/logs/sweep_lumo_generic.log",
+    "local_path": "raw/kernel/20261001T205557Z/logs/sweep_lumo_generic.log",
+    "bytes": 1010,
+    "sha256": "8c31c71d8536592c8224c51e3db77b3baa0a4fde87fecbe49ab7d3fc379225c8"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/logs/sweep_naive.log",
+    "local_path": "raw/kernel/20261001T205557Z/logs/sweep_naive.log",
+    "bytes": 62,
+    "sha256": "4b198ecdeda395eab043d3606b6a86006c7d38b7a849d5a72e98e2c95cff39f0"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/logs/treewy_author_default.log",
+    "local_path": "raw/kernel/20261001T205557Z/logs/treewy_author_default.log",
+    "bytes": 90,
+    "sha256": "98ea6ef37fd88540e7e0c330224ec2c4c1040df5b92acab7ec18b5ddee408a64"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/logs/versions.txt",
+    "local_path": "raw/kernel/20261001T205557Z/logs/versions.txt",
+    "bytes": 1030,
+    "sha256": "a1f6c68a5e60d521566641a1a415a1594bfa53f05d15f623b0c8cbe72b910604"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/logs/weaver_aligned_local.log",
+    "local_path": "raw/kernel/20261001T205557Z/logs/weaver_aligned_local.log",
+    "bytes": 88,
+    "sha256": "1555e9fda375468387ce41cb94d229185b5a19ad0f12512220c30f27e46bc1fe"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/logs/weaver_author_default.log",
+    "local_path": "raw/kernel/20261001T205557Z/logs/weaver_author_default.log",
+    "bytes": 90,
+    "sha256": "5b20d16897ba0e1d1c92bc7b2bb6302fdbbf0937c4c3c1a2378a877803aab4df"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/methods/lumo_fixed32.json",
+    "local_path": "raw/kernel/20261001T205557Z/methods/lumo_fixed32.json",
+    "bytes": 55132,
+    "sha256": "f3ff6a6969d84026c328e8cbc586647bf4bc861577dc94aaf72e3bcb1528e1f2"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/methods/naive_native_paths.json",
+    "local_path": "raw/kernel/20261001T205557Z/methods/naive_native_paths.json",
+    "bytes": 51795,
+    "sha256": "b6ecb449e70014fd3db006da80fe3063fae998ee0ce078cda6033595fb6a36b5"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/methods/naive_torch_node.json",
+    "local_path": "raw/kernel/20261001T205557Z/methods/naive_torch_node.json",
+    "bytes": 51480,
+    "sha256": "06d73ef9a0d01e0bc1da9fd4bf738261d4c9e5db98a7211bdb7ed19318a6e288"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/methods/treewy_author_default.json",
+    "local_path": "raw/kernel/20261001T205557Z/methods/treewy_author_default.json",
+    "bytes": 74983,
+    "sha256": "48659e4fbb17e3ee71d083c21a076ce613c97cbd38eb4fe92eaf3455adfcee88"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/methods/weaver_aligned_local.json",
+    "local_path": "raw/kernel/20261001T205557Z/methods/weaver_aligned_local.json",
+    "bytes": 67943,
+    "sha256": "1480dc54c2dea1510f835b77e6b73094fec1a98ee832512fe7ac0cde7552610c"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/methods/weaver_author_default.json",
+    "local_path": "raw/kernel/20261001T205557Z/methods/weaver_author_default.json",
+    "bytes": 67894,
+    "sha256": "b742ac820fbacc7d4452a42d80545961984fddc9804c58f138c7e8af587aa2a1"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/summary.json",
+    "local_path": "raw/kernel/20261001T205557Z/summary.json",
+    "bytes": 19585,
+    "sha256": "07bd1a83959c5d84c773ea772a3bd7e9d676d05ae951e5314ee742da5aaed468"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/summary.md",
+    "local_path": "raw/kernel/20261001T205557Z/summary.md",
+    "bytes": 4460,
+    "sha256": "1924c79d371a88f5fa7f0ccce130638aca1275ac0b9b25d0e2bea20a5a516e44"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/sweep/sweep_authors.json",
+    "local_path": "raw/kernel/20261001T205557Z/sweep/sweep_authors.json",
+    "bytes": 22489,
+    "sha256": "71d4894359da737dee9b6d7a2bc0a2d91ea072d6ce1b992b78c4ffa5975a74a7"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/sweep/sweep_lumo_generic.json",
+    "local_path": "raw/kernel/20261001T205557Z/sweep/sweep_lumo_generic.json",
+    "bytes": 15098,
+    "sha256": "22ca545a4316f2fde0f7fcc8929af2bf03645cb1b4678d8d90b661b446c719c7"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/kernel/20261001T205557Z/sweep/sweep_naive.json",
+    "local_path": "raw/kernel/20261001T205557Z/sweep/sweep_naive.json",
+    "bytes": 22051,
+    "sha256": "c3b73cc66c00a78602facde7bc32c890625e2e8dd82c127233c154471a5b4882"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-sampled-20261001T150739Z/container_id.txt",
+    "local_path": "raw/dist/ar-sampled-20261001T150739Z/container_id.txt",
+    "bytes": 65,
+    "sha256": "4d5a2d409a7ffc1c730df8d65b6d265b6e42b7ea50a1d0efc46fe7cc4e9e6b91"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-sampled-20261001T150739Z/dist.jsonl",
+    "local_path": "raw/dist/ar-sampled-20261001T150739Z/dist.jsonl",
+    "bytes": 359862,
+    "sha256": "5eb82fb2ed8abaad7795c4f4e3bb94707c9799de7b7a0ac22fd89f3efced8b5e"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-sampled-20261001T150739Z/driver.log",
+    "local_path": "raw/dist/ar-sampled-20261001T150739Z/driver.log",
+    "bytes": 2812,
+    "sha256": "2600beedeb9f3e7b005197efce1eb9b0cab191cbb39a7b1481faee4b8bda2988"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-sampled-20261001T150739Z/engine-logs/fa2_install_receipt.json",
+    "local_path": "raw/dist/ar-sampled-20261001T150739Z/engine-logs/fa2_install_receipt.json",
+    "bytes": 1791,
+    "sha256": "62c42114769057aee43baa8054c68072fe103a5ae7cf35b7499c0e70d78457a4"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-sampled-20261001T150739Z/engine.log",
+    "local_path": "raw/dist/ar-sampled-20261001T150739Z/engine.log",
+    "bytes": 346142,
+    "sha256": "95c42a7727867fcff6412a3af621d1528c6799b4f49a680922adfe37ef3c8f4c"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-sampled-20261001T150739Z/free_before_boot.txt",
+    "local_path": "raw/dist/ar-sampled-20261001T150739Z/free_before_boot.txt",
+    "bytes": 207,
+    "sha256": "3280c0755609084aeb728878ef2c6f92d5081f3eca0984426c22f84c39072858"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-sampled-20261001T150739Z/metrics_boot.txt",
+    "local_path": "raw/dist/ar-sampled-20261001T150739Z/metrics_boot.txt",
+    "bytes": 54800,
+    "sha256": "1d87c2c763267f01836f31caa15e1eaad69a2365dbb8057fd0284e9bcd84a358"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-sampled-20261001T150739Z/metrics_end.txt",
+    "local_path": "raw/dist/ar-sampled-20261001T150739Z/metrics_end.txt",
+    "bytes": 57654,
+    "sha256": "7b36b807fa8a06f5a61be7f238ced49408c32881307f69561ca2af9f6c470b82"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-sampled-20261001T150739Z/serve_cmd.txt",
+    "local_path": "raw/dist/ar-sampled-20261001T150739Z/serve_cmd.txt",
+    "bytes": 745,
+    "sha256": "c64ea56eb20b0d45533b518a1eef742967d0320cfb7df23b30be822f15968402"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-sampled-20261001T150739Z/warmup.jsonl",
+    "local_path": "raw/dist/ar-sampled-20261001T150739Z/warmup.jsonl",
+    "bytes": 679,
+    "sha256": "b9b2d1d493b617b7553f33743a4913d1df1350b6d39a2851042ed779cebd49dd"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed1-sampled-20261001T192848Z/container_id.txt",
+    "local_path": "raw/dist/ar-seed1-sampled-20261001T192848Z/container_id.txt",
+    "bytes": 65,
+    "sha256": "7f62ad636bde9b466df6db03448b70a262ea9d073b1772e5c02cf5f555326e35"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed1-sampled-20261001T192848Z/dist.jsonl",
+    "local_path": "raw/dist/ar-seed1-sampled-20261001T192848Z/dist.jsonl",
+    "bytes": 360473,
+    "sha256": "e67f469d79b96a797db24877aee2ba30da367acb4b5e0b95ac4038943975bf69"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed1-sampled-20261001T192848Z/driver.log",
+    "local_path": "raw/dist/ar-seed1-sampled-20261001T192848Z/driver.log",
+    "bytes": 2839,
+    "sha256": "82c09a1c149cb9e403a7f528cfd3979a4d80af7f03dbaf14b3fae8fcfc1dfc9c"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed1-sampled-20261001T192848Z/engine-logs/fa2_install_receipt.json",
+    "local_path": "raw/dist/ar-seed1-sampled-20261001T192848Z/engine-logs/fa2_install_receipt.json",
+    "bytes": 1791,
+    "sha256": "3187ac35cc3b146be1ce525fef5914cc96367a5a8db40936c02af4b31ed7b33c"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed1-sampled-20261001T192848Z/engine.log",
+    "local_path": "raw/dist/ar-seed1-sampled-20261001T192848Z/engine.log",
+    "bytes": 345918,
+    "sha256": "4e53656b691b732a6e9ebb66f18ae8fc63856c2fc168dfd7b340f3c8a36f03e9"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed1-sampled-20261001T192848Z/free_before_boot.txt",
+    "local_path": "raw/dist/ar-seed1-sampled-20261001T192848Z/free_before_boot.txt",
+    "bytes": 207,
+    "sha256": "d4b933c472806b715f725ae40bd931b807457ef86e65a0e3eb2db4d3fc326976"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed1-sampled-20261001T192848Z/metrics_boot.txt",
+    "local_path": "raw/dist/ar-seed1-sampled-20261001T192848Z/metrics_boot.txt",
+    "bytes": 54801,
+    "sha256": "07fe4b1f4c3697df4a6ab3df82c72654293de32ae498cadfdf878cd4bdb01988"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed1-sampled-20261001T192848Z/metrics_end.txt",
+    "local_path": "raw/dist/ar-seed1-sampled-20261001T192848Z/metrics_end.txt",
+    "bytes": 57650,
+    "sha256": "55f3f309819c59bdb86ae0595f4208223b4e5f357cea4c73bfcbaa1f9d95455f"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed1-sampled-20261001T192848Z/serve_cmd.txt",
+    "local_path": "raw/dist/ar-seed1-sampled-20261001T192848Z/serve_cmd.txt",
+    "bytes": 745,
+    "sha256": "bf5809608cf2d57476e72f25af119d8d16baece149f428fada5c1dec46ec91b2"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed1-sampled-20261001T192848Z/warmup.jsonl",
+    "local_path": "raw/dist/ar-seed1-sampled-20261001T192848Z/warmup.jsonl",
+    "bytes": 709,
+    "sha256": "1a28bea1541516fc4599dfbc6da837c76efe961f7d8e5bde4a9034f7c3a5453d"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed2t065-sampled-20261001T201104Z/container_id.txt",
+    "local_path": "raw/dist/ar-seed2t065-sampled-20261001T201104Z/container_id.txt",
+    "bytes": 65,
+    "sha256": "8c22f16eefef61bffa72bacc8d5b9b2f082913cc306c3c54587b1a2e2e44d16d"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed2t065-sampled-20261001T201104Z/dist.jsonl",
+    "local_path": "raw/dist/ar-seed2t065-sampled-20261001T201104Z/dist.jsonl",
+    "bytes": 359481,
+    "sha256": "ac681d147b26a7b1730d1c903f9308d97e766e0463b679920fc3d6b82571002f"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed2t065-sampled-20261001T201104Z/driver.log",
+    "local_path": "raw/dist/ar-seed2t065-sampled-20261001T201104Z/driver.log",
+    "bytes": 2844,
+    "sha256": "bbdbdc1ac5ded56821542da331ddf2d24037acea04e0f7467c022bc23ac320fd"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed2t065-sampled-20261001T201104Z/engine-logs/fa2_install_receipt.json",
+    "local_path": "raw/dist/ar-seed2t065-sampled-20261001T201104Z/engine-logs/fa2_install_receipt.json",
+    "bytes": 1791,
+    "sha256": "74cc118496c59ed0c2616846213fa6a8ba0fa5380911b3674dbc3779bb1d0dfe"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed2t065-sampled-20261001T201104Z/engine.log",
+    "local_path": "raw/dist/ar-seed2t065-sampled-20261001T201104Z/engine.log",
+    "bytes": 346151,
+    "sha256": "678f6e9d7b41ad4d70199faf9de85fe90449879db3dddad71845d606cf28f262"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed2t065-sampled-20261001T201104Z/free_before_boot.txt",
+    "local_path": "raw/dist/ar-seed2t065-sampled-20261001T201104Z/free_before_boot.txt",
+    "bytes": 207,
+    "sha256": "d4b933c472806b715f725ae40bd931b807457ef86e65a0e3eb2db4d3fc326976"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed2t065-sampled-20261001T201104Z/metrics_boot.txt",
+    "local_path": "raw/dist/ar-seed2t065-sampled-20261001T201104Z/metrics_boot.txt",
+    "bytes": 54803,
+    "sha256": "37b89d09126f546375aea3cdf804fc3f0330d80ddcc2be130c80ed911f47d4b6"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed2t065-sampled-20261001T201104Z/metrics_end.txt",
+    "local_path": "raw/dist/ar-seed2t065-sampled-20261001T201104Z/metrics_end.txt",
+    "bytes": 57660,
+    "sha256": "d87aa1c0adce7b21a190c4f3c8e16707f14284f6205da15c1cefdc0e47fc6008"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed2t065-sampled-20261001T201104Z/serve_cmd.txt",
+    "local_path": "raw/dist/ar-seed2t065-sampled-20261001T201104Z/serve_cmd.txt",
+    "bytes": 745,
+    "sha256": "8b87d598873b22e128cd6e856e59cfde64b7d63811d524cc3cf341d98dc81f66"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/ar-seed2t065-sampled-20261001T201104Z/warmup.jsonl",
+    "local_path": "raw/dist/ar-seed2t065-sampled-20261001T201104Z/warmup.jsonl",
+    "bytes": 708,
+    "sha256": "f3ad553ee4d1ae69f3e38433b7f26a673353f01189e0a30aa75dd01a6eaaff44"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/dist_v2_results.json",
+    "local_path": "raw/dist/dist_v2_results.json",
+    "bytes": 857,
+    "sha256": "661f9dff58f79f892b53b76a5812d6164bdcbc6d4119f8d651bb2ccc5ba95dd9"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/mtp5-sampled-20261001T155028Z/container_id.txt",
+    "local_path": "raw/dist/mtp5-sampled-20261001T155028Z/container_id.txt",
+    "bytes": 65,
+    "sha256": "dc93f962f0f1a99a6f6d250f2f42acbeb84c6bc41217a657d56942a5cb6628fd"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/mtp5-sampled-20261001T155028Z/dist.jsonl",
+    "local_path": "raw/dist/mtp5-sampled-20261001T155028Z/dist.jsonl",
+    "bytes": 359628,
+    "sha256": "ea90b5291e4ad6a5a7f30503168e63f52abcf1f182978c777e2e34288518f3c6"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/mtp5-sampled-20261001T155028Z/driver.log",
+    "local_path": "raw/dist/mtp5-sampled-20261001T155028Z/driver.log",
+    "bytes": 2909,
+    "sha256": "18a804cc7aef4ce5f3abc873d5e289b2a458fcb41a9f5f3baf830efb4d01b3a1"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/mtp5-sampled-20261001T155028Z/engine-logs/fa2_install_receipt.json",
+    "local_path": "raw/dist/mtp5-sampled-20261001T155028Z/engine-logs/fa2_install_receipt.json",
+    "bytes": 1791,
+    "sha256": "2ce0ed94699322383e2495d231c340d107dd04acaa50b1b3bf98de8bf98bd00b"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/mtp5-sampled-20261001T155028Z/engine.log",
+    "local_path": "raw/dist/mtp5-sampled-20261001T155028Z/engine.log",
+    "bytes": 582650,
+    "sha256": "08a6d3381ba38ad218c2986d9d438368bc33a1ee87523dcce5c607822c4b53fe"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/mtp5-sampled-20261001T155028Z/free_before_boot.txt",
+    "local_path": "raw/dist/mtp5-sampled-20261001T155028Z/free_before_boot.txt",
+    "bytes": 207,
+    "sha256": "d4b933c472806b715f725ae40bd931b807457ef86e65a0e3eb2db4d3fc326976"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/mtp5-sampled-20261001T155028Z/metrics_boot.txt",
+    "local_path": "raw/dist/mtp5-sampled-20261001T155028Z/metrics_boot.txt",
+    "bytes": 57830,
+    "sha256": "6d9a36b3f2c72c3db162702e81ca550f9b11832562b64a072d2dd2c5aef053f3"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/mtp5-sampled-20261001T155028Z/metrics_end.txt",
+    "local_path": "raw/dist/mtp5-sampled-20261001T155028Z/metrics_end.txt",
+    "bytes": 61829,
+    "sha256": "124ed509b834d77363086d05ddb99c7a736aa7586de6e747bd582711b66f4b85"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/mtp5-sampled-20261001T155028Z/serve_cmd.txt",
+    "local_path": "raw/dist/mtp5-sampled-20261001T155028Z/serve_cmd.txt",
+    "bytes": 819,
+    "sha256": "877d361964a474ee1aa30d7b4ad5b90dfe8d38254fb1727d11a12a4075a4568a"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/mtp5-sampled-20261001T155028Z/warmup.jsonl",
+    "local_path": "raw/dist/mtp5-sampled-20261001T155028Z/warmup.jsonl",
+    "bytes": 1625,
+    "sha256": "49ebc1a22338f8b5c48f99af952deb071a6da79117a4a9d65184718aadc3bef4"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/pairs_v2.json",
+    "local_path": "raw/dist/pairs_v2.json",
+    "bytes": 412,
+    "sha256": "23fa5edda3f957d9ac7e78f50be4ddf2f7acd1524ab5ebf40190327f39ab2f5d"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/tree-sampled-20261001T173819Z/container_after_teardown.log",
+    "local_path": "raw/dist/tree-sampled-20261001T173819Z/container_after_teardown.log",
+    "bytes": 860119,
+    "sha256": "d84b7b6c0978430d61f9339fe1913d2b4391e6334b020776f8ec2a95a8636203"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/tree-sampled-20261001T173819Z/dist.jsonl",
+    "local_path": "raw/dist/tree-sampled-20261001T173819Z/dist.jsonl",
+    "bytes": 358746,
+    "sha256": "e106f386ecb111a6287ff1ef790f0e9542252953a7555b3e1ca1f5327da27a08"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/tree-sampled-20261001T173819Z/metrics_boot.txt",
+    "local_path": "raw/dist/tree-sampled-20261001T173819Z/metrics_boot.txt",
+    "bytes": 66576,
+    "sha256": "d2e62f2306507275195e67738352831ea67fb274319b042959217c080df5aefd"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/tree-sampled-20261001T173819Z/metrics_end.txt",
+    "local_path": "raw/dist/tree-sampled-20261001T173819Z/metrics_end.txt",
+    "bytes": 68642,
+    "sha256": "57afa0891cc9e6c4b727f913d2f56aaee9c276020f0aa51f2a8ec15c7167675e"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/tree-sampled-20261001T173819Z/serve_runroot.txt",
+    "local_path": "raw/dist/tree-sampled-20261001T173819Z/serve_runroot.txt",
+    "bytes": 104,
+    "sha256": "8142d78c80c26c207351879383454d1127fd8399efe18023bc3ea9cd2c6a3d53"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/dist/tree-sampled-20261001T173819Z/warmup.jsonl",
+    "local_path": "raw/dist/tree-sampled-20261001T173819Z/warmup.jsonl",
+    "bytes": 2367,
+    "sha256": "207534110e0ca0e6963a3e7fd7db7b70bf9ab941065f8f02090d0d58d2889c9b"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/corpus/vllm_prompt_ids.json",
+    "local_path": "raw/corpus/vllm_prompt_ids.json",
+    "bytes": 9359343,
+    "sha256": "6eb11056ceffa98b9ee133b8bed7336c0d8f346b43175f6187745218f16f7e2d"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/container_id.txt",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/container_id.txt",
+    "bytes": 65,
+    "sha256": "3b86a39163f7b621a405f29219e20366128d041eaa8b41a8d8bb4899186e81f2"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/driver.log",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/driver.log",
+    "bytes": 4706,
+    "sha256": "5ddb57851e9ad979b48a76d991be11145f6205b5ef45a10f54bda7d33c722d0f"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/engine.log",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/engine.log",
+    "bytes": 94380,
+    "sha256": "1cba5d9c164193cf7343838be4045babc6c01a9f4185f601812388749114adf2"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/free_before_boot.txt",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/free_before_boot.txt",
+    "bytes": 207,
+    "sha256": "3280c0755609084aeb728878ef2c6f92d5081f3eca0984426c22f84c39072858"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/metrics_boot.txt",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/metrics_boot.txt",
+    "bytes": 63619,
+    "sha256": "c30ebb693fc43aea7edc7ba211c9f61157a80d0d2da629a729d86d4fd498e77c"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/metrics_end.txt",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/metrics_end.txt",
+    "bytes": 84128,
+    "sha256": "a2dc39270dc73a96c950163bbde2991d7aa07439ac9a89b03dfc2a5366bf1758"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/replay.jsonl",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/replay.jsonl",
+    "bytes": 97069,
+    "sha256": "51500a26f19fbb5690a5ff9d7cf8f63054cbe2e2a27aca1cb64e110977e981bb"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/serve_cmd.txt",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/serve_cmd.txt",
+    "bytes": 667,
+    "sha256": "c3dcf294c57eac6ced0d613ac427d1b8a60fdb5ba02a256839e8e98c8a35a093"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/warmup.jsonl",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T205933Z/warmup.jsonl",
+    "bytes": 835,
+    "sha256": "64420fdfa07e561f08556873869fd41dac11ef8efb68e57a9c22592fc1664e01"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-fa2stock-sampled-20261001T211905Z/container_after_teardown.log",
+    "local_path": "raw/replay/tree-fa2stock-sampled-20261001T211905Z/container_after_teardown.log",
+    "bytes": 158829,
+    "sha256": "7f1c230984afaa36af38ec4fb53ea1f2eca88202d92dc6ad6d79dd6be32559e2"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-fa2stock-sampled-20261001T211905Z/metrics_boot.txt",
+    "local_path": "raw/replay/tree-fa2stock-sampled-20261001T211905Z/metrics_boot.txt",
+    "bytes": 66578,
+    "sha256": "42d701ace27804b324b6ca215fd3b81751fad3d75d7cc20cd9c74ccdc43f0490"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-fa2stock-sampled-20261001T211905Z/metrics_end.txt",
+    "local_path": "raw/replay/tree-fa2stock-sampled-20261001T211905Z/metrics_end.txt",
+    "bytes": 68388,
+    "sha256": "f293b49d38e79df9c5671f90dcf120d5c70ff4e5a57776d7233387e7258f9353"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-fa2stock-sampled-20261001T211905Z/replay.jsonl",
+    "local_path": "raw/replay/tree-fa2stock-sampled-20261001T211905Z/replay.jsonl",
+    "bytes": 163680,
+    "sha256": "32fe76ed56ebab93d299fb069f61198c8f5a989c841031b65485cb4817f4125c"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-fa2stock-sampled-20261001T211905Z/serve_runroot.txt",
+    "local_path": "raw/replay/tree-fa2stock-sampled-20261001T211905Z/serve_runroot.txt",
+    "bytes": 112,
+    "sha256": "3c443a640abcad7b18ff044deea76da5a3488963e744254d92bdf3692b376467"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-fa2stock-sampled-20261001T211905Z/warmup.jsonl",
+    "local_path": "raw/replay/tree-fa2stock-sampled-20261001T211905Z/warmup.jsonl",
+    "bytes": 1752,
+    "sha256": "3f2840993053ac6ea6adb57fb8f782311c36d6a17939766ef3d7ae7ba6aa025b"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/container_id.txt",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/container_id.txt",
+    "bytes": 65,
+    "sha256": "7e6c7b02eb285468d187f0e722687e2592897a07abd7e0f1328c96a2e6f4faf4"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/driver.log",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/driver.log",
+    "bytes": 4709,
+    "sha256": "e2e371597a0ebefd9f612349784776a61d34f8e951e2525f84b226a6bdb6fdea"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/engine.log",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/engine.log",
+    "bytes": 98335,
+    "sha256": "d46c841d1b425c04c8128e7e41fd2c2b971da5224b176c69f70a91bfabe763a6"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/free_before_boot.txt",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/free_before_boot.txt",
+    "bytes": 207,
+    "sha256": "d4b933c472806b715f725ae40bd931b807457ef86e65a0e3eb2db4d3fc326976"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/metrics_boot.txt",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/metrics_boot.txt",
+    "bytes": 63624,
+    "sha256": "ccccb6e695cb0490a3622c10f5e5700173d82c542607b7c6e8fd15bf53a12729"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/metrics_end.txt",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/metrics_end.txt",
+    "bytes": 84126,
+    "sha256": "d07d31e2b1752a0db8a893e4838813b8966bb528c7dbad0ea6761661b4df57b1"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/replay.jsonl",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/replay.jsonl",
+    "bytes": 106316,
+    "sha256": "d040be78862028b0e335878eb3cae627259b52613f462fe9c74664fa3b2e4671"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/serve_cmd.txt",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/serve_cmd.txt",
+    "bytes": 667,
+    "sha256": "c3dcf294c57eac6ced0d613ac427d1b8a60fdb5ba02a256839e8e98c8a35a093"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/warmup.jsonl",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T214120Z/warmup.jsonl",
+    "bytes": 835,
+    "sha256": "d56a6cc944e607e5150874ffd8bd83d27469756534aeb6149efc127a1479ba2c"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-fa2stock-sampled-20261001T220159Z/container_after_teardown.log",
+    "local_path": "raw/replay/tree-fa2stock-sampled-20261001T220159Z/container_after_teardown.log",
+    "bytes": 162647,
+    "sha256": "eea26772dbe63668b34152ad410f3f15240cb68d8924595478b54e6e50077dd5"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-fa2stock-sampled-20261001T220159Z/metrics_boot.txt",
+    "local_path": "raw/replay/tree-fa2stock-sampled-20261001T220159Z/metrics_boot.txt",
+    "bytes": 66561,
+    "sha256": "5b24f23273c668b346a5aa48b6c1c5799a250910f7dc0fcc02f44f651ce4b595"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-fa2stock-sampled-20261001T220159Z/metrics_end.txt",
+    "local_path": "raw/replay/tree-fa2stock-sampled-20261001T220159Z/metrics_end.txt",
+    "bytes": 68382,
+    "sha256": "5cb585d16c834fcce945814cb346c81a503c1621d3058b9c65c57859ad58ed56"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-fa2stock-sampled-20261001T220159Z/replay.jsonl",
+    "local_path": "raw/replay/tree-fa2stock-sampled-20261001T220159Z/replay.jsonl",
+    "bytes": 168512,
+    "sha256": "e3b6982b4cfe5e57e05610bc22c736f0db4316156bdf3105702da93b8a7c27fe"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-fa2stock-sampled-20261001T220159Z/serve_runroot.txt",
+    "local_path": "raw/replay/tree-fa2stock-sampled-20261001T220159Z/serve_runroot.txt",
+    "bytes": 112,
+    "sha256": "4a0cd4d571c1e967f666f89b82e4a2c64591dda78891bf7721bdc3240a9410da"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/tree-fa2stock-sampled-20261001T220159Z/warmup.jsonl",
+    "local_path": "raw/replay/tree-fa2stock-sampled-20261001T220159Z/warmup.jsonl",
+    "bytes": 2394,
+    "sha256": "b4a9a02a3e2df71bab2b207811d5676677f1058ad0dd94e9c8baddbd5c2fbe80"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/container_id.txt",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/container_id.txt",
+    "bytes": 65,
+    "sha256": "8ffa1a95d6afe4a0562b2d4e362aea0906cfa665a0ec83e3b4bb4644eea303b5"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/driver.log",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/driver.log",
+    "bytes": 4705,
+    "sha256": "3b54ba45f7a239ff70555f5d1fb3b97ce6f2ee6127290c8330412b7a95cfc4c2"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/engine.log",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/engine.log",
+    "bytes": 93477,
+    "sha256": "9d0f82471c947a39c94e0393d5e4ccceb273f386889882e4792cade2e07904b4"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/free_before_boot.txt",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/free_before_boot.txt",
+    "bytes": 207,
+    "sha256": "d4b933c472806b715f725ae40bd931b807457ef86e65a0e3eb2db4d3fc326976"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/metrics_boot.txt",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/metrics_boot.txt",
+    "bytes": 63626,
+    "sha256": "c5941f2d0847ee637504140645299bda0834a0d4e5df86cff51a7b35eb3e964b"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/metrics_end.txt",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/metrics_end.txt",
+    "bytes": 84122,
+    "sha256": "8e4f31c1f139102b56632a060722ee60de75b80e3b2bae526903396cd3cf63cd"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/replay.jsonl",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/replay.jsonl",
+    "bytes": 95695,
+    "sha256": "1d860c62cdc5a05c8cbdb5c7420acd71b7b2bba2672ab59151bc2c01761bf030"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/serve_cmd.txt",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/serve_cmd.txt",
+    "bytes": 667,
+    "sha256": "c3dcf294c57eac6ced0d613ac427d1b8a60fdb5ba02a256839e8e98c8a35a093"
+  },
+  {
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/warmup.jsonl",
+    "local_path": "raw/replay/sglang-s7k1d8-ids-sampled-20261001T222500Z/warmup.jsonl",
+    "bytes": 814,
+    "sha256": "d526dbf5f066687ad5ec106e5ce810a198e694a88138e230d1ce6aa8d1868e44"
+  },
+  {
+    "remote_path": "/home/mark/shared/models/qwen3.8-27b-nvfp4-radixark/tokenizer.json",
+    "local_path": "raw/corpus/tokenizer.json",
+    "bytes": 12809320,
+    "sha256": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3"
+  }
+]

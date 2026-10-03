@@ -1,0 +1,13 @@
+{
+ "arm": "CAND",
+ "client_rc": 0,
+ "summary": {
+  "arm": "CAND",
+  "attempted": 29,
+  "planned": 29,
+  "sealed": 29,
+  "utc": "2026-10-03T01:28:00Z",
+  "valid": 29
+ },
+ "complete": true
+}

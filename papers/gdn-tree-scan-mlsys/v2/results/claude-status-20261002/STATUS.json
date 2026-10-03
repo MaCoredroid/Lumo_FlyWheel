@@ -1,0 +1,145 @@
+{
+  "checked_PDT": "2026-10-02T09:39:47-07:00",
+  "remote_HEAD": "6952ad038",
+  "worktree_clean": true,
+  "running_experiment_jobs": 0,
+  "running_containers": 0,
+  "gpu_utilization_percent": 0,
+  "latest_Claude_activity": "09:37PDT unchanged/idle report; no implementation or inference underway",
+  "scope": "new30-attempt10-Astropy-task cohort; does not combine historical September27 scikit-learn cohort",
+  "SWE": {
+    "lumotree": {
+      "completed_attempts": 10,
+      "resolved": 5,
+      "test_evaluator_invoked": 10,
+      "empty_patch_failures": 0,
+      "failure_modes": {
+        "tests_failed": 5,
+        "tests_passed": 5
+      },
+      "rates_verified_from_metric_snapshots": {
+        "pooled_decode_tok_s": 26.19,
+        "gen_tokens": 187137,
+        "requests": 236,
+        "e2e_s": 7891.3,
+        "ttft_s": 753.8
+      }
+    },
+    "vllm_mtp5": {
+      "completed_attempts": 10,
+      "resolved": 6,
+      "test_evaluator_invoked": 8,
+      "empty_patch_failures": 2,
+      "failure_modes": {
+        "tests_failed": 2,
+        "tests_passed": 6,
+        "patch_apply_failed": 2
+      },
+      "rates_verified_from_metric_snapshots": {
+        "pooled_decode_tok_s": 27.17,
+        "gen_tokens": 134643,
+        "requests": 224,
+        "e2e_s": 5494.8,
+        "ttft_s": 548.2
+      }
+    },
+    "sglang_eagle_s7_d8": {
+      "completed_attempts": 10,
+      "resolved": 5,
+      "test_evaluator_invoked": 8,
+      "empty_patch_failures": 2,
+      "failure_modes": {
+        "patch_apply_failed": 2,
+        "tests_passed": 5,
+        "tests_failed": 3
+      },
+      "rates_verified_from_metric_snapshots": {
+        "pooled_decode_tok_s": 29.89,
+        "gen_tokens": 158827,
+        "requests": 210,
+        "e2e_s": 5688.3,
+        "ttft_s": 381.2
+      }
+    }
+  },
+  "distribution": {
+    "completed_boots": 10,
+    "raw_rows_per_boot": 800,
+    "raw_errors_per_boot": 0,
+    "distinct_requests_per_boot": 20,
+    "samples_per_request": 40,
+    "verdict": {
+      "E_AA_max_ar_ar_excess": 29.375,
+      "ar_ar_excess": [
+        29.375,
+        18.484,
+        21.661,
+        26.328,
+        22.037,
+        21.257
+      ],
+      "neg_mean_excess_vs_ar": 21.998,
+      "sensitivity_pass": false,
+      "mtp5_mean_excess_vs_ar": {
+        "mtp5-v3s31": 22.028,
+        "mtp5-v3s32": 26.098
+      },
+      "mtp5_verdict": "uninformative (sensitivity rule failed)",
+      "lumotree_mean_excess_vs_ar": {
+        "tree-v3a": 23.898,
+        "tree-v3b": 29.995,
+        "tree-v3c": 24.968
+      },
+      "lumotree_verdict": "uninformative (sensitivity rule failed)"
+    }
+  },
+  "fullmodel_v2": {
+    "completed_boots": 5,
+    "completed_valid_observations": 176,
+    "positive_schedules": 33,
+    "primary_comparison_cycles": 147,
+    "qualified_equivalence": false,
+    "verdict": "INCONCLUSIVE",
+    "gates": {
+      "R1_integrity": true,
+      "R2_prompt_parity": true,
+      "R3_o0_import": true,
+      "R4_heldout_reference": true,
+      "R5_native_categorical": true,
+      "R6_discrimination": false
+    },
+    "negative_controls_executed": 10,
+    "negative_controls_detected": 1,
+    "next_token_greedy_matches": 131,
+    "next_token_greedy_total": 147,
+    "candidate_maxima": {
+      "conv_rel": 0.3690854511133936,
+      "gdn_rel": 0.30282695337277676,
+      "kv_hist_rel": 0.3377607526163621,
+      "kv_new_rel": 0.35263167383045707,
+      "next_kl": 0.49088844338380094,
+      "next_maxabs": 4.21875
+    },
+    "reference_tolerances": {
+      "conv_rel": 1.1645878262694769,
+      "gdn_rel": 1.0456804027111402,
+      "kv_hist_rel": 1.3245500528121454,
+      "kv_new_rel": 1.5887361263890045,
+      "next_kl": 1.9612541929235803
+    },
+    "v1": "candidate and fault observations invalid due to draft-forcing harness defect; preserved"
+  },
+  "completed_timed_mechanism_cells_previous_audit": 12,
+  "paper_state": "main.pdf remains October1 afternoon revision; overnight SWE/distribution-v3/Q1-v2 results not yet integrated",
+  "pending": [
+    "Backfill complete new SWE results and diagnostic outcomes with correct scope and failure classification",
+    "Resolve qualification sensitivity before any full-equivalence or distribution-preservation claim; preserve frozen inconclusive outcomes",
+    "If a stronger claim is required, define a separately disclosed acceptance design with independent calibration and demonstrably sensitive controls; post-hoc retuning alone is insufficient",
+    "Final manuscript/source-bundle review and build after backfill"
+  ],
+  "GPU_queue_pending": 0,
+  "scientific_completion_ETA": null,
+  "audit_files_sha_verified": 57,
+  "no_changes_to_experiment_code": true,
+  "no_new_GPU_launches": true
+}

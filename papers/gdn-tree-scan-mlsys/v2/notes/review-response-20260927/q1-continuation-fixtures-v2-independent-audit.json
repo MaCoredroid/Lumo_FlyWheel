@@ -1,0 +1,217 @@
+{
+  "scope": "Independent CPU saved-artifact and source controls only; no runtime admission",
+  "sources": {
+    "tools/q1_continuation_fixtures_v1.py": "16f85ffff80008fdd396e48c9b1e0387770b7b4ee8e0611de566fa05abf8ce9e",
+    "tools/q1_continuation_fixtures_v2.py": "cf09893afa0078f053cbc2185572c98c03aa0abac62718c532ec9899ade19879",
+    "q1_case_matrix.json": "df2a4c7b01a6ae09ef06c397f0bb0d2f084f40421b39e6d65f01284429173eed",
+    "fullmodel/fixtures/token-fixtures.v1.json": "607634e19235a58d2b6d73f8260dac3c49f842f9f1cba9a1789f329c56012223",
+    "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/results/fr14_nvfp4_port_20260816/fr14_splitk_tierb_credential.json": "37ed4ff59f6c0d6f9ae482916e0c5a5939f38f70d80756fdb43a44101d6dde19",
+    "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/scripts/fr13_patch_fa2_tree_bias.py": "8f61b9cd6a079d0605daedb545b8a2e95225714693c775d396059bab2ce626b2",
+    "runs/q1-native-smoke/q1-native-smoke-recovered-20260928T031726Z/q1_ref/cases/q1-native-smoke-recovered-20260928T031726Z__aligned_nonpacked__pA__r0__calibration-short_available__c0__root-only.json": "8fb996a798d91aaade5cac94debd7996292f40968ef578ba594102a08bc49ec2",
+    "fullmodel/fixtures/token-fixtures.sequences-v2.json": "e9683d2f8097ecfe195331d9977f9e57e1ab8482f1d583e04c5268ad92777318",
+    "tools/tests/test_q1_continuation_fixtures_v2.py": "dd254fd5fdc5413d5629de5e2140003df8430c6ad9aaea5950ebad30baaaa853"
+  },
+  "artifact_canonical_sha256": "c1c0202ce6db695ccd5fc6be9196e0ab99f0ece9ad8450997e4c545446e2576e",
+  "unchanged_F2_F3_records": 30,
+  "replaced_F4_records": 18,
+  "native64_crossings": 18,
+  "candidate1024_crossings": 18,
+  "counts": {
+    "records": 48,
+    "calibration_records": 24,
+    "evaluation_records_held_out": 24,
+    "cycle_observations_before_process_repeat_expansion": 108,
+    "qualification_denominator": null
+  },
+  "all_prefix_padding_and_token_position_checks": "PASS",
+  "split_isolation": "PASS",
+  "source_hash_matches": "7/7",
+  "source_drift_refusals": {
+    "GEN_V1_SHA": "v1 fixture generator changed",
+    "CREDENTIAL_SHA": "candidate page authority changed",
+    "PATCHER_SHA": "candidate page authority changed"
+  },
+  "rebuild_equal_excluding_timestamp": true,
+  "rows": [
+    {
+      "record_id": "calibration-short_available__F4-B3-kv-block-boundary-minus1",
+      "base_length": 13487,
+      "padding_length": 848,
+      "materialized_prefix_length": 14335,
+      "boundary_offset": -1,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "2bc4f52e1fbf7aa70ad7cca53661a40ff9500671f1af571dac8240db66f27fcc"
+    },
+    {
+      "record_id": "calibration-short_available__F4-B3-kv-block-boundary-minus3",
+      "base_length": 13487,
+      "padding_length": 846,
+      "materialized_prefix_length": 14333,
+      "boundary_offset": -3,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "89c03b44b5dc6f74e2e54c538f554a1f7cacdd220202a6fc5f13625f138912a0"
+    },
+    {
+      "record_id": "calibration-short_available__F4-B3-kv-block-boundary-minus11",
+      "base_length": 13487,
+      "padding_length": 838,
+      "materialized_prefix_length": 14325,
+      "boundary_offset": -11,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "67d0839916644157a46b107c8b80d979b47112ccaf5e19205b2f414b0c39d013"
+    },
+    {
+      "record_id": "calibration-medium_available__F4-B3-kv-block-boundary-minus1",
+      "base_length": 28941,
+      "padding_length": 754,
+      "materialized_prefix_length": 29695,
+      "boundary_offset": -1,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "fcd05ccf8cec2091d5d6eebe359eb450e7f61f0d8b07148f13e4e3f35ef5f363"
+    },
+    {
+      "record_id": "calibration-medium_available__F4-B3-kv-block-boundary-minus3",
+      "base_length": 28941,
+      "padding_length": 752,
+      "materialized_prefix_length": 29693,
+      "boundary_offset": -3,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "bfd843b9906ef057dc18d2fd23acafb003004cc6471a3db00025c32cd6aa2999"
+    },
+    {
+      "record_id": "calibration-medium_available__F4-B3-kv-block-boundary-minus11",
+      "base_length": 28941,
+      "padding_length": 744,
+      "materialized_prefix_length": 29685,
+      "boundary_offset": -11,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "441f43281282888b172f81427e3aa389f69d7d8b55841c4d89d7d756f4dce0d1"
+    },
+    {
+      "record_id": "calibration-long_available__F4-B3-kv-block-boundary-minus1",
+      "base_length": 60083,
+      "padding_length": 332,
+      "materialized_prefix_length": 60415,
+      "boundary_offset": -1,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "fa9abcd303acb5ce5d190287ac80431e649224d9d85569f322ffc6193008a974"
+    },
+    {
+      "record_id": "calibration-long_available__F4-B3-kv-block-boundary-minus3",
+      "base_length": 60083,
+      "padding_length": 330,
+      "materialized_prefix_length": 60413,
+      "boundary_offset": -3,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "b1b2df1980d0b34a4f4d018b8e9b74c9a8c98f090a0434459791cd03cf84054a"
+    },
+    {
+      "record_id": "calibration-long_available__F4-B3-kv-block-boundary-minus11",
+      "base_length": 60083,
+      "padding_length": 322,
+      "materialized_prefix_length": 60405,
+      "boundary_offset": -11,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "b2a8dbb125e1e6f713776ffca249bc2b46245e7ba8f9c6aa38dcb57791e03aee"
+    },
+    {
+      "record_id": "evaluation-short_available__F4-B3-kv-block-boundary-minus1",
+      "base_length": 13373,
+      "padding_length": 962,
+      "materialized_prefix_length": 14335,
+      "boundary_offset": -1,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "317f5429359bb22f8a67d0266f9b357a7c6e21d16a373b2ccde33f4cfd1ca9e6"
+    },
+    {
+      "record_id": "evaluation-short_available__F4-B3-kv-block-boundary-minus3",
+      "base_length": 13373,
+      "padding_length": 960,
+      "materialized_prefix_length": 14333,
+      "boundary_offset": -3,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "fd15168d8dbf043dc6d3dfaaeee3b0782fb426be32fa764df460691c2d2d86b8"
+    },
+    {
+      "record_id": "evaluation-short_available__F4-B3-kv-block-boundary-minus11",
+      "base_length": 13373,
+      "padding_length": 952,
+      "materialized_prefix_length": 14325,
+      "boundary_offset": -11,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "551de7d84ef2695aa3b6f7b88c2a3a3f8aefd1d575f3c46de7dc11a6312b37d4"
+    },
+    {
+      "record_id": "evaluation-medium_available__F4-B3-kv-block-boundary-minus1",
+      "base_length": 28930,
+      "padding_length": 765,
+      "materialized_prefix_length": 29695,
+      "boundary_offset": -1,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "2fc2f461d6476fb170308fbbf6731fb39231d133464833809824d976e38418c1"
+    },
+    {
+      "record_id": "evaluation-medium_available__F4-B3-kv-block-boundary-minus3",
+      "base_length": 28930,
+      "padding_length": 763,
+      "materialized_prefix_length": 29693,
+      "boundary_offset": -3,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "f5ea96488bc10f6289802e5a914d7046c131ed173e045115cd23edcc8bf6ad39"
+    },
+    {
+      "record_id": "evaluation-medium_available__F4-B3-kv-block-boundary-minus11",
+      "base_length": 28930,
+      "padding_length": 755,
+      "materialized_prefix_length": 29685,
+      "boundary_offset": -11,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "85242db36aa2c518688d1bdbfb72b0e2abd41ee3c9aca94161ddde772e8e1b1e"
+    },
+    {
+      "record_id": "evaluation-long_available__F4-B3-kv-block-boundary-minus1",
+      "base_length": 48688,
+      "padding_length": 463,
+      "materialized_prefix_length": 49151,
+      "boundary_offset": -1,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "4ad1d0c3fc9653bbb7e7b6010aa6a86b86f7cfffcd7ae91db3e88cf92d455cf9"
+    },
+    {
+      "record_id": "evaluation-long_available__F4-B3-kv-block-boundary-minus3",
+      "base_length": 48688,
+      "padding_length": 461,
+      "materialized_prefix_length": 49149,
+      "boundary_offset": -3,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "e5e37f52f0ca688783f2159e14d9108f4ecb13e589e4d913dc16a96cedf48c9d"
+    },
+    {
+      "record_id": "evaluation-long_available__F4-B3-kv-block-boundary-minus11",
+      "base_length": 48688,
+      "padding_length": 453,
+      "materialized_prefix_length": 49141,
+      "boundary_offset": -11,
+      "native64_crossed": true,
+      "candidate1024_crossed": true,
+      "prefix_with_padding_sha256": "741cedeb59e52d9b3ad177a8759220884e1e2fcf8db67eee80839796f75ee600"
+    }
+  ]
+}

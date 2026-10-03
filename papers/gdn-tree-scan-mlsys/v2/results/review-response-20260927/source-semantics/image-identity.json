@@ -1,0 +1,17 @@
+{
+  "captured_utc": "2026-09-27T20:07:43.044326+00:00",
+  "image": "lumo-flywheel-vllm:26.01-py3-v0.19.0-fr9iso",
+  "image_id": "sha256:3e3c5ccc9fa038dab00d5d5192e54cf12c30650e866a643aaef4d450148ead21",
+  "package_root": "/usr/local/lib/python3.12/dist-packages",
+  "source_scope": "Base image files; effective runtime patches must be examined separately",
+  "files": [
+    {
+      "path": "vllm/v1/spec_decode/metrics.py",
+      "sha256": "acf306f1b453f33f9cebd13abfa6547dea5dff4a1dc92d4e9b701daf526746ee"
+    },
+    {
+      "path": "vllm/v1/core/sched/scheduler.py",
+      "sha256": "9f3da2dfce94963e1e1cefc156e4239120f79c6eaf824b2829cac0ee7736b58a"
+    }
+  ]
+}

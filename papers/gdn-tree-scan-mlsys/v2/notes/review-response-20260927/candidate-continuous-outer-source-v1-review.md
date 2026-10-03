@@ -1,0 +1,3 @@
+# Candidate continuous outer collector: source review
+
+The independent qualification reviewer accepted the fixed-population binding and connected outer collector after repair of incomplete transitive hash binding and dropped partial failure evidence. Both accepted hashes are recorded in `PARENT-CONTINUOUS-OUTER-SOURCE-REVIEW-20260930.json`. The runtime uses the already accepted cycle callbacks, one initial joint import, actual deferred seals, and no inserted interior flush or rehydration. This is source acceptance only: no model execution, unit tests, experiment credit, numerical qualification, or gate admission. Serialized audit, launcher connection, native eligibility, and actual connected execution remain pending.

@@ -1,0 +1,10 @@
+{
+  "supplied_test_log_complete": true,
+  "tests_passed": 49,
+  "seconds": 136.63,
+  "start_end_current_hashes_match": 19,
+  "calibration_bundle_member_hashes_verified": 3,
+  "calibration_summary_terminal_and_power_verified": true,
+  "calibration_manifest_sha256": "a9c1cdc3cc561b90b91ef45129f0e6c986ac39d4a0702132455b9f71936d1505",
+  "scope": "independent stdlib verification of source-bound author test log and already accepted calibration receipts; no full test rerun"
+}

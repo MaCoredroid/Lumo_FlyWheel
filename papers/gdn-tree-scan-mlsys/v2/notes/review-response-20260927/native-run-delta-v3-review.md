@@ -1,0 +1,9 @@
+# Native archive v3: bounded source/CPU delta review
+
+Disposition: **PASS** for the intended delta. Reviewed `archive_native_run_delta_v3.py` SHA256 `60d15d5d3ba43fee095ae84d6077dd29b1c475c25b2d7fff3b6894cd51395630` directly against accepted `archive_native_run_delta_v2.py` SHA256 `6cddbbaf3a0cf535b7f0a9139d7f88dfa110137d5d4bc066a89f4406795a7585`. This is the hardened v2 lineage; the unused `archive_native_delta_v2.py` is unrelated to this comparison.
+
+Exactly two substitutions account for the complete byte delta: `safe()` additionally permits the slash-delimited `q1-native-joint-source` and `q1-native-joint-common-o0` namespaces, and the manifest schema advances from v2 to v3. Reversing those substitutions reproduces the accepted v2 bytes exactly. All root/ancestor/descendant symlink refusals, fresh name/manifest/chunk guards, terminal hash checks, authenticated pushed-baseline membership, content-addressed link selection, encrypted chunk verification, complete decrypted member/hash/link checks and feeder/child cleanup therefore remain byte-identical. Baseline-first restore dependency remains explicit.
+
+Thirty-one pure `safe()` controls passed: valid run/object paths in all four namespaces and refusals for absolute paths, `..` traversal, lookalike namespace prefixes, foreign roots and empty input. Source snapshots, exact diff, inverse-delta proof, results and `check_delta.py` are preserved under `p0/monitor/review-response-20260927/native-run-delta-v3-review-20260929/`.
+
+No archive main, encryption, key read, GPU, remote or network operation was executed. Existing v2 archive/decrypt tests were not rerun because their implementation is unchanged. This review does not claim that the completed source inventory or subsequent joint-native run has been backed up; actual terminal selection, archive execution and publication remain parent-owned operations.

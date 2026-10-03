@@ -1,0 +1,25 @@
+# Fixed-sequence native MTP history: bounded source/CPU review
+
+**PASS at SHA `711594e9141d57ba7445efa3bec9c95d7959669f2e289f53d96f3023a5dc78b2`.** This closes source/CPU bookkeeping preparation only. No launcher, hook, complete runtime corpus, MTP numerical criterion, candidate qualification, full Q1 or GPU authority is established.
+
+## Scope and fixed identities
+
+The wrapper extends the accepted joint-prefix history rather than replacing the native first/follow program. `q1_native_mtp_history_sequences_v1.py:30–58` pins fixture SHA `e9683d2f8097ecfe195331d9977f9e57e1ab8482f1d583e04c5268ad92777318`, selects exactly one original F2/F3/F4 record, authenticates the referenced u32le prefix bytes, appends only its frozen padding, and compares the actual request prompt, case chain and extent. The plan/record contents and checkpoint map are deeply read-only. No new task, cycle or input is added.
+
+The first-pass body at lines76–118 retains the accepted prepared target-token/position/hidden inputs, real metadata lease and Program.first call. Its changed predicate admits precisely the declared checkpoint set and requires single-row fresh checkpoints. `_follow` at120–128 retains Base._follow: the real next request allocation authorizes the scratch row, the actual first-pass winner feeds the follow, and scratch/same-input API rows are restored. It marks completion only after that inherited operation succeeds. `finish` at130–173 requires no pending/live work, complete token extent, every declared first/follow exactly once, and one terminal first at the end. It checks emitted schema/record/request/observation/generation, exact checkpoint-derived cycle/phase and each follow's earlier first-pass index, extent, cycle, winner and restored-scratch flag.
+
+Only the final after-Z first phase is labeled as such; interior pending-token consumption is part of the next fixed cycle. This agrees with `q1_continuous_schedule_v1.py`. There is no new interior after-Z observation or numerical tolerance. The accepted one-time `adopt_joint_prefix` bookkeeping remains inherited, preserving source/bootstrap separation and destination ownership. The future runtime caller and raw audit must still bind the job/selected record, perform/authenticate the actual joint import, and supply/check the actual terminal target O2 token. The wrapper accepts that supplied terminal token; it cannot authenticate O2 itself.
+
+## Findings and repairs
+
+Initial source `e1551a13178cff90597742049fd763e7002f8c4ec3bbc4c008c2c41715df90be` accepted an all-zero prompt of the correct length under the genuine fixed record ID and exposed a mutable checkpoint dict. `INITIAL-FINDINGS.json` and the original source preserve both reproductions. Parent added source-prefix/hash/padding comparison plus deeply immutable mappings/tuples and a read-only checkpoint property.
+
+The first connected pass then found that changing the returned final record's cycle to -1 could survive finish. Parent added the emitted identity/phase checks and actual follow-to-first joins above. The final suite rejects this and a foreign record label, owner/generation drift, wrong first-record join, wrong follow token and missing scratch-restoration evidence. All material findings are closed; no criterion relaxation occurred.
+
+## CPU evidence and limits
+
+Twenty-six independent controls pass. Four connected positives execute the original F2 three-cycle longest→root-only→offspine record, F2 eight-cycle frozen walk, F3 pending correction, and F4 boundary-minus1. They use the actual fixed chain/prefix/positions and metadata lease logic through every token, checkpoint, deferred follow and terminal first. Negative controls cover wrong fixed chain/record/prompt/extent; checkpoint/record/plan mutation; omitted/invented/duplicate checkpoint; missing follow; duplicate/misphased/mislabeled terminal; ownership/phase joins; and follow failure. Follow and same-input API work restore the upcoming row. An injected follow failure restores scratch and makes reuse fail. The retained History-v2 single control and six Joint-prefix controls also pass, for33 tests total.
+
+These are explicitly CPU fake-program tests. Prefix materialization is injected at the accepted quiescent boundary, and `J.audit_join` is stubbed for the constructed source document; the actual inherited adoption checks execute. The supplied Program/model/propose are CPU fakes. The actual same-input verifier executes with only its production-source-file check disabled, as in the existing CPU test, and checks/restores both rows. Therefore this evidence does not establish actual model arithmetic, raw source authentication or production runtime connection. No claim of MTP numerical equivalence follows.
+
+Evidence is in `p0/monitor/review-response-20260927/native-mtp-sequences-independent/`: `controls.py`, `RESULTS.json`, initial/final source snapshots, `INITIAL-FINDINGS.json`, retained-test receipt and `REVIEW-SEAL.json`. No module, kernel, hook, launcher, gate, corpus or manuscript was edited by this review, and no remote/GPU/model action occurred.

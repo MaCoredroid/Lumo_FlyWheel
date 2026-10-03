@@ -1,0 +1,53 @@
+{
+  "scope": "Only exact extracted sealer function; injected receipt writer; no launcher, Docker, SSH, GPU or cache operations. No production source edits.",
+  "utc": "2026-09-29T05:34:12.089544+00:00",
+  "hashes": {
+    "tools/run_q1_candidate_cycle0_v1.sh": "2e8d739ec3f32da9b564e7835db028868647d1c62bf67919c804e71fafc59c81",
+    "tools/q1_candidate_cycle0_gate_v1.py": "3baea8b63d027897afdcc9fc39fbbe846be0d58b8dcc01f513171b74dc9e9bb9",
+    "tools/tests/test_q1_candidate_cycle0_gate_v1.py": "53d37bad14677a1c9175e81af7dc602eabfc2e03d9c492d98e23c46a2360b4b0",
+    "tools/run_q1_candidate_stage1_v2_5.sh": "8b475bffbae5087a62580b8bf17f6d9115349021d9a59b6f286447e5611f9de2",
+    "tools/q1_native_smoke_cleanup_v2_3.sh": "44ae0909759e3338fd0c3031c447f07523b2d47072add2404e78aea15cbd0524",
+    "tools/q1_candidate_case_binding_v2.py": "5876f349cbe8126c40d27e70a61d60d208978e5464fe732c76769fe835364882",
+    "tools/q1_candidate_job_v2.py": "a077baabdf77b4c3a61e0d8458f378b2ca0dc531c6d074b3f40d75ce9e854b50",
+    "tools/q1_candidate_hooks_v2.py": "b54c58fb8df781f5715e649244226d62254fccce0d97d70cf22645b781e9eaa0",
+    "tools/q1_candidate_driver_v2.py": "a1a73199402a3776eae02f7af3d7e6f5973bd7a36530b75a3919f6d8a00cd6bb",
+    "tools/q1_patch_candidate_v2.py": "408424da30044d097880aa4307e72764f6f0306017039742e0821bc3ebc0a70a",
+    "tools/generated/fr14_leg3_launch_nomiddleware.q1diag.v3_3.sh": "d0a78fc5031319451f7d28664f59c0ede179e8e9ca2a7579d490e6706d2236a6",
+    "tools/test_log.candidate_cycle0_wrapper_closed_gate.json": "6a0ffe7c0bc083806dfbbce7647b57a0322464c6709dc4666f413aaa896b51b0"
+  },
+  "probes": [
+    {
+      "case": "before_creation",
+      "returncode": 4,
+      "finalized": "READINESS_REFUSED_no_owned_container",
+      "receipt_status": "READINESS_REFUSED_no_owned_container",
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "missing_cid_after_launcher",
+      "returncode": 6,
+      "finalized": "LAUNCHER_NO_CONTAINER_no_owned_container",
+      "receipt_status": "LAUNCHER_NO_CONTAINER_no_owned_container",
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "unproven_cid_after_launcher",
+      "returncode": 6,
+      "finalized": "OWNERSHIP_UNPROVEN_rc=0_no_owned_container",
+      "receipt_status": "OWNERSHIP_UNPROVEN_rc=0_no_owned_container",
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "timeout_missing_cid",
+      "returncode": 6,
+      "finalized": "LAUNCHER_TIMEOUT_no_owned_container",
+      "receipt_status": "LAUNCHER_TIMEOUT_no_owned_container",
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "extracted_sealer_sha256": "fb141302f47eecbeaec0292f066e69c3942d8291d88827a4d9567238be993d17"
+}

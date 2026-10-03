@@ -1,0 +1,325 @@
+{
+ "arm": "CAND",
+ "cases_sha256": "1e8d2ffc628a35c6518291a280006e75a786f8fb69878eb01452f9ed72b91609",
+ "observations": [
+  {
+   "arm": "CAND",
+   "cache_salt": "q1v3-cold-q1v3v3-20261003T005926Z-CAND-p1",
+   "case_id": "p1__N",
+   "mutation": null,
+   "natural_digest": true,
+   "o0_mode": "import",
+   "obs_id": "CAND__p1__N__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p1__Nb",
+   "mutation": null,
+   "natural_digest": false,
+   "o0_mode": "import",
+   "obs_id": "CAND__p1__Nb__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p1__Nr",
+   "mutation": null,
+   "natural_digest": true,
+   "o0_mode": "none",
+   "obs_id": "CAND__p1__Nr__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": "q1v3-cold-q1v3v3-20261003T005926Z-CAND-p2",
+   "case_id": "p2__N",
+   "mutation": null,
+   "natural_digest": true,
+   "o0_mode": "import",
+   "obs_id": "CAND__p2__N__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p2__Nb",
+   "mutation": null,
+   "natural_digest": false,
+   "o0_mode": "import",
+   "obs_id": "CAND__p2__Nb__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p2__Nr",
+   "mutation": null,
+   "natural_digest": true,
+   "o0_mode": "none",
+   "obs_id": "CAND__p2__Nr__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": "q1v3-cold-q1v3v3-20261003T005926Z-CAND-p3",
+   "case_id": "p3__N",
+   "mutation": null,
+   "natural_digest": true,
+   "o0_mode": "import",
+   "obs_id": "CAND__p3__N__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p3__Nb",
+   "mutation": null,
+   "natural_digest": false,
+   "o0_mode": "import",
+   "obs_id": "CAND__p3__Nb__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p3__Nr",
+   "mutation": null,
+   "natural_digest": true,
+   "o0_mode": "none",
+   "obs_id": "CAND__p3__Nr__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": "q1v3-cold-q1v3v3-20261003T005926Z-CAND-p4",
+   "case_id": "p4__N",
+   "mutation": null,
+   "natural_digest": true,
+   "o0_mode": "import",
+   "obs_id": "CAND__p4__N__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p4__Nb",
+   "mutation": null,
+   "natural_digest": false,
+   "o0_mode": "import",
+   "obs_id": "CAND__p4__Nb__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p4__Nr",
+   "mutation": null,
+   "natural_digest": true,
+   "o0_mode": "none",
+   "obs_id": "CAND__p4__Nr__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": "q1v3-cold-q1v3v3-20261003T005926Z-CAND-p5",
+   "case_id": "p5__N",
+   "mutation": null,
+   "natural_digest": true,
+   "o0_mode": "import",
+   "obs_id": "CAND__p5__N__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p5__Nb",
+   "mutation": null,
+   "natural_digest": false,
+   "o0_mode": "import",
+   "obs_id": "CAND__p5__Nb__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p5__Nr",
+   "mutation": null,
+   "natural_digest": true,
+   "o0_mode": "none",
+   "obs_id": "CAND__p5__Nr__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": "q1v3-cold-q1v3v3-20261003T005926Z-CAND-p6",
+   "case_id": "p6__N",
+   "mutation": null,
+   "natural_digest": true,
+   "o0_mode": "import",
+   "obs_id": "CAND__p6__N__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p6__Nb",
+   "mutation": null,
+   "natural_digest": false,
+   "o0_mode": "import",
+   "obs_id": "CAND__p6__Nb__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p6__Nr",
+   "mutation": null,
+   "natural_digest": true,
+   "o0_mode": "none",
+   "obs_id": "CAND__p6__Nr__r0"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p1__N",
+   "mutation": null,
+   "natural_digest": false,
+   "o0_mode": "import",
+   "obs_id": "CAND__p1__N__r1"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p1__N",
+   "mutation": {
+    "cycle": 2,
+    "mutation": "NC_CONV",
+    "sibling_nodes": null
+   },
+   "natural_digest": false,
+   "nc_id": "p1__NC_CONV",
+   "o0_mode": "import",
+   "obs_id": "CAND__p1__N__NC_CONV"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p3__N",
+   "mutation": {
+    "cycle": 1,
+    "mutation": "NC_CONV",
+    "sibling_nodes": null
+   },
+   "natural_digest": false,
+   "nc_id": "p3__NC_CONV",
+   "o0_mode": "import",
+   "obs_id": "CAND__p3__N__NC_CONV"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p1__N",
+   "mutation": {
+    "cycle": 2,
+    "mutation": "NC_GDN",
+    "sibling_nodes": null
+   },
+   "natural_digest": false,
+   "nc_id": "p1__NC_GDN",
+   "o0_mode": "import",
+   "obs_id": "CAND__p1__N__NC_GDN"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p3__N",
+   "mutation": {
+    "cycle": 1,
+    "mutation": "NC_GDN",
+    "sibling_nodes": null
+   },
+   "natural_digest": false,
+   "nc_id": "p3__NC_GDN",
+   "o0_mode": "import",
+   "obs_id": "CAND__p3__N__NC_GDN"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p1__N",
+   "mutation": {
+    "cycle": 2,
+    "mutation": "NC_KV",
+    "sibling_nodes": null
+   },
+   "natural_digest": false,
+   "nc_id": "p1__NC_KV",
+   "o0_mode": "import",
+   "obs_id": "CAND__p1__N__NC_KV"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p3__N",
+   "mutation": {
+    "cycle": 1,
+    "mutation": "NC_KV",
+    "sibling_nodes": null
+   },
+   "natural_digest": false,
+   "nc_id": "p3__NC_KV",
+   "o0_mode": "import",
+   "obs_id": "CAND__p3__N__NC_KV"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p1__N",
+   "mutation": {
+    "cycle": 2,
+    "mutation": "NC_STALE",
+    "sibling_nodes": null
+   },
+   "natural_digest": false,
+   "nc_id": "p1__NC_STALE",
+   "o0_mode": "import",
+   "obs_id": "CAND__p1__N__NC_STALE"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p3__N",
+   "mutation": {
+    "cycle": 1,
+    "mutation": "NC_STALE",
+    "sibling_nodes": null
+   },
+   "natural_digest": false,
+   "nc_id": "p3__NC_STALE",
+   "o0_mode": "import",
+   "obs_id": "CAND__p3__N__NC_STALE"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p1__N",
+   "mutation": {
+    "cycle": 2,
+    "mutation": "NC_SIB",
+    "sibling_nodes": [
+     0,
+     1,
+     4
+    ]
+   },
+   "natural_digest": false,
+   "nc_id": "p1__NC_SIB",
+   "o0_mode": "import",
+   "obs_id": "CAND__p1__N__NC_SIB"
+  },
+  {
+   "arm": "CAND",
+   "cache_salt": null,
+   "case_id": "p3__N",
+   "mutation": {
+    "cycle": 1,
+    "mutation": "NC_SIB",
+    "sibling_nodes": [
+     0,
+     1,
+     4
+    ]
+   },
+   "natural_digest": false,
+   "nc_id": "p3__NC_SIB",
+   "o0_mode": "import",
+   "obs_id": "CAND__p3__N__NC_SIB"
+  }
+ ]
+}

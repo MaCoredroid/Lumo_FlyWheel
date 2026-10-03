@@ -1,0 +1,38 @@
+{
+  "scope": "prospective design/source review only; no operand or reference values generated",
+  "input_sha256": {
+    "experiments/review-response-20260927/m1/M1-NUMERICAL-CONTRACT.v4.2.json": "b98c3af2fd1d7cccf492cc10040a5847b82aefdc940c7570cb777b805ee4ee80",
+    "experiments/review-response-20260927/m1/M1-OBSERVATION-MANIFEST.v1.json": "c5dd3936ca2a94caea87b0f3e68794f892e01c5759204d149af10b7daa10c3f3",
+    "experiments/review-response-20260927/tools/m1/m1_stage_collector_v3_5.py": "0dc680fa0a9ec81496926b177144ff7211e38fbeb63c37a14b6805384db37f3c",
+    "experiments/review-response-20260927/M1-MEASUREMENT-QUALIFICATION-DESIGN-PROPOSAL-v3.1-AMENDMENT.md": "887cca6743daa20950ddd9a3049ee9c728f5d630f2a1c37f9fb7aaa60ed9dc74",
+    "experiments/review-response-20260927/tools/m1/m1_c_baseline_v1_1.py": "00d1c8e5a593f2f1377e43aef2002f446a6ffb7c04ef0689b38cdbe163fd721b",
+    "experiments/review-response-20260927/tools/m1/m1_native_reference_pack_v1.py": "098de87f5b8c1e9ac61be2b02746a34897bc7d7f8da6e64703c8b3ef2a40e257",
+    "experiments/review-response-20260927/tools/m1/m1_native_c1_collect_v1.py": "fa592b675a367394db36a6c235e66c227df74cb5f0d8aa40fd233d445cf9864c",
+    "experiments/review-response-20260927/tools/m1/m1_native_c1_reduce_v1.py": "27a3ac2b96d68713af4ece33828750461cf3b2ce51a7c1d6e321cde5e95214d4",
+    "experiments/review-response-20260927/tools/m1/m1_cycle_driver_v3.py": "4ad560d96844ad4fd6abe7bfc484f01ac0fbb16925c217c27d46c64801a29d75",
+    "experiments/review-response-20260927/tools/m1/m1_stage_entry_v1_1.py": "3374cbb55279705ecdf58746566c077abdfe399e2686f45f7776aa786f02b355",
+    "p0/monitor/review-response-20260927/m1-v35-reviewed-20260928T165708Z/repo/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/FREEZE-M1-ADAPTERS-v3.5.json": "9b3ea3f7e1d7472692f2336b4b0136f7a960a2f5bf88beae3e86713e306e4da3",
+    "notes/review-response-20260927/m1-native-c1-and-gpu-qualification-next-step-review.md": "66fddca7f3a3ffcc56807c5909e937b85035d659d42a3fb7119dbdd02a2474f6"
+  },
+  "manifest_enumeration_independently_recomputed": {
+    "lumo_fixed32_native": {
+      "cells": 71424,
+      "cells_sha256": "ea9296c7299a1850e23e18476ea4af7857fe2921d1d1c64b0329ac46c221cf01"
+    },
+    "weaver_author_default": {
+      "cells": 71424,
+      "cells_sha256": "3b86958374f9b238d2e0d2e3624029c08490e957b0da79aaed2f480956bf99bc"
+    },
+    "weaver_aligned_local": {
+      "cells": 71424,
+      "cells_sha256": "94cf8d5ffcb84721f81fd393c1a13735ecf93c42f66e8fec058d37220ea7ba4e"
+    },
+    "treewy_author_default": {
+      "cells": 71424,
+      "cells_sha256": "6fc67cae570e336ed9c6b369b9778168611c7b2498c4521fd9c59247ef3d1ee6"
+    }
+  },
+  "unique_cells_four_policies": 285696,
+  "two_c0_repeats_observations_if_complete": 571392,
+  "reviewer_note": "The four enumeration comparisons passed using the original stdlib-only generator. An initial subsequent hash-list command used an absent canonical freeze path; the preserved accepted snapshot path is bound here instead. No experiment failed."
+}

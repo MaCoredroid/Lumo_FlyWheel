@@ -1,0 +1,11 @@
+We deploy \sys{} with Qwen Code on ten Astropy tasks from SWE-bench Verified. The agent inspects repositories, edits files, executes tools, and produces a patch for each task. Model serving runs on a single GB10. Six patches resolve their tasks and four fail tests; agent durations range from approximately 2 to 41 minutes. Appendix~\ref{app:workload} gives the task-level outcomes.
+
+For completed request $r$, let $n_r$ be the output-token count, $\ell_r$ the server-recorded end-to-end latency, and $f_r$ the time to first output. We report the pooled decode rate
+\begin{equation}
+ D_{\mathrm{pool}} =
+ \frac{\sum_{r=1}^{R}(n_r-1)}{\sum_{r=1}^{R}(\ell_r-f_r)}.
+ \label{eq:pooled-decode}
+\end{equation}
+Counts and durations cover the same completed requests, including requests that summarize the agent's context when it grows too long. The numerator counts output intervals, and the denominator excludes first-output latency and between-request agent/tool work. Thus, $D_{\mathrm{pool}}$ measures token production over accumulated request durations rather than aggregate wall-clock throughput.
+
+The ten-task deployment records 25.63 pooled tokens/s over 265 completed requests. Appendix~\ref{app:settings} gives the serving configuration. This descriptive rate has no matched native-decoding or chain-MTP baseline (Section~\ref{sec:limitations}).

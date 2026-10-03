@@ -1,0 +1,15 @@
+\begin{tikzpicture}[font=\scriptsize,
+ box/.style={draw=inkblue,fill=inkblue!7,rounded corners,align=center,minimum height=0.7cm},
+ arr/.style={-{Latex[length=1.7mm]},thick,draw=inkblue}]
+\node[box,minimum width=2.0cm] (prefix) at (0,0) {Materialized\\prefix $m$};
+\node[box,minimum width=1.8cm] (tree) at (2.7,0) {Verify\\candidate tree};
+\node[box,draw=mutedgreen,fill=mutedgreen!8,minimum width=2.0cm] (path) at (5.4,0) {Select accepted\\path $a$};
+\draw[arr] (prefix)--(tree);\draw[arr] (tree)--(path);
+\node[box,minimum width=1.8cm] (r) at (0,-1.5) {Recurrent\\$R(ma)$};
+\node[box,minimum width=1.8cm] (c) at (2.7,-1.5) {Convolution\\$C(ma)$};
+\node[box,minimum width=1.8cm] (k) at (5.4,-1.5) {Attention KV\\$K(ma)$};
+\draw[arr] (path.south) -- ++(0,-0.35) -| (r.north);
+\draw[arr] (path.south) -- ++(0,-0.35) -| (c.north);
+\draw[arr] (path.south)--(k.north);
+\node[align=center,text width=7cm] at (2.7,-2.45) {Same selected materialized prefix on all three surfaces;\\correction token $b$ may remain pending for the next forward.};
+\end{tikzpicture}

@@ -1,0 +1,20 @@
+\begin{table}[!htbp]
+\caption{Serving configurations. The \sys{} column describes the ten-task deployment; earlier two-task revisions use the same proposal geometry and a 32,768-token response cap. Exact software versions and launch settings accompany the artifact.}
+\label{tab:serving-config}
+\centering\footnotesize
+\renewcommand{\arraystretch}{1.12}
+\begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}p{0.16\columnwidth}YY@{}}
+\toprule
+Setting & \sys{} / vLLM & SGLang EAGLE \\
+\midrule
+Target & Qwen3.8-27B; ModelOpt mixed NVFP4, BF16 execution & Qwen3.8-27B; as-shipped NVFP4 checkpoint \\
+Proposals & 27 drafts plus root, padded to 32 rows; maximum depth 11 & Steps/top-$k$/draft tokens: 3/1/4 \\
+Attention & Patched FlashAttention-2; head grouping 2, split-K 4 & FlashInfer \\
+Context & 131,072 tokens & 262,144 tokens \\
+Scheduling & 4,096 scheduled tokens; one sequence & 8,192-token prefill chunks \\
+Response cap & 24,000 tokens & 24,000 or 32,768 tokens \\
+Sampling & \multicolumn{2}{p{0.73\columnwidth}}{Temperature 0.6; top-$p$ 0.95; top-$k$ 20; min-$p$ 0; presence penalty 1.0} \\
+Agent & \multicolumn{2}{p{0.73\columnwidth}}{Qwen Code 0.19.4; one task at a time} \\
+\bottomrule
+\end{tabularx}
+\end{table}

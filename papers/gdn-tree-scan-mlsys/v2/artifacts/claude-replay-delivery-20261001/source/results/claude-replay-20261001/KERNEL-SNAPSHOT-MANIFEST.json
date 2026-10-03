@@ -1,0 +1,71 @@
+{
+  "remote_head": "b5d15a209",
+  "status": "prepared_not_GPU_validated",
+  "files": [
+    {
+      "path": "code/kernel/README.md",
+      "bytes": 13548,
+      "sha256": "2b836bae7104d2a4e9d2723ef5851c5ddaf4acf45e50162d877cdfad94500ca2"
+    },
+    {
+      "path": "code/kernel/aggregate.py",
+      "bytes": 8268,
+      "sha256": "982816d69111ec475293c3b48d160f6608576da7f4c21cfb21d1ef030e7699ba"
+    },
+    {
+      "path": "code/kernel/in_container.sh",
+      "bytes": 2060,
+      "sha256": "3a4967fb3f291bd32490917c6dfe25eb67e7dac5f857eadaa97247638c910a4f"
+    },
+    {
+      "path": "code/kernel/kbench_author.py",
+      "bytes": 19651,
+      "sha256": "c7b01746b9c894a418d937d3780bb24cbe4e31882c32cdbdb1941726f24eea2c"
+    },
+    {
+      "path": "code/kernel/kbench_base.py",
+      "bytes": 3110,
+      "sha256": "60de057995c9e8ca2ba2de52b0d97f292966c613d766950da2c4beca800823b1"
+    },
+    {
+      "path": "code/kernel/kbench_common.py",
+      "bytes": 21458,
+      "sha256": "30ea53f47729bfe0476da382b715799b3091c365926333bfc8182ecc5ca3e581"
+    },
+    {
+      "path": "code/kernel/kbench_lumo.py",
+      "bytes": 12831,
+      "sha256": "39a853426efd5d4065b0dc16edd707b7273cc600df235328c8f064d99b207981"
+    },
+    {
+      "path": "code/kernel/kbench_naive.py",
+      "bytes": 12699,
+      "sha256": "341315c1ae98e0d750580644ab7cf06d6e8ce7fdded9e4bc319e96fcde67e1b6"
+    },
+    {
+      "path": "code/kernel/kbench_trees.py",
+      "bytes": 3948,
+      "sha256": "65690890ca0850191ec219507e7de4bb7396ae0f3debc00b401fc518f6988dcf"
+    },
+    {
+      "path": "code/kernel/kernel_bench.py",
+      "bytes": 11913,
+      "sha256": "de4f0e13e8673b3ac46c763d847a4a1e5152738a834dc273b8ad9a4a10d1c33c"
+    },
+    {
+      "path": "code/kernel/kernel_sweep.py",
+      "bytes": 21133,
+      "sha256": "72bc8c8fa25abd8811f9bac765e0701d1fa6922544bfe42774566e21ada8879b"
+    },
+    {
+      "path": "code/kernel/run_kernel_bench.sh",
+      "bytes": 7928,
+      "sha256": "6baff38753d586e3580f5bb20efe7c240faad993603573a94f805d6edd5cff39"
+    },
+    {
+      "path": "code/kernel/tests/test_kbench_cpu.py",
+      "bytes": 16243,
+      "sha256": "ee80b5eb1998e61516bb89028f619eebf890b276a3681406cff8115c1abef8b7"
+    }
+  ]
+}

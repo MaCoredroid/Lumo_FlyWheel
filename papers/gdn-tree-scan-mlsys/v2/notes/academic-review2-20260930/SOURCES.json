@@ -1,0 +1,74 @@
+[
+  {
+    "key": "specinfer",
+    "url": "https://api.crossref.org/works/10.1145/3620666.3651335",
+    "status": "saved"
+  },
+  {
+    "key": "pagedattention",
+    "url": "https://api.crossref.org/works/10.1145/3600006.3613165",
+    "status": "saved"
+  },
+  {
+    "key": "sequoia",
+    "url": "https://api.crossref.org/works/10.52202/079017-4116",
+    "status": "error",
+    "error": "HTTP Error 429: Too Many Requests"
+  },
+  {
+    "key": "sglang",
+    "url": "https://api.crossref.org/works/10.52202/079017-2000",
+    "status": "error",
+    "error": "HTTP Error 429: Too Many Requests"
+  },
+  {
+    "key": "delta",
+    "url": "https://api.crossref.org/works/10.52202/079017-3668",
+    "status": "saved"
+  },
+  {
+    "key": "leviathan",
+    "url": "https://proceedings.mlr.press/v202/leviathan23a.bib",
+    "status": "error",
+    "error": "HTTP Error 404: Not Found"
+  },
+  {
+    "key": "eagle2",
+    "url": "https://aclanthology.org/2024.emnlp-main.422.bib",
+    "status": "saved"
+  },
+  {
+    "key": "flashattention",
+    "url": "https://api2.openreview.net/notes?id=mZn2Xyh9Ec",
+    "status": "error",
+    "error": "HTTP Error 403: Forbidden"
+  },
+  {
+    "key": "swebench",
+    "url": "https://api2.openreview.net/notes?id=VTF8yNQM66",
+    "status": "error",
+    "error": "HTTP Error 403: Forbidden"
+  },
+  {
+    "key": "gateddelta",
+    "url": "https://api2.openreview.net/notes?id=r8H7xhYPwz",
+    "status": "error",
+    "error": "HTTP Error 403: Forbidden"
+  },
+  {
+    "key": "deft",
+    "url": "https://api2.openreview.net/notes?id=2c7pfOqu9k",
+    "status": "error",
+    "error": "HTTP Error 403: Forbidden"
+  },
+  {
+    "key": "flashinfer",
+    "url": "https://proceedings.mlsys.org/paper_files/paper/677-/bibtex",
+    "status": "saved"
+  },
+  {
+    "key": "fasttree",
+    "url": "https://proceedings.mlsys.org/paper_files/paper/662-/bibtex",
+    "status": "saved"
+  }
+]

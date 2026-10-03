@@ -1,0 +1,70 @@
+{
+  "protocol": "sampled, no per-request seed, 43 unique requests, cap 1024",
+  "primary_configuration_arms": [
+    "ar",
+    "mtp1",
+    "mtp3",
+    "mtp5",
+    "mtp7",
+    "lumotree",
+    "sglang3",
+    "sglang5",
+    "sglang7",
+    "sglang9"
+  ],
+  "single_run_variants": [
+    "topk0",
+    "stockfa2",
+    "hostoff"
+  ],
+  "arms": {
+    "lumotree": [
+      "tree-sampled-20261001T055908Z",
+      "tree-sampled-20261001T064332Z",
+      "tree-sampled-20261001T072623Z"
+    ],
+    "mtp5": [
+      "mtp5-sampled-20261001T062146Z",
+      "mtp5-sampled-20261001T070447Z",
+      "mtp5-sampled-20261001T074648Z"
+    ],
+    "ar": [
+      "ar-sampled-20261001T045451Z"
+    ],
+    "mtp1": [
+      "mtp1-sampled-20261001T083640Z"
+    ],
+    "mtp3": [
+      "mtp3-sampled-20261001T053452Z"
+    ],
+    "mtp7": [
+      "mtp7-sampled-20261001T090724Z"
+    ],
+    "sglang3": [
+      "sglang-s3k1d4-sampled-20261001T102640Z"
+    ],
+    "sglang5": [
+      "sglang-s5k1d6-sampled-20261001T104952Z",
+      "sglang-s5k1d6-sampled-20261001T111436Z",
+      "sglang-s5k1d6-sampled-20261001T120232Z"
+    ],
+    "sglang7": [
+      "sglang-s7k1d8-sampled-20261001T113448Z",
+      "sglang-s7k1d8-sampled-20261001T125206Z",
+      "sglang-s7k1d8-sampled-20261001T131243Z"
+    ],
+    "sglang9": [
+      "sglang-s9k1d10-sampled-20261001T123131Z"
+    ],
+    "topk0": [
+      "tree-topk0-sampled-20261001T081505Z"
+    ],
+    "stockfa2": [
+      "tree-fa2stock-sampled-20261001T093533Z"
+    ],
+    "hostoff": [
+      "tree-h27nobake-sampled-20261001T095752Z"
+    ]
+  },
+  "exclusion_rule": "Greedy and earlier request-seeded protocols are separate; failed/incomplete runs are retained but do not enter complete-cohort rate pooling."
+}

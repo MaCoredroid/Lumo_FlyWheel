@@ -1,0 +1,4 @@
+(EngineCore pid=156) INFO 10-01 10:00:45 [gpu_model_runner.py:8217] Model loading took 20.54 GiB memory and 131.897445 seconds
+(EngineCore pid=156) INFO 10-01 10:01:52 [gpu_worker.py:440] Available KV cache memory: 52.74 GiB
+(EngineCore pid=156) INFO 10-01 10:01:52 [kv_cache_utils.py:1337] GPU KV cache size: 202,752 tokens
+(EngineCore pid=156) INFO 10-01 10:02:57 [gpu_worker.py:599] CUDA graph pool memory: 1.47 GiB (actual), 0.17 GiB (estimated), difference: 1.3 GiB (88.2%).

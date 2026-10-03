@@ -1,0 +1,7 @@
+# M1 qualification paper prose — closure
+
+**PASS: both findings in `m1-qualification-paper-source-review.md` are closed.** The revised paragraph defines the cell axes, reduction entries, RMS/maximum error, and the matching reference-magnitude term; identifies the author C1 operators as our predeclared sequential software comparators; distinguishes Weaver TF32 verification from FP32 elementwise replay; and distinguishes Weaver's additive 1e-6 normalization constant from TreeWY's 1e-12 norm floor. Counts, reference/operator scope, failure outcomes and all prior claim limitations remain unchanged.
+
+Reviewed generator SHA-256: `06e01cbf285f558a40cdd88219cb03b1f321f6074d9bbc356e48c040122fda0e`; generated TEX: `a47d54a8e55a2cda867c9494a59c74adf0e44399991356d7c9241571a21570df`. Replacing only this revised paragraph with its prior text reconstructs the exact previously reviewed generator and TEX hashes (`5f7dc509…` and `dea1d5ee…`), proving the delta is confined to that paragraph. JSON remains `ba93cfae27ac922c4635f696d6a720d2c6f1c3ca05160ecd65a40542c00d1afd`; main.tex and paper.config.yaml likewise retain their previously reviewed hashes.
+
+With writes intercepted into memory and directory creation disabled, the current generator passes its acceptance/evidence checks and reproduces both saved outputs byte for byte. No source/manuscript/gate edit, experiment or GPU action occurred. This closes the bounded scientific-content review; it makes no claim about PDF rendering or additional qualification.

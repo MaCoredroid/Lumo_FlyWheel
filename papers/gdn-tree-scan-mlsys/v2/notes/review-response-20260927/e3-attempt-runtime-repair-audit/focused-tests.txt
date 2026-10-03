@@ -1,0 +1,23 @@
+test_f1_changed_launch_timeline_refuses (test_runtime.RuntimeTests.test_f1_changed_launch_timeline_refuses) ... ok
+test_f1_future_boot_refuses (test_runtime.RuntimeTests.test_f1_future_boot_refuses) ... ok
+test_f1_missing_boot_started_refuses (test_runtime.RuntimeTests.test_f1_missing_boot_started_refuses) ... ok
+test_f1_missing_runtime_probe_still_refuses (test_runtime.RuntimeTests.test_f1_missing_runtime_probe_still_refuses) ... ok
+test_f1_old_boot_before_launch_refuses (test_runtime.RuntimeTests.test_f1_old_boot_before_launch_refuses) ... ok
+test_f1_real_collector_stage_transition_preserves_launch (test_runtime.RuntimeTests.test_f1_real_collector_stage_transition_preserves_launch) ... ok
+test_f1_server_restart_during_transition_refuses (test_runtime.RuntimeTests.test_f1_server_restart_during_transition_refuses) ... ok
+test_f1_wrong_boot_identity_refuses_before_start (test_runtime.RuntimeTests.test_f1_wrong_boot_identity_refuses_before_start) ... ok
+test_f2_changed_constructor_file_refuses (test_runtime.RuntimeTests.test_f2_changed_constructor_file_refuses) ... ok
+test_f2_changed_dataset_bytes_refuse_before_factory (test_runtime.RuntimeTests.test_f2_changed_dataset_bytes_refuse_before_factory) ... ok
+test_f2_dataset_changed_during_read_refuses (test_runtime.RuntimeTests.test_f2_dataset_changed_during_read_refuses) ... ok
+test_f2_duplicate_selected_row_refuses (test_runtime.RuntimeTests.test_f2_duplicate_selected_row_refuses) ... ok
+test_f2_even_caller_matching_id_only_refuses (test_runtime.RuntimeTests.test_f2_even_caller_matching_id_only_refuses) ... ok
+test_f2_pinned_row_constructor_reaches_evaluator_and_binds_invocation (test_runtime.RuntimeTests.test_f2_pinned_row_constructor_reaches_evaluator_and_binds_invocation) ... ok
+test_f2_row_metadata_mismatch_refuses_before_factory (test_runtime.RuntimeTests.test_f2_row_metadata_mismatch_refuses_before_factory) ... ok
+test_f2_same_id_wrong_repo_version_script_tests_refused (test_runtime.RuntimeTests.test_f2_same_id_wrong_repo_version_script_tests_refused) ... ok
+test_f2_wrong_constructor_function_source_refuses (test_runtime.RuntimeTests.test_f2_wrong_constructor_function_source_refuses) ... ok
+test_f2_wrong_constructor_import_path_refuses (test_runtime.RuntimeTests.test_f2_wrong_constructor_import_path_refuses) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 1.240s
+
+OK

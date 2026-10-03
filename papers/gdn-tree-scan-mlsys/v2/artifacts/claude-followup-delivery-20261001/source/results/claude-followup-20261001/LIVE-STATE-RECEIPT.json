@@ -1,0 +1,31 @@
+{
+  "utc": "2026-10-01T22:56:17.199745+00:00",
+  "pdt": "2026-10-01T15:56:17.199745-07:00",
+  "containers": [
+    "fr13-bigdenom-hydra27_fixed32_promoab_C_v2swe20261001T224407Z Up 11 minutes"
+  ],
+  "processes": [
+    "2326503    05:53:19 bash /home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/v2exp_pipeline.sh",
+    "2441567    01:16:42 bash /home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/v2exp_pipeline_after.sh",
+    "2476826       23:17 bash run_all.sh --wait-idle",
+    "2478716       12:09 bash /home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/run_swe_tree_arm.sh"
+  ],
+  "task_artifact_paths": [
+    "swe_out/verified/per_task/astropy__astropy-13977/fixed32_task_boundary.json",
+    "swe_out/verified/per_task/astropy__astropy-13977/qwen_runtime_attestation.json",
+    "swe_out/verified/per_task/astropy__astropy-13977/qwen_stderr.log",
+    "swe_out/verified/per_task/astropy__astropy-13977/vllm_metrics_pre.txt",
+    "swe_out/verified/per_task/astropy__astropy-13977/images_arch.json",
+    "swe_out/verified/per_task/astropy__astropy-13977/dcgm_samples.jsonl",
+    "swe_out/verified/per_task/astropy__astropy-13977/prompt.md",
+    "swe_out/verified/per_task/astropy__astropy-13977/workspace/AGENTS.md"
+  ],
+  "progress_logs": [
+    {
+      "path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_orchestrator.log",
+      "bytes": 551,
+      "tail": "[fr14-net-boundary] FR14_NET_BOUNDARY_APPLIED net=fr14-agent-isolated bridge=fr14agent0 gateway=172.31.99.1 proxy_port=8023 rules=9 fingerprint=e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4\n[eval-offload] eval step -> alienware (native x86_64)\n[codex-offload] codex docker -> alienware (x86); endpoint=http://127.0.0.1:8023/v1 (GB10 stays vLLM-only \u2014 uncontended deploy-speed)\n=== [2026-10-01T22:49:57Z] dataset=princeton-nlp/SWE-bench_Verified tag=verified n=10 concurrency=1 ===\n[2026-10-01T22:49:58Z] -> astropy__astropy-13977\n"
+    }
+  ],
+  "q1_idle_log": "[q1v3 2026-10-01T22:33:00Z] run=/home/mark/shared/lumotree-v2exp-runs/q1v3/q1v3-20261001T223300Z stages=A,CAND,B,V,P commit=b3fc6bb3db5eb5faf7ea06a779ab7862a6722256 dirty=0\nfreeze verified (18 files)\n{\"ok\": true, \"cases\": 33, \"cycles\": 147, \"negative_controls\": 10, \"path_usage\": {\"S11\": 34, \"R0\": 37, \"S3\": 19, \"B21\": 6, \"B6\": 7, \"B13\": 12, \"B5\": 7, \"B11\": 6, \"S1\": 12, \"B20\": 6, \"B16\": 1}}\n[q1v3 2026-10-01T22:33:01Z] stage A: kv_bytes=42949672960 packed=0\n[q1v3 2026-10-01T22:33:01Z] waiting for the GPU to become idle\n"
+}

@@ -1,0 +1,86 @@
+{
+  "F1_original_sequence": {
+    "boot_started_at_utc": "2026-09-27T00:00:13+00:00",
+    "injected_start_calls": 1,
+    "launch_bytes_unchanged": true,
+    "raw_boot_identity_verified": true,
+    "real_collector_calls": 1,
+    "result": "PASS"
+  },
+  "F2_internal_construction": {
+    "dataclass_fields": [
+      "FAIL_TO_PASS",
+      "PASS_TO_PASS",
+      "arch",
+      "base_image_tag",
+      "docker_specs",
+      "env_image_tag",
+      "env_script_list",
+      "eval_script_list",
+      "instance_id",
+      "instance_image_tag",
+      "language",
+      "namespace",
+      "repo",
+      "repo_script_list",
+      "version"
+    ],
+    "dataset_constructor_harness_hashes_match": true,
+    "default_options_preserved": true,
+    "evaluator_body": "injected double; no official task tests",
+    "full_projection_hash_matches": true,
+    "generated_script_keys": [
+      "eval_script",
+      "install_repo_script",
+      "setup_env_script"
+    ],
+    "immutable_image_override_verified": true,
+    "result": "PASS",
+    "selected_row_hash_matches": true,
+    "selected_row_reads": 1,
+    "test_content_absent_from_invocation_and_agent_input": true
+  },
+  "F2_original_substitution": {
+    "evaluator_calls": 0,
+    "invocation_created": false,
+    "reason": "caller TestSpec substitution forbidden; construct from pinned selected row",
+    "result": "REFUSED"
+  },
+  "additional_metadata_refusals": {
+    "base_commit": {
+      "evaluator_calls": 0,
+      "reason": "selected evaluator metadata base_commit differs from bound identity",
+      "result": "REFUSED"
+    },
+    "environment_setup_commit": {
+      "evaluator_calls": 0,
+      "reason": "selected evaluator metadata environment_setup_commit differs from bound identity",
+      "result": "REFUSED"
+    },
+    "instance_id": {
+      "evaluator_calls": 0,
+      "reason": "selected task missing/duplicate in pinned dataset",
+      "result": "REFUSED"
+    },
+    "version": {
+      "evaluator_calls": 0,
+      "reason": "selected evaluator metadata version differs from bound identity",
+      "result": "REFUSED"
+    }
+  },
+  "author_full_suite_log_verified": {
+    "independently_rerun": false,
+    "reported_tests": 91
+  },
+  "focused_tests_passed": true,
+  "focused_tests_run": 18,
+  "new_test_names": 18,
+  "original_test_names_retained": 73,
+  "pins_verified": {
+    "MANIFEST.json": "be15b0fcefcf9bda4f70168607829a8be8d849cc358935dfdfe0af903b3eea6d",
+    "evaluator.py": "9b52383d2b5f0e0794cb9dee1194fdf8fe74c846cfc6a4b92a7387f220ac2e71",
+    "runtime.py": "09f35b0faa72839c9a654249f29e20d39b0adae9011082bdb5c0e2cc8778e2e9",
+    "unit-tests-repair-v2.txt": "173cffd9d60c08e0ae103b9b779a97154aec700c3887bd70f68542503596168d"
+  },
+  "scope": "FOCUSED_INJECTED_CPU_ONLY"
+}

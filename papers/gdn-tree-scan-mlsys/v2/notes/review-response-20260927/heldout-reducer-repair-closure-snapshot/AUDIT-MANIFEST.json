@@ -1,0 +1,41 @@
+{
+  "scope": "independent bounded F1/F2 closure; source and synthetic local controls only; no real reduction",
+  "files": {
+    "SNAPSHOT.json": {
+      "sha256": "d5dbb3f458470e6b20a0361e337087fd7d9ba7c68bd5b41a70fafd84bcc76830",
+      "bytes": 905
+    },
+    "check_closure.py": {
+      "sha256": "172cd22a603deae75a7f30fb62e01d7495a2cecb75b3c453f0e7aaf15d5a0196",
+      "bytes": 4758
+    },
+    "completed-test-log.txt": {
+      "sha256": "9dd9d4c3de9141eb5dfc0ce563f785afc832a99affa5880dca7c3b0ecd843a8d",
+      "bytes": 9731
+    },
+    "independent-checks.json": {
+      "sha256": "75798b80c044a673f5eceb62d4175361fbe7ed42409b7bd1a1d845e32d3eb458",
+      "bytes": 1071
+    },
+    "tools/q1_2b_reduce_v2_2_1.py": {
+      "sha256": "a7decd00863f69b6970f7e1015a1d725681f046ebc65c63a535d5bc42da00cc8",
+      "bytes": 63711
+    },
+    "tools/run_q1_2b_reduction_repair_v2_2_1.sh": {
+      "sha256": "6aa6a9c3f374840b728d64f565c73bbd445e8843105d0bc06259fbe121c383c5",
+      "bytes": 8244
+    },
+    "tools/test_log.q1_2b.v2_2_1_reduction_repair.attempt1.txt": {
+      "sha256": "e1267c1dea9f3c1fc7e96a41d41578dd17022410fa8209fe74c1d5108e066d8a",
+      "bytes": 8858
+    },
+    "tools/test_log.q1_2b.v2_2_1_reduction_repair.attempt2.txt": {
+      "sha256": "8162d00b8614bad3910443e0268fd3a4b64ef1e8aa0b897891e6d461f76aa6a6",
+      "bytes": 2928
+    },
+    "tools/tests/test_q1_2b_v2_2_1_reduction_repair.py": {
+      "sha256": "4404061bcc4c24c1274b3e4542fb47ab4a760b92691e90e7e1267027da494dc2",
+      "bytes": 31315
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "schema": "lumotree-review-response-p0-gap-register-v1",
+  "items": [
+    {
+      "issue": "Excluded earlier SGLang rate omitted",
+      "status": "resolved_by_existing_data",
+      "evidence": "p0-evidence.json:cohorts.SGLang_earlier",
+      "finding": "30.70049467291224 pooled tok/s; one empty patch remains excluded from the separate retrospective patch-producing comparison."
+    },
+    {
+      "issue": "Paired task times and outcomes missing",
+      "status": "resolved_by_existing_data",
+      "evidence": "all-attempts.csv and paired-task-outcomes.tex",
+      "finding": "22 complete-bracket attempts; six additional adverse/incomplete comparison records and seven prior lineage records retained without invented rates. Sr12 subset not double-counted."
+    },
+    {
+      "issue": "Speculative acceptance absent",
+      "status": "partially_resolved_by_existing_data",
+      "evidence": "output-acceptance-histograms.csv and source-semantics/",
+      "finding": "Tree output-side accepted drafts/event and accepted-length histograms recovered. Logical branch selection and commit-side histograms are not inferred. SGLang recent-window gauges cannot recover task-total acceptance."
+    },
+    {
+      "issue": "Per-stage costs absent",
+      "status": "partially_resolved_by_existing_data",
+      "evidence": "phase-counters.csv",
+      "finding": "Forward/drafter/committer-dispatch task-bracket totals align by span count. Wall spans have a smaller population. No isolated acceptance, recurrent replay, attention or convolution timing and no overhead control is recovered."
+    },
+    {
+      "issue": "Engine configuration underdescribed",
+      "status": "partially_resolved_by_existing_data",
+      "evidence": "p0-evidence.json:configuration",
+      "finding": "Patched vLLM version, tree commits, FA2 hash, EAGLE 3/1/4 launch, requested sampling and caps recovered. Exact historical SGLang loaded binaries and checkpoint/tokenizer/precision identity across stacks remain missing."
+    },
+    {
+      "issue": "Metric source identity",
+      "status": "matched_base_source_recovered_runtime_limit_explicit",
+      "evidence": "p0-evidence.json:metric_source_extraction and historical_patcher_review",
+      "finding": "Immutable base image ID/digest matches historical Cqc10; metrics and scheduler source hashes verified. Historical runtime patcher functions were reviewed separately; this does not retroactively attest every installed scheduler byte."
+    },
+    {
+      "issue": "Current-route next-forward continuation qualification",
+      "status": "requires_fresh_measurement",
+      "evidence": "plan/2026-09-27-adversarial-review-response.md:E1",
+      "finding": "Task outcomes and counter conservation do not qualify recurrent/conv/KV/drafter continuation or numerical equivalence."
+    },
+    {
+      "issue": "Mechanism-specific advantage over compact-state families",
+      "status": "requires_fresh_measurement",
+      "evidence": "plan/2026-09-27-adversarial-review-response.md:E2",
+      "finding": "Need same-input verification-plus-publication comparison with conversion, deferred flush, scratch, traffic and spill accounting."
+    },
+    {
+      "issue": "Selected maximum over development revisions used as headline",
+      "status": "requires_confirmation_or_narrower_claim",
+      "evidence": "p0-evidence.json:cohorts",
+      "finding": "29.09 is the maximum of three distinct tree revisions on the recovered pair. Revisions are not independent fixed-build repeats."
+    },
+    {
+      "issue": "Historical native/DSpark/DFlash runs mistaken for absent testing or current controls",
+      "status": "resolved_scope_with_fresh_control_still_required",
+      "evidence": "notes/comparator-git-history-2026-09-23.md",
+      "finding": "Those experiments exist but do not provide the frozen current-build same-stack four-arm workload experiment."
+    }
+  ]
+}

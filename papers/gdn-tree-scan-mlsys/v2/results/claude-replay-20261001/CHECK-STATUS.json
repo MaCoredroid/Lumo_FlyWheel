@@ -1,0 +1,16 @@
+{
+  "checked_utc": "2026-10-01T15:59:26Z",
+  "checked_local": "2026-10-01 08:59:26 America/Los_Angeles",
+  "running_experiment_jobs": 1,
+  "job": "v2exp-mtp5",
+  "stage": "distribution_diagnostic_sample_collection",
+  "collected": 16,
+  "planned": 800,
+  "completed_diagnostic_collections": 1,
+  "completed_fullmodel_qualification_cases": 0,
+  "completed_timed_mechanism_cells": 0,
+  "new_workload_attempts": 0,
+  "planned_new_workload_attempts": 30,
+  "old_scope": "closed review-response campaign remains separate",
+  "completion_eta": "No defensible overall scientific-completion ETA; rough remaining distribution collection projection 1\u20133h"
+}

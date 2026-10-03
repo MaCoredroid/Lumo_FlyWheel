@@ -1,0 +1,19 @@
+# M1 adapter v1: parent cycle and accounting review
+
+28 September 2026. Reviewed freeze `6cc862ea5d7b86768ed3ce8fc4e3b17e1e4296ff5f16a2aa88cad17029e15b6f`; all 21 frozen members match locally. This is a useful CPU scaffold, explicitly submitted without a real in-image executor. It is not ready for an M1 execution gate. No kernel, numerical case or timing experiment was run by this review.
+
+## Corrections before the runtime freeze
+
+1. **Deliver the actual replay inputs to the executor.** `tools/m1/m1_cycle_driver.py:93` constructs the full Weaver replay arguments but passes only its callable name. The selected leaf, stash tensors, bank and cache indices are lost. Line 121 similarly drops Lumo's accepted-path tensor and passes only the length; different branches of the same length cannot be distinguished at that call boundary. Carry the actual tensors/metadata through the executor interface and bind Lumo to its real prepared-scan and native-replay backend. Add a check with two different equal-length branches so the issue cannot hide behind length-only assertions.
+
+2. **Make TreeWY's commit a single real operation.** Lines 107–108 send an invented `#commit(prev_leaf)` callable and then the wrapper that already commits the previous leaf. The synthetic executor also mutates its state for the final `flush` phase. A live executor must invoke the author wrapper once per layer per call, including the final deferred flush. Model the internal commit as an observation/event, not a second executable callable. Authenticate the durable bank after the real call. Preserve the final flush cost.
+
+3. **Bind charged work to the executed boundary and correct allocation sizes.** The TreeWY reorder at line 99 runs once before the sequence, while `m1_accounting.py:70` describes an inside-boundary gather for every layer and step. Output inverse remapping is listed at line 75 but not performed in the driver. Either execute those transformations at the declared common raw-input boundary or explicitly report a separately named prearranged-input boundary. The allocation at `m1_accounting.py:62` has shape `[1]`, dtype uint8 and `bytes=1`, although its note describes the large reordered operand bundle. Replace it with the actual storage allocations and lifetimes. Separate unique live storage, cumulative allocation volume, logical exports and measured traffic; the current calculated byte entries are not traffic measurements.
+
+4. **Separate synthetic receipts from measured evidence.** The driver hardcodes execution/warmup/graph booleans (lines 95–142) even with `DryRunExecutor`. A structural validator cannot establish these facts. A parent CPU probe confirms that a receipt with `image_id='none (cpu dry run)'` and `gpu_name='none'` still validates after adding a timing field. Add an explicit execution mode and reject synthetic receipts in the runtime/result reducer. Runtime receipts must derive the relevant assertions from actual calls, state-byte digests, source/image identities and observed timing/resource records. Preserve dry-run receipts as preparation only. No existing result was promoted by this review.
+
+## Next package
+
+Retain v1 and its test log. Submit the repaired source plus a real pinned-image executor and a bounded untimed initialization/verification plan for parent review. Freeze common operands, exact forced paths, carried-state semantics, methods/variants, layer count, repetitions, initialization/reset placement and stop rules before numerical outcomes. Author-default and aligned local ports remain separate; blocked aligned TreeWY remains blocked until its exact diff is reviewed. Broader candidate state/logit qualification continues separately.
+
+Independent adapter/kernel-semantic review is in progress. These findings do not authorize a GPU launch or another memory reclaim. The prior native smoke has separately passed its limited instrumentation contract.

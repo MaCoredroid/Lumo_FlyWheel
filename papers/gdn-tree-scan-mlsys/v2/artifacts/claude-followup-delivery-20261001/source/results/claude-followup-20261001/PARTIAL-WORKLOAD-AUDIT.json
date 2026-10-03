@@ -1,0 +1,111 @@
+{
+  "scope": "first5 completed LumoTree attempts of30; partial cohort not paper main result",
+  "reports": [
+    {
+      "task": "astropy__astropy-13977",
+      "report": {
+        "track": "swe_bench",
+        "instance_id": "astropy__astropy-13977",
+        "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+        "dataset_name": "princeton-nlp/SWE-bench_Verified",
+        "verdict": "failed",
+        "passed": false,
+        "failure_mode": "tests_failed",
+        "harness_exit_code": 0,
+        "eval_wall_clock_seconds": 53.187,
+        "error": null,
+        "arch": "x86_64",
+        "eval_host": "mark-Alienware-Aurora-ACT1250",
+        "run_id": "x86eval-out-1790895432",
+        "namespace": "swebench",
+        "cache_level": "env"
+      },
+      "sha256": "7d929e4d74b606d8be10dab70f4254ba40d467da0fcd5e3cfed191e6bde2117e"
+    },
+    {
+      "task": "astropy__astropy-14096",
+      "report": {
+        "track": "swe_bench",
+        "instance_id": "astropy__astropy-14096",
+        "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+        "dataset_name": "princeton-nlp/SWE-bench_Verified",
+        "verdict": "resolved",
+        "passed": true,
+        "failure_mode": "tests_passed",
+        "harness_exit_code": 0,
+        "eval_wall_clock_seconds": 53.307,
+        "error": null,
+        "arch": "x86_64",
+        "eval_host": "mark-Alienware-Aurora-ACT1250",
+        "run_id": "x86eval-out-1790896884",
+        "namespace": "swebench",
+        "cache_level": "env"
+      },
+      "sha256": "4682955e51be42a43be900ed3f083de8e2bee0c1b00bd18ccdd5426fb538e352"
+    },
+    {
+      "task": "astropy__astropy-14182",
+      "report": {
+        "track": "swe_bench",
+        "instance_id": "astropy__astropy-14182",
+        "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+        "dataset_name": "princeton-nlp/SWE-bench_Verified",
+        "verdict": "failed",
+        "passed": false,
+        "failure_mode": "tests_failed",
+        "harness_exit_code": 0,
+        "eval_wall_clock_seconds": 51.04,
+        "error": null,
+        "arch": "x86_64",
+        "eval_host": "mark-Alienware-Aurora-ACT1250",
+        "run_id": "x86eval-out-1790897235",
+        "namespace": "swebench",
+        "cache_level": "env"
+      },
+      "sha256": "e313603a35db377866546ebccd437c25a80c49383889084ec04330779bc53e17"
+    },
+    {
+      "task": "astropy__astropy-14309",
+      "report": {
+        "track": "swe_bench",
+        "instance_id": "astropy__astropy-14309",
+        "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+        "dataset_name": "princeton-nlp/SWE-bench_Verified",
+        "verdict": "resolved",
+        "passed": true,
+        "failure_mode": "tests_passed",
+        "harness_exit_code": 0,
+        "eval_wall_clock_seconds": 41.793,
+        "error": null,
+        "arch": "x86_64",
+        "eval_host": "mark-Alienware-Aurora-ACT1250",
+        "run_id": "x86eval-out-1790897433",
+        "namespace": "swebench",
+        "cache_level": "env"
+      },
+      "sha256": "a2621cdc63818f80f05fbc69e8203e1c382ed18f2f0ce8e1473adc00aa2936cd"
+    },
+    {
+      "task": "astropy__astropy-14365",
+      "report": {
+        "track": "swe_bench",
+        "instance_id": "astropy__astropy-14365",
+        "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+        "dataset_name": "princeton-nlp/SWE-bench_Verified",
+        "verdict": "failed",
+        "passed": false,
+        "failure_mode": "tests_failed",
+        "harness_exit_code": 0,
+        "eval_wall_clock_seconds": 40.382,
+        "error": null,
+        "arch": "x86_64",
+        "eval_host": "mark-Alienware-Aurora-ACT1250",
+        "run_id": "x86eval-out-1790897601",
+        "namespace": "swebench",
+        "cache_level": "env"
+      },
+      "sha256": "2322ec5e825f29828826b71533062706bf822cf857aae7ef32cc5b84071a0b2b"
+    }
+  ],
+  "files_SHA_verified": 30
+}

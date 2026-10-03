@@ -1,0 +1,61 @@
+{
+  "schema": "lumotree.paper-results-delivery.v1",
+  "created_utc": "2026-10-02T23:20:05.249351+00:00",
+  "paper": {
+    "pdf": "main.pdf",
+    "pages": 14,
+    "reference_start_page": 13,
+    "sha256": "ec39a2338411ba2e15c6b909750721b25e3c70bdc464f11784f6b365b7f96a24"
+  },
+  "source_package": {
+    "path": "artifacts/results-update-delivery-20261002/lumotree-source-20261002.tar.gz",
+    "sha256": "b56bc34d1b835ad87bfab0eeb795f56434edef9ce51fc32fec641af75faaa138",
+    "dependency_files": 19,
+    "all_current_and_archive_dependency_hashes_match": true,
+    "clean_build_succeeded": true,
+    "clean_build_text_equal": true,
+    "critical_latex_warnings": 0
+  },
+  "data_supplement": {
+    "path": "artifacts/results-update-delivery-20261002/lumotree-results-supplement-20261002.tar.gz",
+    "sha256": "6ebc7df0cd3279cd77ab26617f785396e217dc231e2a5356acdd3709b5ad5652",
+    "files": 858,
+    "all_archive_file_hashes_verified": true,
+    "manifest_sha256": "6090837cf4f10594ed1d64b5f9ab3460f73f6b4f3e7f49acf6189fe23d34be79"
+  },
+  "numerical_audit": {
+    "path": "results/claude-results-20261002/AUDIT.json",
+    "sha256": "91a6e5f5eb027f3f454ca5506082dae42d7a5d424598d63770cda0f5a2fc1838",
+    "remote_head": "da2312962a365fc6808af6304c53436b08d7fd2e",
+    "remote_files_sha_verified": 271
+  },
+  "review": {
+    "path": "notes/results-update-20261002/REVIEW.md",
+    "sha256": "e6b6587b2bd6c663d1e32fefd5f2fb6389329c7287e8e6c623338d17b197921c",
+    "final_render_pages": 14,
+    "all_pages_visually_reviewed": true,
+    "new_result_pages_individually_reviewed": [
+      8,
+      9,
+      10
+    ]
+  },
+  "scientific_disposition": {
+    "workload_attempts": 30,
+    "tasks_per_arm": 10,
+    "resolved": {
+      "LumoTree": 5,
+      "native_MTP5": 6,
+      "SGLang": 5
+    },
+    "confirmation_requests_per_arm": 43,
+    "confirmation_rate_LumoTree_vs_MTP5_percent": 11.9,
+    "confirmation_SGLang_token_ID_matched": false,
+    "new_tree_topologies_executed": false,
+    "fullmodel_cycles": 147,
+    "fullmodel_frozen_verdict": "INCONCLUSIVE",
+    "posthoc_state_analysis_is_qualification": false,
+    "sampled_distribution_verdict": "uninformative"
+  },
+  "scope": "Backfill existing completed experiment records only. No new model execution, release tag change, git push, publication or arXiv upload."
+}

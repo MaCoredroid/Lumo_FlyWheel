@@ -1,0 +1,20 @@
+# Native MTP driver v3: bounded connection review
+
+**PASS for prospective source readiness.** The new driver connects salted requests to matching sealed controls and the separately reviewed MTP raw auditor, and stops on an invalid observation. No new source blocker was found. This is not a launch approval or a numerical/runtime qualification result.
+
+Reviewed driver SHA: `c9c1343adc6e162f55fb5bdea402b1ba7035e09538c6f23b6d2c2a69ff2429b9` (`tools/q1_reference_driver_v3_mtp.py`). Accepted predecessor v2 SHA: `47314063eaa46b59eaa4fa60978353caef570bd8b39ebe5f127c56ff94702159`. Imported raw auditor matches the supplied accepted snapshot: `d7ca5a80415f00c27acdbd4e44b94cbe6f00cac3b231992dfc400691cc87393c`. All were copied and rechecked at sealing in `p0/monitor/review-response-20260927/native-mtp-driver-v3-review/`.
+
+The delta is bounded:
+
+- The job must contain the explicit native MTP policy before the driver creates its output or sends a request. Existing jobs without this policy are intentionally refused.
+- `observation_salt` hashes a domain separator, the exact job SHA and complete observation ID. The observation ID includes run, arm, process, repeat and case. The identical value enters the atomically replaced control file and completion HTTP payload. The driver recomputes it from expected job/observation identity when authenticating the sealed control; it does not trust an arbitrary salt copied from the seal.
+- The existing target object/hash authentication and seal identity checks remain. The additional `audit(doc, objects_root)` is mandatory. Import failures and ordinary audit exceptions append a seal failure. At the exact accepted auditor version, successful return is necessarily the validated `valid: True` result; invalid inputs raise. No alternate audit result is used to bypass the checks. The returned audit detail is saved in the per-observation driver receipt.
+- HTTP error, missing or invalid seal, audit failure, salt mismatch, and prompt-token mismatch still stop the request loop. The complete verdict requires the exact expected count and authenticated observations. The driver has no fallback to the old raw reader when MTP audit fails.
+
+The cold-history policy is source-supported, rather than inferred merely from the policy string. Earlier accepted source review followed completion cache_salt through request preprocessing, renderer prompt extras, token-engine input and first-block cache hashing. This driver now sends that field. The accepted history requires a real initial computed offset of zero and continuous complete prepared input history; the raw auditor validates the saved history from extent zero. Thus a salt token alone cannot qualify an APC-skipped history. Actual runtime enforcement remains to be observed, and this policy does not establish APC/reuse lifecycle coverage.
+
+**Independent CPU controls: 11 named cases PASS.** They execute this actual driver with injected transport and synthetic sealed files, including a negative using the actual accepted raw auditor. A valid injected-audit control completes two requests. Missing auditor, actual auditor with missing MTP, injected audit exception, a prior observation's salt, wrong job identity, HTTP failure and prompt mismatch each stop after one request. Missing or changed policy fails before creating output or requesting HTTP. A separate cross-product yields 32 distinct salts across job, arm, process, repeat and case. No HTTP, model, Docker or GPU operation was performed. `INDEPENDENT-CONTROLS.json` and its source preserve these results.
+
+Parent-supplied connected CPU log `test_log.native_mtp_driver_v3.attempt1.txt` reports three passing methods and was inspected, not independently rerun. Its audit-positive path is explicitly injected. The accepted full raw auditor's arithmetic and 35 controls are not re-reviewed here.
+
+Final packaging must bind this driver, the exact accepted auditor and its imports/runtime; a prospective launcher must use a job with the explicit policy and retain the normal model ID. No source change is requested by this review. No experiment count advances.

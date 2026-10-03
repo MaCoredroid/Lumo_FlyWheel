@@ -1,0 +1,44 @@
+{
+  "schema": "independent.native-smoke-embed-repair.cpu.v1",
+  "status": "PASS_BOUNDED_CPU_SOURCE_REVIEW",
+  "checks": [
+    "pinned stock source and 5 anchors; emitted runner compiles; prehook after preparation before forward",
+    "already patched source refuses",
+    "missing anchor refuses",
+    "both arms preserve env/serve/docker argv and invoke new strict patcher",
+    "embed buffer uses nonzero query_start_loc rather than stale slot zero",
+    "non-None argument takes precedence over runner buffer",
+    "invalid buffer seals once before state capture",
+    "invalid position seals once before state capture",
+    "invalid wrong-token seals once before state capture",
+    "invalid wrong-position seals once before state capture",
+    "invalid wrong-mrope-row0 seals once before state capture",
+    "mRoPE-shaped position accepts matching row0 at request offset",
+    "actual sampled-token method forces root,z,terminal and embed observer consumes chain",
+    "only boot facts and preforward method AST differ; forcing/numerical/sealing methods identical",
+    "actual shell syntax and no-write/no-launch dry-run pass",
+    "all frozen local campaign and repository member hashes/sizes match"
+  ],
+  "count": 16,
+  "source_sha256": {
+    "q1_reference_hooks_v2_1.py": "1ac939405de01a4c22e5d73decb9994cfb3a3214fd838ed2a734b39110b2b8cf",
+    "q1_patch_reference_runner_v2_1.py": "ee61c5d779cc39dce9757bae944f51d991bf2b15ef89b04bf69e9a58c91b315a",
+    "q1_spec_off_engine_config_v2_1.py": "cd7fbc1322c9c4206990f2223728c2b49ae551c1a644a99fbafd2576380deb14",
+    "run_q1_native_smoke_v2_4.sh": "df5e0c1982f12060a4277bcd79d9762c371ed009c8a5ed47d3cfc7062903a721"
+  },
+  "stock_runner_sha256": "904d7d357ba076c93cefee5f7f030e2be577dc12599aebdf56395b894e2077b0",
+  "emitted_runner_sha256": "3bc57571d11944ec9af43f1db49a51d1685e1a75b625815f265699deba65b73f",
+  "freeze": {
+    "name": "FREEZE-Q1-FULLMODEL-DESIGN-v2.5.json",
+    "file_sha256": "81b94eb336080ec5fa3aa6043b136b8b1667454fc0dcc740eda16aa15568bdc5",
+    "local_campaign_members": 61,
+    "repo_members": 3,
+    "mismatches": []
+  },
+  "limits": [
+    "No torch, pytest, vLLM, model or GPU imports/execution. Author Torch controls were reviewed as source-bound evidence, not rerun here.",
+    "Seam probes stub state/boot/IO; they do not establish actual runtime O0/O1/O2 validity.",
+    "mRoPE check observes row0 and shape; it is not an independent all-axis or multimodal qualification.",
+    "No launch authorization or numerical qualification."
+  ]
+}

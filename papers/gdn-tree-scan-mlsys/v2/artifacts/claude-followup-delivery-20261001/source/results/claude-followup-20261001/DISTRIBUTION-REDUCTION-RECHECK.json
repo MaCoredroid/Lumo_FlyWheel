@@ -1,0 +1,52 @@
+{
+  "scope": "CPU reduction only; no new inference",
+  "analysis_sha256": "52ef7880fab15f9f2896b5048c49ccbf0567241d24889b50cfff6d4569655717",
+  "tokenizer_sha256": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3",
+  "exact_result_match": true,
+  "results": {
+    "NULL": {
+      "requests": 20,
+      "samples_x": 800,
+      "samples_y": 800,
+      "T_obs": 106.575,
+      "null_mean": 75.897,
+      "null_sd": 3.021,
+      "excess": 30.678,
+      "z": 10.16,
+      "p_perm": 0.001
+    },
+    "NEG": {
+      "requests": 20,
+      "samples_x": 800,
+      "samples_y": 800,
+      "T_obs": 102.225,
+      "null_mean": 81.552,
+      "null_sd": 2.851,
+      "excess": 20.673,
+      "z": 7.25,
+      "p_perm": 0.001
+    },
+    "CAND_lumotree": {
+      "requests": 20,
+      "samples_x": 800,
+      "samples_y": 800,
+      "T_obs": 107.65,
+      "null_mean": 76.732,
+      "null_sd": 2.715,
+      "excess": 30.918,
+      "z": 11.39,
+      "p_perm": 0.001
+    },
+    "SEC_mtp5": {
+      "requests": 20,
+      "samples_x": 800,
+      "samples_y": 800,
+      "T_obs": 96.925,
+      "null_mean": 74.844,
+      "null_sd": 3.039,
+      "excess": 22.081,
+      "z": 7.27,
+      "p_perm": 0.001
+    }
+  }
+}

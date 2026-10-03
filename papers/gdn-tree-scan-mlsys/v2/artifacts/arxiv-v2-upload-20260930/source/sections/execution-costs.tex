@@ -1,0 +1,19 @@
+The ten-task deployment emits an average of 4.05 accepted drafts per speculative event. This counter measures output draft length after filtering, excluding the correction or bonus token. It does not identify the branch published into persistent state. Physical draft slots also include padding and are distinct from logical candidates.
+
+\begin{table}[t]
+\caption{Acceptance and mean GPU span durations for the ten-task deployment. Dispatch includes acceptance, path handling, and state commitment.}
+\label{tab:recovered-telemetry}
+\centering\small
+\begin{tabular}{@{}lr@{}}
+\toprule
+Metric & Value \\
+\midrule
+Accepted drafts per event & 4.05 \\
+Target span (ms) & 114.89 \\
+Drafter span (ms) & 54.76 \\
+Dispatch span (ms) & 20.15 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:recovered-telemetry} summarizes the phase measurements. Each timer is reduced using its own duration sum and span count, with no outstanding samples at task boundaries. Dispatch combines sampling and native replay; the spans do not form an isolated critical-path decomposition.

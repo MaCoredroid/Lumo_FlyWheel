@@ -1,0 +1,55 @@
+{
+  "source_path": "/Users/zhiyuanma/.claude/projects/-Users-zhiyuanma-work-CursorWS-Lumo-FlyWheel/4b42a19b-dcd2-4f56-b934-a8a23ca4ec19.jsonl",
+  "snapshot_bytes": 20185494,
+  "snapshot_sha256": "cfef991ef11d1ee8fc7add9442d09ad54335f45e78ce56ce56c0ac60dd8ea026",
+  "records": [
+    {
+      "line": 607,
+      "type": "user",
+      "timestamp": "2026-10-01T01:30:02.797Z",
+      "text": "How much of those is in git itself and how much need to be new? but considering we want to use lastest code, probably should do those now. Could you help?"
+    },
+    {
+      "line": 1308,
+      "type": "user",
+      "timestamp": "2026-10-01T04:33:20.391Z",
+      "text": "go ahead, keep running and report results per 10min"
+    },
+    {
+      "line": 2808,
+      "type": "assistant",
+      "timestamp": "2026-10-01T13:33:46.819Z",
+      "text": "The replay benchmark is complete, and it changes the paper's claim. On the latest code, LumoTree beats vLLM's own chain drafting by 10%, but it does not beat a tuned SGLang EAGLE chain. LumoTree averages 28.81 tokens/s. SGLang's best setting averages 30.06, 4.3% faster but only marginally significant at about p \u2248 0.09. SGLang's 5-step setting is level with LumoTree.\n\nEvery arm used the same checkpoint and decoded the same 43 recorded agent requests. Requests used the same chat template and the deployed sampling settings with no per-request seed, at batch size 1.\n\n| Arm | Runs | Decode rate, mean \u00b1 spread | Mean accepted per step |\n|---|---|---|---|\n| SGLang EAGLE, 7 steps, 8 draft tokens | 3 | **30.06 \u00b1 0.78** | not exposed |\n| SGLang EAGLE, 5 steps, 6 draft tokens | 3 | 29.28 \u00b1 0.07 | not exposed |\n| **LumoTree, deployed** | 3 | **28.81 \u00b1 0.54** | 5.48 |\n| SGLang EAGLE, 9 steps, 10 draft tokens | 1 | 28.81 | not exposed |\n| SGLang EAGLE, 3 steps, 4 draft tokens | 1 | 26.32 | not exposed |\n| vLLM MTP-5 | 3 | 26.12 \u00b1 0.10 | 4.17 |\n| vLLM MTP-7 | 1 | 25.72 | 4.67 |\n| vLLM MTP-3 | 1 | 22.06 | 3.17 |\n| vLLM MTP-1 | 1 | 15.37 | 1.88 |\n| Plain decoding | 1 | 10.54 | n/a |\n\nRates are in tokens per second.\n\n**LumoTree ablations, one run each:**\n\n| Variant | Decode rate | Effect |\n|---|---|---|\n| Stock attention instead of split-K | 27.11 tok/s | split-K adds about 6% |\n| Fused draft selection off | 29.40 tok/s | no measurable effect |\n| Host-side optimization off | 29.02 tok/s | no measurable effect |\n\nThe 31-node tree profile fails at runtime on the latest code, so there's no tree-size result.\n\n**What this means for the paper:**\n- **Supported claim.** LumoTree accepts the most tokens per step of any vLLM arm, 5.5 against 4.2 for MTP-5. It beats every vLLM chain length by 10% or more, and vLLM chains stop improving after 5 draft tokens.\n- **Unsupported claim.** LumoTree does not beat SGLang. SGLang's per-step overhead is low enough that a plain chain matches or slightly beats the tree. Much of LumoTree's lead over vLLM chains is vLLM's own overhead, not the tree.\n- **Honest framing.** A tree verifier for hybrid models that lifts vLLM to SGLang-level speed. Split-K attention is the only optimization with a measured payoff.\n- **Coverage is narrow.** All 43 requests come from two Astropy agent sessions, and every run is at batch size 1.\n\n**Operational facts for the paper:**\n- **Sampling constraints.** The deployed route refuses temperature 0 and per-request seeds.\n- **Correctness test.** Greedy output match can't serve as one, because native MTP-5 matches plain decoding on only 1 of 43 requests.\n\nEverything is committed on the GB10 branch `claude/v2-experiments-20260930` at commit `93bc49cfa`. The summary is in `scripts/v2exp/results/replay_summary_20261001.json`. The GPU is idle, so I've stopped the 10-minute reports.\n\n**Decision for you.** The remaining plan items are:\n- the same-build 10-task SWE agent study, about a day of setup and 15 GPU hours;\n- a distributional correctness check, about 1\u20132 days;\n- kernel timing and memory, 2\u20134 days.\n\nThey make sense if the paper's frame is \"brings vLLM to parity with SGLang\". If you want to keep the frame \"beats the best available stack\", these results argue against it. Tell me which frame you want and I'll continue with the matching experiments. Codex can update the paper text with these numbers in the meantime."
+    },
+    {
+      "line": 2818,
+      "type": "user",
+      "timestamp": "2026-10-01T15:04:51.148Z",
+      "text": "\n\n<pasted_content id=\"3125\">\nDecision for you. The remaining plan items are:\n\n* the same-build 10-task SWE agent study, about a day of setup and 15 GPU hours;\n* a distributional correctness check, about 1\u20132 days;\n* kernel timing and memory, 2\u20134 days.\n</pasted_content id=\"3125\">\n\n Go!"
+    },
+    {
+      "line": 2968,
+      "type": "assistant",
+      "timestamp": "2026-10-01T15:11:54.235Z",
+      "text": "All three workstreams are underway.\n\n1. **Distributional correctness, running.** For 20 recorded requests, each arm draws 40 samples of 24 tokens at the deployed sampling settings. The arms are plain decoding, MTP-5, LumoTree, a second plain-decoding run for the noise floor, and SGLang at 7 steps. At each token position I compare each arm's token distribution with plain decoding. The plain-decoding pair shows what pure noise looks like. This finishes in about 4 hours, around 19:15 UTC.\n2. **SWE agent study, ready.** The same 10 Astropy tasks as the 10-task deployment. LumoTree runs through that deployment's exact vehicle on the latest code. vLLM MTP-5 and SGLang at 7 steps use the same proxy, agent, evaluator and 9,000-second budgets. It starts automatically after step 1, about 3.3 hours per arm, so roughly 10 hours in total.\n3. **Kernel timing and memory, being prepared.** A background agent is building a timed benchmark on top of Codex's numerical harness, without using the GPU. It covers LumoTree's scan and replay against TreeWY and Weaver, a naive store-every-node-state baseline, and peak and scratch memory. It runs once the GPU frees up.\n\nI also fixed the queue's GPU-idle check, which had stalled the queue for about 90 minutes. All code is committed on the GB10 branch, latest commit `2cfefb6fb`. Updates every 10 minutes."
+    },
+    {
+      "line": 2977,
+      "type": "assistant",
+      "timestamp": "2026-10-01T15:43:30.925Z",
+      "text": "The kernel timing harness is ready but untested on the GPU, so it needs a short smoke run first. It refuses to start while any queue is active. So the order is:\n1. finish the distribution queue;\n2. run the kernel smoke test, then the full benchmark, about 30 minutes;\n3. start the 10-hour SWE queue.\n\nCommitting the harness."
+    },
+    {
+      "line": 2989,
+      "type": "assistant",
+      "timestamp": "2026-10-01T15:43:42.582Z",
+      "text": "Committed. Plain decoding is 32 of 40 sample rounds into its distribution run, faster than estimated. The whole distribution queue should finish around 18:30 UTC."
+    },
+    {
+      "line": 2994,
+      "type": "assistant",
+      "timestamp": "2026-10-01T15:43:52.411Z",
+      "text": "Status at 15:44 UTC:\n- **Distribution check.** Plain decoding is at 640 of 800 samples, and the whole queue should finish around 18:30 UTC.\n- **Kernel benchmark.** It's built and committed but not yet tested on the GPU. It compares LumoTree's scan and replay against TreeWY, Weaver and a naive store-every-node baseline, timed and with memory. It runs right after the distribution queue, smoke test first.\n- **SWE study.** Ready, and starts after the kernel benchmark.\n\nNext update in 10 minutes."
+    }
+  ]
+}

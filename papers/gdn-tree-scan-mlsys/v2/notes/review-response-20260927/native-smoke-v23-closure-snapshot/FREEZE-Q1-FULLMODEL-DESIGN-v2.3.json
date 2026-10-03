@@ -1,0 +1,452 @@
+{
+ "schema": "lumo.review-response.q1-fullmodel-design-freeze.v2.3",
+ "frozen_utc": "2026-09-28T02:26:29.641440+00:00",
+ "status": "Q1 full-model native-smoke package v2.3 = v2.2 (seven reviewed sources UNCHANGED) + the parent's marker-before-seal ordering fix and receipt-failure propagation; CPU-only; NO engine boot; for the parent's final launcher review and one model-smoke gate",
+ "supersedes": [
+  "FREEZE-Q1-FULLMODEL-DESIGN-v2.2.json, -v2.1.json, -v2.json (kept, hashed here); launchers v2, v2.1, v2.2 are retained frozen and must NOT be launched"
+ ],
+ "parent_review_bindings": {
+  "smoke_design": {
+   "path": "p0/monitor/review-response-20260927/Q1-NATIVE-SMOKE-DESIGN.json",
+   "sha256": "8e5f96be0e8cbd95973fa511c609c57af8ff5a30b5e6be4c7507ce65130d5ed4"
+  },
+  "closure_addendum": {
+   "path": "notes/review-response-20260927/q1-fullmodel-v2-repair-closure-addendum.md",
+   "sha256": "8d40cf1d94c3f1d63c386a06b0d51d3486767c58415d1f283d69e71fac0b8c87"
+  },
+  "snapshot": {
+   "dir": "notes/review-response-20260927/fullmodel-repair-preliminary-snapshot-20260928T015125Z",
+   "SNAPSHOT.json_sha256": "3401379e664426b94c41c98985087c1f82378d5f8c1ed5cf70f4d75256d09905",
+   "seven_hashes_equal_current": true
+  },
+  "prior_reviews": [
+   "q1-fullmodel-implementation-review.md",
+   "q1-fullmodel-v2-preliminary-repair-review.md",
+   "q1-fullmodel-fa2-api-addendum.md"
+  ],
+  "launcher_review": {
+   "path": "notes/review-response-20260927/q1-native-smoke-launcher-review.md",
+   "sha256": "1dee1e5e8e5c79108e21400b991e02096f5eaf2a4668ab4e3a887c119fcb50de"
+  },
+  "instruction": "parent-instruction-smoke-cleanup-20260928T0216.txt",
+  "instructions": [
+   "parent-instruction-smoke-cleanup-followup-20260928T0220.txt",
+   "parent-instruction-smoke-controls-20260928T0221.txt",
+   "parent-instruction-smoke-final-marker-20260928T0224.txt"
+  ]
+ },
+ "reviewed_seven_sources_equal_snapshot": {
+  "tools/q1_reference_hooks_v2.py": "78ebde8de667f53e012db41597f6e4ab5970fd8b7c126a0c88f55ac62e6187dd",
+  "tools/q1_reference_driver_v2.py": "47314063eaa46b59eaa4fa60978353caef570bd8b39ebe5f127c56ff94702159",
+  "tools/q1_reference_fa2_install.py": "e485a2fe8a01c3820dbfda5c65a431019ef0f4289e246ca586a9ff858ed5b6d3",
+  "tools/q1_spec_off_engine_config_v2.py": "58aadfdb56f10142599098ada8a76ff3c792c39675e22fd4f5d5fadab81cffc4",
+  "tools/q1_reference_job.py": "9a9144622375c7a895c54fa590bdb9f9e2c6e27c728076dfa5ace1580806d485",
+  "tools/q1_patch_reference_runner_v2.py": "52fd1971f7f509809c4d06e1b6cf7b721b24a24f281ab9a1812ed5dd342742e3",
+  "tools/tests/test_q1_fullmodel_v2_package.py": "213bf798b8e18d53fe2edc8456d145999c8c04c9d4f3661d07a003c74c71037c"
+ },
+ "files": {
+  "tools/q1_reference_hooks_v2.py": {
+   "sha256": "78ebde8de667f53e012db41597f6e4ab5970fd8b7c126a0c88f55ac62e6187dd",
+   "bytes": 42736
+  },
+  "tools/q1_reference_driver_v2.py": {
+   "sha256": "47314063eaa46b59eaa4fa60978353caef570bd8b39ebe5f127c56ff94702159",
+   "bytes": 9817
+  },
+  "tools/q1_reference_fa2_install.py": {
+   "sha256": "e485a2fe8a01c3820dbfda5c65a431019ef0f4289e246ca586a9ff858ed5b6d3",
+   "bytes": 6246
+  },
+  "tools/q1_spec_off_engine_config_v2.py": {
+   "sha256": "58aadfdb56f10142599098ada8a76ff3c792c39675e22fd4f5d5fadab81cffc4",
+   "bytes": 14016
+  },
+  "tools/q1_reference_job.py": {
+   "sha256": "9a9144622375c7a895c54fa590bdb9f9e2c6e27c728076dfa5ace1580806d485",
+   "bytes": 5912
+  },
+  "tools/q1_patch_reference_runner_v2.py": {
+   "sha256": "52fd1971f7f509809c4d06e1b6cf7b721b24a24f281ab9a1812ed5dd342742e3",
+   "bytes": 5954
+  },
+  "tools/tests/test_q1_fullmodel_v2_package.py": {
+   "sha256": "213bf798b8e18d53fe2edc8456d145999c8c04c9d4f3661d07a003c74c71037c",
+   "bytes": 39037
+  },
+  "tools/run_q1_native_smoke_v2.sh": {
+   "sha256": "ac1740bd08d0364d7fb56c64a9a336f68add096f5209a7333543307a8245f352",
+   "bytes": 14830
+  },
+  "tools/tests/test_q1_native_smoke_launcher_static.py": {
+   "sha256": "8d250e99c76d4cb1232af66d1b8f71fe957b691f71375cfb270706910a1db802",
+   "bytes": 5124
+  },
+  "tools/test_log.q1_fullmodel.v2.attempt1.txt": {
+   "sha256": "b70d9861e5f3d83448070b7e798fa63088e9852ed4536cfd94be68e9221e9dc5",
+   "bytes": 10205
+  },
+  "tools/test_log.q1_native_smoke_launcher.attempt1.txt": {
+   "sha256": "a44cb90f986f7119d2eab0b2c74778bee78d31001b029ff83f47b9073ccef0f2",
+   "bytes": 2420
+  },
+  "tools/test_log.q1_native_smoke_launcher.attempt2.txt": {
+   "sha256": "537d6dec1159e2079e0f4446597476a0aae336e9937bfbaf7de2bf02b5585d5b",
+   "bytes": 2510
+  },
+  "tools/test_log.q1_native_smoke_launcher.attempt3.txt": {
+   "sha256": "26a8f4dc15d4d8f819f96c4495d9fdd239b8631a22580bc0bf030b118c4cdcb5",
+   "bytes": 2378
+  },
+  "fullmodel/spec-off-engine-config.v2.json": {
+   "sha256": "ff878c480e68e304b4937eb79fd92cdddf1e261b68c6f5040818f1d08a1cfb14",
+   "bytes": 20676
+  },
+  "fullmodel/fixtures/token-fixtures.v1.json": {
+   "sha256": "607634e19235a58d2b6d73f8260dac3c49f842f9f1cba9a1789f329c56012223",
+   "bytes": 224734
+  },
+  "identity/native_source/fa2_source_index.json": {
+   "sha256": "0b060734ed11a1e41071b09bcb1b8fcc8935b520e0b843b2b913e8a6056aec08",
+   "bytes": 3170
+  },
+  "identity/native_source/vllm__vllm_flash_attn__flash_attn_interface.py": {
+   "sha256": "9caca9584061cfd60c9ebd404d9a8881a62fe7894242efefcba5b88fc086d5b6",
+   "bytes": 19815
+  },
+  "identity/native_source/vllm__vllm_flash_attn____init__.py": {
+   "sha256": "5252161dc738b1ec93c37b8313276fb159f11fc80f8308e8359e54435eb7e955",
+   "bytes": 1479
+  },
+  "identity/native_source/vllm__v1__attention__backends__fa_utils.py": {
+   "sha256": "379bdccb69048f7bf6746816d146b383adceadef5e03bcd1ab1aa216ebbdfb27",
+   "bytes": 8252
+  },
+  "identity/native_source/vllm__v1__attention__backends__flash_attn.py": {
+   "sha256": "c949e39a0b0b3dfa316017c422b1cb1368cd3a4a1328a1c691f5d7f44ed571e7",
+   "bytes": 47406
+  },
+  "identity/native_source/vllm__model_executor__layers__attention__attention.py": {
+   "sha256": "1e5894a5ddc0dcbd343ba4b3e4c6d674d87604232dabede2aed1383a5ac4e713",
+   "bytes": 31530
+  },
+  "identity/native_source/vllm__v1__worker__gpu_model_runner.py": {
+   "sha256": "904d7d357ba076c93cefee5f7f030e2be577dc12599aebdf56395b894e2077b0",
+   "bytes": 307678
+  },
+  "prefix-plan/selected/calibration-short_available/token-ids.u32le": {
+   "sha256": "20321ed78102db81290634bab97cd0e97fd096343aeec7c2ab036d9605a6315c",
+   "bytes": 53948
+  },
+  "tools/q1_fullmodel_token_fixtures.py": {
+   "sha256": "fc6c882bbcbd2d53f2e1fabea5aa84ff049314fe56c289561ecb7e4a34ba41b9",
+   "bytes": 13735
+  },
+  "FREEZE-Q1-FULLMODEL-DESIGN.json": {
+   "sha256": "149a68d342f7415bc1ad82e6720e5f0a05c1c958889a7020c6639ed13cda8d54",
+   "bytes": 3465
+  },
+  "tools/run_q1_native_smoke_v2_1.sh": {
+   "sha256": "fb0ec877dd3137d933538a0802d877443a25ed952379eda6862e224a23f3a788",
+   "bytes": 15373
+  },
+  "tools/q1_native_smoke_cleanup_v2_1.sh": {
+   "sha256": "9c4904be64fb0b8495498cd9c54be9904d25e14ffb64976f92d96d22cbde58be",
+   "bytes": 3249
+  },
+  "tools/tests/test_q1_native_smoke_launcher_v2_1_static.py": {
+   "sha256": "a6c452a58745f00e4b0c1399089b9eef16200f5774035b4bfb36c4ed91e4b31c",
+   "bytes": 9523
+  },
+  "tools/test_log.q1_native_smoke_launcher.v2_1.attempt1.txt": {
+   "sha256": "cba12ace6f748a223738bf1428a02d927ceaf4c321610bf3a8b43b47de88e484",
+   "bytes": 3052
+  },
+  "launcher_smoke_v2_to_v2_1.diff": {
+   "sha256": "188879551ae9ada2cea0df6a9f994746dd8ae38d20decc08b46c85512cce0428",
+   "bytes": 8689
+  },
+  "FREEZE-Q1-FULLMODEL-DESIGN-v2.json": {
+   "sha256": "08ecf29a8a0a810f98016dc235c183e5fc2b9a055fdce2f33434834a069d9af2",
+   "bytes": 16675
+  },
+  "tools/run_q1_native_smoke_v2_2.sh": {
+   "sha256": "5527724c45705ea8c73c39bb0c13ccf858d01c61af4a69f8ddd386ace6b1a902",
+   "bytes": 16108
+  },
+  "tools/q1_native_smoke_cleanup_v2_2.sh": {
+   "sha256": "3353a27264b8080bac89e37fc119ee73145747299bf49dbd2db0ffdb7169e358",
+   "bytes": 4638
+  },
+  "tools/tests/test_q1_native_smoke_launcher_v2_2_static.py": {
+   "sha256": "c989ed92ed58d09d61278def8bafb24578fbb36e347fdd6224ee9156da9883b3",
+   "bytes": 11588
+  },
+  "tools/test_log.q1_native_smoke_launcher.v2_2.attempt1.txt": {
+   "sha256": "72b7325d20410c6304c1988b1532320062ca72f4729d89612739a0a9024a23f5",
+   "bytes": 3178
+  },
+  "launcher_smoke_v2_1_to_v2_2.diff": {
+   "sha256": "e77a1cef45d7354f5990ab06bcb6881c2e2311ad0abae1c86196e39059b006bb",
+   "bytes": 7937
+  },
+  "cleanup_lib_v2_1_to_v2_2.diff": {
+   "sha256": "6b34cf6299341e59f2cae6c1f1b1a2b9bc2b51a27563d3ccadc87a1cfd9dfb65",
+   "bytes": 5250
+  },
+  "FREEZE-Q1-FULLMODEL-DESIGN-v2.1.json": {
+   "sha256": "007b10d4048d398f322d58848ffe31c4c4b8d508a7f3d4cedf1484c1f21d5ebf",
+   "bytes": 20561
+  },
+  "tools/run_q1_native_smoke_v2_3.sh": {
+   "sha256": "b1a61fb2a5a142ed882be00b49cfcffb6257c9643c48d9a040435e581f9795be",
+   "bytes": 16495
+  },
+  "tools/q1_native_smoke_cleanup_v2_3.sh": {
+   "sha256": "44ae0909759e3338fd0c3031c447f07523b2d47072add2404e78aea15cbd0524",
+   "bytes": 5210
+  },
+  "tools/tests/test_q1_native_smoke_launcher_v2_3_static.py": {
+   "sha256": "7062ae4e487199cbe7cbcf0c244578e944465f972c58f6436e8163cda339dd3b",
+   "bytes": 14587
+  },
+  "tools/test_log.q1_native_smoke_launcher.v2_3.attempt1.txt": {
+   "sha256": "6a42d594c38a4409a6dcf09a203fcb5001656165b7a4301807d4dfea48ee2faa",
+   "bytes": 3668
+  },
+  "launcher_smoke_v2_2_to_v2_3.diff": {
+   "sha256": "bf028c6915fbc5ddaecf1704035f3a91e31e0202cc34725f3e1b0c859f43610a",
+   "bytes": 3638
+  },
+  "cleanup_lib_v2_2_to_v2_3.diff": {
+   "sha256": "c1c1080337846340bc085bfcaedcccfb77aebe40e8d8d24a067a7b0432cadabf",
+   "bytes": 2015
+  },
+  "FREEZE-Q1-FULLMODEL-DESIGN-v2.2.json": {
+   "sha256": "a8e99651f2064c3954b383a5936397939cf479723608a4b381257cec9ed60408",
+   "bytes": 24335
+  }
+ },
+ "repo_files": {
+  "scripts/fr13_patch_fa2_tree_bias.py": {
+   "sha256": "8f61b9cd6a079d0605daedb545b8a2e95225714693c775d396059bab2ce626b2",
+   "bytes": 481205
+  },
+  "scripts/fr14_patch_nvfp4_lmhead.py": {
+   "sha256": "0a673b5ad0b76467530ef33e8da36500c73b25857eda11281c2e55103ce57a71",
+   "bytes": 18318
+  },
+  "scripts/fr13_fixed32_topology.py": {
+   "sha256": "c02703b4bc777e5edfa01623b446a289cba8f1023e31d8efd7fc8126666b38bc",
+   "bytes": 54622
+  }
+ },
+ "fa2_fork_binary": {
+  "path": "/home/mark/fr14_splitk_build_20260818/_vllm_fa2_qrow32_gqa_pair_splitk_b1_sm121a.abi3.so",
+  "sha256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+  "bytes": 300123792
+ },
+ "pinned_image_fa2_sources": {
+  "flash_attn_interface_stock": {
+   "sha256": "9caca9584061cfd60c9ebd404d9a8881a62fe7894242efefcba5b88fc086d5b6",
+   "bytes": 19815,
+   "in_image_path": "/usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/flash_attn_interface.py"
+  },
+  "fa_utils": {
+   "sha256": "379bdccb69048f7bf6746816d146b383adceadef5e03bcd1ab1aa216ebbdfb27",
+   "bytes": 8252,
+   "in_image_path": "/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/fa_utils.py"
+  },
+  "flash_attn_backend": {
+   "sha256": "c949e39a0b0b3dfa316017c422b1cb1368cd3a4a1328a1c691f5d7f44ed571e7",
+   "bytes": 47406,
+   "in_image_path": "/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/flash_attn.py"
+  },
+  "attention_layer": {
+   "sha256": "1e5894a5ddc0dcbd343ba4b3e4c6d674d87604232dabede2aed1383a5ac4e713",
+   "bytes": 31530,
+   "in_image_path": "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/attention/attention.py"
+  },
+  "vllm_flash_attn_init": {
+   "sha256": "5252161dc738b1ec93c37b8313276fb159f11fc80f8308e8359e54435eb7e955",
+   "bytes": 1479,
+   "in_image_path": "/usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/__init__.py"
+  }
+ },
+ "fa2_interface_patched_sha256_expected": "dadab8aff63b7f608274834929c954335247366411382f390af92501361044a1",
+ "fa2_attestation_contract": "fa_utils.get_flash_attn_version(requires_alibi=False, head_size=None) == 2 (the pinned interface has no getter; DEFAULT_FA_VERSION/global selector alone are insufficient); interface (patched), fa_utils, flash_attn backend and attention-layer module shas == fa2_source_index; installed .so == fork 28570f83 and torch.ops._vllm_fa2_C.varlen_fwd_tree_bias present; EVERY attention layer attn_backend.get_name()==FLASH_ATTN, impl vllm.v1.attention.backends.flash_attn.FlashAttentionImpl, impl.vllm_flash_attn_version==2; mismatch is FATAL at boot and seals every admitted case INVALID",
+ "repairs_closed_per_parent_addendum": [
+  "driver hash + exact-length authentication of every referenced GDN/KV/O2 object (dedup by sha); reconstruct_logical_kv verifies",
+  "enable_packed_recurrent_decode must EXIST and be bool/0-1 int on every GDN layer (boot + snapshot); missing refuses in the primary arm",
+  "exact materialized K/V slices (full blocks + valid tail only) checked finite with block identity; declared kv dtype / kv heads / head dim enforced at extraction",
+  "FA2 selector/source/binary/per-layer impl attestation (see fa2_attestation_contract)"
+ ],
+ "smoke_plan": {
+  "design": "Q1-NATIVE-SMOKE-DESIGN.json 8e5f96be",
+  "arm": "aligned_nonpacked (VLLM_ENABLE_FLA_PACKED_RECURRENT_DECODE=0; PRIMARY)",
+  "fresh_processes": 1,
+  "process": "A",
+  "case_ids": [
+   "calibration-short_available__c0__root-only"
+  ],
+  "repeats": 2,
+  "expected_requests": 2,
+  "prefix": {
+   "prefix_id": "calibration-short_available",
+   "prefix_len": 13487,
+   "token_ids_sha256": "20321ed78102db81290634bab97cd0e97fd096343aeec7c2ab036d9605a6315c",
+   "file": "prefix-plan/selected/calibration-short_available/token-ids.u32le"
+  },
+  "chain_tokens": [
+   11352,
+   25559
+  ],
+  "chain_positions": [
+   13487,
+   13488
+  ],
+  "z_position": 13488,
+  "terminal_token_id": 248046,
+  "save_kv_bytes": true,
+  "required_evidence": "two complete VALID O0/O1/O2 seals with actual token/position trace, finite complete state/logits, hash+length-bound reusable logical state bytes, repeat-unique observation identity; report native repeat/cache differences (O0 digest equality, O2 argmax equality)",
+  "failure_rule": "any missing/invalid evidence, boot receipt problem, unhealthy engine or unauthenticated seal stops the run, preserves the receipt, exits non-zero; no automatic expansion or retry"
+ },
+ "launcher_repair_v2_1": {
+  "finding": "v2 stop_engine (lines 112-119) suppressed docker stop/rm failures, wrote engine_stopped_utc unconditionally and the terminal exit used only the driver rc (reviewer CPU mocks reproduced rc 0 + stopped timestamp with a still-running engine)",
+  "fix": "stop_engine/finish_run moved to the gate-bound sourced library: stop -> logs + inspect preserved -> verified terminal state (Running false, Status exited|dead|created) else rc 8 with engine_cleanup_state/engine_cleanup.err and NO stopped timestamp -> stopped timestamp -> rm else rc 9; finish_run returns the driver rc if non-zero else the cleanup rc; the EXIT trap records rc + cleanup rc in the receipt and exits with the cleanup rc only when the script would otherwise exit 0; ENGINE_NOT_HEALTHY / BOOT_RECEIPTS_NOT_CLEAN paths record cleanup rc too",
+  "diff": {
+   "file": "launcher_smoke_v2_to_v2_1.diff",
+   "content_lines": 37
+  },
+  "controls": "8 passed (tools/test_log.q1_native_smoke_launcher.v2_1.attempt1.txt): actual-shell mocked docker/nvidia-smi: success (verified stop then rm, idempotent), stop failure + still running (rc 8, no timestamp, logs/inspect kept, no rm), stop rc 0 but still running (rc 8), stopped but rm fails (rc 9), no owned container (rc 0), finish_run semantics (0/8/9/2/2), exact shipped trap line (clean exit -> 8; exit 6 stays 6; success -> 0; exit 2 stays 2); static contract; v2 launcher bytes unchanged; dry-run writes nothing",
+  "not_rerun": "the 58-test package suite (unchanged seven sources; log b70d9861 stands)"
+ },
+ "launcher_repair_v2_2": {
+  "gaps": [
+   "(1) v2.1 EXIT trap re-ran stop_engine after finish_run/boot-failure receipts: reviewer probe = two stop calls and engine_cleanup.err growing 150 -> 300 bytes after process EXIT (sealed files rewritten)",
+   "(2) `if ! docker ps -a | grep` read a Docker enumeration failure as absence: reviewer probe = cleanup_rc 0 + state no_owned_container with a failed docker ps",
+   "(3) cleanup library was sourced before the gate validated its hash"
+  ],
+  "fix": "library v2.2: owned_container_state() returns 1 on query failure (stop_engine -> rc 8 'not_verified docker_query_failed', no stop/rm attempted); finalize(STATUS, RC) is the single owner (FINALIZED=1 set before cleanup; stop_engine once; receipt once; FINALIZED.txt); on_exit_trap(rc) returns rc unchanged once finalized, otherwise finalizes an unexpected abort exactly once. Launcher v2.2: `. \"$CLEANUP_LIB\"` moved after the gate block; docker ps prechecks capture rc and refuse on enumeration failure; all terminal paths call finalize; the trap calls on_exit_trap; no direct stop_engine call remains",
+  "diffs": {
+   "launcher_smoke_v2_1_to_v2_2.diff": 24,
+   "cleanup_lib_v2_1_to_v2_2.diff": 54
+  },
+  "controls": "5 passed (tools/test_log.q1_native_smoke_launcher.v2_2.attempt1.txt): static (sourcing after gate, checked docker ps prechecks, no direct stop_engine, exactly 3 finalize call sites, v2/v2.1 bytes unchanged, dry-run writes nothing); isolated controls carried from v2.1; COMBINED A: failed docker ps -> rc 8 docker_query_failed, no stop/rm, and composed finalize+trap exits 8 with one receipt; COMBINED B: ACTUAL finalize + ACTUAL launcher EXIT trap on a failed stop for driver rc 2 and rc 0 -> exactly ONE docker stop, ONE receipt write, receipt/state/cleanup.err/engine.log bytes IDENTICAL at receipt time and after process EXIT; success path one stop + one rm; unexpected abort before finalization finalized exactly once by the trap (5/8/0/6)",
+  "not_rerun": "the 58-test package suite (unchanged seven sources)"
+ },
+ "launcher_repair_v2_3": {
+  "finding": "v2.2 finalize wrote FINALIZED.txt AFTER write_receipt, while the receipt reads FINALIZED.txt into engine.finalized and hashes the output files (an artifact written after the seal; engine.finalized null in the receipt); write_receipt failure was not propagated",
+  "fix": "library v2.3: FINALIZED.txt written BEFORE write_receipt; write_receipt failure -> stderr + return 10 (or the primary failure rc); launcher v2.3: RUN-RECEIPT written atomically (tmp + os.replace) and write_receipt returns the python status",
+  "diffs": {
+   "launcher_smoke_v2_2_to_v2_3.diff": 11,
+   "cleanup_lib_v2_2_to_v2_3.diff": 13
+  },
+  "controls": "6 passed (tools/test_log.q1_native_smoke_launcher.v2_3.attempt1.txt): v2.2 static + isolated + COMBINED A/B controls re-run against v2.3 with the receipt-time snapshot now including FINALIZED.txt and gpu_contention_after.txt, engine.finalized_at_receipt_time not null and equal to the final marker/receipt status, and the output listing/hashes identical after process EXIT (no write after the seal); NEW: receipt write failure -> rc 10 with driver 0 / rc 2 with driver 2, marker present, one cleanup; v2/v2.1/v2.2 bytes unchanged; dry-run writes nothing",
+  "not_rerun": "the 58-test package suite (unchanged seven sources)"
+ },
+ "launch": {
+  "launcher": "tools/run_q1_native_smoke_v2_3.sh",
+  "sha256": "b1a61fb2a5a142ed882be00b49cfcffb6257c9643c48d9a040435e581f9795be",
+  "command": "RUN_ID=<approved_run_id> bash papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/run_q1_native_smoke_v2_3.sh   (from /home/mark/lumotree-review-20260927; --dry-run prints only)",
+  "steps": [
+   "gate + reviewed-hash + scope check",
+   "GPU contention / lumotree containers / port 9950 / image digest / fork sha+size / frozen prefix bytes",
+   "job: q1_reference_job.py --smoke (hash-bound)",
+   "engine config rendered for this run/log dir/job (validate() must be clean)",
+   "LAUNCH-BINDING.json + engine_launch_argv.json",
+   "docker run -d (lm-head shim, FA2 fork install + minimal interface patch receipt, stock-runner patch receipt, vllm serve)",
+   "/health wait (HEALTH_TIMEOUT_S default 2400)",
+   "install/patch receipts must exist and be clean",
+   "q1_reference_driver_v2.py R=2 (authenticates seals + raw objects; stops on first failure)",
+   "finalize STATUS RC (single owner): stop_engine once (checked docker ps; verified terminal state; rc 8/9) -> gpu contention after -> FINALIZED.txt marker -> sealed RUN-RECEIPT (atomic tmp+replace; write failure -> rc 10 unless a primary failure rc exists) -> nothing written afterwards; EXIT trap is a no-op once finalized and finalizes an unexpected abort exactly once"
+  ],
+  "output": "runs/q1-native-smoke/<RUN_ID>/ (q1_ref/{boot_attestation,cases,objects}, driver/DRIVER-VERDICT.aligned_nonpacked.pA.json, q1_ref_fa2_install_receipt.json, q1_ref_patch_receipt.json, engine.log, engine-config.json, LAUNCH-BINDING.json, gpu contention before/after, timings, RUN-RECEIPT.json)",
+  "gate_file": "p0/monitor/review-response-20260927/GATE-Q1-NATIVE-SMOKE.json (parent-owned; SMOKE_GATE env may override)",
+  "gate_fields_required": {
+   "gate": "Q1-NATIVE-SMOKE",
+   "approved": true,
+   "approved_run_id": "<RUN_ID>",
+   "reviewed_scope": {
+    "arm": "aligned_nonpacked",
+    "process": "A",
+    "repeats": 2,
+    "fresh_processes": 1,
+    "case_ids": [
+     "calibration-short_available__c0__root-only"
+    ],
+    "expected_requests": 2,
+    "save_kv_bytes": true,
+    "block": "calibration"
+   },
+   "reviewed_hashes": {
+    "image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+    "smoke_design": "8e5f96be0e8cbd95973fa511c609c57af8ff5a30b5e6be4c7507ce65130d5ed4",
+    "hooks_v2": "78ebde8de667f53e012db41597f6e4ab5970fd8b7c126a0c88f55ac62e6187dd",
+    "driver_v2": "47314063eaa46b59eaa4fa60978353caef570bd8b39ebe5f127c56ff94702159",
+    "patcher_v2": "52fd1971f7f509809c4d06e1b6cf7b721b24a24f281ab9a1812ed5dd342742e3",
+    "config_v2": "58aadfdb56f10142599098ada8a76ff3c792c39675e22fd4f5d5fadab81cffc4",
+    "fa2_install": "e485a2fe8a01c3820dbfda5c65a431019ef0f4289e246ca586a9ff858ed5b6d3",
+    "job_builder": "9a9144622375c7a895c54fa590bdb9f9e2c6e27c728076dfa5ace1580806d485",
+    "fa2_source_index": "0b060734ed11a1e41071b09bcb1b8fcc8935b520e0b843b2b913e8a6056aec08",
+    "token_fixtures": "607634e19235a58d2b6d73f8260dac3c49f842f9f1cba9a1789f329c56012223",
+    "prefix_token_ids": "20321ed78102db81290634bab97cd0e97fd096343aeec7c2ab036d9605a6315c",
+    "stock_runner_copy": "904d7d357ba076c93cefee5f7f030e2be577dc12599aebdf56395b894e2077b0",
+    "fa2_patcher": "8f61b9cd6a079d0605daedb545b8a2e95225714693c775d396059bab2ce626b2",
+    "lm_head_shim": "0a673b5ad0b76467530ef33e8da36500c73b25857eda11281c2e55103ce57a71",
+    "fork_binary": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+    "launcher": "b1a61fb2a5a142ed882be00b49cfcffb6257c9643c48d9a040435e581f9795be",
+    "cleanup_lib": "44ae0909759e3338fd0c3031c447f07523b2d47072add2404e78aea15cbd0524"
+   }
+  },
+  "cleanup_lib": {
+   "path": "tools/q1_native_smoke_cleanup_v2_3.sh",
+   "sha256": "44ae0909759e3338fd0c3031c447f07523b2d47072add2404e78aea15cbd0524",
+   "sourced_by_launcher": "after the gate validates reviewed_hashes.cleanup_lib"
+  }
+ },
+ "expected_values_for_gate": {
+  "image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+  "smoke_design": "8e5f96be0e8cbd95973fa511c609c57af8ff5a30b5e6be4c7507ce65130d5ed4",
+  "hooks_v2": "78ebde8de667f53e012db41597f6e4ab5970fd8b7c126a0c88f55ac62e6187dd",
+  "driver_v2": "47314063eaa46b59eaa4fa60978353caef570bd8b39ebe5f127c56ff94702159",
+  "patcher_v2": "52fd1971f7f509809c4d06e1b6cf7b721b24a24f281ab9a1812ed5dd342742e3",
+  "config_v2": "58aadfdb56f10142599098ada8a76ff3c792c39675e22fd4f5d5fadab81cffc4",
+  "fa2_install": "e485a2fe8a01c3820dbfda5c65a431019ef0f4289e246ca586a9ff858ed5b6d3",
+  "job_builder": "9a9144622375c7a895c54fa590bdb9f9e2c6e27c728076dfa5ace1580806d485",
+  "fa2_source_index": "0b060734ed11a1e41071b09bcb1b8fcc8935b520e0b843b2b913e8a6056aec08",
+  "token_fixtures": "607634e19235a58d2b6d73f8260dac3c49f842f9f1cba9a1789f329c56012223",
+  "prefix_token_ids": "20321ed78102db81290634bab97cd0e97fd096343aeec7c2ab036d9605a6315c",
+  "stock_runner_copy": "904d7d357ba076c93cefee5f7f030e2be577dc12599aebdf56395b894e2077b0",
+  "fa2_patcher": "8f61b9cd6a079d0605daedb545b8a2e95225714693c775d396059bab2ce626b2",
+  "lm_head_shim": "0a673b5ad0b76467530ef33e8da36500c73b25857eda11281c2e55103ce57a71",
+  "fork_binary": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+  "launcher": "b1a61fb2a5a142ed882be00b49cfcffb6257c9643c48d9a040435e581f9795be",
+  "cleanup_lib": "44ae0909759e3338fd0c3031c447f07523b2d47072add2404e78aea15cbd0524"
+ },
+ "tests": {
+  "package": "58 passed (tools/test_log.q1_fullmodel.v2.attempt1.txt; source hashes identical start/end; the test file is one of the seven reviewed hashes)",
+  "launcher_static": "4 passed (tools/test_log.q1_native_smoke_launcher.attempt3.txt; attempts 1-2 retained: test-side ordering assertions matched informational/gate-block mentions of tool names; launcher bytes identical across the three attempts)",
+  "launcher_v2_1": "8 passed (tools/test_log.q1_native_smoke_launcher.v2_1.attempt1.txt; hashes identical start/end)",
+  "launcher_v2_2": "5 passed (tools/test_log.q1_native_smoke_launcher.v2_2.attempt1.txt; hashes identical start/end)",
+  "launcher_v2_3": "6 passed (tools/test_log.q1_native_smoke_launcher.v2_3.attempt1.txt; hashes identical start/end)"
+ },
+ "disclosures": [
+  "the seven reviewed sources are byte-identical to the parent snapshot 20260928T015125Z; nothing in them changed after the closure review",
+  "the launcher, its static test and the freeze are the only new files; the launcher executes the config's rendered docker argv verbatim (no shell eval) and has never been run beyond --dry-run",
+  "host torch 2.4.1 CPU ran the package tests (no vllm); the FA2 real-API test uses stub modules whose __file__ are the extracted pinned byte copies",
+  "v1 files (hooks/driver/patcher/config v1, design manifest v1) remain frozen under FREEZE-Q1-FULLMODEL-DESIGN.json and are not used by the smoke",
+  "v2.1 changes ONLY the wrapper lifecycle: 37 diff content lines vs launcher v2 plus the new 38-line library; no source/criterion/scope change",
+  "the gate for v2.1 must bind launcher = fb0ec877... and cleanup_lib = 9c4904be...; a gate carrying the v2 launcher hash is refused by v2.1 and vice versa",
+  "v2.2 changes only the wrapper lifecycle (24 launcher diff lines, 54 library diff lines); no source/criterion/scope change",
+  "the gate for v2.2 must bind launcher = 5527724c... and cleanup_lib = 3353a272...; gates naming v2/v2.1 hashes are refused",
+  "v2.3 changes only the finalization ordering/receipt propagation (11 launcher + 13 library diff lines); no source/criterion/scope change",
+  "the gate for v2.3 must bind launcher = b1a61fb2... and cleanup_lib = 44ae0909...; gates naming v2/v2.1/v2.2 hashes are refused"
+ ],
+ "non_claims": [
+  "no engine/model boot; no GPU",
+  "no candidate outcomes, no held-out, no timing, no qualification",
+  "component results (Q1.2a/Q1.2b) are not full-model qualification",
+  "cycle-0 forced continuation only"
+ ],
+ "freeze_canonical_sha256": "32bfac15205d1dd572eb4f4a1ae32e5d1d84b64770d4be86071cb5c932b496cf"
+}

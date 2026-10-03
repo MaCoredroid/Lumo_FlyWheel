@@ -1,0 +1,186 @@
+{
+  "scope": "pure stdlib controls and frozen metadata only, no Torch/GPU/fixture tensor/candidate",
+  "source_snapshot_sha256": "5762ba964e1eb05789e99fc07ea0b7a16b7589538148d8432807d662ff30b9d1",
+  "checks": [
+    {
+      "name": "complete_frozen_evaluation_scope",
+      "accepted": true,
+      "problems": []
+    },
+    {
+      "name": "unsupported_block",
+      "accepted": false,
+      "problems": [
+        "unsupported block 'test': supported blocks are ('calibration', 'evaluation')"
+      ]
+    },
+    {
+      "name": "wrong_gate_block",
+      "accepted": false,
+      "problems": [
+        "gate reviewed_scope.block 'calibration' does not authorize block 'evaluation'"
+      ]
+    },
+    {
+      "name": "candidate_negatives_nonzero",
+      "accepted": false,
+      "problems": [
+        "negative mutations are calibration-only: held-out requires --negatives 0 and reviewed_scope.negatives 0"
+      ]
+    },
+    {
+      "name": "gate_negatives_nonzero",
+      "accepted": false,
+      "problems": [
+        "negative mutations are calibration-only: held-out requires --negatives 0 and reviewed_scope.negatives 0"
+      ]
+    },
+    {
+      "name": "candidate_limit_partial",
+      "accepted": false,
+      "problems": [
+        "held-out requires complete coverage: --limit must be 0"
+      ]
+    },
+    {
+      "name": "gate_missing_fixture",
+      "accepted": false,
+      "problems": [
+        "gate reviewed_scope.held_out_fixture_ids ['evaluation/fx0_ordinary-random'] does not name exactly the manifest held-out ids ['evaluation/fx0_ordinary-random', 'evaluation/fx1_mixed-stress']"
+      ]
+    },
+    {
+      "name": "gate_duplicate_fixture",
+      "accepted": false,
+      "problems": [
+        "gate reviewed_scope.held_out_fixture_ids ['evaluation/fx0_ordinary-random', 'evaluation/fx1_mixed-stress', 'evaluation/fx0_ordinary-random'] does not name exactly the manifest held-out ids ['evaluation/fx0_ordinary-random', 'evaluation/fx1_mixed-stress']"
+      ]
+    },
+    {
+      "name": "manifest_missing_fixture",
+      "accepted": false,
+      "problems": [
+        "policy domain evaluation_held_out ids ['evaluation/fx0_ordinary-random', 'evaluation/fx1_mixed-stress'] != manifest held-out ids ['evaluation/fx1_mixed-stress']",
+        "gate reviewed_scope.held_out_fixture_ids ['evaluation/fx0_ordinary-random', 'evaluation/fx1_mixed-stress'] does not name exactly the manifest held-out ids ['evaluation/fx1_mixed-stress']"
+      ]
+    },
+    {
+      "name": "manifest_duplicate_fixture",
+      "accepted": false,
+      "problems": [
+        "manifest has no complete typed unique fixture set for block 'evaluation': ['evaluation/fx0_ordinary-random', 'evaluation/fx1_mixed-stress', 'evaluation/fx0_ordinary-random']",
+        "policy domain evaluation_held_out ids ['evaluation/fx0_ordinary-random', 'evaluation/fx1_mixed-stress'] != manifest held-out ids ['evaluation/fx0_ordinary-random', 'evaluation/fx0_ordinary-random', 'evaluation/fx1_mixed-stress']",
+        "gate reviewed_scope.held_out_fixture_ids ['evaluation/fx0_ordinary-random', 'evaluation/fx1_mixed-stress'] does not name exactly the manifest held-out ids ['evaluation/fx0_ordinary-random', 'evaluation/fx0_ordinary-random', 'evaluation/fx1_mixed-stress']"
+      ]
+    },
+    {
+      "name": "policy_missing_fixture",
+      "accepted": false,
+      "problems": [
+        "policy domain evaluation_held_out ids ['evaluation/fx0_ordinary-random'] != manifest held-out ids ['evaluation/fx0_ordinary-random', 'evaluation/fx1_mixed-stress']"
+      ]
+    },
+    {
+      "name": "wrong_runner_sha",
+      "accepted": false,
+      "problems": [
+        "held-out gate does not bind this runner's bytes"
+      ]
+    },
+    {
+      "name": "missing_power_run",
+      "accepted": false,
+      "problems": [
+        "gate reviewed_scope.calibration_power_run_id must name the accepted calibration run (negative power source)"
+      ]
+    },
+    {
+      "name": "empty_power_run",
+      "accepted": false,
+      "problems": [
+        "gate reviewed_scope.calibration_power_run_id must name the accepted calibration run (negative power source)"
+      ]
+    },
+    {
+      "name": "nonempty_power_run_is_parent_authority_not_validated_here",
+      "accepted": true,
+      "problems": []
+    }
+  ],
+  "functions": {
+    "q1_component_runner": {
+      "unchanged_functions_classes": [
+        "Backend",
+        "Inventory",
+        "TensorStore",
+        "_case_path",
+        "_jsonable",
+        "alias_class",
+        "alias_rank",
+        "attest",
+        "authorize_scope",
+        "boot_lifecycle",
+        "build_alias_pages",
+        "canonical_sha",
+        "control_rows",
+        "gate_approval",
+        "helper_hashes",
+        "layer_name",
+        "masks_from_parent",
+        "metrics_record",
+        "nonfinite",
+        "per_head",
+        "projected_archive_bytes",
+        "ref_record",
+        "run_fixture",
+        "run_negatives",
+        "run_process",
+        "run_row",
+        "scratch_row",
+        "sha256_file",
+        "sha_t",
+        "tensor_bytes",
+        "utc",
+        "validate_alias_topology",
+        "validate_row_policy"
+      ],
+      "changed": [
+        "main"
+      ],
+      "added": [
+        "block_authorization"
+      ]
+    },
+    "q1_2b_reduce": {
+      "unchanged_functions_classes": [
+        "_case_rel",
+        "_is_int",
+        "_load_json",
+        "_recompute_metrics",
+        "canonical_sha",
+        "load_inventory",
+        "main",
+        "process_independence",
+        "reducer_runtime_identity",
+        "sha256_file",
+        "verify_record"
+      ],
+      "changed": [
+        "reduce_run"
+      ],
+      "added": []
+    }
+  },
+  "expected_ids": [
+    "evaluation/fx0_ordinary-random",
+    "evaluation/fx1_mixed-stress"
+  ],
+  "expected_cases": 5760,
+  "case_counts": {
+    "output": 3072,
+    "state": 2688
+  },
+  "head_observations": 276480,
+  "bash_syntax_exit": 0,
+  "parent_power_authority_condition": "Parent must bind/copy/verify accepted calibration summary, terminal receipt and acceptance receipt in the trusted held-out gate; runner alone checks only a nonempty run ID."
+}

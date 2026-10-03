@@ -1,0 +1,24 @@
+{
+ "files": {
+  "PROTOCOL.md": "937a786eced906d3728628ed24d6c7c300ef7f2ce045bed807f1423618c6b7af",
+  "cases.py": "0c4109acaf48adb83bb32e02c16a5c4db5f47ea95949cfc6cd55bad86c78c8d3",
+  "cases.v1.json": "b00fda47437b182e5d6901effb5f207e1d1b8cb1e44b7028fa817a79f9303861",
+  "client.py": "7375f229f7d548f3e72f342052ceff94ca6e8e8605d0942fc25b851e844e81a6",
+  "fixtures/requests/bnd-25535.json": "13ae09b8a29c2e1da97181a77fd5461c02840f88bd2a1c30a693a31df0e1da48",
+  "fixtures/requests/cal-long.json": "a10c2a43bb25727d07f2b42afd3a5453797e0faf68f36ef42da7b8be0dd1ed15",
+  "fixtures/requests/cal-medium.json": "4f56ad5b77326d83b1b2d910148a002b7876653c4149de6b9a8e77c28cdd97d2",
+  "fixtures/requests/cal-short.json": "74a3e00921781beb993d0e5330f53ce9d7d03cfdcd12a2fd78f71ea306680ee8",
+  "fixtures/requests/eval-long.json": "6d734abc5988e4bed470ebe5e0a9cda022125374f5015ecb3f8795d1154c5b81",
+  "fixtures/requests/eval-medium.json": "b1d392308c25729261d5359504669df67c370d5be2f0eb624da2c16c2c73ef89",
+  "fixtures/requests/eval-short.json": "21979a32102d0a84a433ac2fa73a29382200207fbcca4af2a5c891c2eb84c115",
+  "make_cand_launch.py": "a7abb4af00694f22a7ef9cf144b08e3990fede91f1b43c268fb8be86a87e9476",
+  "patch_runner.py": "bcf123ad26402e1a88150911154d33818eb3bc7bb9404d8ee4ac998e84aae0c9",
+  "q1v3_common.py": "4b355071ad6ed6271131296776cdeb682975fd9a50e9a19c7d5de2c3c92fb1ee",
+  "q1v3_hooks.py": "fbb83948877a100ce736cbc15b5f0f22759239573c761e27751a9065e817b309",
+  "reduce.py": "bc272f7adfb23ad3337595ebe8902a9602ad52d7ef165b481776ae88431baf62",
+  "run_all.sh": "70dba3207361f6a28abb45e10596daefd75c3eb3853f69792b9d90a62bf0f9ab",
+  "serve_native_q1v3.sh": "ac04fde09d064a330205f7d55959cc2c8617cd13111b80c13efa603a33813128"
+ },
+ "schema": "q1v3.freeze.v1",
+ "utc": "2026-10-01T22:32:58Z"
+}

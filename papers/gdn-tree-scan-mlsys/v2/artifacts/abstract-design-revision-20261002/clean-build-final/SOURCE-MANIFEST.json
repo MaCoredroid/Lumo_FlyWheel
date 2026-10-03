@@ -1,0 +1,89 @@
+{
+  "schema": "lumotree.source-package.v1",
+  "dependency_files": [
+    {
+      "path": "IEEEtran.cls",
+      "sha256": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b"
+    },
+    {
+      "path": "abstract.tex",
+      "sha256": "6df1bdc2006279afc460b73e1232d9fc439687cfd18d4afadd3c9e9842bd9a45"
+    },
+    {
+      "path": "figures/pipeline.tikz",
+      "sha256": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c"
+    },
+    {
+      "path": "figures/scan-replay.tikz",
+      "sha256": "19c984883a8b70cc5209c33fa4f62e98aba708ad2b025568d1b2d600a3e4ecd0"
+    },
+    {
+      "path": "figures/state-contract.tikz",
+      "sha256": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898"
+    },
+    {
+      "path": "main.bbl",
+      "sha256": "392512456ceb65b6d3e8b5e06b522910508f4984792a8654bde42b0e6df67c30"
+    },
+    {
+      "path": "main.tex",
+      "sha256": "6d4eae0e1f69497b7d6782c5f7546d940dfb6bf4412e1235a74d19ca73c87498"
+    },
+    {
+      "path": "ref.bib",
+      "sha256": "6cba931832435ef088018bcb885b1117e0154863cb081e9da974c5ec2bffa7a2"
+    },
+    {
+      "path": "sections/execution-costs.tex",
+      "sha256": "dba407dcf633c99e45f1cf352168c0c6f46c91a0f25df9e3d224aef97166a476"
+    },
+    {
+      "path": "sections/fullmodel-protocol.tex",
+      "sha256": "cb62d56162bb107789222945e9c2ef37dc47234e5e408daa40784a871e8ac3b5"
+    },
+    {
+      "path": "sections/fullmodel-validation.tex",
+      "sha256": "fbf5ca4be2ab98864ef45166c30f355a3c09dd4db45bcc557002fab7d41fcaff"
+    },
+    {
+      "path": "sections/mechanism-costs.tex",
+      "sha256": "fbc21f0b2fc66bf650706f49bdb8ef5bfa7856839570e5ebb5e16843769a0f2a"
+    },
+    {
+      "path": "sections/optimization-spans.tex",
+      "sha256": "ae35b3b0ea31e4ee1c3baa532a9b6d0438e51422294d631ec4d647dd5e5e89a5"
+    },
+    {
+      "path": "sections/recurrent-comparison.tex",
+      "sha256": "0ac8ea1e338af46351a0feaac63f910c8698d30ba3bfa15c898c2ee5db3f3814"
+    },
+    {
+      "path": "sections/recurrent-validation.tex",
+      "sha256": "4b8540c9162a2de4c44574ef10178e42674480cc579efca0cfca14fc70edc953"
+    },
+    {
+      "path": "sections/replay-protocol.tex",
+      "sha256": "11ea989b987a8fe067dd07cf4e02c0aa919d798f8919c0d400fa369538e0849f"
+    },
+    {
+      "path": "sections/request-replay.tex",
+      "sha256": "aabaffc47ef320a3441bfe420aa341ebbf1ed3335005acd38c6428e7c904a610"
+    },
+    {
+      "path": "sections/sampling-validation.tex",
+      "sha256": "85495681df218059859af1aa481003a0c24e243d5e5d60a40bea46a5d0763f2d"
+    },
+    {
+      "path": "sections/workload-configuration.tex",
+      "sha256": "b178e1d123e9777725f0932f543c03020a8098f5f9d9da135f566594979a71e6"
+    },
+    {
+      "path": "sections/workload-details.tex",
+      "sha256": "93da83861148630e81824472fdc528afd53a902d8db95c6ebbb6a66f6aa62813"
+    },
+    {
+      "path": "sections/workload.tex",
+      "sha256": "aa98ca35abe10771c7deaf0dbeb3e01067efa28ec0c6b561cee15eda8786c329"
+    }
+  ]
+}

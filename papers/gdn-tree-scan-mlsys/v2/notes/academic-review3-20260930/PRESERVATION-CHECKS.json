@@ -1,0 +1,14 @@
+{
+  "method_tables_unchanged": true,
+  "figures_unchanged": true,
+  "algorithms_unchanged": true,
+  "GDN_component_unchanged": true,
+  "native_table_unchanged": true,
+  "acceptance_timing_table_unchanged": true,
+  "ten_task_outcomes_unchanged": true,
+  "recurrent_counts_unchanged": true,
+  "native_study_in_appendix": true,
+  "one_artifact_self_citation": true,
+  "one_workload_outcome_table": true,
+  "removed_historical_narrative": true
+}

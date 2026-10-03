@@ -1,0 +1,17 @@
+{
+  "pages": 11,
+  "latest_render_matches_all_visually_reviewed_pages": true,
+  "page_sha256": {
+    "page-01.png": "0a638b36d1c06f397ae461cf0500f9694c851a64ac58e8a43ee273d807d6c7b5",
+    "page-02.png": "cb7519262ba2ad6c8b397ef9730b37d460fcf0e40ae3560789fd5e330d51db19",
+    "page-03.png": "28cb3add330dbc998372b9115ed319c1513597b07230b1d2542ac8fa264e9231",
+    "page-04.png": "90f413751cfdb29f947d530b27c4c7bed0bd569c1792590d5eb4e26513820a6c",
+    "page-05.png": "438b91c60ff30534f3b95d1e25516ac077e07869d2b49da4ba9913530df4cf55",
+    "page-06.png": "9fd985a5f5db7526fdc9f201eee3e46510f56c213413296913b0616ec615ac8f",
+    "page-07.png": "c93e10991d9a8bd5ea7a3ece25808155f018d9f545ba1c2a572e604b83c9164f",
+    "page-08.png": "4ec7b46d4b48871a41a7edd5aef735e1f34abb5bbd3ada19642fd3784371c48d",
+    "page-09.png": "03a4d40b43275e444a8e21ed8323c3bb520b13f56801fbf8d769b6fc01c01869",
+    "page-10.png": "122df70aa76d0d00473e0352ff77505deebf740e377ee0c07742dc645d40c2db",
+    "page-11.png": "9517deb4c1dbcd4a9b6608c0fdff09a3717a6b2459f6f9eaa44069b6c31911ea"
+  }
+}

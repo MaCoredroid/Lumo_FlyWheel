@@ -1,0 +1,17 @@
+# Joint MTP categorical contract: content review
+
+**Final disposition: PASS for policy content at SHA-256 `4dad3bf5918c31d734214d8d2579ca1bb5b75500b575dbf2c0718287a287c593`; both initial findings below are closed. Executable binding and launch remain pending.**
+
+2026-09-29. Reviewed `p0/monitor/review-response-20260927/Q1-JOINT-MTP-CATEGORICAL-CONTRACT-v1.json`, SHA-256 `d77d97e2dc35b8d3c24df87680228f998bb27056c3d60f1cf7000b6b4430eac7`. Source/CPU inspection only; no implementation, policy, gate or model changes. Executable binding remains pending and launch is not approved.
+
+All six source hashes match actual files. Fixture SHA `607634e19235a58d2b6d73f8260dac3c49f842f9f1cba9a1789f329c56012223` matches. The contract's ordered case list is exactly all84 calibration cycle-0 cases in that fixture (28 for each of three prefixes), with A/B and r0/r1 giving336 observations per route. For every case, root position=P, before-z materialized=P+1+L, z position=P+1+L and after-z materialized=P+2+L agree with the fixture. The three MTP phases and target O2 remain distinct.
+
+**One required content clarification before executable binding:** lines165–174 define `ordered_topk3` as actual native `torch.topk`, but do not explicitly require the candidate's actual emitted fused-selector outputs. State that candidate spine/top3 observations are the real production outputs bound to that head row; the native executable operators are the comparator. Recomputing torch.topk on candidate logits is a diagnostic/control and cannot replace the candidate's actual IDs. This closes the possibility of testing the scores while bypassing a faulty selector/output connection. Keep separate argmax and ordered k=3, zero allowed disagreement, exact native tie/rank behavior, and no top32 slicing or set-only replacement.
+
+Related identity precision at line193: any required categorical mismatch fails; only an actual spine-input mismatch makes the following self-fed MTP input unmatched. A top3-only mismatch can leave the spine/follow input identical, and should not falsely label that input unmatched.
+
+All other reviewed boundaries are appropriate: exact joint O0 and publication/ownership/adapter prerequisites; native categorical stability with missing/unqualified cases retained; no forcing a divergent winner to fabricate agreement; numerical KV/hidden/full-score differences diagnostic only; full Q1, MTP numerical equivalence, later proposal levels, continuous cycles, APC/lifecycle, held-out, timing and WP admission remain unclosed. No new tolerance or experiment is required for this content correction.
+
+## Exact-byte closure
+
+Rechecked corrected contract `4dad3bf5918c31d734214d8d2579ca1bb5b75500b575dbf2c0718287a287c593`. The preserved initial draft at `p0/monitor/review-response-20260927/joint-mtp-categorical-contract-initial-draft-20260929.json` remains exactly `d77d97e2dc35b8d3c24df87680228f998bb27056c3d60f1cf7000b6b4430eac7`. JSON comparison shows only `operator_contract` and `first_divergence_policy` changed. Actual emitted candidate fused-selector spine/top3 are now required and bound to the full head row; recomputation cannot replace them. Top3-only mismatch fails without falsely changing the follow-input identity. All source/fixture hashes were revalidated; population, phase/extents, mandatory conjunctions and unclosed requirements are unchanged. No remaining material content issue. This acceptance covers the prospective rule's content, not executable enforcement, scientific readiness, launch, qualification, timing or WP admission.

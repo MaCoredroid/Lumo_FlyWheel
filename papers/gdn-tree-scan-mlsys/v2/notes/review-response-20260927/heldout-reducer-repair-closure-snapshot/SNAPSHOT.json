@@ -1,0 +1,25 @@
+{
+  "utc": "2026-09-28T02:00:31.808382+00:00",
+  "files": {
+    "tools/test_log.q1_2b.v2_2_1_reduction_repair.attempt2.txt": {
+      "sha256": "8162d00b8614bad3910443e0268fd3a4b64ef1e8aa0b897891e6d461f76aa6a6",
+      "bytes": 2928
+    },
+    "tools/test_log.q1_2b.v2_2_1_reduction_repair.attempt1.txt": {
+      "sha256": "e1267c1dea9f3c1fc7e96a41d41578dd17022410fa8209fe74c1d5108e066d8a",
+      "bytes": 8858
+    },
+    "tools/q1_2b_reduce_v2_2_1.py": {
+      "sha256": "a7decd00863f69b6970f7e1015a1d725681f046ebc65c63a535d5bc42da00cc8",
+      "bytes": 63711
+    },
+    "tools/run_q1_2b_reduction_repair_v2_2_1.sh": {
+      "sha256": "6aa6a9c3f374840b728d64f565c73bbd445e8843105d0bc06259fbe121c383c5",
+      "bytes": 8244
+    },
+    "tools/tests/test_q1_2b_v2_2_1_reduction_repair.py": {
+      "sha256": "4404061bcc4c24c1274b3e4542fb47ab4a760b92691e90e7e1267027da494dc2",
+      "bytes": 31315
+    }
+  }
+}

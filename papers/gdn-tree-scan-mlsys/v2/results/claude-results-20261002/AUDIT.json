@@ -1,0 +1,987 @@
+{
+  "schema": "codex.paper-results-audit.v1",
+  "source_files_sha_verified": 271,
+  "remote_head": "da2312962a365fc6808af6304c53436b08d7fd2e",
+  "workload": {
+    "lumotree": {
+      "output_tokens": 187137.0,
+      "requests": 236.0,
+      "e2e_s": 7891.331706523895,
+      "ttft_s": 753.8045086860657,
+      "pooled_tokens_s": 26.185679552523162,
+      "raw_evaluation_reports": 10,
+      "resolved": 5,
+      "empty_patches": 0,
+      "failed_tests": 5,
+      "test_evaluator_invocations": 10,
+      "agent_minutes": 144.01333333333332,
+      "task_summary": {
+        "13977": {
+          "verdict": "failed",
+          "agent_s": 489.8
+        },
+        "14096": {
+          "verdict": "resolved",
+          "agent_s": 1450.6
+        },
+        "14182": {
+          "verdict": "failed",
+          "agent_s": 348.9
+        },
+        "14309": {
+          "verdict": "resolved",
+          "agent_s": 189.1
+        },
+        "14365": {
+          "verdict": "failed",
+          "agent_s": 166.5
+        },
+        "14369": {
+          "verdict": "failed",
+          "agent_s": 1912.0
+        },
+        "14508": {
+          "verdict": "resolved",
+          "agent_s": 2216.6
+        },
+        "14539": {
+          "verdict": "resolved",
+          "agent_s": 369.1
+        },
+        "14598": {
+          "verdict": "failed",
+          "agent_s": 1254.4
+        },
+        "14995": {
+          "verdict": "resolved",
+          "agent_s": 243.8
+        }
+      }
+    },
+    "vllm_mtp5": {
+      "output_tokens": 134643.0,
+      "requests": 224.0,
+      "e2e_s": 5494.835367441177,
+      "ttft_s": 548.2409048080444,
+      "pooled_tokens_s": 27.17404893718478,
+      "raw_evaluation_reports": 10,
+      "resolved": 6,
+      "empty_patches": 2,
+      "failed_tests": 2,
+      "test_evaluator_invocations": 8,
+      "agent_minutes": 99.515,
+      "task_summary": {
+        "13977": {
+          "verdict": "failed",
+          "agent_s": 586.4
+        },
+        "14096": {
+          "verdict": "failed",
+          "agent_s": 1181.6
+        },
+        "14182": {
+          "verdict": "failed",
+          "agent_s": 357.2
+        },
+        "14309": {
+          "verdict": "resolved",
+          "agent_s": 101.5
+        },
+        "14365": {
+          "verdict": "resolved",
+          "agent_s": 141.6
+        },
+        "14369": {
+          "verdict": "resolved",
+          "agent_s": 1071.9
+        },
+        "14508": {
+          "verdict": "resolved",
+          "agent_s": 440.0
+        },
+        "14539": {
+          "verdict": "resolved",
+          "agent_s": 206.4
+        },
+        "14598": {
+          "verdict": "failed",
+          "agent_s": 1592.4
+        },
+        "14995": {
+          "verdict": "resolved",
+          "agent_s": 291.9
+        }
+      }
+    },
+    "sglang_eagle_s7_d8": {
+      "output_tokens": 158827.0,
+      "requests": 210.0,
+      "e2e_s": 5688.253344496712,
+      "ttft_s": 381.23080281633884,
+      "pooled_tokens_s": 29.888133836676108,
+      "raw_evaluation_reports": 10,
+      "resolved": 5,
+      "empty_patches": 2,
+      "failed_tests": 3,
+      "test_evaluator_invocations": 8,
+      "agent_minutes": 102.99833333333332,
+      "task_summary": {
+        "13977": {
+          "verdict": "failed",
+          "agent_s": 1256.3
+        },
+        "14096": {
+          "verdict": "failed",
+          "agent_s": 612.1
+        },
+        "14182": {
+          "verdict": "failed",
+          "agent_s": 67.9
+        },
+        "14309": {
+          "verdict": "resolved",
+          "agent_s": 119.7
+        },
+        "14365": {
+          "verdict": "resolved",
+          "agent_s": 167.5
+        },
+        "14369": {
+          "verdict": "failed",
+          "agent_s": 984.4
+        },
+        "14508": {
+          "verdict": "resolved",
+          "agent_s": 440.4
+        },
+        "14539": {
+          "verdict": "resolved",
+          "agent_s": 1031.6
+        },
+        "14598": {
+          "verdict": "failed",
+          "agent_s": 1220.2
+        },
+        "14995": {
+          "verdict": "resolved",
+          "agent_s": 279.8
+        }
+      }
+    }
+  },
+  "replays": {
+    "mtp5-cfM1-sampled-20261002T214201Z": {
+      "requests": 43,
+      "output_tokens": 15841,
+      "decode_seconds": 576.2917853267863,
+      "pooled_tokens_s": 27.41319658242524,
+      "request_prompt_tokens": {
+        "chatreq_1790974250261.json": 22814,
+        "chatreq_1790974308675.json": 23522,
+        "chatreq_1790974311895.json": 24023,
+        "chatreq_1790974370080.json": 26018,
+        "chatreq_1790974394553.json": 26785,
+        "chatreq_1790974487166.json": 29564,
+        "chatreq_1790974866602.json": 23908,
+        "chatreq_1790974885053.json": 28618,
+        "chatreq_1790974892777.json": 28962,
+        "chatreq_1790974896570.json": 29166,
+        "chatreq_1790974913908.json": 30983,
+        "chatreq_1790974964496.json": 23396,
+        "chatreq_1790974976564.json": 24088,
+        "chatreq_1790975092393.json": 27916,
+        "chatreq_1790975098057.json": 28098,
+        "chatreq_1790975105189.json": 28436,
+        "chatreq_1790975109944.json": 28829,
+        "chatreq_1790975121133.json": 30100,
+        "chatreq_1790975145832.json": 31431,
+        "chatreq_1790975170245.json": 33181,
+        "chatreq_1790975192276.json": 33966,
+        "chatreq_1790975206432.json": 34633,
+        "chatreq_1790975225764.json": 35170,
+        "chatreq_1790975287592.json": 23283,
+        "chatreq_1790975303755.json": 24592,
+        "chatreq_1790975319745.json": 26755,
+        "chatreq_1790975324377.json": 27614,
+        "chatreq_1790975334814.json": 29282,
+        "chatreq_1790975360551.json": 30138,
+        "chatreq_1790975372794.json": 33730,
+        "chatreq_1790975454147.json": 36247,
+        "chatreq_1790975574802.json": 40109,
+        "chatreq_1790975599672.json": 40259,
+        "chatreq_1790975643650.json": 42387,
+        "chatreq_1790975651599.json": 42745,
+        "chatreq_1790975672507.json": 43386,
+        "chatreq_1790975687891.json": 43950,
+        "chatreq_1790975708683.json": 45195,
+        "chatreq_1790975725293.json": 45815,
+        "chatreq_1790975753660.json": 47960,
+        "chatreq_1790975761394.json": 48362,
+        "chatreq_1790975853966.json": 36198,
+        "chatreq_1790975902484.json": 37245
+      },
+      "accepted_drafts": 12204.0,
+      "speculative_events": 3686.0,
+      "accepted_drafts_per_event": 3.3109061313076507,
+      "timers": {},
+      "timer_totals": {}
+    },
+    "mtp5-swM1-sampled-20261002T191918Z": {
+      "requests": 43,
+      "output_tokens": 18579,
+      "decode_seconds": 712.7340699657798,
+      "pooled_tokens_s": 26.0068948309009,
+      "request_prompt_tokens": {
+        "chatreq_1787597282944.json": 23276,
+        "chatreq_1787597307152.json": 23636,
+        "chatreq_1787597309713.json": 24391,
+        "chatreq_1787597402587.json": 27118,
+        "chatreq_1787597404989.json": 27291,
+        "chatreq_1787597407027.json": 28373,
+        "chatreq_1787597607897.json": 40985,
+        "chatreq_1787597624780.json": 41504,
+        "chatreq_1787597632003.json": 41889,
+        "chatreq_1787597735027.json": 45880,
+        "chatreq_1787597739493.json": 46214,
+        "chatreq_1787597743386.json": 47058,
+        "chatreq_1787597754195.json": 47674,
+        "chatreq_1787597853247.json": 50349,
+        "chatreq_1787597882520.json": 52026,
+        "chatreq_1787598364750.json": 65450,
+        "chatreq_1787598371432.json": 66216,
+        "chatreq_1787598460010.json": 68557,
+        "chatreq_1787598478475.json": 49231,
+        "chatreq_1787598678577.json": 40715,
+        "chatreq_1787598702721.json": 44053,
+        "chatreq_1787598726220.json": 44739,
+        "chatreq_1787598736476.json": 45283,
+        "chatreq_1787598744134.json": 45745,
+        "chatreq_1787598769288.json": 33092,
+        "chatreq_1787598851731.json": 34604,
+        "chatreq_1787598884943.json": 35507,
+        "chatreq_1787598953625.json": 23024,
+        "chatreq_1787598972855.json": 23578,
+        "chatreq_1787598990204.json": 25535,
+        "chatreq_1787599034884.json": 28171,
+        "chatreq_1787599048795.json": 28980,
+        "chatreq_1787599111706.json": 31626,
+        "chatreq_1787599178913.json": 34098,
+        "chatreq_1787599200933.json": 35733,
+        "chatreq_1787599268104.json": 37910,
+        "chatreq_1787599273545.json": 38811,
+        "chatreq_1787599333657.json": 40694,
+        "chatreq_1787599345801.json": 41156,
+        "chatreq_1787599361377.json": 41729,
+        "chatreq_1787599365100.json": 41888,
+        "chatreq_1787599372806.json": 42342,
+        "chatreq_1787599377763.json": 42592
+      },
+      "accepted_drafts": 14133.0,
+      "speculative_events": 4480.0,
+      "accepted_drafts_per_event": 3.1546875,
+      "timers": {},
+      "timer_totals": {}
+    },
+    "sglang-s7k1d8-cfS1-sampled-20261002T220022Z": {
+      "requests": 43,
+      "output_tokens": 15495,
+      "decode_seconds": 511.05136596690863,
+      "pooled_tokens_s": 30.235708245813672,
+      "request_prompt_tokens": {
+        "chatreq_1790974250261.json": 22960,
+        "chatreq_1790974308675.json": 23668,
+        "chatreq_1790974311895.json": 24169,
+        "chatreq_1790974370080.json": 26164,
+        "chatreq_1790974394553.json": 26931,
+        "chatreq_1790974487166.json": 29710,
+        "chatreq_1790974866602.json": 24054,
+        "chatreq_1790974885053.json": 28764,
+        "chatreq_1790974892777.json": 29108,
+        "chatreq_1790974896570.json": 29312,
+        "chatreq_1790974913908.json": 31129,
+        "chatreq_1790974964496.json": 23542,
+        "chatreq_1790974976564.json": 24234,
+        "chatreq_1790975092393.json": 28062,
+        "chatreq_1790975098057.json": 28244,
+        "chatreq_1790975105189.json": 28582,
+        "chatreq_1790975109944.json": 28975,
+        "chatreq_1790975121133.json": 30246,
+        "chatreq_1790975145832.json": 31577,
+        "chatreq_1790975170245.json": 33327,
+        "chatreq_1790975192276.json": 34112,
+        "chatreq_1790975206432.json": 34779,
+        "chatreq_1790975225764.json": 35316,
+        "chatreq_1790975287592.json": 23429,
+        "chatreq_1790975303755.json": 24738,
+        "chatreq_1790975319745.json": 26901,
+        "chatreq_1790975324377.json": 27760,
+        "chatreq_1790975334814.json": 29428,
+        "chatreq_1790975360551.json": 30284,
+        "chatreq_1790975372794.json": 33876,
+        "chatreq_1790975454147.json": 36393,
+        "chatreq_1790975574802.json": 40265,
+        "chatreq_1790975599672.json": 40415,
+        "chatreq_1790975643650.json": 42543,
+        "chatreq_1790975651599.json": 42901,
+        "chatreq_1790975672507.json": 43542,
+        "chatreq_1790975687891.json": 44106,
+        "chatreq_1790975708683.json": 45351,
+        "chatreq_1790975725293.json": 45971,
+        "chatreq_1790975753660.json": 48116,
+        "chatreq_1790975761394.json": 48518,
+        "chatreq_1790975853966.json": 36231,
+        "chatreq_1790975902484.json": 37278
+      },
+      "timers": {},
+      "timer_totals": {}
+    },
+    "tree-cfT1-sampled-20261002T212537Z": {
+      "requests": 43,
+      "output_tokens": 14044,
+      "decode_seconds": 456.54000082891434,
+      "pooled_tokens_s": 30.667630381958123,
+      "request_prompt_tokens": {
+        "chatreq_1790974250261.json": 22814,
+        "chatreq_1790974308675.json": 23522,
+        "chatreq_1790974311895.json": 24023,
+        "chatreq_1790974370080.json": 26018,
+        "chatreq_1790974394553.json": 26785,
+        "chatreq_1790974487166.json": 29564,
+        "chatreq_1790974866602.json": 23908,
+        "chatreq_1790974885053.json": 28618,
+        "chatreq_1790974892777.json": 28962,
+        "chatreq_1790974896570.json": 29166,
+        "chatreq_1790974913908.json": 30983,
+        "chatreq_1790974964496.json": 23396,
+        "chatreq_1790974976564.json": 24088,
+        "chatreq_1790975092393.json": 27916,
+        "chatreq_1790975098057.json": 28098,
+        "chatreq_1790975105189.json": 28436,
+        "chatreq_1790975109944.json": 28829,
+        "chatreq_1790975121133.json": 30100,
+        "chatreq_1790975145832.json": 31431,
+        "chatreq_1790975170245.json": 33181,
+        "chatreq_1790975192276.json": 33966,
+        "chatreq_1790975206432.json": 34633,
+        "chatreq_1790975225764.json": 35170,
+        "chatreq_1790975287592.json": 23283,
+        "chatreq_1790975303755.json": 24592,
+        "chatreq_1790975319745.json": 26755,
+        "chatreq_1790975324377.json": 27614,
+        "chatreq_1790975334814.json": 29282,
+        "chatreq_1790975360551.json": 30138,
+        "chatreq_1790975372794.json": 33730,
+        "chatreq_1790975454147.json": 36247,
+        "chatreq_1790975574802.json": 40109,
+        "chatreq_1790975599672.json": 40259,
+        "chatreq_1790975643650.json": 42387,
+        "chatreq_1790975651599.json": 42745,
+        "chatreq_1790975672507.json": 43386,
+        "chatreq_1790975687891.json": 43950,
+        "chatreq_1790975708683.json": 45195,
+        "chatreq_1790975725293.json": 45815,
+        "chatreq_1790975753660.json": 47960,
+        "chatreq_1790975761394.json": 48362,
+        "chatreq_1790975853966.json": 36198,
+        "chatreq_1790975902484.json": 37245
+      },
+      "accepted_drafts": 11664.0,
+      "speculative_events": 2469.0,
+      "accepted_drafts_per_event": 4.724179829890644,
+      "timers": {
+        "committer_ms": 20.96812432098989,
+        "target_ms": 109.96958205367957,
+        "step_wall_ms": 185.2012680025049,
+        "drafter_ms": 48.238575410239314
+      },
+      "timer_totals": {
+        "committer": [
+          53.00741828346244,
+          2528
+        ],
+        "target": [
+          278.00310343170196,
+          2528
+        ],
+        "wall": [
+          459.85474845021963,
+          2483
+        ],
+        "drafter": [
+          121.94711863708498,
+          2528
+        ]
+      }
+    },
+    "tree-swA1-sampled-20261002T181143Z": {
+      "requests": 43,
+      "output_tokens": 18279,
+      "decode_seconds": 743.8417016323656,
+      "pooled_tokens_s": 24.51596886808171,
+      "request_prompt_tokens": {
+        "chatreq_1787597282944.json": 23276,
+        "chatreq_1787597307152.json": 23636,
+        "chatreq_1787597309713.json": 24391,
+        "chatreq_1787597402587.json": 27118,
+        "chatreq_1787597404989.json": 27291,
+        "chatreq_1787597407027.json": 28373,
+        "chatreq_1787597607897.json": 40985,
+        "chatreq_1787597624780.json": 41504,
+        "chatreq_1787597632003.json": 41889,
+        "chatreq_1787597735027.json": 45880,
+        "chatreq_1787597739493.json": 46214,
+        "chatreq_1787597743386.json": 47058,
+        "chatreq_1787597754195.json": 47674,
+        "chatreq_1787597853247.json": 50349,
+        "chatreq_1787597882520.json": 52026,
+        "chatreq_1787598364750.json": 65450,
+        "chatreq_1787598371432.json": 66216,
+        "chatreq_1787598460010.json": 68557,
+        "chatreq_1787598478475.json": 49231,
+        "chatreq_1787598678577.json": 40715,
+        "chatreq_1787598702721.json": 44053,
+        "chatreq_1787598726220.json": 44739,
+        "chatreq_1787598736476.json": 45283,
+        "chatreq_1787598744134.json": 45745,
+        "chatreq_1787598769288.json": 33092,
+        "chatreq_1787598851731.json": 34604,
+        "chatreq_1787598884943.json": 35507,
+        "chatreq_1787598953625.json": 23024,
+        "chatreq_1787598972855.json": 23578,
+        "chatreq_1787598990204.json": 25535,
+        "chatreq_1787599034884.json": 28171,
+        "chatreq_1787599048795.json": 28980,
+        "chatreq_1787599111706.json": 31626,
+        "chatreq_1787599178913.json": 34098,
+        "chatreq_1787599200933.json": 35733,
+        "chatreq_1787599268104.json": 37910,
+        "chatreq_1787599273545.json": 38811,
+        "chatreq_1787599333657.json": 40694,
+        "chatreq_1787599345801.json": 41156,
+        "chatreq_1787599361377.json": 41729,
+        "chatreq_1787599365100.json": 41888,
+        "chatreq_1787599372806.json": 42342,
+        "chatreq_1787599377763.json": 42592
+      },
+      "accepted_drafts": 13950.0,
+      "speculative_events": 4363.0,
+      "accepted_drafts_per_event": 3.1973412789365114,
+      "timers": {
+        "drafter_ms": 31.700236206434244,
+        "committer_ms": 20.569337167811046,
+        "target_ms": 111.86246218800976,
+        "step_wall_ms": 170.78923138135906
+      },
+      "timer_totals": {
+        "drafter": [
+          140.21014474105866,
+          4423
+        ],
+        "committer": [
+          90.97817829322825,
+          4423
+        ],
+        "target": [
+          494.76767025756715,
+          4423
+        ],
+        "wall": [
+          747.71525498759,
+          4378
+        ]
+      }
+    },
+    "tree-swAF1-sampled-20261002T201229Z": {
+      "requests": 43,
+      "output_tokens": 19525,
+      "decode_seconds": 673.1313890153542,
+      "pooled_tokens_s": 28.942343676021345,
+      "request_prompt_tokens": {
+        "chatreq_1787597282944.json": 23276,
+        "chatreq_1787597307152.json": 23636,
+        "chatreq_1787597309713.json": 24391,
+        "chatreq_1787597402587.json": 27118,
+        "chatreq_1787597404989.json": 27291,
+        "chatreq_1787597407027.json": 28373,
+        "chatreq_1787597607897.json": 40985,
+        "chatreq_1787597624780.json": 41504,
+        "chatreq_1787597632003.json": 41889,
+        "chatreq_1787597735027.json": 45880,
+        "chatreq_1787597739493.json": 46214,
+        "chatreq_1787597743386.json": 47058,
+        "chatreq_1787597754195.json": 47674,
+        "chatreq_1787597853247.json": 50349,
+        "chatreq_1787597882520.json": 52026,
+        "chatreq_1787598364750.json": 65450,
+        "chatreq_1787598371432.json": 66216,
+        "chatreq_1787598460010.json": 68557,
+        "chatreq_1787598478475.json": 49231,
+        "chatreq_1787598678577.json": 40715,
+        "chatreq_1787598702721.json": 44053,
+        "chatreq_1787598726220.json": 44739,
+        "chatreq_1787598736476.json": 45283,
+        "chatreq_1787598744134.json": 45745,
+        "chatreq_1787598769288.json": 33092,
+        "chatreq_1787598851731.json": 34604,
+        "chatreq_1787598884943.json": 35507,
+        "chatreq_1787598953625.json": 23024,
+        "chatreq_1787598972855.json": 23578,
+        "chatreq_1787598990204.json": 25535,
+        "chatreq_1787599034884.json": 28171,
+        "chatreq_1787599048795.json": 28980,
+        "chatreq_1787599111706.json": 31626,
+        "chatreq_1787599178913.json": 34098,
+        "chatreq_1787599200933.json": 35733,
+        "chatreq_1787599268104.json": 37910,
+        "chatreq_1787599273545.json": 38811,
+        "chatreq_1787599333657.json": 40694,
+        "chatreq_1787599345801.json": 41156,
+        "chatreq_1787599361377.json": 41729,
+        "chatreq_1787599365100.json": 41888,
+        "chatreq_1787599372806.json": 42342,
+        "chatreq_1787599377763.json": 42592
+      },
+      "accepted_drafts": 15650.0,
+      "speculative_events": 3939.0,
+      "accepted_drafts_per_event": 3.973089616653973,
+      "timers": {
+        "drafter_ms": 32.014016037235784,
+        "committer_ms": 20.660855736665606,
+        "target_ms": 112.12164710662209,
+        "step_wall_ms": 171.26860142472404
+      },
+      "timer_totals": {
+        "drafter": [
+          127.79995202064524,
+          3992
+        ],
+        "committer": [
+          82.47813610076909,
+          3992
+        ],
+        "target": [
+          447.5896152496354,
+          3992
+        ],
+        "wall": [
+          675.9971698233858,
+          3947
+        ]
+      }
+    },
+    "tree-swG1-sampled-20261002T172743Z": {
+      "requests": 43,
+      "output_tokens": 18672,
+      "decode_seconds": 702.6973838349804,
+      "pooled_tokens_s": 26.510700663679692,
+      "request_prompt_tokens": {
+        "chatreq_1787597282944.json": 23276,
+        "chatreq_1787597307152.json": 23636,
+        "chatreq_1787597309713.json": 24391,
+        "chatreq_1787597402587.json": 27118,
+        "chatreq_1787597404989.json": 27291,
+        "chatreq_1787597407027.json": 28373,
+        "chatreq_1787597607897.json": 40985,
+        "chatreq_1787597624780.json": 41504,
+        "chatreq_1787597632003.json": 41889,
+        "chatreq_1787597735027.json": 45880,
+        "chatreq_1787597739493.json": 46214,
+        "chatreq_1787597743386.json": 47058,
+        "chatreq_1787597754195.json": 47674,
+        "chatreq_1787597853247.json": 50349,
+        "chatreq_1787597882520.json": 52026,
+        "chatreq_1787598364750.json": 65450,
+        "chatreq_1787598371432.json": 66216,
+        "chatreq_1787598460010.json": 68557,
+        "chatreq_1787598478475.json": 49231,
+        "chatreq_1787598678577.json": 40715,
+        "chatreq_1787598702721.json": 44053,
+        "chatreq_1787598726220.json": 44739,
+        "chatreq_1787598736476.json": 45283,
+        "chatreq_1787598744134.json": 45745,
+        "chatreq_1787598769288.json": 33092,
+        "chatreq_1787598851731.json": 34604,
+        "chatreq_1787598884943.json": 35507,
+        "chatreq_1787598953625.json": 23024,
+        "chatreq_1787598972855.json": 23578,
+        "chatreq_1787598990204.json": 25535,
+        "chatreq_1787599034884.json": 28171,
+        "chatreq_1787599048795.json": 28980,
+        "chatreq_1787599111706.json": 31626,
+        "chatreq_1787599178913.json": 34098,
+        "chatreq_1787599200933.json": 35733,
+        "chatreq_1787599268104.json": 37910,
+        "chatreq_1787599273545.json": 38811,
+        "chatreq_1787599333657.json": 40694,
+        "chatreq_1787599345801.json": 41156,
+        "chatreq_1787599361377.json": 41729,
+        "chatreq_1787599365100.json": 41888,
+        "chatreq_1787599372806.json": 42342,
+        "chatreq_1787599377763.json": 42592
+      },
+      "accepted_drafts": 14964.0,
+      "speculative_events": 3788.0,
+      "accepted_drafts_per_event": 3.9503695881731784,
+      "timers": {
+        "target_ms": 111.82164522390211,
+        "step_wall_ms": 185.84564651032557,
+        "drafter_ms": 46.76829555787213,
+        "committer_ms": 20.756666261332825
+      },
+      "timer_totals": {
+        "target": [
+          430.0660475311275,
+          3846
+        ],
+        "wall": [
+          706.3993023857474,
+          3801
+        ],
+        "drafter": [
+          179.87086471557623,
+          3846
+        ],
+        "committer": [
+          79.83013844108604,
+          3846
+        ]
+      }
+    },
+    "tree-swGF1-sampled-20261002T194930Z": {
+      "requests": 43,
+      "output_tokens": 21327,
+      "decode_seconds": 786.9210608787835,
+      "pooled_tokens_s": 27.047185617616307,
+      "request_prompt_tokens": {
+        "chatreq_1787597282944.json": 23276,
+        "chatreq_1787597307152.json": 23636,
+        "chatreq_1787597309713.json": 24391,
+        "chatreq_1787597402587.json": 27118,
+        "chatreq_1787597404989.json": 27291,
+        "chatreq_1787597407027.json": 28373,
+        "chatreq_1787597607897.json": 40985,
+        "chatreq_1787597624780.json": 41504,
+        "chatreq_1787597632003.json": 41889,
+        "chatreq_1787597735027.json": 45880,
+        "chatreq_1787597739493.json": 46214,
+        "chatreq_1787597743386.json": 47058,
+        "chatreq_1787597754195.json": 47674,
+        "chatreq_1787597853247.json": 50349,
+        "chatreq_1787597882520.json": 52026,
+        "chatreq_1787598364750.json": 65450,
+        "chatreq_1787598371432.json": 66216,
+        "chatreq_1787598460010.json": 68557,
+        "chatreq_1787598478475.json": 49231,
+        "chatreq_1787598678577.json": 40715,
+        "chatreq_1787598702721.json": 44053,
+        "chatreq_1787598726220.json": 44739,
+        "chatreq_1787598736476.json": 45283,
+        "chatreq_1787598744134.json": 45745,
+        "chatreq_1787598769288.json": 33092,
+        "chatreq_1787598851731.json": 34604,
+        "chatreq_1787598884943.json": 35507,
+        "chatreq_1787598953625.json": 23024,
+        "chatreq_1787598972855.json": 23578,
+        "chatreq_1787598990204.json": 25535,
+        "chatreq_1787599034884.json": 28171,
+        "chatreq_1787599048795.json": 28980,
+        "chatreq_1787599111706.json": 31626,
+        "chatreq_1787599178913.json": 34098,
+        "chatreq_1787599200933.json": 35733,
+        "chatreq_1787599268104.json": 37910,
+        "chatreq_1787599273545.json": 38811,
+        "chatreq_1787599333657.json": 40694,
+        "chatreq_1787599345801.json": 41156,
+        "chatreq_1787599361377.json": 41729,
+        "chatreq_1787599365100.json": 41888,
+        "chatreq_1787599372806.json": 42342,
+        "chatreq_1787599377763.json": 42592
+      },
+      "accepted_drafts": 17188.0,
+      "speculative_events": 4203.0,
+      "accepted_drafts_per_event": 4.089459909588389,
+      "timers": {
+        "committer_ms": 20.687106583139762,
+        "target_ms": 112.57910444905576,
+        "step_wall_ms": 187.55360251129443,
+        "drafter_ms": 47.70924579688443
+      },
+      "timer_totals": {
+        "committer": [
+          88.08569983100911,
+          4258
+        ],
+        "target": [
+          479.36182674407945,
+          4258
+        ],
+        "wall": [
+          790.1633273800835,
+          4213
+        ],
+        "drafter": [
+          203.1459686031339,
+          4258
+        ]
+      }
+    },
+    "tree-swT1-sampled-20261002T174951Z": {
+      "requests": 43,
+      "output_tokens": 20726,
+      "decode_seconds": 718.6358174271882,
+      "pooled_tokens_s": 28.780920041040943,
+      "request_prompt_tokens": {
+        "chatreq_1787597282944.json": 23276,
+        "chatreq_1787597307152.json": 23636,
+        "chatreq_1787597309713.json": 24391,
+        "chatreq_1787597402587.json": 27118,
+        "chatreq_1787597404989.json": 27291,
+        "chatreq_1787597407027.json": 28373,
+        "chatreq_1787597607897.json": 40985,
+        "chatreq_1787597624780.json": 41504,
+        "chatreq_1787597632003.json": 41889,
+        "chatreq_1787597735027.json": 45880,
+        "chatreq_1787597739493.json": 46214,
+        "chatreq_1787597743386.json": 47058,
+        "chatreq_1787597754195.json": 47674,
+        "chatreq_1787597853247.json": 50349,
+        "chatreq_1787597882520.json": 52026,
+        "chatreq_1787598364750.json": 65450,
+        "chatreq_1787598371432.json": 66216,
+        "chatreq_1787598460010.json": 68557,
+        "chatreq_1787598478475.json": 49231,
+        "chatreq_1787598678577.json": 40715,
+        "chatreq_1787598702721.json": 44053,
+        "chatreq_1787598726220.json": 44739,
+        "chatreq_1787598736476.json": 45283,
+        "chatreq_1787598744134.json": 45745,
+        "chatreq_1787598769288.json": 33092,
+        "chatreq_1787598851731.json": 34604,
+        "chatreq_1787598884943.json": 35507,
+        "chatreq_1787598953625.json": 23024,
+        "chatreq_1787598972855.json": 23578,
+        "chatreq_1787598990204.json": 25535,
+        "chatreq_1787599034884.json": 28171,
+        "chatreq_1787599048795.json": 28980,
+        "chatreq_1787599111706.json": 31626,
+        "chatreq_1787599178913.json": 34098,
+        "chatreq_1787599200933.json": 35733,
+        "chatreq_1787599268104.json": 37910,
+        "chatreq_1787599273545.json": 38811,
+        "chatreq_1787599333657.json": 40694,
+        "chatreq_1787599345801.json": 41156,
+        "chatreq_1787599361377.json": 41729,
+        "chatreq_1787599365100.json": 41888,
+        "chatreq_1787599372806.json": 42342,
+        "chatreq_1787599377763.json": 42592
+      },
+      "accepted_drafts": 17008.0,
+      "speculative_events": 3806.0,
+      "accepted_drafts_per_event": 4.468733578560168,
+      "timers": {
+        "drafter_ms": 49.685232068639195,
+        "target_ms": 112.0436374579359,
+        "step_wall_ms": 189.14490037924423,
+        "committer_ms": 20.82618642013838
+      },
+      "timer_totals": {
+        "drafter": [
+          191.88436624908456,
+          3862
+        ],
+        "target": [
+          432.7125278625484,
+          3862
+        ],
+        "wall": [
+          721.9660847475752,
+          3817
+        ],
+        "committer": [
+          80.43073195457443,
+          3862
+        ]
+      }
+    },
+    "tree-swT2-sampled-20261002T185812Z": {
+      "requests": 43,
+      "output_tokens": 19676,
+      "decode_seconds": 686.720581073314,
+      "pooled_tokens_s": 28.5895028358033,
+      "request_prompt_tokens": {
+        "chatreq_1787597282944.json": 23276,
+        "chatreq_1787597307152.json": 23636,
+        "chatreq_1787597309713.json": 24391,
+        "chatreq_1787597402587.json": 27118,
+        "chatreq_1787597404989.json": 27291,
+        "chatreq_1787597407027.json": 28373,
+        "chatreq_1787597607897.json": 40985,
+        "chatreq_1787597624780.json": 41504,
+        "chatreq_1787597632003.json": 41889,
+        "chatreq_1787597735027.json": 45880,
+        "chatreq_1787597739493.json": 46214,
+        "chatreq_1787597743386.json": 47058,
+        "chatreq_1787597754195.json": 47674,
+        "chatreq_1787597853247.json": 50349,
+        "chatreq_1787597882520.json": 52026,
+        "chatreq_1787598364750.json": 65450,
+        "chatreq_1787598371432.json": 66216,
+        "chatreq_1787598460010.json": 68557,
+        "chatreq_1787598478475.json": 49231,
+        "chatreq_1787598678577.json": 40715,
+        "chatreq_1787598702721.json": 44053,
+        "chatreq_1787598726220.json": 44739,
+        "chatreq_1787598736476.json": 45283,
+        "chatreq_1787598744134.json": 45745,
+        "chatreq_1787598769288.json": 33092,
+        "chatreq_1787598851731.json": 34604,
+        "chatreq_1787598884943.json": 35507,
+        "chatreq_1787598953625.json": 23024,
+        "chatreq_1787598972855.json": 23578,
+        "chatreq_1787598990204.json": 25535,
+        "chatreq_1787599034884.json": 28171,
+        "chatreq_1787599048795.json": 28980,
+        "chatreq_1787599111706.json": 31626,
+        "chatreq_1787599178913.json": 34098,
+        "chatreq_1787599200933.json": 35733,
+        "chatreq_1787599268104.json": 37910,
+        "chatreq_1787599273545.json": 38811,
+        "chatreq_1787599333657.json": 40694,
+        "chatreq_1787599345801.json": 41156,
+        "chatreq_1787599361377.json": 41729,
+        "chatreq_1787599365100.json": 41888,
+        "chatreq_1787599372806.json": 42342,
+        "chatreq_1787599377763.json": 42592
+      },
+      "accepted_drafts": 16106.0,
+      "speculative_events": 3627.0,
+      "accepted_drafts_per_event": 4.4405845051006345,
+      "timers": {
+        "target_ms": 112.23279659524823,
+        "step_wall_ms": 189.56351884036928,
+        "committer_ms": 20.788789873886664,
+        "drafter_ms": 50.00584367935817
+      },
+      "timer_totals": {
+        "target": [
+          413.57785545348975,
+          3685
+        ],
+        "wall": [
+          690.0112085789442,
+          3640
+        ],
+        "committer": [
+          76.60669068527235,
+          3685
+        ],
+        "drafter": [
+          184.27153395843487,
+          3685
+        ]
+      }
+    }
+  },
+  "drafter_pass_baseline_pooled": {
+    "pooled_tokens_s": 28.687384953038727,
+    "accepted_drafts_per_event": 4.454997981972285,
+    "timers": {
+      "target": 112.13599884934918,
+      "wall": 189.34924142772152,
+      "drafter": 49.84177821750622,
+      "committer": 20.80792667812996
+    }
+  },
+  "confirmation": {
+    "request_count": 43,
+    "message_overlap": 0,
+    "conversation_overlap": 0,
+    "conversations": 5,
+    "task_selection": {
+      "0b07e7083d:astropy__astropy-14508": {
+        "available": 17,
+        "selected": 12
+      },
+      "26dccaecc9:astropy__astropy-14995": {
+        "available": 17,
+        "selected": 12
+      },
+      "663dd6b6d2:astropy__astropy-14096": {
+        "available": 9,
+        "selected": 6
+      },
+      "763ee7ecb7:astropy__astropy-14309": {
+        "available": 7,
+        "selected": 5
+      },
+      "d64e7310be:astropy__astropy-14995": {
+        "available": 11,
+        "selected": 8
+      }
+    },
+    "sglang_prompt_token_delta": [
+      33,
+      146,
+      156
+    ],
+    "comparisons": {
+      "mtp5": {
+        "pooled_ratio": 1.118717778488457,
+        "requests_tree_faster": 33,
+        "median_request_ratio": 1.1298301478199437
+      },
+      "sglang": {
+        "pooled_ratio": 1.0142851668177562,
+        "requests_tree_faster": 18,
+        "median_request_ratio": 0.9385679973595307
+      }
+    },
+    "runs": {
+      "tree": "tree-cfT1-sampled-20261002T212537Z",
+      "mtp5": "mtp5-cfM1-sampled-20261002T214201Z",
+      "sglang": "sglang-s7k1d8-cfS1-sampled-20261002T220022Z"
+    },
+    "scope": "one run per arm; SGLang chat API, NOT exact token-ID parity"
+  },
+  "fullmodel": {
+    "cells": 147,
+    "frozen_verdict": "INCONCLUSIVE",
+    "faults_detected_frozen": 1,
+    "faults_total": 10,
+    "posthoc_state_worst_ratio": {
+      "gdn_rel": 1.1369342821788253,
+      "conv_rel": 1.2903476725488272,
+      "kv_new_rel": 1.1744088915608812,
+      "kv_hist_rel": 1.1272802510166489
+    },
+    "posthoc_state_fault_min_ratio": 2.832897336931706,
+    "posthoc_state_fault_observations": 8,
+    "next_logit_KL": {
+      "candidate": {
+        "median": 0.042684844619268456,
+        "p90": 0.11284063235725261,
+        "max": 0.49088844338380094,
+        "greedy_flips": 16
+      },
+      "B": {
+        "median": 0.0,
+        "p90": 0.04388782779624918,
+        "max": 0.1577404653593437,
+        "greedy_flips": 2
+      },
+      "V": {
+        "median": 0.0,
+        "p90": 0.0,
+        "max": 0.0,
+        "greedy_flips": 0
+      },
+      "P": {
+        "median": 0.04346132942783124,
+        "p90": 0.09341974885873496,
+        "max": 0.49031354823089507,
+        "greedy_flips": 16
+      }
+    },
+    "posthoc_status": "descriptive after inspecting outcomes; not independent qualification"
+  }
+}

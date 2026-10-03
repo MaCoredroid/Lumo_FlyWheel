@@ -1,0 +1,74 @@
+{
+  "run_id": "q12b-heldout-20260928T013539Z",
+  "scope": "read-only source/metadata check; original reducer failure preserved",
+  "source_bytes_verified": {
+    "runner": "ab27fc9cf680bdd2b7c3ad994fc9f7bffe0f9ff1b0f35dc2cc36018f364dea29",
+    "reducer": "6475182d9e0996dd4e7c228340c57299665cd1ea641ed0b61bf291d631af9d73",
+    "launcher": "5cc0fdd7fc0895560de77e8046c73c7eac3f010bba8eee137b3573d3eaf050b5",
+    "native_module": "000ab8996af9788fdb8843a6a3b91833e7a14c8acc0e1ea073a536330f64cb6f"
+  },
+  "all_launch_helper_source_bytes_verified": {
+    "q1_component_runner_v2_2.py": "ab27fc9cf680bdd2b7c3ad994fc9f7bffe0f9ff1b0f35dc2cc36018f364dea29",
+    "q1_oracle.py": "645944992d116115976eea5a925f1ebf9a23562d8d8a3ebd693116daa0ec5d82",
+    "q1_2b_fixtures.py": "eba98d7ccabf8ad602b5274070b92b901ee571af1fba48a82bcf3297cb220039",
+    "q1_policy_evaluator.py": "84830b2a9f4bcacc6344c2762af027a178bd3267e369d41fde06cd3a08f332d6",
+    "q1_policy_evaluator_v2.py": "a65f492b0b576221de328852c84b5b367a89dca2d542b9dde7062c410ed3ff0f",
+    "q1_policy_evaluator_v2_1.py": "2d25e4c9bb669a4c66a5a3caa5093b614e5aba136eb424efb0e410f0b0b61061",
+    "q1_bf16_ulp.py": "b6158c4de483dc014c52df8b1a9ad9158aa8a25a5810c749a4a172325a12e00c",
+    "scripts/fr13_fixed32_topology.py": "c02703b4bc777e5edfa01623b446a289cba8f1023e31d8efd7fc8126666b38bc",
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "d9dd0c697b466180ab5d834a52555c1516edb534e0a3d1bd3094e0d1489c24c8",
+    "src/lumo_flywheel_serving/fr13_tree_conv_fused.py": "564c7dc7ba61ccd9579f2fb7a4af9a2cdaaa1753dfb98434f2011457d90d9a6e"
+  },
+  "full_native_and_candidate_repeat_censuses_AB_identical": true,
+  "process_container_ids": {
+    "A": "c8b27d825b28df884d2e22f67dd6279a4b97c056e32cc4f2bbda6360ed430abc",
+    "B": "b7e6337ac4769b26280a09c65b485171821c8cc621be344e3ce69f7dcbfc3a40"
+  },
+  "command_reduce": "docker run --rm -i --name lumotree-review-q12b-reduce --cidfile /home/mark/lumotree-review-20260927/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1.2b-heldout/q12b-heldout-20260928T013539Z/reduce.cid -e Q12B_CONTAINER_NAME=lumotree-review-q12b-reduce -e OMP_NUM_THREADS=1 -e MKL_NUM_THREADS=1 -e CUDA_VISIBLE_DEVICES= -e PYTHONDONTWRITEBYTECODE=1   -v /home/mark/lumotree-review-20260927:/workspace:ro -v /home/mark/lumotree-review-20260927/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1.2b-heldout/q12b-heldout-20260928T013539Z:/runs/q12b-heldout-20260928T013539Z --entrypoint python3 sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc /workspace/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_2b_reduce_v2_2.py --run /runs/q12b-heldout-20260928T013539Z --block evaluation --recompute all\n",
+  "pinned_cpu_command_and_runtime_verified": true,
+  "original_summary": {
+    "schema": "lumo.review-response.q1-2b-summary.v2.1",
+    "run": "/runs/q12b-heldout-20260928T013539Z",
+    "findings": {
+      "malformed": [
+        "procA: loaded helper q1_component_runner_v2_2.py hash != launch-bound helper map",
+        "procB: loaded helper q1_component_runner_v2_2.py hash != launch-bound helper map"
+      ],
+      "structural": [],
+      "numerical": [],
+      "uncovered": []
+    },
+    "note": "component verification/publication only; not full-model Q1; no timing",
+    "reducer_runtime": {
+      "python": "3.12.13",
+      "hostname": "07a0a8ba58bf",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "CUDA_VISIBLE_DEVICES": "",
+      "container_name_env": "lumotree-review-q12b-reduce",
+      "pid": 1,
+      "torch": "2.11.0+cu130",
+      "torch_threads": 1,
+      "cuda_available": false
+    },
+    "policy": {
+      "sha256": "4a103df013439ae02977d10a42c3cf2eeb916a7dcb1a61c19e6b929da620f7b3",
+      "version": "v2.1",
+      "integrity_ok": true,
+      "approved_ok": true,
+      "problems": [],
+      "auth_problems": []
+    }
+  },
+  "terminal_receipt_sha256": "7746dd7ba4eeb74c61e9e0c328a24653dfaf54f59667fcca67d27e726bf6e427",
+  "logs": {
+    "procA.log": {
+      "sha256": "b296133e17175357e92a56c750b01c312e63c24c1e5e6579ffbe4e98bc7955ff",
+      "engagement_messages_present": true
+    },
+    "procB.log": {
+      "sha256": "ad4aff05711dd730d0eb7c9555f68890ca35425a911da66894a7f1508764f4b3",
+      "engagement_messages_present": true
+    }
+  }
+}

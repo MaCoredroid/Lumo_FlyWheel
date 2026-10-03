@@ -1,0 +1,21 @@
+{
+  "utc": "2026-09-28T02:49:50.156671+00:00",
+  "files": {
+    "tools/q1_reference_hooks_v2_1.py": {
+      "sha256": "1ac939405de01a4c22e5d73decb9994cfb3a3214fd838ed2a734b39110b2b8cf",
+      "bytes": 44520
+    },
+    "tools/q1_patch_reference_runner_v2_1.py": {
+      "sha256": "ee61c5d779cc39dce9757bae944f51d991bf2b15ef89b04bf69e9a58c91b315a",
+      "bytes": 6010
+    },
+    "tools/q1_spec_off_engine_config_v2_1.py": {
+      "sha256": "cd7fbc1322c9c4206990f2223728c2b49ae551c1a644a99fbafd2576380deb14",
+      "bytes": 14124
+    },
+    "tools/run_q1_native_smoke_v2_4.sh": {
+      "sha256": "df5e0c1982f12060a4277bcd79d9762c371ed009c8a5ed47d3cfc7062903a721",
+      "bytes": 16770
+    }
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "checked_utc": "2026-09-28T02:18:17.308847+00:00",
+  "source_archive": "artifacts/lumotree-component-qualified-source-20260928-v2.tar.gz",
+  "sha256": "176403c3c13f4e4d599bfa71fe1bb725bed15cde16f5886e92d1b445b0849b38",
+  "files": 15,
+  "all_member_hashes_match": true,
+  "clean_extraction": "/var/folders/xc/sy7ktq0n42d1n78zg10b8p_r0000gn/T/lumotree-source-check-20260928-v2-lmrt4mls",
+  "clean_compile_exit": 0,
+  "pdf_text_identical": true,
+  "previous_attempt": "Original archive omitted .tikz input; preserved failed archive/log; repaired packaging only",
+  "manifest": {
+    "schema": "lumo.manuscript-source.v1",
+    "created_utc": "2026-09-28T02:18:15.098915+00:00",
+    "scope": "Compilable current manuscript sources; raw tensors/campaign artifacts are separate evidence",
+    "files": {
+      "IEEEtran.cls": {
+        "sha256": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b",
+        "bytes": 281789
+      },
+      "abstract.tex": {
+        "sha256": "c1cb90f8d7f93808a2b7ea1805186304f0f3ad863b4af08380a9e0da02a97aed",
+        "bytes": 1119
+      },
+      "figures/pipeline.tikz": {
+        "sha256": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c",
+        "bytes": 4669
+      },
+      "figures/scan-replay.tikz": {
+        "sha256": "19c984883a8b70cc5209c33fa4f62e98aba708ad2b025568d1b2d600a3e4ecd0",
+        "bytes": 1035
+      },
+      "figures/state-contract.tikz": {
+        "sha256": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898",
+        "bytes": 1056
+      },
+      "main.bbl": {
+        "sha256": "88b288c16d0cd76a0eda28774cee4ae2b9f5ab57ffd61925a91b33047b6bdfb3",
+        "bytes": 12055
+      },
+      "main.tex": {
+        "sha256": "fb1571cf1dd4fb67d71d3122dc63dc9f1928dc2b026795f85cd43b1939c40013",
+        "bytes": 45423
+      },
+      "ref.bib": {
+        "sha256": "45ff04659e08f46a5591ca42dc624ed15521eb0f043d54098a27e7e8d55eb981",
+        "bytes": 13687
+      },
+      "results/agent-workload/case-study.tex": {
+        "sha256": "798470a439c2bebad6956a779803d459a2d8572217d446b1f794b855296e87c3",
+        "bytes": 12316
+      },
+      "results/agent-workload/review-configuration.tex": {
+        "sha256": "aba40eb0e68052d81a6f69744af16267d3a3cb5f6c0e65c4419e3447457f895f",
+        "bytes": 2343
+      },
+      "results/agent-workload/review-outcomes.tex": {
+        "sha256": "80004d9296fab1bbe8ce29cefae6bdc79bb1ff1ceebf843b8ec39694fced7c75",
+        "bytes": 2091
+      },
+      "results/agent-workload/review-telemetry.tex": {
+        "sha256": "52e88906abe944fff0ac74e636256faf5ec783a7ba685ec4142d425d9ed72d6d",
+        "bytes": 2736
+      },
+      "results/review-response-20260927/all-attempts-table.tex": {
+        "sha256": "3ceea0a4e0e5c3180d1525dfeffd2813bf93bcb34364f4fee06a88a29aa8aeaf",
+        "bytes": 679
+      },
+      "results/review-response-20260927/component-qualification.tex": {
+        "sha256": "dbdb81ffb279923c2cc7ace1cbf5bc6cb11c3921338457e8dbd85c350979c57d",
+        "bytes": 2229
+      },
+      "results/review-response-20260927/paired-task-outcomes.tex": {
+        "sha256": "94790ae1870f19a3db62d534ec39f2d126a59429ca1a54a7e058c39023f104ec",
+        "bytes": 855
+      }
+    }
+  }
+}

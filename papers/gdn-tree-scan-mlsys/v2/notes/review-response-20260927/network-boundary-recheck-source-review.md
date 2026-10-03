@@ -1,0 +1,35 @@
+# Fresh network-boundary reader: bounded source review
+
+**One narrow source blocker: cancellation loses the promised refusal/raw receipt.** The normal success/refusal checks pass. Final caller/source/evidence integration remains required below; this is not WP readiness. No real SSH, Docker, process, network, model, GPU, rule or sysctl action was performed.
+
+Reviewed helper `network_boundary_recheck_v1.py` SHA `4db054b776bbdb0a89c25c4b057aa6ee44a957f23c04ea744a5daba14180a0f0`; caller `sole_executor_v3_11.py` SHA `d04311942d3e0121ffc72044d5048663d041c296ac948ca2062c8edf21eb2979`; tests SHA `10d3b6608eb645edb20e8acf71e37b6e3578e29cef9ec58f139050d384b03001`. Exact inputs and independent results are preserved in `p0/monitor/review-response-20260927/network-boundary-recheck-independent-v1/`.
+
+## F1: retain cancellation evidence, then propagate cancellation
+
+`run():75–77` catches only `Exception`. Independent calls through the actual helper with injected SDK/command functions raise `KeyboardInterrupt` and `SystemExit` on the third command after two completed reads. Both exceptions correctly propagate, but `agent-network-live-recheck.json` is absent; the already collected daemon and command observations disappear. This violates the promised retained refusal receipt. The caller's existing outer `BaseException` path still closes/cleans the owned attempt; no agent-start bypass is alleged.
+
+Minimal change: catch `BaseException` for retention, preserve the available partial observations, then re-raise cancellation/control exceptions unchanged. Continue translating ordinary failures to `AgentHostRefusal` if desired. Keep write-once behavior and never replace an existing receipt. A pair of fake cancellation controls is sufficient; no live operation is necessary. Preserve the failed source snapshot and original test logs.
+
+## Checks that pass
+
+All **11 supplied CPU controls pass**, using `PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s <campaign>/tools/tests -p test_network_boundary_recheck_v1.py -v` (0.013s). They call only fake command and daemon boundaries. The independent interruption controls also used in-memory boundaries and temporary files.
+
+The baseline comes from a hash-verified packet evidence entry. It must have the exact five declared SSH commands and successful original observations; no command from retained JSON is executed. Fresh filter/NAT/IPv6/sysctl output is compared byte-for-byte, preserving rule order. Fresh SSH daemon identity and SDK identity before/after are compared with the frozen x86 client identity; changed ID/version is refused. The commands contain no mutation or forwarding test. Existing same-clock and wall/monotonic admissibility bounds refuse results exceeding60s; this review does not claim a new hard60s SDK-call cancellation mechanism.
+
+The caller diff is only the new import plus one call and sequence entry before the existing agent-host preflight. It executes after ownership/boot/tunnel, before output preparation/probe/agent creation. Ordinary refusal follows the existing consumed-attempt setup-failure cleanup and no-retry path. Scientific settings and previously accepted transport/cleanup code are unchanged.
+
+## Minimum final integration, still pending
+
+The new receipt currently lives only at a named path: the call return is discarded, only `agent_network_live_recheck` is appended to sequence, `retain_result()` does not bind its hash, `prior_evidence_map()` never reads it, and `two_host_v1`'s host-binding record list does not include it. Before treating this as a frozen, replayable admission condition, bind the helper/caller bytes in the final source package and bind the actual receipt hash/attempt/baseline/producer in the result/evidence chain. The next-arm evidence check should require that binding if the check was attempted, while preserving a genuine REFUSED setup outcome rather than converting it to success. Record the attempt before entering the helper so a missing interruption receipt cannot look like an unattempted check. This is the minimal new receipt integration, not a request to rewrite accepted transport.
+
+The current draft still deliberately lacks runtime qualification and final parent approval; no source review here supplies those. The read-only rule snapshot is distinct from successfully forwarding traffic, and the new receipt correctly states `not_runtime_forwarding_proof:true`.
+
+## F1 repair closure and exact evidence-map check
+
+**F1 CLOSED** on helper SHA `5d795462ecc32d20e191baaf76285f1d01547f1271d282805396f2e5d3ae1559`. The only source delta catches `BaseException`, retains the partial REFUSED receipt, and re-raises non-Exception cancellation unchanged. Caller remains `d04311942d3e0121ffc72044d5048663d041c296ac948ca2062c8edf21eb2979`; updated tests SHA `16eaaee9a4540337f95b3ccb1528788fe10a8a5f5c6723ed35374bb421838285`. All12 supplied fake controls pass. The independent original third-command reproductions now both preserve the two completed reads and REFUSED reason while propagating KeyboardInterrupt/SystemExit unchanged. No further helper logic blocker found in this bounded repair. Inputs/results are in the original review directory's `repair1/`.
+
+The optional generated-map check also passes: `EVIDENCE.REPAIRED-DRAFT.json` SHA `75ddafb44ad3a9c906d2b37c6e2079198a5cd507a312331a15e480d126e7f831` contains180 entries, every local member hash verifies, and its local/remote key sets match. Relative to the original181-entry map it removes only the previously reported unreachable bad alias `4f816890…`; only the valid `af37030b…` control's path changes, to an immutable same-byte copy. The original map is preserved byte-for-byte under its original hash. Provenance explicitly grants neither route qualification nor launch authority. `seal_evidence_map_v1.py` SHA `a096c6f582fce347ba7a0b88150f7f138912d15a042ea7eeb91c8c3004a38d12` was inspected, not executed; this validates this exact successor map, not arbitrary future repair inputs.
+
+The precise remaining caller/evidence action is unchanged: pin the new helper and v3.11 caller in the final package; mark the network check attempted before entering it; retain its returned or failed receipt hash and verify attempt ID, producer SHA and frozen baseline hash in `retain_result`; carry the receipt/raw bytes through the authenticated evidence map; and require the same binding in `prior_evidence_map` when the check was attempted. Agent creation requires PASSED; a retained REFUSED network check remains a genuine consumed setup failure, not a successful admission or retry opportunity. Missing/mismatched receipts must remain incomplete. If using the existing collector-role approval convention, add the helper's explicit role/member and verify it before this new call. The current sequence string alone is not an authenticated receipt dependency.
+
+Final disposition: bounded network-reader source repair and exact stale-map repair pass; the explicitly listed source/ledger integration and final freeze/WP/route-qualification gates remain pending. No live operation occurred.

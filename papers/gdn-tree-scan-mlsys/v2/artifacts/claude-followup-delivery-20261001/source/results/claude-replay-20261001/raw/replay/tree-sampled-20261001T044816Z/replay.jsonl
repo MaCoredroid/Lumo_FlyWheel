@@ -1,0 +1,1 @@
+{"error": "HTTP 500: {\"error\":{\"message\":\"EngineCore encountered an issue. See stack trace (above) for the root cause.\",\"type\":\"InternalServerError\",\"param\":null,\"code\":500}}", "spec_delta": {}, "arm": "tree", "mode": "sampled", "request": "chatreq_1787597282944.json", "index": 0, "max_tokens": 1024, "wall_utc": "2026-10-01T04:54:12Z"}

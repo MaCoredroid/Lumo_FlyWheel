@@ -1,0 +1,104 @@
+[
+  {
+    "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/scripts/fr13_canonical_env.sh",
+    "sha256": "b81e8d2f6d3a63e68e365d69ef56a4e62f1fc184c42eb9664852a06b2b1662fa",
+    "selected_setting_lines": [
+      {
+        "line": 139,
+        "text": "#   QWEN_CODE_MAX_OUTPUT_TOKENS=32768    (turn cap)"
+      }
+    ]
+  },
+  {
+    "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/scripts/run_swe_bench_q36_a.py",
+    "sha256": "a924716508292e5a86ae7cde1ee09794dd229665f2a42b958f26cd06fba224c9",
+    "selected_setting_lines": [
+      {
+        "line": 22,
+        "text": "    stream_idle_timeout_ms + turn limit). Eval buffer: 30 min. Override: SWE_AGENT_WALL_S / --agent-wall-s."
+      },
+      {
+        "line": 72,
+        "text": "DEFAULT_AGENT_WALL_S = 0  # per-attempt codex wall. 0 = NO upper limit (user 2026-07-01):"
+      },
+      {
+        "line": 79,
+        "text": "# generation is bounded by MAX_OUTPUT (32768). Set SWE_AGENT_WALL_S>0 (or --agent-wall-s N) to"
+      },
+      {
+        "line": 745,
+        "text": "    # qwen-code reserves max(ESCALATED_MAX_TOKENS=64000, outputTokenLimit=65536) output tokens"
+      },
+      {
+        "line": 750,
+        "text": "    # SITE 25, DELIBERATELY NOT LOWERED TO 24000. This is a SEPARATE KNOB from the"
+      },
+      {
+        "line": 752,
+        "text": "    # contextLimit (131072 - reservation). The ceiling moved to 24000"
+      },
+      {
+        "line": 758,
+        "text": "    # POST-proxy max_tokens, which is 24000 either way. Over-reserving costs the"
+      },
+      {
+        "line": 761,
+        "text": "    \"-e QWEN_CODE_MAX_OUTPUT_TOKENS=32768 \""
+      },
+      {
+        "line": 762,
+        "text": "    # FR13 \u00a759 belt: raise qwen-code's stream-idle abort (built-in default 120000ms)"
+      },
+      {
+        "line": 766,
+        "text": "    # Modest raise (240000ms) paired with the runner stall-watchdog; on the live"
+      },
+      {
+        "line": 767,
+        "text": "    # ssh/offload path ${VAR:-240000} shell-expands remotely. Overridable via env."
+      },
+      {
+        "line": 770,
+        "text": "    \"-e QWEN_STREAM_IDLE_TIMEOUT_MS=${{QWEN_STREAM_IDLE_TIMEOUT_MS:-240000}} \""
+      },
+      {
+        "line": 2535,
+        "text": "        # held at 32768 for eval-fairness with the banked corpus."
+      },
+      {
+        "line": 2536,
+        "text": "        f\"-e QWEN_CODE_MAX_OUTPUT_TOKENS=32768 \""
+      },
+      {
+        "line": 7424,
+        "text": "# agent mid-stream. With SWE_AGENT_WALL_S=0 the harness imposes NO wall, so a"
+      },
+      {
+        "line": 8694,
+        "text": "CAMPAIGN_TASK_BUDGET_ENV = \"FR13_CAMPAIGN_TASK_BUDGET_S\""
+      },
+      {
+        "line": 8701,
+        "text": "# limit\"); a fat-fingered FR13_CAMPAIGN_TASK_BUDGET_S=60 would cap every task in"
+      },
+      {
+        "line": 8709,
+        "text": "    \"\"\"FR13_CAMPAIGN_TASK_BUDGET_S seconds; unset/empty/0 => 0.0 (cap OFF)."
+      },
+      {
+        "line": 10093,
+        "text": "                        default=int(os.environ.get(\"SWE_AGENT_WALL_S\", str(DEFAULT_AGENT_WALL_S))))"
+      }
+    ]
+  },
+  {
+    "path": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/scripts/swe_x86_helpers/offload_codex_proxy.sh",
+    "sha256": "874866ce560bea0bdab83e713b4e3cfe3c355af8e77023d56af54837dba86074",
+    "selected_setting_lines": [
+      {
+        "line": 154,
+        "text": "    # temp=0.6/top_p=0.95). temp 0.0 was WRONG for the speed/accept measurement (user 2026-06-16): the"
+      }
+    ]
+  }
+]

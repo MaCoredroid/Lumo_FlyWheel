@@ -1,0 +1,41 @@
+{
+  "scope": "Synthetic GDN verification and accepted recurrent publication only; no full-model or performance result",
+  "denominator": "Per block and process: 2 operand sets x 48 instances x (32 physical output rows + 28 publication paths); repeats/processes do not add input coverage",
+  "inputs_sha256": {
+    "p0/monitor/review-response-20260927/q12b-calibration-result-acceptance.json": "9d56a48cd15bc981536a2059451af0d638fc39da899b892636ce7e2d5e3963cc",
+    "p0/monitor/review-response-20260927/q12b-heldout-result-acceptance.json": "f0107abc93a6b6aa0d46b8317c2b184612c91d7b3083ed39ebaebe577a115b7f",
+    "experiments/review-response-20260927/runs/q1.2b/q12b-calibration-retry-20260928T010045Z/summary.v2.json": "68408fc1f530ca7f8de37eb4689f5becc541adfea0b2a21905838ce60e1141f6",
+    "notes/review-response-20260927/raw-audit-q12b-retry/extra-tensors-and-output-differences.json": "037917fed988550f0bbe8a81996e9f1d8e6c1c6930cac3a927069e461fe9fb7f",
+    "experiments/review-response-20260927/runs/q1.2b-heldout-reduction/q12b-heldout-reduction-20260928T020837Z/summary.v2_2_1.json": "a1a52aaf0ab290647865873e805646dcf3d87f5e3480132da8c6489c31951a71",
+    "notes/review-response-20260927/raw-audit-q12b-heldout/extra-tensors-and-output-differences.json": "b8cfc11d22d4028f21279f3a9d36c149d04580f9178cdd1265a1bbf787423003"
+  },
+  "rows": [
+    {
+      "block": "Calibration",
+      "operand_sets": 2,
+      "instances_per_set": 48,
+      "output_bitwise": 3004,
+      "output_total": 3072,
+      "state_bitwise": 2688,
+      "state_total": 2688,
+      "paired_pass": 5760,
+      "cases_total": 5760,
+      "fresh_processes": 2,
+      "repeats": 2
+    },
+    {
+      "block": "Held-out",
+      "operand_sets": 2,
+      "instances_per_set": 48,
+      "output_bitwise": 3018,
+      "output_total": 3072,
+      "state_bitwise": 2688,
+      "state_total": 2688,
+      "paired_pass": 5760,
+      "cases_total": 5760,
+      "fresh_processes": 2,
+      "repeats": 2
+    }
+  ],
+  "heldout_reduction": "Original metadata-identity refusal retained; separate authorized CPU reanalysis of unchanged tensors with unchanged numerical policy"
+}

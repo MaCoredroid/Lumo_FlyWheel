@@ -1,0 +1,777 @@
+{
+ "schema": "lumo.v2exp.kernel-bench.sweep.v1",
+ "family": "lumo_generic",
+ "args": {
+  "family": "lumo_generic",
+  "out": "/out/sweep",
+  "shapes": "chain12,tree8,tree16,tree27",
+  "warmup": 10,
+  "repeats": 50,
+  "modes": [
+   "graph",
+   "eager"
+  ],
+  "seed": 20260928,
+  "layers": 48,
+  "l2_flush_mib": 256,
+  "capture_warmup": 3,
+  "smoke": false
+ },
+ "started_utc": "2026-10-01T20:57:45.429495+00:00",
+ "identity": {
+  "utc": "2026-10-01T20:57:46.105235+00:00",
+  "hostname": "2b0179c266bf",
+  "python": "3.12.13",
+  "torch": "2.11.0+cu130",
+  "cuda": "13.0",
+  "image_id_env": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+  "env_fr13": {
+   "FR13_FIXED32_COMMITTER_LAYER_BATCH": "0",
+   "FR13_FIXED32_COMMIT_DEVICE_FILL": "1",
+   "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL": "0",
+   "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION": "0",
+   "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION": "0",
+   "FR13_FIXED32_KV_REMAP16": "1",
+   "FR13_FIXED32_MODE": "hydra27_fixed32",
+   "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE": "0",
+   "FR13_FLAGS_INKERNEL": "1",
+   "FR13_RING_EXPORT": "1",
+   "FR13_SCAN_ALIGN": "0",
+   "FR13_SUBTREE_PARALLEL": "1",
+   "FR13_TREE_GDN_GEOM_OVERRIDE": "BV=8",
+   "FR13_TREE_RUNROW_INIT": "1"
+  },
+  "triton": "3.6.0",
+  "gpu_name": "NVIDIA GB10",
+  "gpu_sm_count": 48,
+  "gpu_total_memory": 126175309824,
+  "capability": [
+   12,
+   1
+  ],
+  "version_expectations": {
+   "torch": "2.11.0+cu130",
+   "triton": "3.6.0",
+   "torch_matches": true,
+   "triton_matches": true
+  }
+ },
+ "topology": {
+  "physical_parent": [
+   -1,
+   0,
+   0,
+   0,
+   1,
+   1,
+   1,
+   2,
+   3,
+   4,
+   4,
+   4,
+   7,
+   8,
+   9,
+   9,
+   9,
+   12,
+   13,
+   14,
+   14,
+   14,
+   17,
+   18,
+   19,
+   23,
+   24,
+   25,
+   26,
+   28,
+   29,
+   30
+  ],
+  "hydra27_valid_mask": "0x7abdffff",
+  "subtree_levels": [
+   [
+    [
+     0,
+     1,
+     4,
+     9,
+     14
+    ],
+    -1
+   ],
+   [
+    [
+     19,
+     24,
+     26,
+     28,
+     29,
+     30,
+     31
+    ],
+    14
+   ],
+   [
+    [
+     2,
+     7,
+     12,
+     17,
+     22
+    ],
+    0
+   ],
+   [
+    [
+     3,
+     8,
+     13,
+     18,
+     23,
+     25,
+     27
+    ],
+    0
+   ],
+   [
+    [
+     5
+    ],
+    1
+   ],
+   [
+    [
+     6
+    ],
+    1
+   ],
+   [
+    [
+     10
+    ],
+    4
+   ],
+   [
+    [
+     11
+    ],
+    4
+   ],
+   [
+    [
+     15
+    ],
+    9
+   ],
+   [
+    [
+     16
+    ],
+    9
+   ],
+   [
+    [
+     20
+    ],
+    14
+   ],
+   [
+    [
+     21
+    ],
+    14
+   ]
+  ],
+  "inactive_physical": [
+   18,
+   23,
+   25,
+   27
+  ],
+  "max_depth": 11
+ },
+ "result": {
+  "route": "generic subtree path scan (non-fixed32)",
+  "env": {
+   "FR13_SUBTREE_PARALLEL": "1",
+   "FR13_SCAN_ALIGN": "0",
+   "FR13_TREE_GDN_GEOM_OVERRIDE": "BV=8",
+   "FR13_RING_EXPORT": "1",
+   "FR13_FLAGS_INKERNEL": "1",
+   "FR13_FIXED32_MODE": null,
+   "FR13_FIXED32_COMMIT_DEVICE_FILL": null,
+   "FR13_FIXED32_KV_REMAP16": null
+  },
+  "shapes": {
+   "chain12": {
+    "shape": {
+     "name": "chain12",
+     "rows": [
+      0,
+      1,
+      4,
+      9,
+      14,
+      19,
+      24,
+      26,
+      28,
+      29,
+      30,
+      31
+     ],
+     "parent": [
+      -1,
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+     ],
+     "n": 12,
+     "drafts": 11,
+     "depth": 11
+    },
+    "layer0_error_vs_c2": {
+     "cells": 12,
+     "invalid_cells": 0,
+     "nonfinite_values": 0,
+     "max_abs_max": 0.0002391300532326862,
+     "rms_max": 5.5557789709173173e-05,
+     "rms_median": 4.6585257443407625e-05,
+     "rel_max_abs_max": 0.0028071737653440915
+    },
+    "schedule": {
+     "schedule": "heavy_path",
+     "levels": 1,
+     "paths_per_level": [
+      1
+     ],
+     "max_len_per_level": [
+      12
+     ],
+     "critical_path": 12,
+     "n_pad": 16,
+     "cut_states_N_c": 0,
+     "export_buffer_allocated_bytes": 37748736,
+     "cut_bytes_written_per_layer": 0,
+     "paper_formula": {
+      "N_c": 0,
+      "B_v": 8,
+      "d_k": 128,
+      "bytes_per_head_value_tile": 0,
+      "head_value_tiles_per_layer": 768,
+      "bytes_per_layer": 0,
+      "bytes_all_layers_if_resident": 0,
+      "formula": "M_cut = 4 * N_c * B_v * d_k (bytes, fp32) per head/value-tile"
+     }
+    },
+    "timing": {
+     "graph": {
+      "regions": {
+       "verify": {
+        "n": 50,
+        "median_ms": 4.162800073623657,
+        "p10_ms": 4.154448175430298,
+        "p90_ms": 4.717510461807251,
+        "mean_ms": 4.26530689239502,
+        "std_ms": 0.21192099765552366,
+        "min_ms": 4.150879859924316,
+        "max_ms": 4.803423881530762
+       }
+      },
+      "total": {
+       "n": 50,
+       "median_ms": 4.162800073623657,
+       "p10_ms": 4.154448175430298,
+       "p90_ms": 4.717510461807251,
+       "mean_ms": 4.26530689239502,
+       "std_ms": 0.21192099765552366,
+       "min_ms": 4.150879859924316,
+       "max_ms": 4.803423881530762
+      },
+      "labels": [
+       "verify"
+      ],
+      "per_layer_median_ms": 0.08672500153382619,
+      "transient_peak_allocated_bytes": 0
+     },
+     "eager": {
+      "regions": {
+       "verify": {
+        "n": 50,
+        "median_ms": 4.298511981964111,
+        "p10_ms": 4.278191804885864,
+        "p90_ms": 4.936313581466675,
+        "mean_ms": 4.421054105758667,
+        "std_ms": 0.24492557472713716,
+        "min_ms": 4.272863864898682,
+        "max_ms": 4.977536201477051
+       }
+      },
+      "total": {
+       "n": 50,
+       "median_ms": 4.298511981964111,
+       "p10_ms": 4.278191804885864,
+       "p90_ms": 4.936313581466675,
+       "mean_ms": 4.421054105758667,
+       "std_ms": 0.24492557472713716,
+       "min_ms": 4.272863864898682,
+       "max_ms": 4.977536201477051
+      },
+      "labels": [
+       "verify"
+      ],
+      "per_layer_median_ms": 0.08955233295758565,
+      "transient_peak_allocated_bytes": 0
+     }
+    }
+   },
+   "tree8": {
+    "shape": {
+     "name": "tree8",
+     "rows": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+     ],
+     "parent": [
+      -1,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      2,
+      3
+     ],
+     "n": 9,
+     "drafts": 8,
+     "depth": 2
+    },
+    "layer0_error_vs_c2": {
+     "cells": 9,
+     "invalid_cells": 0,
+     "nonfinite_values": 0,
+     "max_abs_max": 0.00024243120971355336,
+     "rms_max": 5.317690484404108e-05,
+     "rms_median": 4.7637129217847636e-05,
+     "rel_max_abs_max": 0.003157429465703091
+    },
+    "schedule": {
+     "schedule": "heavy_path",
+     "levels": 2,
+     "paths_per_level": [
+      1,
+      4
+     ],
+     "max_len_per_level": [
+      3,
+      2
+     ],
+     "critical_path": 5,
+     "n_pad": 16,
+     "cut_states_N_c": 2,
+     "export_buffer_allocated_bytes": 28311552,
+     "cut_bytes_written_per_layer": 6291456,
+     "paper_formula": {
+      "N_c": 2,
+      "B_v": 8,
+      "d_k": 128,
+      "bytes_per_head_value_tile": 8192,
+      "head_value_tiles_per_layer": 768,
+      "bytes_per_layer": 6291456,
+      "bytes_all_layers_if_resident": 301989888,
+      "formula": "M_cut = 4 * N_c * B_v * d_k (bytes, fp32) per head/value-tile"
+     }
+    },
+    "timing": {
+     "graph": {
+      "regions": {
+       "verify": {
+        "n": 50,
+        "median_ms": 3.5942399501800537,
+        "p10_ms": 3.5872448444366456,
+        "p90_ms": 3.6089310884475707,
+        "mean_ms": 3.629283185005188,
+        "std_ms": 0.1319837062004274,
+        "min_ms": 3.58351993560791,
+        "max_ms": 4.174975872039795
+       }
+      },
+      "total": {
+       "n": 50,
+       "median_ms": 3.5942399501800537,
+       "p10_ms": 3.5872448444366456,
+       "p90_ms": 3.6089310884475707,
+       "mean_ms": 3.629283185005188,
+       "std_ms": 0.1319837062004274,
+       "min_ms": 3.58351993560791,
+       "max_ms": 4.174975872039795
+      },
+      "labels": [
+       "verify"
+      ],
+      "per_layer_median_ms": 0.07487999896208446,
+      "transient_peak_allocated_bytes": 0
+     },
+     "eager": {
+      "regions": {
+       "verify": {
+        "n": 50,
+        "median_ms": 3.7744799852371216,
+        "p10_ms": 3.7643840312957764,
+        "p90_ms": 3.8113024711608885,
+        "mean_ms": 3.806006422042847,
+        "std_ms": 0.12160022814650505,
+        "min_ms": 3.756864070892334,
+        "max_ms": 4.417183876037598
+       }
+      },
+      "total": {
+       "n": 50,
+       "median_ms": 3.7744799852371216,
+       "p10_ms": 3.7643840312957764,
+       "p90_ms": 3.8113024711608885,
+       "mean_ms": 3.806006422042847,
+       "std_ms": 0.12160022814650505,
+       "min_ms": 3.756864070892334,
+       "max_ms": 4.417183876037598
+      },
+      "labels": [
+       "verify"
+      ],
+      "per_layer_median_ms": 0.07863499969244003,
+      "transient_peak_allocated_bytes": 0
+     }
+    }
+   },
+   "tree16": {
+    "shape": {
+     "name": "tree16",
+     "rows": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ],
+     "parent": [
+      -1,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      2,
+      3,
+      4,
+      4,
+      4,
+      7,
+      8,
+      9,
+      9,
+      9
+     ],
+     "n": 17,
+     "drafts": 16,
+     "depth": 4
+    },
+    "layer0_error_vs_c2": {
+     "cells": 17,
+     "invalid_cells": 0,
+     "nonfinite_values": 0,
+     "max_abs_max": 0.00024243120971355336,
+     "rms_max": 5.317690484404108e-05,
+     "rms_median": 4.722550435670907e-05,
+     "rel_max_abs_max": 0.0032834408307358467
+    },
+    "schedule": {
+     "schedule": "heavy_path",
+     "levels": 2,
+     "paths_per_level": [
+      1,
+      8
+     ],
+     "max_len_per_level": [
+      5,
+      3
+     ],
+     "critical_path": 8,
+     "n_pad": 32,
+     "cut_states_N_c": 4,
+     "export_buffer_allocated_bytes": 53477376,
+     "cut_bytes_written_per_layer": 12582912,
+     "paper_formula": {
+      "N_c": 4,
+      "B_v": 8,
+      "d_k": 128,
+      "bytes_per_head_value_tile": 16384,
+      "head_value_tiles_per_layer": 768,
+      "bytes_per_layer": 12582912,
+      "bytes_all_layers_if_resident": 603979776,
+      "formula": "M_cut = 4 * N_c * B_v * d_k (bytes, fp32) per head/value-tile"
+     }
+    },
+    "timing": {
+     "graph": {
+      "regions": {
+       "verify": {
+        "n": 50,
+        "median_ms": 7.485935926437378,
+        "p10_ms": 7.454755020141602,
+        "p90_ms": 8.065974617004395,
+        "mean_ms": 7.58705919265747,
+        "std_ms": 0.24376119521089726,
+        "min_ms": 7.425983905792236,
+        "max_ms": 8.258943557739258
+       }
+      },
+      "total": {
+       "n": 50,
+       "median_ms": 7.485935926437378,
+       "p10_ms": 7.454755020141602,
+       "p90_ms": 8.065974617004395,
+       "mean_ms": 7.58705919265747,
+       "std_ms": 0.24376119521089726,
+       "min_ms": 7.425983905792236,
+       "max_ms": 8.258943557739258
+      },
+      "labels": [
+       "verify"
+      ],
+      "per_layer_median_ms": 0.15595699846744537,
+      "transient_peak_allocated_bytes": 0
+     },
+     "eager": {
+      "regions": {
+       "verify": {
+        "n": 50,
+        "median_ms": 7.722831964492798,
+        "p10_ms": 7.68960337638855,
+        "p90_ms": 8.41061773300171,
+        "mean_ms": 7.874838390350342,
+        "std_ms": 0.27394178081159176,
+        "min_ms": 7.67248010635376,
+        "max_ms": 8.505375862121582
+       }
+      },
+      "total": {
+       "n": 50,
+       "median_ms": 7.722831964492798,
+       "p10_ms": 7.68960337638855,
+       "p90_ms": 8.41061773300171,
+       "mean_ms": 7.874838390350342,
+       "std_ms": 0.27394178081159176,
+       "min_ms": 7.67248010635376,
+       "max_ms": 8.505375862121582
+      },
+      "labels": [
+       "verify"
+      ],
+      "per_layer_median_ms": 0.16089233259359995,
+      "transient_peak_allocated_bytes": 0
+     }
+    }
+   },
+   "tree27": {
+    "shape": {
+     "name": "tree27",
+     "rows": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      19,
+      20,
+      21,
+      22,
+      24,
+      26,
+      28,
+      29,
+      30,
+      31
+     ],
+     "parent": [
+      -1,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      2,
+      3,
+      4,
+      4,
+      4,
+      7,
+      8,
+      9,
+      9,
+      9,
+      12,
+      14,
+      14,
+      14,
+      17,
+      18,
+      22,
+      23,
+      24,
+      25,
+      26
+     ],
+     "n": 28,
+     "drafts": 27,
+     "depth": 11
+    },
+    "layer0_error_vs_c2": {
+     "cells": 28,
+     "invalid_cells": 0,
+     "nonfinite_values": 0,
+     "max_abs_max": 0.00024243120971355336,
+     "rms_max": 5.5557789709173173e-05,
+     "rms_median": 4.7149508922836557e-05,
+     "rel_max_abs_max": 0.0032834408307358467
+    },
+    "schedule": {
+     "schedule": "heavy_path",
+     "levels": 2,
+     "paths_per_level": [
+      1,
+      10
+     ],
+     "max_len_per_level": [
+      12,
+      5
+     ],
+     "critical_path": 17,
+     "n_pad": 32,
+     "cut_states_N_c": 5,
+     "export_buffer_allocated_bytes": 88080384,
+     "cut_bytes_written_per_layer": 15728640,
+     "paper_formula": {
+      "N_c": 5,
+      "B_v": 8,
+      "d_k": 128,
+      "bytes_per_head_value_tile": 20480,
+      "head_value_tiles_per_layer": 768,
+      "bytes_per_layer": 15728640,
+      "bytes_all_layers_if_resident": 754974720,
+      "formula": "M_cut = 4 * N_c * B_v * d_k (bytes, fp32) per head/value-tile"
+     }
+    },
+    "timing": {
+     "graph": {
+      "regions": {
+       "verify": {
+        "n": 50,
+        "median_ms": 10.997823715209961,
+        "p10_ms": 10.973494052886963,
+        "p90_ms": 11.698614120483398,
+        "mean_ms": 11.167123184204101,
+        "std_ms": 0.29387765192769055,
+        "min_ms": 10.961983680725098,
+        "max_ms": 11.734335899353027
+       }
+      },
+      "total": {
+       "n": 50,
+       "median_ms": 10.997823715209961,
+       "p10_ms": 10.973494052886963,
+       "p90_ms": 11.698614120483398,
+       "mean_ms": 11.167123184204101,
+       "std_ms": 0.29387765192769055,
+       "min_ms": 10.961983680725098,
+       "max_ms": 11.734335899353027
+      },
+      "labels": [
+       "verify"
+      ],
+      "per_layer_median_ms": 0.22912132740020752,
+      "transient_peak_allocated_bytes": 0
+     },
+     "eager": {
+      "regions": {
+       "verify": {
+        "n": 50,
+        "median_ms": 11.253967761993408,
+        "p10_ms": 11.198118019104005,
+        "p90_ms": 11.934918117523193,
+        "mean_ms": 11.485178203582764,
+        "std_ms": 0.3189870258028804,
+        "min_ms": 11.183551788330078,
+        "max_ms": 11.974431991577148
+       }
+      },
+      "total": {
+       "n": 50,
+       "median_ms": 11.253967761993408,
+       "p10_ms": 11.198118019104005,
+       "p90_ms": 11.934918117523193,
+       "mean_ms": 11.485178203582764,
+       "std_ms": 0.3189870258028804,
+       "min_ms": 11.183551788330078,
+       "max_ms": 11.974431991577148
+      },
+      "labels": [
+       "verify"
+      ],
+      "per_layer_median_ms": 0.234457661708196,
+      "transient_peak_allocated_bytes": 0
+     }
+    }
+   }
+  }
+ },
+ "elapsed_s": 5.4,
+ "status": "complete",
+ "ended_utc": "2026-10-01T20:57:53.088792+00:00"
+}

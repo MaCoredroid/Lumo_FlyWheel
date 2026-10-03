@@ -1,0 +1,19 @@
+{
+ "obs_id": "B__p6__Nb__r0",
+ "problems": [],
+ "response": {
+  "error": null,
+  "finish_reason": "stop",
+  "seconds": 26.127,
+  "status": 200,
+  "usage": {
+   "completion_tokens": 19,
+   "prompt_tokens": 46234,
+   "prompt_tokens_details": null,
+   "total_tokens": 46253
+  }
+ },
+ "sealed": true,
+ "utc": "2026-10-03T01:38:22Z",
+ "valid": true
+}

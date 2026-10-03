@@ -1,0 +1,35 @@
+{
+  "captured_utc": "20260928T015125Z",
+  "remote_tools": "/home/mark/lumotree-review-20260927/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools",
+  "status": "PRELIMINARY_NOT_FROZEN",
+  "files": {
+    "q1_reference_hooks_v2.py": {
+      "sha256": "78ebde8de667f53e012db41597f6e4ab5970fd8b7c126a0c88f55ac62e6187dd",
+      "bytes": 42736
+    },
+    "q1_reference_driver_v2.py": {
+      "sha256": "47314063eaa46b59eaa4fa60978353caef570bd8b39ebe5f127c56ff94702159",
+      "bytes": 9817
+    },
+    "q1_reference_fa2_install.py": {
+      "sha256": "e485a2fe8a01c3820dbfda5c65a431019ef0f4289e246ca586a9ff858ed5b6d3",
+      "bytes": 6246
+    },
+    "q1_spec_off_engine_config_v2.py": {
+      "sha256": "58aadfdb56f10142599098ada8a76ff3c792c39675e22fd4f5d5fadab81cffc4",
+      "bytes": 14016
+    },
+    "q1_reference_job.py": {
+      "sha256": "9a9144622375c7a895c54fa590bdb9f9e2c6e27c728076dfa5ace1580806d485",
+      "bytes": 5912
+    },
+    "q1_patch_reference_runner_v2.py": {
+      "sha256": "52fd1971f7f509809c4d06e1b6cf7b721b24a24f281ab9a1812ed5dd342742e3",
+      "bytes": 5954
+    },
+    "tests/test_q1_fullmodel_v2_package.py": {
+      "sha256": "213bf798b8e18d53fe2edc8456d145999c8c04c9d4f3661d07a003c74c71037c",
+      "bytes": 39037
+    }
+  }
+}

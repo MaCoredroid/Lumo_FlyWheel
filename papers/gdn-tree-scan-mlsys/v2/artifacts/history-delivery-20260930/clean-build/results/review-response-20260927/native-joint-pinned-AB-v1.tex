@@ -1,0 +1,29 @@
+% Generated from reviewed complete native joint A/B evidence; see companion JSON.
+A follow-up reference experiment pins the native kernel-selection cache,
+imports the same target and MTP starting state, and
+records native continuation on the same 84 predetermined paths, with two repetitions
+in each of two independent processes (336 observations). All observations pass
+the recorded raw-data, ownership, finiteness, and fixed-population audit.
+Across the four observations per path, target starting state is identical for
+84/84 paths, published target state for 65/84,
+full target logits for 65/84, and greedy decisions are
+stable for 84/84.
+
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+Native continuation phase & Categorical & Raw logits \\
+\midrule
+MTP root, before $z$ & 75/84 & 65/84 \\
+MTP follow-up, before $z$ & 77/84 & 65/84 \\
+MTP root, after $z$ & 76/84 & 65/84 \\
+Next target decision & 84/84 & 65/84 \\
+\bottomrule
+\end{tabular}
+\end{center}
+Here $z$ is the pending target token. Categorical agreement requires matched inputs and identical actual spine and
+ordered top-three selections at each MTP phase, and the same next target decision.
+Raw-logit equality is reported separately. The joint categorical reference
+prerequisite holds for 68/84 paths under the frozen
+criterion. This native reference experiment does not qualify the tree candidate,
+continuous cycles, lifecycle behavior, or workload performance.

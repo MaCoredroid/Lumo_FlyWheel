@@ -1,0 +1,166 @@
+{
+  "files": [
+    {
+      "recorded_key": "kbench:aggregate.py",
+      "remote_path": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/kernel/aggregate.py",
+      "bytes": 8268,
+      "sha256": "982816d69111ec475293c3b48d160f6608576da7f4c21cfb21d1ef030e7699ba",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "kbench:in_container.sh",
+      "remote_path": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/kernel/in_container.sh",
+      "bytes": 2060,
+      "sha256": "3a4967fb3f291bd32490917c6dfe25eb67e7dac5f857eadaa97247638c910a4f",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "kbench:kbench_author.py",
+      "remote_path": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/kernel/kbench_author.py",
+      "bytes": 19651,
+      "sha256": "c7b01746b9c894a418d937d3780bb24cbe4e31882c32cdbdb1941726f24eea2c",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "kbench:kbench_base.py",
+      "remote_path": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/kernel/kbench_base.py",
+      "bytes": 3110,
+      "sha256": "60de057995c9e8ca2ba2de52b0d97f292966c613d766950da2c4beca800823b1",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "kbench:kbench_common.py",
+      "remote_path": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/kernel/kbench_common.py",
+      "bytes": 21458,
+      "sha256": "30ea53f47729bfe0476da382b715799b3091c365926333bfc8182ecc5ca3e581",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "kbench:kbench_lumo.py",
+      "remote_path": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/kernel/kbench_lumo.py",
+      "bytes": 12831,
+      "sha256": "39a853426efd5d4065b0dc16edd707b7273cc600df235328c8f064d99b207981",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "kbench:kbench_naive.py",
+      "remote_path": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/kernel/kbench_naive.py",
+      "bytes": 12699,
+      "sha256": "341315c1ae98e0d750580644ab7cf06d6e8ce7fdded9e4bc319e96fcde67e1b6",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "kbench:kbench_trees.py",
+      "remote_path": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/kernel/kbench_trees.py",
+      "bytes": 3948,
+      "sha256": "65690890ca0850191ec219507e7de4bb7396ae0f3debc00b401fc518f6988dcf",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "kbench:kernel_bench.py",
+      "remote_path": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/kernel/kernel_bench.py",
+      "bytes": 11913,
+      "sha256": "de4f0e13e8673b3ac46c763d847a4a1e5152738a834dc273b8ad9a4a10d1c33c",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "kbench:kernel_sweep.py",
+      "remote_path": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/kernel/kernel_sweep.py",
+      "bytes": 21133,
+      "sha256": "72bc8c8fa25abd8811f9bac765e0701d1fa6922544bfe42774566e21ada8879b",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "kbench:run_kernel_bench.sh",
+      "remote_path": "/home/mark/shared/lumotree-v2exp-20260930/scripts/v2exp/kernel/run_kernel_bench.sh",
+      "bytes": 7928,
+      "sha256": "6baff38753d586e3580f5bb20efe7c240faad993603573a94f805d6edd5cff39",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "m1:m1_adapters.py",
+      "remote_path": "/home/mark/lumotree-review-20260927/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/m1/m1_adapters.py",
+      "bytes": 33488,
+      "sha256": "375a177b1da203a15b8deecc21f971a87a328d037e2f52913c41bd40f1444066",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "m1:m1_adapters_v2.py",
+      "remote_path": "/home/mark/lumotree-review-20260927/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/m1/m1_adapters_v2.py",
+      "bytes": 40001,
+      "sha256": "a5414791a08f1f526b38f5f86c73cd6cee56c739542be820f785d8a7bd3ffcce",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "m1:m1_adapters_v3.py",
+      "remote_path": "/home/mark/lumotree-review-20260927/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/m1/m1_adapters_v3.py",
+      "bytes": 8598,
+      "sha256": "c5c3b3b328f8f67d04ddb4d0a421da478a2d9e2c38958ef5496919f63372aeda",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "m1:m1_cycle_driver_v2.py",
+      "remote_path": "/home/mark/lumotree-review-20260927/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/m1/m1_cycle_driver_v2.py",
+      "bytes": 37329,
+      "sha256": "8f22778f65b142e7fd1262f8c3b182ba02eaf30ae7efde7b09b1e97bd21e37f3",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "m1:m1_loaders.py",
+      "remote_path": "/home/mark/lumotree-review-20260927/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/m1/m1_loaders.py",
+      "bytes": 9922,
+      "sha256": "f9f2d979ff9e88acf3ea796475a01ab32daaa6241f7cb2fd0faa3507fff9a5ba",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "q1:q1_2b_fixtures.py",
+      "remote_path": "/home/mark/lumotree-review-20260927/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_2b_fixtures.py",
+      "bytes": 12729,
+      "sha256": "eba98d7ccabf8ad602b5274070b92b901ee571af1fba48a82bcf3297cb220039",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "q1:q1_component_runner_v2_2.py",
+      "remote_path": "/home/mark/lumotree-review-20260927/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_component_runner_v2_2.py",
+      "bytes": 75944,
+      "sha256": "ab27fc9cf680bdd2b7c3ad994fc9f7bffe0f9ff1b0f35dc2cc36018f364dea29",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "q1:q1_oracle.py",
+      "remote_path": "/home/mark/lumotree-review-20260927/papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_oracle.py",
+      "bytes": 7800,
+      "sha256": "645944992d116115976eea5a925f1ebf9a23562d8d8a3ebd693116daa0ec5d82",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "review:scripts/fr13_fixed32_topology.py",
+      "remote_path": "/home/mark/lumotree-review-20260927/scripts/fr13_fixed32_topology.py",
+      "bytes": 54622,
+      "sha256": "c02703b4bc777e5edfa01623b446a289cba8f1023e31d8efd7fc8126666b38bc",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "review:src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+      "remote_path": "/home/mark/lumotree-review-20260927/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+      "bytes": 732084,
+      "sha256": "d9dd0c697b466180ab5d834a52555c1516edb534e0a3d1bd3094e0d1489c24c8",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "workspace:scripts/fr13_fixed32_topology.py",
+      "remote_path": "/home/mark/shared/lumotree-v2exp-20260930/scripts/fr13_fixed32_topology.py",
+      "bytes": 54622,
+      "sha256": "c02703b4bc777e5edfa01623b446a289cba8f1023e31d8efd7fc8126666b38bc",
+      "matches_completed_run": true
+    },
+    {
+      "recorded_key": "workspace:src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+      "remote_path": "/home/mark/shared/lumotree-v2exp-20260930/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+      "bytes": 732084,
+      "sha256": "d9dd0c697b466180ab5d834a52555c1516edb534e0a3d1bd3094e0d1489c24c8",
+      "matches_completed_run": true
+    }
+  ],
+  "all_match": true
+}

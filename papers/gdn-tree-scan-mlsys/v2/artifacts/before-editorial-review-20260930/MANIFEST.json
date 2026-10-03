@@ -1,0 +1,130 @@
+{
+  "scope": "Pre-edit manuscript and dependency snapshot; raw evidence unchanged",
+  "files": [
+    {
+      "path": "IEEEtran.cls",
+      "bytes": 281789,
+      "sha256": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b"
+    },
+    {
+      "path": "README.md",
+      "bytes": 10834,
+      "sha256": "8024cafe1b934dac1042082e3a4f5a0684bffaa478d4b3cc0c34c964e67036e6"
+    },
+    {
+      "path": "abstract.tex",
+      "bytes": 1383,
+      "sha256": "43eae5a1775a19d3622bf85f9e578d33aa571dfb8c42cd6e3fefcf578f05c4dc"
+    },
+    {
+      "path": "figures/pipeline.tikz",
+      "bytes": 4669,
+      "sha256": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c"
+    },
+    {
+      "path": "figures/scan-replay.tikz",
+      "bytes": 1035,
+      "sha256": "19c984883a8b70cc5209c33fa4f62e98aba708ad2b025568d1b2d600a3e4ecd0"
+    },
+    {
+      "path": "figures/state-contract.tikz",
+      "bytes": 1056,
+      "sha256": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898"
+    },
+    {
+      "path": "main.bbl",
+      "bytes": 12055,
+      "sha256": "88b288c16d0cd76a0eda28774cee4ae2b9f5ab57ffd61925a91b33047b6bdfb3"
+    },
+    {
+      "path": "main.pdf",
+      "bytes": 321167,
+      "sha256": "93540c16affde0f3faa308a5de48d6068d7771f284d1831586af61b00dbbf36c"
+    },
+    {
+      "path": "main.tex",
+      "bytes": 47980,
+      "sha256": "19976a98e32bf4a33ebdf6897ef9f29e425d1dd4fc90ebca9bce0bc7ed5845d8"
+    },
+    {
+      "path": "paper.config.yaml",
+      "bytes": 2118,
+      "sha256": "183e8329957223138bc5d7a2dc2d99bd0e7353726db1e61f00a8b977fa6c3a35"
+    },
+    {
+      "path": "ref.bib",
+      "bytes": 13687,
+      "sha256": "45ff04659e08f46a5591ca42dc624ed15521eb0f043d54098a27e7e8d55eb981"
+    },
+    {
+      "path": "results/agent-workload/case-study.tex",
+      "bytes": 12520,
+      "sha256": "a39788613841f11c0eaecca0d254214fb6ac8a4fbfba33b695fb93e5ce077980"
+    },
+    {
+      "path": "results/agent-workload/review-configuration.tex",
+      "bytes": 2343,
+      "sha256": "aba40eb0e68052d81a6f69744af16267d3a3cb5f6c0e65c4419e3447457f895f"
+    },
+    {
+      "path": "results/agent-workload/review-outcomes.tex",
+      "bytes": 2091,
+      "sha256": "80004d9296fab1bbe8ce29cefae6bdc79bb1ff1ceebf843b8ec39694fced7c75"
+    },
+    {
+      "path": "results/agent-workload/review-telemetry.tex",
+      "bytes": 2736,
+      "sha256": "52e88906abe944fff0ac74e636256faf5ec783a7ba685ec4142d425d9ed72d6d"
+    },
+    {
+      "path": "results/history-recovery-20260930/history.tex",
+      "bytes": 5266,
+      "sha256": "eb878a4c9b9499dc9fa6b34a82a7205bb861f4e478ef5dcecd03071cec688a79"
+    },
+    {
+      "path": "results/history-recovery-20260930/july22-table.tex",
+      "bytes": 571,
+      "sha256": "9d638488a4d2240336ce9361baddf129973dd8cf988e5285064fb9f4556d089b"
+    },
+    {
+      "path": "results/review-response-20260927/all-attempts-table.tex",
+      "bytes": 679,
+      "sha256": "3ceea0a4e0e5c3180d1525dfeffd2813bf93bcb34364f4fee06a88a29aa8aeaf"
+    },
+    {
+      "path": "results/review-response-20260927/component-qualification.tex",
+      "bytes": 2229,
+      "sha256": "dbdb81ffb279923c2cc7ace1cbf5bc6cb11c3921338457e8dbd85c350979c57d"
+    },
+    {
+      "path": "results/review-response-20260927/m1-qualification.tex",
+      "bytes": 3551,
+      "sha256": "c3d8a3692dddcbbf13e95b0249091edf62bf037834b663cfc8f733543e271ee8"
+    },
+    {
+      "path": "results/review-response-20260927/native-common-o0-paired-v1.tex",
+      "bytes": 956,
+      "sha256": "ba06fc002dbc674118b8ac23ca19d1c236301dcb807d27712569cd85ec2005d4"
+    },
+    {
+      "path": "results/review-response-20260927/native-joint-AB-v1.tex",
+      "bytes": 1381,
+      "sha256": "a2b7541686d2df0e41392f6b9191c3e145a78d60e3a527bd017a423fcbb1e461"
+    },
+    {
+      "path": "results/review-response-20260927/native-joint-pinned-AB-v1.tex",
+      "bytes": 1427,
+      "sha256": "31a0c0e4e251c68b3124e244fdd746ae20a24b16558863c1c4e27b5902ad4ac6"
+    },
+    {
+      "path": "results/review-response-20260927/native-reference.tex",
+      "bytes": 1294,
+      "sha256": "f1667f646203d851f15ee3c1864defe84a5075ed35e1e6843bc2b27a932c59a5"
+    },
+    {
+      "path": "results/review-response-20260927/paired-task-outcomes.tex",
+      "bytes": 855,
+      "sha256": "94790ae1870f19a3db62d534ec39f2d126a59429ca1a54a7e058c39023f104ec"
+    }
+  ]
+}

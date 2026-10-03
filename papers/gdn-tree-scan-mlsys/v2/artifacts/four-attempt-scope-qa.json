@@ -1,0 +1,27 @@
+{
+  "checked_utc": "2026-09-28T06:29:43.719467+00:00",
+  "scope": "Author-approved four-attempt manuscript amendment only",
+  "changed_prior_receipt_files": [
+    "main.tex",
+    "abstract.tex",
+    "main.pdf",
+    "paper.config.yaml"
+  ],
+  "abstract_numeric_tokens_identical": true,
+  "all_existing_result_input_hashes_unchanged": true,
+  "pdf_pages": 13,
+  "overfull_hboxes": 0,
+  "undefined_references": false,
+  "build_warning": "balance called in second column; final reference page visually checked, no clipping or overlap",
+  "rendered_and_visually_reviewed_pages": [
+    1,
+    12,
+    13
+  ],
+  "source_bundle_verification": "artifacts/four-attempt-source-bundle-verification.json",
+  "independent_review": "BOUNDED_PASS",
+  "memory_scope": "Existing main.tex distinguishes logical exports from full scratch allocation and source tile reuse from compiler-dependent registers/spills. No measured-memory claim added.",
+  "new_experiments": 0,
+  "independent_review_path": "notes/review-response-20260927/paper-four-attempt-scope-review.md",
+  "independent_review_sha256": "9f60ddd4adc01d5525542d7a3c9d7e6ae0eb4115a367091be311f8bee92dc51f"
+}

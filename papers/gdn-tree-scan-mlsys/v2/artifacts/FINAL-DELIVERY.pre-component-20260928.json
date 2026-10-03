@@ -1,0 +1,57 @@
+{
+  "schema": "lumo.paper-delivery.v2",
+  "updated_utc": "2026-09-27T20:22:28.855233+00:00",
+  "status": "P0_INTEGRATED_CAMPAIGN_ACTIVE",
+  "paper_title": "LumoTree: Path-Parallel Speculative Verification for Hybrid Language Models",
+  "pdf_path": "/Users/zhiyuanma/work/CursorWS/Lumo_FlyWheel/papers/gdn-tree-scan-mlsys/v2/main.pdf",
+  "pdf_pages": 13,
+  "build": {
+    "command": "latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex",
+    "exit_code": 0,
+    "undefined_references": false,
+    "overfull_hboxes": 0,
+    "warning": "1.73193pt final bibliography balance vbox; rendered and visually no clipping",
+    "native_editor_compile": "Does not load additional project files; input{abstract} resolved to package. Multi-file project compiled with existing local TeX toolchain; source editor retained.",
+    "citation_metadata_audit": "No undefined LaTeX citations; no new bibliography sources in P0. Citation-policy script reports 10 prior introduction keys without A/B/C tier classifications, so no automatic source-tier pass is claimed.",
+    "issues_csv_schema": "passed"
+  },
+  "P0": {
+    "status": "INDEPENDENTLY_APPROVED",
+    "unique_complete_bracket_attempts": 22,
+    "additional_comparison_records": 6,
+    "earlier_lineage_records": 7,
+    "source_input_hashes_verified": 118,
+    "tests_passed": 11,
+    "source_bound_reducer_reproduced": true
+  },
+  "new_experiments": {
+    "qualification_cases_completed": 0,
+    "mechanism_cells_completed": 0,
+    "pilot_attempts_completed": 0,
+    "pilot_total": 8,
+    "confirmation_total": null,
+    "state": "Protocol and harness preparation; no current-campaign GPU result claimed"
+  },
+  "monitor": {
+    "id": "review-lumo-v2-experiments-every-10-minutes",
+    "status": "ACTIVE",
+    "tmux": "lumotree-review-20260927"
+  },
+  "previous_receipt": "p0/monitor/review-response-20260927/pre-p0-manuscript/artifacts/FINAL-DELIVERY.json",
+  "files": {
+    "main.tex": "468ab4b1d702ad7260cbfe39346e0c56ac8001050439a51ae3456933d71627e2",
+    "abstract.tex": "c1cb90f8d7f93808a2b7ea1805186304f0f3ad863b4af08380a9e0da02a97aed",
+    "main.pdf": "98d2db95106b2725bf143d4035ab7bd79b18567dc8fb95c8ce09e21f9917862f",
+    "main.bbl": "88b288c16d0cd76a0eda28774cee4ae2b9f5ab57ffd61925a91b33047b6bdfb3",
+    "paper.config.yaml": "8cf82a5ed716b76e3debf73f56b0f14920dc6aa686a8d352021d1ace71d558a2",
+    "results/agent-workload/case-study.tex": "798470a439c2bebad6956a779803d459a2d8572217d446b1f794b855296e87c3",
+    "results/agent-workload/review-configuration.tex": "aba40eb0e68052d81a6f69744af16267d3a3cb5f6c0e65c4419e3447457f895f",
+    "results/agent-workload/review-outcomes.tex": "80004d9296fab1bbe8ce29cefae6bdc79bb1ff1ceebf843b8ec39694fced7c75",
+    "results/agent-workload/review-telemetry.tex": "52e88906abe944fff0ac74e636256faf5ec783a7ba685ec4142d425d9ed72d6d",
+    "results/review-response-20260927/p0-evidence.json": "f4bd35518a34b2f2f142b2de67f30998d484aa940b9c078ebbafcbb18004f1d8",
+    "results/review-response-20260927/MANIFEST.json": "6d18fb6e6a1178bb73a220d1687f106eed64b92bf2b50549a2bfdaae660e8955",
+    "notes/review-response-20260927/p0-paper-review.md": "7990d514356f4a498f42c574cbd7ae02d810aaf0b38b3105c926edfc7ad0aef3"
+  },
+  "publication": false,
+  "push": false
+}

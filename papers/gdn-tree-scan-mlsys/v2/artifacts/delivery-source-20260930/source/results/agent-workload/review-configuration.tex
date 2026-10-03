@@ -1,0 +1,23 @@
+The tree engine is patched vLLM, recorded as version \texttt{0.19.2rc1.dev134+gfe9c3d6c5}. Table~\ref{tab:serving-config} makes the execution settings explicit. The artifact binds repository commits, launch settings, container identity where recorded, and the loaded attention extension. The common model name does not establish identical checkpoint tensors, conversion policy, tokenizer bytes, or KV-cache precision across stacks. Those identities remain unresolved in these development records and must be frozen for a controlled comparison.
+
+\begin{table*}[t]
+\caption{Recorded serving configurations for the exploratory workload evidence. Shared-pair tree revisions are \texttt{bdca0bd}, \texttt{78a29d3}, and \texttt{a450f6c}; the ten-task deployment is \texttt{e7af6b5}. Full hashes and known identity gaps are retained in the artifact.}
+\label{tab:serving-config}
+\centering\footnotesize
+\renewcommand{\arraystretch}{1.12}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.21\textwidth}YY@{}}
+\toprule
+Setting & \sys{} / patched vLLM & SGLang EAGLE \\
+\midrule
+Target & Qwen3.8-27B NVFP4, RadixArk conversion; bf16 execution & Qwen3.8-27B NVFP4, recorded as-shipped model path \\
+Weight/tokenizer identity & Recorded model/configuration lineage; cross-stack byte identity unverified & Historical loaded weight/tokenizer and code hashes not fully attested \\
+Proposal configuration & 27 logical drafts; root plus drafts padded to 32 rows; maximum depth 11 & EAGLE steps/top-$k$/draft tokens: 3/1/4 \\
+Attention & Patched FlashAttention-2; head grouping 2, split-K 4 & FlashInfer \\
+Graphs/cache & Prefix caching; full/piecewise target graphs; separate drafter and committer graphs & Launch and telemetry retained; exact mode parity not established \\
+Context/scheduling & 131,072 context; 4,096 scheduled tokens; maximum one active sequence & 262,144 context; 8,192-token prefill chunks; earlier telemetry observes up to three requests \\
+Response cap & 32,768 on shared pair; 24,000 on ten-task deployment & 32,768 earlier pair; 24,000 later pair \\
+Requested sampling & \multicolumn{2}{l}{Temperature 0.6; top-$p$ 0.95; top-$k$ 20; min-$p$ 0; presence penalty 1.0} \\
+Agent protocol & \multicolumn{2}{l}{Qwen Code 0.19.4; one task at a time; proxy auto-continuation disabled} \\
+\bottomrule
+\end{tabularx}
+\end{table*}

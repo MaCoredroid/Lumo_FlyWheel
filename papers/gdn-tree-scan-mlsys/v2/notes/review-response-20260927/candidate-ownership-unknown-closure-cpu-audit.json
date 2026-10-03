@@ -1,0 +1,105 @@
+{
+  "utc": "2026-09-29T05:36:03.645221+00:00",
+  "scope": "Exact extracted sealer only, injected receipt stub, no Docker/SSH/GPU/cache/launcher execution; inverse full-source deltas checked.",
+  "hashes": {
+    "run_q1_candidate_cycle0_v1.sh": "6c0b8482a44695be180a7674d42071a9d7c72f1c643ea29697a06a5d6ed46531",
+    "run_q1_candidate_stage1_v2_6.sh": "d54550b4ab98508b33baa95cfed9514cda38b4d29034b4fc351ac4c7196206ba"
+  },
+  "inverse_sha256": {
+    "run_q1_candidate_cycle0_v1.sh": "2e8d739ec3f32da9b564e7835db028868647d1c62bf67919c804e71fafc59c81",
+    "run_q1_candidate_stage1_v2_6.sh": "8b475bffbae5087a62580b8bf17f6d9115349021d9a59b6f286447e5611f9de2"
+  },
+  "controls": [
+    {
+      "wrapper": "run_q1_candidate_cycle0_v1.sh",
+      "attempted": 0,
+      "mode": "direct",
+      "input_status": "READINESS_REFUSED",
+      "process_exit": 4,
+      "finalized": "READINESS_REFUSED_no_owned_container",
+      "cleanup_state": null
+    },
+    {
+      "wrapper": "run_q1_candidate_cycle0_v1.sh",
+      "attempted": 1,
+      "mode": "direct",
+      "input_status": "LAUNCHER_NO_CONTAINER",
+      "process_exit": 8,
+      "finalized": "LAUNCHER_NO_CONTAINER_creation_attempted_ownership_unproven_cleanup_rc=8",
+      "cleanup_state": "UNKNOWN_CREATION_OWNERSHIP_UNPROVEN"
+    },
+    {
+      "wrapper": "run_q1_candidate_cycle0_v1.sh",
+      "attempted": 1,
+      "mode": "direct",
+      "input_status": "OWNERSHIP_UNPROVEN_rc=0",
+      "process_exit": 8,
+      "finalized": "OWNERSHIP_UNPROVEN_rc=0_creation_attempted_ownership_unproven_cleanup_rc=8",
+      "cleanup_state": "UNKNOWN_CREATION_OWNERSHIP_UNPROVEN"
+    },
+    {
+      "wrapper": "run_q1_candidate_cycle0_v1.sh",
+      "attempted": 1,
+      "mode": "direct",
+      "input_status": "LAUNCHER_TIMEOUT",
+      "process_exit": 8,
+      "finalized": "LAUNCHER_TIMEOUT_creation_attempted_ownership_unproven_cleanup_rc=8",
+      "cleanup_state": "UNKNOWN_CREATION_OWNERSHIP_UNPROVEN"
+    },
+    {
+      "wrapper": "run_q1_candidate_cycle0_v1.sh",
+      "attempted": 1,
+      "mode": "exit_trap",
+      "input_status": "ABORTED_PRELAUNCH_rc=143",
+      "process_exit": 143,
+      "finalized": "ABORTED_PRELAUNCH_rc=143_creation_attempted_ownership_unproven_cleanup_rc=8",
+      "cleanup_state": "UNKNOWN_CREATION_OWNERSHIP_UNPROVEN"
+    },
+    {
+      "wrapper": "run_q1_candidate_stage1_v2_6.sh",
+      "attempted": 0,
+      "mode": "direct",
+      "input_status": "READINESS_REFUSED",
+      "process_exit": 4,
+      "finalized": "READINESS_REFUSED_no_owned_container",
+      "cleanup_state": null
+    },
+    {
+      "wrapper": "run_q1_candidate_stage1_v2_6.sh",
+      "attempted": 1,
+      "mode": "direct",
+      "input_status": "LAUNCHER_NO_CONTAINER",
+      "process_exit": 8,
+      "finalized": "LAUNCHER_NO_CONTAINER_creation_attempted_ownership_unproven_cleanup_rc=8",
+      "cleanup_state": "UNKNOWN_CREATION_OWNERSHIP_UNPROVEN"
+    },
+    {
+      "wrapper": "run_q1_candidate_stage1_v2_6.sh",
+      "attempted": 1,
+      "mode": "direct",
+      "input_status": "OWNERSHIP_UNPROVEN_rc=0",
+      "process_exit": 8,
+      "finalized": "OWNERSHIP_UNPROVEN_rc=0_creation_attempted_ownership_unproven_cleanup_rc=8",
+      "cleanup_state": "UNKNOWN_CREATION_OWNERSHIP_UNPROVEN"
+    },
+    {
+      "wrapper": "run_q1_candidate_stage1_v2_6.sh",
+      "attempted": 1,
+      "mode": "direct",
+      "input_status": "LAUNCHER_TIMEOUT",
+      "process_exit": 8,
+      "finalized": "LAUNCHER_TIMEOUT_creation_attempted_ownership_unproven_cleanup_rc=8",
+      "cleanup_state": "UNKNOWN_CREATION_OWNERSHIP_UNPROVEN"
+    },
+    {
+      "wrapper": "run_q1_candidate_stage1_v2_6.sh",
+      "attempted": 1,
+      "mode": "exit_trap",
+      "input_status": "ABORTED_PRELAUNCH_rc=143",
+      "process_exit": 143,
+      "finalized": "ABORTED_PRELAUNCH_rc=143_creation_attempted_ownership_unproven_cleanup_rc=8",
+      "cleanup_state": "UNKNOWN_CREATION_OWNERSHIP_UNPROVEN"
+    }
+  ],
+  "parent_target_control_sha256": "054a965d870db9d7c86012511d0fcf2965490241ae5e09c58b55067b1b677c87"
+}

@@ -1,0 +1,19 @@
+{
+ "obs_id": "CAND__p3__N__NC_SIB",
+ "problems": [],
+ "response": {
+  "error": null,
+  "finish_reason": "stop",
+  "seconds": 5.578,
+  "status": 200,
+  "usage": {
+   "completion_tokens": 27,
+   "prompt_tokens": 27482,
+   "prompt_tokens_details": null,
+   "total_tokens": 27509
+  }
+ },
+ "sealed": true,
+ "utc": "2026-10-03T01:28:00Z",
+ "valid": true
+}

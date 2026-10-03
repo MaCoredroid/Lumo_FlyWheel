@@ -1,0 +1,162 @@
+{
+  "scope": "Independent direct audit of saved CPU fixtures; no model/tensor/runtime operations.",
+  "hashes": {
+    "tools/q1_continuation_fixtures_v1.py": "16f85ffff80008fdd396e48c9b1e0387770b7b4ee8e0611de566fa05abf8ce9e",
+    "fullmodel/fixtures/token-fixtures.sequences-v1.json": "cc1c07cf2bfddbfc57875b655eaea149af92f497db56ed2aff185c2f7c426fa4",
+    "tools/tests/test_q1_continuation_fixtures_v1.py": "04010e397d20e7c2b6dca482444a557dd13109e0040d64ef2ec72a0a4ae40dcf",
+    "tools/q1_fullmodel_token_fixtures.py": "fc6c882bbcbd2d53f2e1fabea5aa84ff049314fe56c289561ecb7e4a34ba41b9",
+    "tools/q1_native_corpus_v1.py": "d4502b7f47ab1ac6ed8cd295aa5565726fad486c4a1ff1bda6a13fe24e4ea770",
+    "q1_case_matrix.json": "df2a4c7b01a6ae09ef06c397f0bb0d2f084f40421b39e6d65f01284429173eed",
+    "fullmodel/fixtures/token-fixtures.v1.json": "607634e19235a58d2b6d73f8260dac3c49f842f9f1cba9a1789f329c56012223",
+    "tools/test_log.q1_continuation_fixtures_v1.txt": "dc730c0c8a0213fd4bf86d079024f4d3517a14902cddbe578078025523405115"
+  },
+  "records": 48,
+  "cycles": 108,
+  "cycles_by_split": {
+    "calibration": 54,
+    "evaluation": 54
+  },
+  "records_by_split_kind": {
+    "('calibration', 'continuous')": 9,
+    "('calibration', 'pending-correction')": 3,
+    "('calibration', 'pending-bonus')": 3,
+    "('calibration', 'kv-boundary')": 9,
+    "('evaluation', 'continuous')": 9,
+    "('evaluation', 'pending-correction')": 3,
+    "('evaluation', 'pending-bonus')": 3,
+    "('evaluation', 'kv-boundary')": 9
+  },
+  "continuous_handoffs_consumed_once": 60,
+  "calibration_evaluation_prefix_ids_and_hashes_disjoint": true,
+  "physical_rows_positions_valid": true,
+  "all_pending_aliases_equal_frozen_cycle0_chains": true,
+  "boundary_records": [
+    {
+      "prefix_id": "calibration-short_available",
+      "offset": -1,
+      "padding_tokens": 16,
+      "initial_prefix_len": 13503,
+      "remainder": 63
+    },
+    {
+      "prefix_id": "calibration-short_available",
+      "offset": -3,
+      "padding_tokens": 14,
+      "initial_prefix_len": 13501,
+      "remainder": 61
+    },
+    {
+      "prefix_id": "calibration-short_available",
+      "offset": -11,
+      "padding_tokens": 6,
+      "initial_prefix_len": 13493,
+      "remainder": 53
+    },
+    {
+      "prefix_id": "calibration-medium_available",
+      "offset": -1,
+      "padding_tokens": 50,
+      "initial_prefix_len": 28991,
+      "remainder": 63
+    },
+    {
+      "prefix_id": "calibration-medium_available",
+      "offset": -3,
+      "padding_tokens": 48,
+      "initial_prefix_len": 28989,
+      "remainder": 61
+    },
+    {
+      "prefix_id": "calibration-medium_available",
+      "offset": -11,
+      "padding_tokens": 40,
+      "initial_prefix_len": 28981,
+      "remainder": 53
+    },
+    {
+      "prefix_id": "calibration-long_available",
+      "offset": -1,
+      "padding_tokens": 12,
+      "initial_prefix_len": 60095,
+      "remainder": 63
+    },
+    {
+      "prefix_id": "calibration-long_available",
+      "offset": -3,
+      "padding_tokens": 10,
+      "initial_prefix_len": 60093,
+      "remainder": 61
+    },
+    {
+      "prefix_id": "calibration-long_available",
+      "offset": -11,
+      "padding_tokens": 2,
+      "initial_prefix_len": 60085,
+      "remainder": 53
+    },
+    {
+      "prefix_id": "evaluation-short_available",
+      "offset": -1,
+      "padding_tokens": 2,
+      "initial_prefix_len": 13375,
+      "remainder": 63
+    },
+    {
+      "prefix_id": "evaluation-short_available",
+      "offset": -3,
+      "padding_tokens": 0,
+      "initial_prefix_len": 13373,
+      "remainder": 61
+    },
+    {
+      "prefix_id": "evaluation-short_available",
+      "offset": -11,
+      "padding_tokens": 56,
+      "initial_prefix_len": 13429,
+      "remainder": 53
+    },
+    {
+      "prefix_id": "evaluation-medium_available",
+      "offset": -1,
+      "padding_tokens": 61,
+      "initial_prefix_len": 28991,
+      "remainder": 63
+    },
+    {
+      "prefix_id": "evaluation-medium_available",
+      "offset": -3,
+      "padding_tokens": 59,
+      "initial_prefix_len": 28989,
+      "remainder": 61
+    },
+    {
+      "prefix_id": "evaluation-medium_available",
+      "offset": -11,
+      "padding_tokens": 51,
+      "initial_prefix_len": 28981,
+      "remainder": 53
+    },
+    {
+      "prefix_id": "evaluation-long_available",
+      "offset": -1,
+      "padding_tokens": 15,
+      "initial_prefix_len": 48703,
+      "remainder": 63
+    },
+    {
+      "prefix_id": "evaluation-long_available",
+      "offset": -3,
+      "padding_tokens": 13,
+      "initial_prefix_len": 48701,
+      "remainder": 61
+    },
+    {
+      "prefix_id": "evaluation-long_available",
+      "offset": -11,
+      "padding_tokens": 5,
+      "initial_prefix_len": 48693,
+      "remainder": 53
+    }
+  ],
+  "qualification_denominator": null
+}

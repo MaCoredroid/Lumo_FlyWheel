@@ -1,0 +1,78 @@
+\begin{tikzpicture}[x=1cm,y=1cm,font=\sffamily\fontsize{8}{10}\selectfont,
+  flow/.style={-{Latex[length=1.8mm]},draw=inkblue,line width=0.8pt},
+  edge/.style={draw=inkblue!75,line width=0.7pt},
+  token/.style={circle,draw=inkblue,fill=white,minimum size=5.5mm,inner sep=0pt},
+  chosen/.style={token,draw=mutedgreen,fill=mutedgreen!12,line width=1pt},
+  title/.style={anchor=west,font=\sffamily\bfseries\fontsize{9}{11}\selectfont},
+  note/.style={font=\sffamily\fontsize{7.5}{9}\selectfont,align=center},
+  state/.style={draw=mutedgreen!70,fill=mutedgreen!5,rounded corners=1.5pt,
+    minimum height=0.37cm,text width=4.1cm,align=left,inner xsep=5pt}]
+
+\node[title] at (0,4.4) {(a) Propose a candidate tree};
+\node[title] at (6.0,4.4) {(b) Verify branch-local computation};
+\node[title] at (12.3,4.4) {(c) Select a path and commit state};
+\draw[black!18] (0,4.12)--(5.05,4.12);
+\draw[black!18] (6.0,4.12)--(11.15,4.12);
+\draw[black!18] (12.3,4.12)--(17.5,4.12);
+
+\node[token,fill=black!5,draw=black!45] (root) at (0.55,2.65) {$m$};
+\node[token] (a) at (1.8,3.25) {$a$};
+\node[token] (b) at (1.8,2.0) {$b$};
+\node[token] (c) at (3.1,3.65) {$c$};
+\node[token] (d) at (3.1,2.85) {$d$};
+\node[token] (e) at (3.1,2.0) {$e$};
+\node[token] (f) at (4.35,3.65) {$f$};
+\foreach \from/\to in {root/a,root/b,a/c,a/d,b/e,c/f}
+  \draw[edge] (\from)--(\to);
+\node[note,anchor=north] at (0.55,2.2) {materialized\\prefix};
+\node[note,text width=4.7cm] at (2.55,1.05)
+  {MTP proposals and suffix extensions\\share one logical ancestry.};
+\node[note,text=black!65] at (2.55,0.33)
+  {Draft tokens carry proposal probabilities $q$.};
+\draw[flow] (4.95,3.0)--(5.8,3.0);
+
+\node[draw=inkblue!60,fill=inkblue!4,rounded corners=2pt,
+  minimum width=5.15cm,minimum height=1.97cm] (forward) at (8.575,3.0) {};
+\node[font=\sffamily\bfseries\fontsize{8}{10}\selectfont] at (8.575,3.67)
+  {Ancestry-aware target forward};
+\node[anchor=west] at (6.3,3.23) {Recurrent state};
+\node[anchor=east,text=inkblue] at (10.85,3.23) {path scans};
+\node[anchor=west] at (6.3,2.79) {Convolution};
+\node[anchor=east,text=inkblue] at (10.85,2.79) {path-local filtering};
+\node[anchor=west] at (6.3,2.35) {Attention};
+\node[anchor=east,text=inkblue] at (10.85,2.35) {tree mask + KV map};
+\draw[black!10] (6.3,3.02)--(10.85,3.02);
+\draw[black!10] (6.3,2.58)--(10.85,2.58);
+\node[draw=mutedamber,fill=mutedamber!6,dashed,rounded corners=2pt,
+  text width=4.7cm,align=center,minimum height=0.65cm] (scratch) at (8.575,1.0)
+  {Temporary cut states and replay operands};
+\draw[flow,draw=mutedamber] (forward.south)--(scratch.north)
+  node[midway,right,note,text=black!65] {retain within the step};
+\node[note,text=black!65] at (8.575,0.33)
+  {Unselected branch state is not published.};
+\draw[flow] (11.3,3.0)--(12.1,3.0)
+  node[midway,above=2pt,note] {$p$};
+
+\node[chosen,fill=black!5,draw=black!45] (mout) at (12.65,3.05) {$m$};
+\node[chosen] (aout) at (13.72,3.05) {$a$};
+\node[chosen] (dout) at (14.79,3.05) {$d$};
+\node[token,dashed,draw=mutedamber,fill=mutedamber!6] (pending) at (16.55,3.05) {$b^*$};
+\draw[flow,draw=mutedgreen] (mout)--(aout);
+\draw[flow,draw=mutedgreen] (aout)--(dout);
+\draw[flow,dashed,draw=mutedamber] (dout)--(pending);
+\node[note] at (13.72,3.67) {Select using $p$ and $q$};
+\node[note,text=black!65] at (16.55,3.67) {Pending token};
+\node[note,text=black!65] at (16.55,2.51) {not yet in state};
+\node[state] (rcommit) at (14.9,1.85) {Recurrent: replay accepted path};
+\node[state] (ccommit) at (14.9,1.27) {Convolution: gather history};
+\node[state] (kcommit) at (14.9,0.69) {Attention: remap KV entries};
+\draw[flow,draw=mutedgreen] (13.72,2.72)--(13.72,2.13);
+\draw[-{Latex[length=1.5mm]},dashed,draw=mutedamber,line width=0.7pt]
+  (scratch.east)--(11.65,1.0)--(11.65,1.85)--(rcommit.west);
+\node[note,text=mutedgreen!80!black,font=\sffamily\bfseries\fontsize{8}{10}\selectfont]
+  at (14.9,0.08) {One coherent continuation: $\mathcal{S}(mad)$};
+
+\draw[black!18] (0,-0.35)--(17.5,-0.35);
+\node[note,text width=17.2cm] at (8.75,-0.72)
+  {\textbf{Shared tree descriptor:} parents, positions, attention visibility, and logical-to-physical slots stay consistent across all three stages.};
+\end{tikzpicture}

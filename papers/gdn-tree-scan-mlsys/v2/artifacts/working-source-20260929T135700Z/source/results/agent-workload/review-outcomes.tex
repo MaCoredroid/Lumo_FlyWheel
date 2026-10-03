@@ -1,0 +1,18 @@
+\paragraph{All-attempt outcome accounting}
+The recovered ledger has 22 unique attempts with complete task metric brackets: four in the August 19 \texttt{bdca0bd} run, two in each other shared-pair tree run, ten in the August 24 deployment, and two in each SGLang pair. Table~\ref{tab:all-attempts} retains their outcomes and pooled rates, including the empty-patch SGLang pair. The two-task \texttt{bdca0bd} row is contained in its four-task row; the rows must not be summed as independent cohorts. Additional partial and unbracketed records stay in a separate provenance ledger, without invented rates or completed evaluations.
+
+\begin{table*}[t]
+\caption{All recovered complete-bracket development cohorts. Rates are descriptive diagnostics under Eq.~\ref{eq:pooled-decode}, including failed attempts. The earlier SGLang pair ($^*$) contains an empty patch and is excluded only from the patch-producing comparison in Table~\ref{tab:pooled-decode}. The first tree pair overlaps the final four-task row; different task populations are not ranked against one another.}
+\label{tab:all-attempts}
+\centering\small
+\input{results/review-response-20260927/all-attempts-table}
+\end{table*}
+
+\begin{table*}[t]
+\caption{Shared-task agent times and outcomes, including the excluded earlier SGLang pair ($^*$). Task suffixes identify Astropy instances 12907 and 13033. Agent time includes model service and tools, but excludes subsequent evaluation. Different token trajectories are outcomes of the systems and do not isolate kernel cost.}
+\label{tab:paired-agent-time}
+\centering\footnotesize
+\input{results/review-response-20260927/paired-task-outcomes}
+\end{table*}
+
+Table~\ref{tab:paired-agent-time} supplies the missing task-level timing context. The August 19 \texttt{bdca0bd} pair totals 1,038.755 agent seconds; later SGLang totals 2,043.900 seconds. Both resolve task 12907 and fail task 13033. The token totals differ substantially. These single recorded pairs cannot establish a general task-completion speedup, and the spread across tree revisions cannot estimate within-build uncertainty.

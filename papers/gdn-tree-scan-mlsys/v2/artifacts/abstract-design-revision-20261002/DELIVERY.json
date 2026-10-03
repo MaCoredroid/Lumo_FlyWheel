@@ -1,0 +1,21 @@
+{
+  "schema": "lumotree.abstract-revision-delivery.v1",
+  "verified_utc": "2026-10-03T06:59:06.473169+00:00",
+  "abstract_words": 119,
+  "changed_source_dependencies": [
+    "abstract.tex"
+  ],
+  "body_unchanged_from": "artifacts/closure-delivery-20261002/source/",
+  "page_count": 15,
+  "canonical_and_clean_source_builds_passed": true,
+  "extracted_pdf_text_identical": true,
+  "visual_checks": "First page at 130 dpi and all 15 pages in final contact sheet; no clipping or overlap observed.",
+  "new_experiments": 0,
+  "publication_action": false,
+  "files": {
+    "abstract.tex": "6df1bdc2006279afc460b73e1232d9fc439687cfd18d4afadd3c9e9842bd9a45",
+    "main.pdf": "ca52186877e0047cefaffc502116698056dfd2e22f888d21d0da8f1add1d056a",
+    "artifacts/abstract-design-revision-20261002/lumotree-source-design-abstract-20261002.tar.gz": "e5ec42db4fd36136eb3dd4c572160c83da1f3a64e802bb547820652e41dea8b5",
+    "artifacts/abstract-design-revision-20261002/source/SOURCE-MANIFEST.json": "849890fbef9b886d0fdf0bfe9e0ca978629333c0644dfd94198f06daed3613c2"
+  }
+}

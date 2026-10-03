@@ -1,0 +1,232 @@
+{
+  "schema": "lumotree.closure-audit.v1",
+  "remote_files_sha_verified": 350,
+  "remote_head": "c14584f7b142ca2f4557e7dc03be8c4dbab2815b",
+  "freeze_utc": "2026-10-03T00:59:10Z",
+  "first_sealed_observation_utc": "2026-10-03T01:12:04Z",
+  "fullmodel": {
+    "numerical_verdict": "EQUIVALENT",
+    "prefixes": 6,
+    "cases": 18,
+    "cycles": 126,
+    "faults_detected": 10,
+    "max_ratio": {
+      "gdn_rel": 1.0814641320777625,
+      "conv_rel": 1.2230544610769498,
+      "kv_new_rel": 1.2227274518081976,
+      "kv_hist_rel": 1.166571302654812,
+      "next_kl": 0.7368587453552092
+    },
+    "max_absolute": {
+      "gdn_rel": 0.43545876543912176,
+      "conv_rel": 0.3043428497524795,
+      "kv_new_rel": 0.37520949325696573,
+      "kv_hist_rel": 0.23361392083542412,
+      "next_kl": 0.11052881180328138
+    },
+    "greedy_flips": {
+      "CAND": 4,
+      "B": 7,
+      "V": 2,
+      "P": 7
+    },
+    "cache_reuse_observations": 30,
+    "cache_hit_fraction_min": 0.919917864476386,
+    "candidate_repeat_bitwise": true,
+    "scope": "Tolerance-based comparison against native controls; not bitwise model equality or sampling-distribution equality; binary tensor norms not independently recomputed in this paper update."
+  },
+  "confirmation": {
+    "tree": {
+      "runs": 3,
+      "requests": 129,
+      "output_tokens": 46098,
+      "decode_seconds": 1495.6119544710964,
+      "pooled_tokens_s": 30.735913725867707,
+      "run_rates": [
+        30.667630381958123,
+        29.924351540838455,
+        31.671680307435775
+      ],
+      "accepted_per_event": 4.7247683755404575,
+      "timer_means_ms": {
+        "committer": 20.93939337156725,
+        "target": 109.77379821190046,
+        "wall": 185.05476362855654,
+        "drafter": 48.16673686457616
+      }
+    },
+    "mtp5": {
+      "runs": 3,
+      "requests": 129,
+      "output_tokens": 46360,
+      "decode_seconds": 1679.9164872122929,
+      "pooled_tokens_s": 27.51982039102265,
+      "run_rates": [
+        27.41319658242524,
+        27.436560693977437,
+        27.705072568402777
+      ],
+      "accepted_per_event": 3.2722094625631604
+    },
+    "pooled_ratio": 1.116864619359732,
+    "all_tree_rates_above_all_mtp": true
+  },
+  "attribution": {
+    "deployed (T1,T2)": {
+      "runs": 2,
+      "requests": 86,
+      "output_tokens": 40402,
+      "decode_seconds": 1405.356398500502,
+      "pooled_tokens_s": 28.687384953038727,
+      "run_rates": [
+        28.780920041040943,
+        28.5895028358033
+      ],
+      "accepted_per_event": 4.454997981972285,
+      "timer_means_ms": {
+        "drafter": 49.84177821750622,
+        "target": 112.13599884934916,
+        "wall": 189.34924142772152,
+        "committer": 20.80792667812996
+      },
+      "boot_memory": [
+        {
+          "weights_gib": 20.54,
+          "kv_avail_gib": 52.97,
+          "graph_pool_gib": 1.59,
+          "kv_tokens": 203776.0
+        },
+        {
+          "weights_gib": 20.54,
+          "kv_avail_gib": 52.94,
+          "graph_pool_gib": 1.52,
+          "kv_tokens": 203776.0
+        }
+      ]
+    },
+    "split-K off (stock FA2)": {
+      "runs": 3,
+      "requests": 129,
+      "output_tokens": 58773,
+      "decode_seconds": 2186.5981475403532,
+      "pooled_tokens_s": 26.81974283476234,
+      "run_rates": [
+        27.10846959289272,
+        26.697059802517682,
+        26.668390247975175
+      ],
+      "accepted_per_event": 4.504949570414643,
+      "timer_means_ms": {
+        "committer": 21.134242953798356,
+        "target": 126.78082457640602,
+        "wall": 204.435195116757,
+        "drafter": 49.93940052425163
+      },
+      "boot_memory": [
+        {
+          "weights_gib": 20.54,
+          "kv_avail_gib": 51.51,
+          "graph_pool_gib": 0.46,
+          "kv_tokens": 197632.0
+        },
+        {
+          "weights_gib": 20.54,
+          "kv_avail_gib": 51.65,
+          "graph_pool_gib": 0.42,
+          "kv_tokens": 198656.0
+        },
+        {
+          "weights_gib": 20.54,
+          "kv_avail_gib": 51.35,
+          "graph_pool_gib": 0.5,
+          "kv_tokens": 197632.0
+        }
+      ]
+    },
+    "fused top-k off": {
+      "runs": 1,
+      "requests": 43,
+      "output_tokens": 17162,
+      "decode_seconds": 582.3427797583863,
+      "pooled_tokens_s": 29.396775567652206,
+      "run_rates": [
+        29.396775567652206
+      ],
+      "accepted_per_event": 4.618798955613577,
+      "timer_means_ms": {
+        "drafter": 50.56618638194443,
+        "committer": 21.07620125928803,
+        "target": 112.31972382940737,
+        "wall": 190.38088702913623
+      },
+      "boot_memory": [
+        {
+          "weights_gib": 20.54,
+          "kv_avail_gib": 52.76,
+          "graph_pool_gib": 1.97,
+          "kv_tokens": 202752.0
+        }
+      ]
+    },
+    "prep bake off": {
+      "runs": 1,
+      "requests": 43,
+      "output_tokens": 21109,
+      "decode_seconds": 725.8075363012031,
+      "pooled_tokens_s": 29.024223291142317,
+      "run_rates": [
+        29.024223291142317
+      ],
+      "accepted_per_event": 4.505328827657915,
+      "timer_means_ms": {
+        "target": 111.84520076397833,
+        "wall": 188.9712117220709,
+        "drafter": 49.851428159501545,
+        "committer": 20.746502413375737
+      },
+      "boot_memory": [
+        {
+          "weights_gib": 20.54,
+          "kv_avail_gib": 52.74,
+          "graph_pool_gib": 1.47,
+          "kv_tokens": 202752.0
+        }
+      ]
+    }
+  },
+  "sampling": {
+    "steps_captured": 40,
+    "rows": 2480,
+    "flat_history_matches": 2480,
+    "correct_path_matches": 63,
+    "node_steps": 1120,
+    "deeper_share_TV_over_0_01": 0.22037037037037038,
+    "maximum_node_TV": 0.4206,
+    "MC_steps": 6,
+    "walks_per_step": 200000,
+    "node_tests": 54,
+    "used_row_rejections": 0,
+    "correct_path_rejected_steps": 5,
+    "fault_detected_steps": {
+      "double_temperature": 6,
+      "target_rows_shifted": 6,
+      "correlated_uniforms": 1,
+      "always_accept": 3,
+      "fixed_residual_draw": 5
+    },
+    "expected_sum_TV_per_step_range": [
+      0.0,
+      0.1983
+    ],
+    "scope": "CPU deployed float-oracle walk on captured compressed supports; Monte Carlo non-rejection does not prove universal exactness; history-independent exactness remains conditional on correct target rows and matching filters."
+  },
+  "TV_independent_recheck": {
+    "node_steps": 1120,
+    "non_tied_node_values_match_within": 0.00015,
+    "top_p_tie_order_differences": 9,
+    "maximum_difference_at_ties": 0.025596256276852025,
+    "maximum_TV_independent": 0.4205898634079172,
+    "deeper_share_over_0_01_independent": 0.2222222222222222,
+    "scope": "Top-256 captured logits rounded to five decimals; ties make some TV values implementation-order dependent; describe the aggregate as approximate."
+  }
+}

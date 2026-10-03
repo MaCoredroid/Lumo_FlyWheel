@@ -1,0 +1,28 @@
+{
+  "scope": "independent local stdlib F1/F2/auth controls; synthetic in-memory authority is not launch approval; actual reduce_run is forbidden",
+  "source_sha256": "a7decd00863f69b6970f7e1015a1d725681f046ebc65c63a535d5bc42da00cc8",
+  "launcher_sha256": "6aa6a9c3f374840b728d64f565c73bbd445e8843105d0bc06259fbe121c383c5",
+  "checks": [
+    "F1_original_binding_accepted",
+    "F1_repair_hash_in_original_binding_rejected",
+    "F1_wrong_original_hash_rejected",
+    "F2_no_write_same",
+    "F2_no_write_inside",
+    "F2_no_write_symlink_to_run",
+    "F2_no_write_symlink_into_run",
+    "F2_no_write_ancestor",
+    "F2_no_write_existing_file",
+    "separate_output_allowed",
+    "synthetic_authorization_binds_real_original_receipts",
+    "auth_reject_missing",
+    "auth_reject_not_approved",
+    "auth_reject_wrong_purpose",
+    "auth_reject_wrong_run",
+    "auth_reject_wrong_repair_sha",
+    "auth_reject_wrong_reduction_id",
+    "auth_reject_wrong_original_receipt"
+  ],
+  "passed": 18,
+  "shell_syntax": "PASS",
+  "no_original_or_candidate_output_mutation": true
+}

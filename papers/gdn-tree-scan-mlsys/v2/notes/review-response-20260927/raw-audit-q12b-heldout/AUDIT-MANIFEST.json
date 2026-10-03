@@ -1,0 +1,37 @@
+{
+  "scope": "independent read-only audit; original held-out reduction failed and remains preserved",
+  "files": {
+    "account_extra_and_differences.py": {
+      "sha256": "4a1b68f4394b8cb9c1f0b12d5a6f450c18da94d9883ba02c8199b6204a80bd45",
+      "bytes": 3454
+    },
+    "check_identity_receipts.py": {
+      "sha256": "73536cad2951b8c570f58f9e6398471c9f480864c144c6d7993788c471388b2e",
+      "bytes": 2691
+    },
+    "extra-tensors-and-output-differences.json": {
+      "sha256": "b8cfc11d22d4028f21279f3a9d36c149d04580f9178cdd1265a1bbf787423003",
+      "bytes": 114686
+    },
+    "helper-identity-repro.json": {
+      "sha256": "bdc64b5b215e3267f6db271d2d37bffe4521187696b4d53290ecbdd6fdaa0c45",
+      "bytes": 1383
+    },
+    "helper_identity_repro.py": {
+      "sha256": "ab231f25de0f2668415e1a50554c3f17893a6815261797da60325390888ee4b1",
+      "bytes": 1151
+    },
+    "identity-receipts.json": {
+      "sha256": "01f93282024b0e2195aeb84a28f97fe528a30d91dff552106bfd89119492f816",
+      "bytes": 4338
+    },
+    "independent-raw-audit.json": {
+      "sha256": "49fe8fbe22863646e3bd186d71a05ada72f78bd823a55e5a588b2acbb4963d2b",
+      "bytes": 14248
+    },
+    "inspect_raw.py": {
+      "sha256": "021d6cf2073b8c9166536b5f794bd3eaf5d034c6d360022cc381fb62a21c0907",
+      "bytes": 12119
+    }
+  }
+}

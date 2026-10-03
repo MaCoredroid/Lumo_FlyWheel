@@ -1,0 +1,54 @@
+{
+  "source_sha256": "9c00f38242aece81bf367294ca458c9cc2236066e287ffb4e4396c5370183020",
+  "scope": "Exact on_sealed AST; injected state/counter only; stop before tensor snapshot; no imports or operational actions.",
+  "counter_controls": [
+    {
+      "case": "missing",
+      "raw_complete_events": null,
+      "reached_O1_capture": false,
+      "reasons": [
+        "complete events -1 != before+1 (7)"
+      ]
+    },
+    {
+      "case": "stale",
+      "raw_complete_events": 7,
+      "reached_O1_capture": false,
+      "reasons": [
+        "complete events 7 != before+1 (7)"
+      ]
+    },
+    {
+      "case": "jump",
+      "raw_complete_events": 9,
+      "reached_O1_capture": false,
+      "reasons": [
+        "complete events 9 != before+1 (7)"
+      ]
+    },
+    {
+      "case": "correct",
+      "raw_complete_events": 8,
+      "reached_O1_capture": true,
+      "reasons": [
+        "on_sealed: RuntimeError: CPU_CONTROL_STOP_AT_O1"
+      ]
+    },
+    {
+      "case": "fractional",
+      "raw_complete_events": 8.75,
+      "reached_O1_capture": true,
+      "reasons": [
+        "on_sealed: RuntimeError: CPU_CONTROL_STOP_AT_O1"
+      ]
+    },
+    {
+      "case": "string",
+      "raw_complete_events": "8",
+      "reached_O1_capture": true,
+      "reasons": [
+        "on_sealed: RuntimeError: CPU_CONTROL_STOP_AT_O1"
+      ]
+    }
+  ]
+}

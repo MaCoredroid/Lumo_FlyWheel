@@ -1,0 +1,70 @@
+Table~\ref{tab:swe-tasks} lists every task in the ten-task deployment. It covers the remaining tasks of an interrupted sixteen-task development campaign, rather than a prospectively sampled benchmark cohort. All attempts use tools and produce nonempty patches. No malformed tool-call arguments or degeneration are detected by the recorded trace screen. That screen requires at most 200 visible characters, no tool calls, and at least 2,000 thinking characters; it can miss loops that continue narrating or using tools, so zero detections do not establish general robustness.
+
+\begin{table}[t]
+\caption{Ten-task \sys{} deployment. Task IDs have prefix \texttt{astropy\_\_astropy-}. Agent time includes model service and tools; evaluation occurs subsequently. There is one attempt per task and no matched native arm.}
+\label{tab:swe-tasks}
+\centering\small
+\begin{tabular}{@{}lrl@{}}
+\toprule
+Task suffix & Agent time (min) & Evaluation \\
+\midrule
+13977 & 24.59 & Failed tests \\
+14096 & 22.99 & Resolved \\
+14182 & 7.23 & Failed tests \\
+14309 & 1.67 & Resolved \\
+14365 & 6.78 & Failed tests \\
+14369 & 27.70 & Resolved \\
+14508 & 41.24 & Resolved \\
+14539 & 18.57 & Resolved \\
+14598 & 25.79 & Failed tests \\
+14995 & 4.59 & Resolved \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The ten-task rate pools 248,342 output tokens over 265 completed requests, with 10,667.62 seconds of summed end-to-end latency and 989.82 seconds to first output. These requests comprise 256 normal and nine compaction requests. The included SGLang pair pools 47,854 tokens over 45 requests, with corresponding latency sums of 2,013.63 and 235.95 seconds. These totals reproduce Table~\ref{tab:pooled-decode}; raw precision is retained in the artifact.
+
+Table~\ref{tab:all-attempts} includes all 22 unique attempts with complete task metric intervals. Build A's two-task subset is also contained in its four-task row; these rows must not be counted as independent cohorts. The excluded SGLang run remains visible even though its second task produces an empty patch and does not reach test evaluation. Its response cap is larger than that of the included SGLang run, so the failure cannot be attributed to the latter's smaller cap.
+
+\begin{table*}[t]
+\caption{Complete recorded workload groups, including unsuccessful attempts. Agent minutes sum task durations, not elapsed experiment wall time. Rates use Eq.~\ref{eq:pooled-decode}. The excluded SGLang pair ($^*$) contains an empty patch; the Build A pair overlaps its four-task row. Different task populations are not ranked against one another.}
+\label{tab:all-attempts}
+\centering\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Deployment / subset & Tasks & Resolved & Agent min & Tokens/s \\
+\midrule
+Build A, shared pair & 2 & 1 & 17.31 & 29.09 \\
+Build B, shared pair & 2 & 1 & 18.06 & 28.28 \\
+Build C, shared pair & 2 & 1 & 48.68 & 27.27 \\
+SGLang excluded pair$^{*}$ & 2 & 1 & 26.70 & 30.70 \\
+SGLang included pair & 2 & 1 & 34.07 & 26.89 \\
+Ten-task cohort & 10 & 6 & 181.15 & 25.63 \\
+Build A, all four tasks & 4 & 2 & 73.67 & 26.21 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{table*}[t]
+\caption{Shared-task outcomes, including the excluded SGLang run. Astropy task suffixes identify instances 12907 and 13033. Agent seconds include model service and tools, but exclude evaluation. Different output lengths are system outcomes and do not isolate kernel cost.}
+\label{tab:paired-agent-time}
+\centering\small
+\begin{tabular}{@{}llrrl@{}}
+\toprule
+Deployment & Task & Agent s & Output tokens & Evaluation \\
+\midrule
+Build A & 12907 & 407.19 & 7,873 & Resolved \\
+Build A & 13033 & 631.57 & 17,154 & Failed tests \\
+Build B & 12907 & 291.44 & 5,603 & Resolved \\
+Build B & 13033 & 791.87 & 20,636 & Failed tests \\
+Build C & 12907 & 670.87 & 14,138 & Resolved \\
+Build C & 13033 & 2,249.68 & 56,286 & Failed tests \\
+SGLang excluded$^{*}$ & 12907 & 238.72 & 5,895 & Resolved \\
+SGLang excluded$^{*}$ & 13033 & 1,363.45 & 41,955 & Empty patch \\
+SGLang included & 12907 & 426.13 & 8,314 & Resolved \\
+SGLang included & 13033 & 1,617.77 & 39,540 & Failed tests \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Build A completes four tasks in total, two resolved and two failed. Subsequent development attempts after Builds B and C include a degeneration event and a task without completed evaluation. Other partial records lack complete metric intervals and therefore have no inferred rates. All such records, source versions, failures, and retries remain in the supporting artifact. They are not combined into a single-build benchmark score or substituted for a matched native-decoding control.

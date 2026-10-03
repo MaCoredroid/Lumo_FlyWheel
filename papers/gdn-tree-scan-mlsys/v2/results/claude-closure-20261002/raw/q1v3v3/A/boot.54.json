@@ -1,0 +1,93 @@
+{
+ "arm": "A",
+ "attention_backend": "FLASH_ATTN",
+ "cache_config": {
+  "block_size": "1024",
+  "enable_prefix_caching": "True",
+  "gpu_memory_utilization": "0.7",
+  "kv_cache_memory_bytes": "42949672960",
+  "mamba_block_size": "1024",
+  "mamba_cache_mode": "align",
+  "mamba_ssm_cache_dtype": "float32",
+  "num_gpu_blocks": "640"
+ },
+ "cases_sha256": "1e8d2ffc628a35c6518291a280006e75a786f8fb69878eb01452f9ed72b91609",
+ "env": {
+  "Q1V3_ARM": "A",
+  "Q1V3_ARM_KIND": "native",
+  "Q1V3_CASES": "/q1v3/cases.json",
+  "Q1V3_OUT": "/q1run/A",
+  "Q1V3_RUN": "/q1run",
+  "VLLM_BATCH_INVARIANT": "0",
+  "VLLM_ENABLE_FLA_PACKED_RECURRENT_DECODE": "0"
+ },
+ "hooks_sha256": "d4b219a6bf7f7ecf3eccf8672e5a43573206433a803763b42e8d9851ff3b4ccc",
+ "kind": "native",
+ "kv_cache": {
+  "groups": [
+   {
+    "block_size": 1024,
+    "layers": 16,
+    "spec": "MambaSpec"
+   },
+   {
+    "block_size": 1024,
+    "layers": 16,
+    "spec": "MambaSpec"
+   },
+   {
+    "block_size": 1024,
+    "layers": 16,
+    "spec": "MambaSpec"
+   },
+   {
+    "block_size": 1024,
+    "layers": 16,
+    "spec": "FullAttentionSpec"
+   }
+  ],
+  "num_blocks": 640,
+  "tensor_bytes_total": 42949672960
+ },
+ "layers": {
+  "attention": 16,
+  "gdn": 48,
+  "mtp_layers": []
+ },
+ "packed_recurrent_decode": [
+  "False"
+ ],
+ "pid": 54,
+ "shapes": {
+  "conv": [
+   640,
+   3,
+   10240
+  ],
+  "conv_dtype": "torch.bfloat16",
+  "kv": [
+   2,
+   10240,
+   64,
+   4,
+   256
+  ],
+  "kv_dtype": "torch.bfloat16",
+  "kv_stride": [
+   65536,
+   131072,
+   1024,
+   256,
+   1
+  ],
+  "ssm": [
+   640,
+   48,
+   128,
+   128
+  ],
+  "ssm_dtype": "torch.float32"
+ },
+ "speculative": null,
+ "utc": "2026-10-03T01:11:22Z"
+}

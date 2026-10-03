@@ -1,0 +1,54 @@
+# M1-Q held-out design: independent prospective review
+
+2026-09-28. **The proposed reference-first, two-GPU-phase sequence is scientifically compatible with contract v4.2, subject to the explicit scheduling amendment and bindings below. It is not yet an executable or launch approval.** No implementation, gate, operand, reference value, candidate output, remote operation or GPU job was created in this review. The reported native-C1 calibration run is treated as awaiting its independent result audit and parent acceptance, not independently accepted by this note.
+
+## Direct answers
+
+**Seed 20260928 reproduction:** the original combined design does require a U1 reproduction cycle before U2 for each variant. Amendment v3.1 line 10 names that ordering; v4.2 line 31 retains the 56-cycle shape. Therefore, the proposed standalone held-out stage must not be described as executing the unchanged original sequence. The smallest sound prospective decision is: *factor the untimed M1-Q numerical gate into its own stage now; defer the seed-20260928 U1 reproduction and all timed/warm-up blocks to the later measurement stage; retain their existing requirements there*. No numerical rule depends on an initialization-error envelope, and seed 20260928 is expressly reproduction-only (v4.2:255–268). This scheduling amendment avoids an unnecessary reproduction boot for the standalone qualification. If the parent instead wishes to claim the original 56-cycle sequence unchanged, include its four U1 cycles before the corresponding U2 cycles; do not silently omit them.
+
+**Repeat count:** v4.2:304–308 requires two bitwise-identical comparator repeats; it does not require two fresh GPU processes. The existing CPU reference evaluator also computes both C2 and the named author-policy C1 twice (`m1_c_baseline_v1_1.py:508–520`), which should remain unchanged. Two native-C1 reset repeats in one native-only process satisfy the stated repeat requirement. Two C0 reset cycles per variant are a reasonable explicitly frozen consistency check for this standalone stage; the original U2 itself was one qualification cycle, not a demand for more than two C0 repeats. Apply the same frozen numerical rule to **both** C0 repetitions and retain/report disagreement rather than selecting one. Repeats are not additional independent inputs or qualification cells (v4.2:323).
+
+**Two separate GPU phases:** no retained rule forbids them. Native C1 first, CPU sealing next, C0 later strengthens the required reference-before-method boundary. The “in-process” author-reference language in the old v3.1 policy paragraph is superseded by v4.2:19–31; it must not force an obsolete reference implementation. Preserve exact input/reference bytes across phases and separately identify their processes, image, loaded source and completion receipts. One executor at a time, no overlap, and unchanged numerical settings are sufficient for this component design; separate phases do not establish cross-process method determinism.
+
+## Required order and smallest prospective binding
+
+1. **Resolve calibration before opening the held-out seed.** Contract v4.2:314 requires the parent to freeze each surface's comparator resolution **before any qualification input exists**, not merely before C0. Bind the accepted author-policy calibration receipt and the independently audited/accepted native-C1 calibration receipt, including their source/policy identities and both calibration seeds. The reported 142,848 native cells and 244,224 detected witnesses alone are not the acceptance receipt. Parent adoption must explicitly include the M1 input domain and three-cycle continuation for the Lumo paired rule (v4.2:272). No held-out generation until that prerequisite is satisfied.
+
+2. **Freeze a standalone M1-Q design before CPU generation.** Bind seed 20260929, 48 ordinary-random operand instances in layer order, B1, the existing topology and all four policy names, two C0 repeats, the existing method order, three publication paths, no timing, and the staged sequence described here. State the U1 deferral above. Generate the pristine inputs once using the accepted CPU environment—Torch 2.4.1 CPU, NumPy 2.3.4, four Torch threads, unchanged precision guards—and preserve raw q/k/v/a/b/A_log/dt_bias/S0, dtypes, shapes and content hashes. `build_operands` uses one seeded generator consumed successively across layers (`m1_c_baseline_v1_1.py:942–946`); do not reseed each layer or regenerate in image Torch and assume equal bytes.
+
+3. **Build references independently, then collect native C1 only.** Reuse the frozen CPU arithmetic for all eight policy/surface C2 references and the six named author-policy C1 surfaces; retain their two-repeat checks, prepared-operand identities and source-independence declaration. These are independently written comparison operators for author policies, not the author tree kernels or a claim of hardware emulation. A separately bound native-only held-out collector then loads the same input pack and executes the pinned native operator twice from pristine S0. Preserve root-to-node first-verification outputs, uninterrupted publication history at cumulative updates 1/6/11, intermediate states and wrong-final-sibling values needed by the existing witnesses. This phase must not instantiate a C0 adapter. Its terminal receipt and exact tensor inventory precede the next step.
+
+4. **Seal held-out reference validity in the original CPU environment before C0.** Recompute the same per-cell C1/C2 error terms, bounds, finite checks, two-repeat identity and applicable structural witnesses from the raw reference values. Bind the result to both the CPU pack and native receipt. Keep identical-witness exclusions explicit; do not redefine power from observed C0 errors. A nonfinite/missing reference is UNCOVERED, and a surface that fails its required comparator/witness condition is unresolved/report-only; it must not enter U2 under v4.2:314/322. With the proposed fixed four-variant stage, a pre-C0 failure should stop at this gate and preserve evidence, not silently shrink the experiment or choose a new seed.
+
+5. **Only then run one serial C0 GPU phase.** A fresh phase authority must name the sealed reference-validity receipt, exact reference/input pack, v4.2, the observation manifest, unchanged adapter/executor/driver dependencies, and the successor entry/reducer source hashes. Load the sealed CPU-generated operands; do not use the current collector's in-image diagnostic C2 values as the new acceptance authority. For every repeat, log pristine-S0 restoration and clearing of pending/stash/ring state, while retaining the accepted warmed allocator/JIT/captured-graph lifecycle (v3.1:12). Preserve TreeWY's mandatory deferred final flush and inverse output mapping (`m1_cycle_driver_v3.py:167–193`). Keep v3.5 capture/observer failure demotion and per-phase CUDA/host observations; do not sum UMA host and CUDA counters. Require the existing actual 12 GiB CUDA-free check inside each owned GPU job, with no standalone query/reclaim or full-model memory-floor substitution.
+
+6. **Reduce raw C0 values against the sealed references in the frozen CPU environment.** Enforce the exact expected cell keys independently for each repeat; detect extra/duplicate/missing cells, wrong policy/preparation, changed bytes and wrong phase. Both RMS and maximum error must obey the unchanged per-cell rule with `kappa=1.1`, `u32=2^-24`, `eta32=2^-149`; no extra BF16 allowance, cross-head pooling, new calibration maximum or favorable-repeat selection. Retain every failed, incomplete or divergent record and issue no speed/full-model/serving claim.
+
+The current v3.5 collector is still an initialization collector: its manifest explicitly says “no numerical pass/fail” and “no qualification” (`:296–306`), it generates its own design-selected operands (`:327–329`) and runs one cycle per method (`:336–338`). The old entry imports v3.2 (`m1_stage_entry_v1_1.py:28–29`). Thus a narrowly versioned held-out entry/pack/collector integration/reducer is genuinely needed; changing a seed argument or relabeling an initialization receipt is insufficient. The existing native pack/collector/reducer also hardcode the two calibration seeds, so their held-out scope must be separately versioned rather than changing or reusing the calibration receipt.
+
+## Denominator and source checks
+
+The qualification manifest is already defined for the exact role string `qualification_M1Q_unopened` and seed 20260929. Preserve this cell-key role when validating its frozen digests; a run's transition to “opened” belongs in stage metadata rather than silently renaming cell identifiers.
+
+| Population | Unique cells |
+|---|---:|
+| First verification, one policy: 48 layers × 28 active nodes × 48 value heads | 64,512 |
+| Durable publications, one policy: 48 layers × 3 paths × 48 value heads | 6,912 |
+| One policy/input | 71,424 |
+| All four policies on the one held-out input population | 285,696 |
+
+Two complete C0 repeats yield 571,392 observations of those 285,696 policy-specific cells, not 571,392 independent cells. Reset S0 is an exact premise, not a scored cell. Verifications 2/3 outputs remain outside the declared population. The native-C1 held-out portion has 71,424 unique cells; the reported calibration run's 142,848 unique cells used **two** seeds and cannot be copied as this denominator.
+
+I independently recomputed all four held-out cell counts and canonical cell-list hashes using the original standard-library observation generator; each matches the sealed manifest. No operand values or Torch/CUDA objects were generated. The source/hash inventory and four recomputed bindings are preserved in `m1-q-prospective-design-review.inputs.json`, SHA `98c8506bf5fd367f3ee090fbad3850f59ce0e8165aacd21e847ac9325fe15f9f`.
+
+| Reviewed authority/source | SHA-256 |
+|---|---|
+| Numerical contract v4.2 | `b98c3af2fd1d7cccf492cc10040a5847b82aefdc940c7570cb777b805ee4ee80` |
+| Observation manifest v1 | `c5dd3936ca2a94caea87b0f3e68794f892e01c5759204d149af10b7daa10c3f3` |
+| Collector v3.5 | `0dc680fa0a9ec81496926b177144ff7211e38fbeb63c37a14b6805384db37f3c` |
+| Measurement amendment v3.1 | `887cca6743daa20950ddd9a3049ee9c728f5d630f2a1c37f9fb7aaa60ed9dc74` |
+| CPU baseline v1.1 | `00d1c8e5a593f2f1377e43aef2002f446a6ffb7c04ef0689b38cdbe163fd721b` |
+| Native-C1 collector v1 | `fa592b675a367394db36a6c235e66c227df74cb5f0d8aa40fd233d445cf9864c` |
+| Existing next-step review | `66fddca7f3a3ffcc56807c5909e937b85035d659d42a3fb7119dbdd02a2474f6` |
+
+No broader experimental axis or additional model boot is needed to make this prospective M1-Q design valid. The remaining blockers are the calibration acceptance before seed opening, the explicit stage-separation/U1 scheduling decision, and the independently reviewed source-bound held-out entry/reducer implementation.

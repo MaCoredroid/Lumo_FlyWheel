@@ -1,0 +1,64 @@
+{
+  "scope": "Independent local stdlib/source audit; synthetic CPU bytes only; no Torch or Triton execution",
+  "sources": {
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_conv_publication_witness_v1.py": "f6c62159852257ee2ff915209e1e46dd39eabb379cccb2a8fddcb054f01dcd23",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_hooks_v4.py": "6ac2870ad178544fdf260237440802d27afbd6184b351e3877f532d9d86bf594",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_patch_candidate_v4.py": "24c136e669033be4b06be1da52b5dafc98d5328e4f5ab3790f189d8f9b930302",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_job_v4.py": "26c6a80471fada85d3e9555a8e0a980cd3bb0f74286bba4f4c45a4c411a47fc6",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_candidate_raw_audit_v3.py": "7f78b7b69144a26471f9ba22725f2df566218ce7ead2d661d3859a7fb42c3f8b",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/q1_target_kv_witness_v1.py": "311b047bcc1bc59809d89f71baf27dc0f178c065d20d48358e408332a081d0d8",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_conv_publication_witness_v1.py": "77c8a33afd4a5b2a17928cc6dd907832b03f94e8faf756ab996adfba8a27082c",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/tools/tests/test_q1_conv_publication_bridge_v4.py": "23abbbc20790986a2343afc4733d4e138066b8c16d52d741cc6db44717309e2a",
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": "d9dd0c697b466180ab5d834a52555c1516edb534e0a3d1bd3094e0d1489c24c8",
+    "src/lumo_flywheel_serving/fr13_tree_conv_fused.py": "564c7dc7ba61ccd9579f2fb7a4af9a2cdaaa1753dfb98434f2011457d90d9a6e",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/workload-plan/inspections/cpu-lumotree-source-20260929T012000Z/result/sources/v1/attention/backends/gdn_attn.py": "970878cacc8c23cd558969d4c3554a7a89a5d484d9887250aa5fc246b6bc4ad6",
+    "papers/gdn-tree-scan-mlsys/v2/experiments/review-response-20260927/runs/q1-candidate-stage1/q1-candidate-stage1-20260929T040755Z/engine.log": "73235cade0b3ea407618afa9c7adfd83c4ccb562124cb395523445b821df0880"
+  },
+  "production_source_map_entries_match": 1088,
+  "all_declared_unique_paths_plan_checked": 28,
+  "synthetic_full_geometry_byte_oracle": "PASS for all48 source capacities67 with nonzero inactive tails,16exactaliasbanks3destinations each",
+  "zero_tail_and_source_copy_routes": "PASS",
+  "o1_materialized_live_tap_bytes": 2949120,
+  "rehash_negatives_and_capacity_control": {
+    "undersized_source35": "B1 source geometry",
+    "null_row_corruption": "convolution publication or untouched guard bytes differ",
+    "destination_corruption": "convolution publication or untouched guard bytes differ",
+    "source_mutation": "source stage changed during commit",
+    "inactive_source_row66_corruption": "source stage changed during commit",
+    "adjacent_guard_corruption": "convolution publication or untouched guard bytes differ",
+    "zero_row35_changed_in_both_snapshots": "source zero row35 is not positive zero",
+    "O1_rehashed_raw_mismatch": "O1 convolution materialized bytes differ"
+  },
+  "production_source_capacity": {
+    "shape": [
+      67,
+      10240
+    ],
+    "B1_source_rows_consumed": 36,
+    "zero_row_index": 35,
+    "freeze_keeps_original_source_reference": true,
+    "corrected_witness_result": "PASS"
+  },
+  "patchproof": {
+    "gpu_model_runner.patched.py": {
+      "pre_sha256": "3d9df101ebb1b2d5e8bc0ca844451b47a935f4adf48f7c6ab4ef81438ce21b79",
+      "post_sha256": "8f899689c56e38b73473695abf1375d22281fc9714fb67a4388b3cfb70fc967d",
+      "inverse_original_bytes": true,
+      "AST_parse": true
+    },
+    "rejection_sampler.patched.py": {
+      "pre_sha256": "7e4691a6e48fdd9426117beb9b91ef1fdd1053578f792b4d670234efba7b0e52",
+      "post_sha256": "ec7991888339cb8182072c8d6226282e77d6cca56364ac7138bf826905b06b5c",
+      "inverse_original_bytes": true,
+      "AST_parse": true,
+      "direct_adjacent_call_order": [
+        "on_conv_before",
+        "_fixed_conv_commit",
+        "on_conv_after",
+        "_fixed_replay"
+      ]
+    }
+  },
+  "local_torch_available": false,
+  "qualification_or_launch_admitted": false
+}

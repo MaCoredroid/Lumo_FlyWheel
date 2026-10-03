@@ -1,0 +1,26 @@
+{
+  "schema": "lumo.paper.native-common-o0-paired.v1",
+  "fixtures_sha256": "607634e19235a58d2b6d73f8260dac3c49f842f9f1cba9a1789f329c56012223",
+  "sources_sha256": "e4f7e3bb7944f197a62b02bad6fa85ca3b4f1792db9be3471b5e02855dc7e343",
+  "freeze_sha256": "ceb210445886cd334c5b266a171d16a8877ad77dde599cd28f451413608371cd",
+  "source": "p0/monitor/review-response-20260927/native-common-o0-repair2-b-independent-20260929/paired-attempt1/RESULT.json",
+  "source_sha256": "0c787fd1e92abd0b39ca05978638956c03562aa527efbe9feaa80a01b7f65cc3",
+  "audit_manifest": "p0/monitor/review-response-20260927/native-common-o0-repair2-b-independent-20260929/paired-attempt1/MANIFEST.json",
+  "audit_manifest_sha256": "52a090538ff795af6ccded7663c49d9d59beefe4af562b4ef9184a570b3b6cf3",
+  "independent_review": "notes/review-response-20260927/native-common-o0-repair2-ab-full-raw-review-20260929.md",
+  "independent_review_sha256": "6ba96b81ea4eeebf02c843fe132a65112e9d47d13418f153a0c39c8143aeefa0",
+  "observations": 336,
+  "cases": 84,
+  "processes": 2,
+  "repeats": 2,
+  "counts": {
+    "common_o0_cases": 84,
+    "o1_identical_cases": 84,
+    "full_logits_identical_cases": 84,
+    "decision_stable_cases": 84,
+    "tie_observations": 4,
+    "target_decision_prerequisite_cases": 84
+  },
+  "scope": "Fixed common target O0, calibration cycle0 A/B xR2 only. Natural-prefill failures preserved; no MTP/candidate/heldout/continuous/workload qualification.",
+  "full_q1_qualified": false
+}

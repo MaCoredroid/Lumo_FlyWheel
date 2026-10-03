@@ -1,0 +1,21 @@
+{
+  "schema": "lumo.paper.native-common-o0-single-process.v1",
+  "source": "p0/monitor/review-response-20260927/native-common-o0-repair2-a-independent-20260929/full-attempt1/RESULT.json",
+  "source_sha256": "2537e907d061e67ff89b13199bb4751ca4b07e57d4205af16ccda2b1a4b62e6d",
+  "independent_review": "notes/review-response-20260927/native-common-o0-repair2-a-full-raw-review-20260929.md",
+  "independent_review_sha256": "187d09bf7b2ce191993f8e34bd1c75b18f07c87de696581c2d0b435666c5c04b",
+  "run_id": "q1-native-common-o0-repair2-20260929T125100Z-aligned_nonpacked-A",
+  "counts": {
+    "case_denominator": 84,
+    "complete_pairs": 84,
+    "decision_stable_pairs": 84,
+    "o0_identical_pairs": 84,
+    "o1_identical_pairs": 84,
+    "full_logits_identical_pairs": 84,
+    "tie_observations": 2
+  },
+  "observations": 168,
+  "scope": "One target-only process,84 predetermined paths,two repeats; no A/B,candidate,MTP,lifecycle or workload qualification",
+  "status": "SINGLE_PROCESS_RESULT_REVIEWED",
+  "full_q1_qualified": false
+}

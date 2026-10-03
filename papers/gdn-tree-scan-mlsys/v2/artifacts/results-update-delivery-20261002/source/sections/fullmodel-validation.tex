@@ -1,0 +1,31 @@
+The full-model comparison covers 33 forced schedules and 147 continuation cycles over seven prefixes of approximately 13,000--60,000 tokens. Each schedule carries published state through four to seven cycles, including root-only acceptance, off-spine paths, deep suffixes, and a cache-page boundary. A common starting-state import removes differences in initial prefill; subsequent cycles use the state actually published by each arm. Every candidate tree forward is checked against all 32 forced input tokens. Appendix~\ref{app:fullmodel-protocol} describes the native controls and fault injections.
+
+Under the preregistered rule, no candidate cycle exceeds the calibrated tolerances, but only one of ten injected faults is detected. The full-model verdict is therefore \textit{inconclusive}. The rule sets tolerances to four times the largest native calibration distance, yielding relative-state bounds of 1.05--1.59. A low candidate violation count under these insensitive bounds cannot establish equivalence. Next-token greedy agreement with the sequential reference holds on 131 of 147 cycles; the native packed-kernel variant also agrees on 131, the independent process control on 145, and the cache-capacity control on all 147.
+
+\paragraph{Disclosed post-hoc state analysis}
+After inspecting the frozen result, we compare each cycle's state distance with the native controls at that same cycle, rather than a run-wide maximum. For state surface $s$ and cycle $c$, define
+\begin{equation}
+ R_s(c)=\max\{0.02,d_s(B,A;c),d_s(V,A;c),d_s(P,A;c)\},
+\end{equation}
+where $d_s$ is the maximum per-layer relative $L_2$ distance, $A$ is the sequential reference, and $B$, $V$, and $P$ are the native controls. The floor 0.02 is inherited from the frozen protocol. Table~\ref{tab:posthoc-state} reports the largest candidate-to-$R_s$ ratio. All candidate state ratios are below 1.30; all eight injected state-fault observations exceed 2.83 on at least one targeted surface. These data describe a separation under a rule chosen after seeing outcomes, not an independent acceptance test.
+
+\begin{table}[t]
+\caption{Post-hoc state-distance ratios over 147 cycles. The denominator is the largest same-cycle native-control distance, floored at 0.02. Ratios are rounded; the preregistered verdict remains inconclusive.}
+\label{tab:posthoc-state}
+\centering\small
+\begin{tabular}{@{}lr@{}}
+\toprule
+State surface & Maximum candidate ratio \\
+\midrule
+GDN recurrent state & 1.137 \\
+Convolution history & 1.290 \\
+KV at newly committed positions & 1.174 \\
+KV at earlier positions & 1.127 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Next-token logits require separate interpretation. Candidate KL divergence from the sequential reference has median 0.043, 90th percentile 0.113, and maximum 0.491; the native packed-kernel variant records 0.043, 0.093, and 0.490. Their equal greedy-disagreement counts do not establish identical logits or flip locations. The two stale-input controls produce KL values 0.78 and 1.66, above every clean candidate value. State-fault separation and these logit summaries do not jointly certify full-model equivalence.
+
+\paragraph{Sampled-output diagnostic}
+Ten fresh boots collect 8,000 continuations in total: four plain-decoding controls, three \sys{} boots, two MTP-5 boots, and one temperature-change control. Each boot samples 40 continuations for each of 20 requests. The statistic sums marginal total-variation distances over the first sixteen parsed-output token positions, with short outputs padded by an end category, and subtracts a within-request permutation mean. The maximum excess between plain-decoding boots is 29.38, while the temperature-change control's mean excess is 22.00. The preregistered sensitivity requirement therefore fails, making every candidate verdict uninformative. This diagnostic neither establishes nor rejects distribution preservation.

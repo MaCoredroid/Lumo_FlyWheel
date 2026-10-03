@@ -1,0 +1,14 @@
+{
+  "schema": "independent-pdf-changed-page-review-v1",
+  "status": "PASS",
+  "pdf": "artifacts/working-source-20260929T151300Z/clean-build/main.pdf",
+  "pdf_sha256": "2b5fb87995f751f2d1dfb70ccef97406866b9f316f258b3e46d5a11eb3987b0b",
+  "page": 11,
+  "render_dpi": 160,
+  "render": "artifacts/working-source-20260929T151300Z/render-review/page-11.png",
+  "render_sha256": "13e5f630e5c47a4884797affef07d43e5ade1c8248df8572ecf3a05246b13da9",
+  "visual_findings": [],
+  "disposition": "Paired 336-observation/84-path result and four tie observations are legible. Target-only limitations continue at right-column top without clipping or overlap. Original natural-prefill adverse result remains visible. No whole-document visual re-review claimed.",
+  "campaign_complete": false,
+  "published": false
+}

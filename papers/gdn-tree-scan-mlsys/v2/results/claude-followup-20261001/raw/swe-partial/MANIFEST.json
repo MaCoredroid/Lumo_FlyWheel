@@ -1,0 +1,218 @@
+[
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-13977/eval/eval_report.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-13977/eval/eval_report.json",
+    "bytes": 505,
+    "sha256": "7d929e4d74b606d8be10dab70f4254ba40d467da0fcd5e3cfed191e6bde2117e"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-13977/eval/predictions.jsonl",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-13977/eval/predictions.jsonl",
+    "bytes": 1175,
+    "sha256": "25f63859215494b991e8f3df1b212c473a6df813d820a8bff3959bbc7f6200a6"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-13977/fixed32_task_boundary.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-13977/fixed32_task_boundary.json",
+    "bytes": 2114,
+    "sha256": "d5db2c81d746e44b71b67de83a07e9a1491bd299473a8614b00db840b62d025f"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-13977/qwen_runtime_attestation.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-13977/qwen_runtime_attestation.json",
+    "bytes": 2962,
+    "sha256": "00e199445afc6702b12b58d295c5ef853541a32c98cb5d15e2017ad10b184d01"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-13977/vllm_metrics_post.txt",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-13977/vllm_metrics_post.txt",
+    "bytes": 69075,
+    "sha256": "606f638ef702011141f33ec4cfbf1de831cd5f0eab79604711c78959ba2689b9"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-13977/vllm_metrics_pre.txt",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-13977/vllm_metrics_pre.txt",
+    "bytes": 67179,
+    "sha256": "e9e2c1bd0496c99f427ac8d6aaf291c486e78adba5661b81a9633a3e2c0d2b2f"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14096/eval/eval_report.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14096/eval/eval_report.json",
+    "bytes": 506,
+    "sha256": "4682955e51be42a43be900ed3f083de8e2bee0c1b00bd18ccdd5426fb538e352"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14096/eval/predictions.jsonl",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14096/eval/predictions.jsonl",
+    "bytes": 1398,
+    "sha256": "6720598c5d79aeb58aa85cbfa4c44349232573b8f9d5aaaddc867748b3d110d6"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14096/fixed32_task_boundary.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14096/fixed32_task_boundary.json",
+    "bytes": 2120,
+    "sha256": "0414f550d772cb530ba2e4226af30b73394dba35b9af0e2d1a0729aa73d5159d"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14096/qwen_runtime_attestation.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14096/qwen_runtime_attestation.json",
+    "bytes": 2962,
+    "sha256": "00e199445afc6702b12b58d295c5ef853541a32c98cb5d15e2017ad10b184d01"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14096/vllm_metrics_post.txt",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14096/vllm_metrics_post.txt",
+    "bytes": 69091,
+    "sha256": "cc1bb1bb39d04af4ae3c8ab12a401bea7e1077f5bd0a5ece14cdc4e02c942c6b"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14096/vllm_metrics_pre.txt",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14096/vllm_metrics_pre.txt",
+    "bytes": 69076,
+    "sha256": "38770d2a97fea446da916a645328acdad4ad490e3d6437a7577fe8fc672274e0"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14182/eval/eval_report.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14182/eval/eval_report.json",
+    "bytes": 504,
+    "sha256": "e313603a35db377866546ebccd437c25a80c49383889084ec04330779bc53e17"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14182/eval/predictions.jsonl",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14182/eval/predictions.jsonl",
+    "bytes": 975,
+    "sha256": "e7ccc00e4313c87c796284f0b5e6744464a1cf97477eb0ae9fe65e609da142db"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14182/fixed32_task_boundary.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14182/fixed32_task_boundary.json",
+    "bytes": 2120,
+    "sha256": "726c62a0cc33fc62878be85947d11119fd5eba2317a6df59532ae54a84abfecd"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14182/qwen_runtime_attestation.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14182/qwen_runtime_attestation.json",
+    "bytes": 2962,
+    "sha256": "00e199445afc6702b12b58d295c5ef853541a32c98cb5d15e2017ad10b184d01"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14182/vllm_metrics_post.txt",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14182/vllm_metrics_post.txt",
+    "bytes": 69092,
+    "sha256": "9362f6cfce642646725a409f06cbeaa95ece74cc6e3e8e9cba9974cad06e98cd"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14182/vllm_metrics_pre.txt",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14182/vllm_metrics_pre.txt",
+    "bytes": 69091,
+    "sha256": "456e78a69d36d54fdbb512dbb416b9f9a9d22ef5f878b9647d5f910208f8a4b0"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14309/eval/eval_report.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14309/eval/eval_report.json",
+    "bytes": 506,
+    "sha256": "a2621cdc63818f80f05fbc69e8203e1c382ed18f2f0ce8e1473adc00aa2936cd"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14309/eval/predictions.jsonl",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14309/eval/predictions.jsonl",
+    "bytes": 739,
+    "sha256": "ba1d93cd4704c1e5a844f5aa053f219839849dcea19df30c2f5c76189248fdef"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14309/fixed32_task_boundary.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14309/fixed32_task_boundary.json",
+    "bytes": 2119,
+    "sha256": "6794254a760042db8df49320806d96e31f15db73d98448847ef008bd647b1507"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14309/qwen_runtime_attestation.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14309/qwen_runtime_attestation.json",
+    "bytes": 2962,
+    "sha256": "00e199445afc6702b12b58d295c5ef853541a32c98cb5d15e2017ad10b184d01"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14309/vllm_metrics_post.txt",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14309/vllm_metrics_post.txt",
+    "bytes": 69229,
+    "sha256": "c83a94c7095026dae7c6e80ba34ae24268952338cdc28898e626d1b2e3c970de"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14309/vllm_metrics_pre.txt",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14309/vllm_metrics_pre.txt",
+    "bytes": 69092,
+    "sha256": "69ec9973277545a0d7e02f475007d353502016389ec10d8f85a8d8ec2104f6e2"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14365/eval/eval_report.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14365/eval/eval_report.json",
+    "bytes": 505,
+    "sha256": "2322ec5e825f29828826b71533062706bf822cf857aae7ef32cc5b84071a0b2b"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14365/eval/predictions.jsonl",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14365/eval/predictions.jsonl",
+    "bytes": 721,
+    "sha256": "ee7646b9ec46e49fbf84f22fa849a538ee726a5ed9e7854c598ad40a59bb10c7"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14365/fixed32_task_boundary.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14365/fixed32_task_boundary.json",
+    "bytes": 2126,
+    "sha256": "e6726e17afd53784dd8170843e7877d9c7eccd4f8c7bd3592ce0cc52b61b4880"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14365/qwen_runtime_attestation.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14365/qwen_runtime_attestation.json",
+    "bytes": 2962,
+    "sha256": "00e199445afc6702b12b58d295c5ef853541a32c98cb5d15e2017ad10b184d01"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14365/vllm_metrics_post.txt",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14365/vllm_metrics_post.txt",
+    "bytes": 69276,
+    "sha256": "d0bda60917e3c42c498c019eb266b5ff74ebf00d78c79a1a99c64fecb04b6a9c"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14365/vllm_metrics_pre.txt",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14365/vllm_metrics_pre.txt",
+    "bytes": 69229,
+    "sha256": "43217371ae2534253218abed15298d8d5cba02f0f9d561113f90056d94393197"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14369/eval/eval_report.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14369/eval/eval_report.json",
+    "bytes": 505,
+    "sha256": "0da9ef4dba94cc45bc661551565b46b7fc59f6051d94ec5be7288913fc30da8a"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14369/eval/predictions.jsonl",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14369/eval/predictions.jsonl",
+    "bytes": 13262,
+    "sha256": "540e462f4522dbecbb55aa96301a234442b083ccb23ee8c91e41da6fb020458b"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14369/fixed32_task_boundary.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14369/fixed32_task_boundary.json",
+    "bytes": 2134,
+    "sha256": "522a94c219bd17ff46b110b2df69eaca09b5e3dc25aa53f555c97e031e7c8c9d"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14369/qwen_runtime_attestation.json",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14369/qwen_runtime_attestation.json",
+    "bytes": 2962,
+    "sha256": "00e199445afc6702b12b58d295c5ef853541a32c98cb5d15e2017ad10b184d01"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14369/vllm_metrics_post.txt",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14369/vllm_metrics_post.txt",
+    "bytes": 69303,
+    "sha256": "62f7046cf7dc2e525e707d36e4337e344fa2882a92a6c9c1c17ac6a224d0e6b5"
+  },
+  {
+    "path": "swe_out/verified/per_task/astropy__astropy-14369/vllm_metrics_pre.txt",
+    "remote_path": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/swe_out/verified/per_task/astropy__astropy-14369/vllm_metrics_pre.txt",
+    "bytes": 69276,
+    "sha256": "1785f756ce0b1d01ec071132f024ae625b553d59dc915f08d6d8076cc5a7af04"
+  }
+]

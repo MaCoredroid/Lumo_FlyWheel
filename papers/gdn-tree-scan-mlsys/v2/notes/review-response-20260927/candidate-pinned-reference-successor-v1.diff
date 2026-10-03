@@ -1,0 +1,153 @@
+--- q1_candidate_job_joint_v1.py
++++ q1_candidate_job_joint_kernel_ref_v1.py
+@@ -14,7 +14,7 @@
+ 
+ import q1_candidate_case_binding_v2 as B
+ import q1_native_corpus_v1 as N
+-import q1_native_joint_common_o0_plan_v1 as Plan
++import q1_native_joint_kernel_pin_plan_v1 as Plan
+ import q1_joint_categorical_v1 as Cat
+ import q1_joint_common_o0_sources_v1 as Sources
+ from q1_candidate_job import ENV_PINS, REQUEST, TERMINAL_TOKEN
+--- q1_candidate_joint_gate_v1.py
++++ q1_candidate_joint_kernel_ref_gate_v1.py
+@@ -12,7 +12,7 @@
+ 
+ import q1_candidate_case_binding_v2 as B
+ import q1_candidate_job as S
+-import q1_candidate_job_joint_v1 as J
++import q1_candidate_job_joint_kernel_ref_v1 as J
+ import q1_native_corpus_v1 as N
+ 
+ 
+--- run_q1_candidate_joint_v1.sh
++++ run_q1_candidate_joint_kernel_ref_v1.sh
+@@ -35,7 +35,7 @@
+   [required_tree_flags]="$REPO/scripts/fr13_required_tree_flags.sh" [gpu_oom_guard]="$REPO/scripts/gpu_oom_guard.sh" [reference_hooks_v2]="$TOOLS/q1_reference_hooks_v2.py" [diag_workload_manifest]="$DIAG_MANIFEST"
+   [mtp_kv_witness]="$TOOLS/q1_mtp_kv_publication_witness_v1.py"
+   [hidden_bridge]="$TOOLS/q1_hidden_publication_bridge_v1.py" [hidden_live]="$TOOLS/q1_hidden_publication_live_v1.py" [hidden_witness]="$TOOLS/q1_hidden_publication_witness_v1.py" [hidden_event_binding]="$TOOLS/q1_hidden_event_binding_v1.py"
+-  [hooks]="$TOOLS/q1_candidate_hooks_joint_v1.py" [patcher]="$TOOLS/q1_patch_candidate_joint_v1.py" [hydration_v4]="$TOOLS/q1_candidate_hydration_v4.py" [hydration_v1]="$TOOLS/q1_candidate_hydration.py" [kv_reblocking]="$TOOLS/q1_candidate_kv_reblocking_v1.py" [candidate_state_audit]="$TOOLS/q1_candidate_state_audit_v2.py" [forced_acceptance]="$TOOLS/q1_forced_acceptance.py" [swap_observer]="$TOOLS/q1_swap_observe_v1.py" [diagnostic_swap_policy]="$MON/Q1-DIAGNOSTIC-EXISTING-SWAP-POLICY-v1.json" [validation_interpreter_record]="$REPO/$C/identity/review-worktree-venv.provisioning-record.v1.json" [host_validation_binding]="$REPO/$C/identity/host-validation-binding.v1.json" [host_validation_verifier]="$TOOLS/q1_host_validation_binding_v1.py" [job_builder]="$TOOLS/q1_candidate_job_joint_v1.py" [stage1_job_lib]="$TOOLS/q1_candidate_job.py" [job_builder_v2]="$TOOLS/q1_candidate_job_v2.py" [layer_registry]="$TOOLS/q1_candidate_layer_registry_v1.py" [target_kv_witness]="$TOOLS/q1_target_kv_witness_v1.py" [conv_publication_witness]="$TOOLS/q1_conv_publication_witness_v2.py" [replay_publication_witness]="$TOOLS/q1_replay_publication_witness_v1.py" [case_binding]="$TOOLS/q1_candidate_case_binding_v2.py" [corpus_tool]="$TOOLS/q1_native_corpus_v1.py" [native_corpus]="$NATIVE_CORPUS" [native_reduction]="$NATIVE_REDUCTION" [native_result_acceptance]="$NATIVE_RESULT" [stage1_result_acceptance]="$STAGE1_RESULT" [prepared_job]="$PREPARED_JOB" [cycle0_gate]="$TOOLS/q1_candidate_joint_gate_v1.py" [model_config]="$REPO/$C/workload-plan/inspections/codex-worker-binding-20260928T225042Z/config.json" [driver]="$TOOLS/q1_candidate_driver_joint_v1.py" [candidate_seal_auth]="$TOOLS/q1_candidate_joint_seal_auth_v1.py" [reducer]="$TOOLS/q1_candidate_joint_full_audit_v1.py"
++  [hooks]="$TOOLS/q1_candidate_hooks_joint_v1.py" [patcher]="$TOOLS/q1_patch_candidate_joint_v1.py" [hydration_v4]="$TOOLS/q1_candidate_hydration_v4.py" [hydration_v1]="$TOOLS/q1_candidate_hydration.py" [kv_reblocking]="$TOOLS/q1_candidate_kv_reblocking_v1.py" [candidate_state_audit]="$TOOLS/q1_candidate_state_audit_v2.py" [forced_acceptance]="$TOOLS/q1_forced_acceptance.py" [swap_observer]="$TOOLS/q1_swap_observe_v1.py" [diagnostic_swap_policy]="$MON/Q1-DIAGNOSTIC-EXISTING-SWAP-POLICY-v1.json" [validation_interpreter_record]="$REPO/$C/identity/review-worktree-venv.provisioning-record.v1.json" [host_validation_binding]="$REPO/$C/identity/host-validation-binding.v1.json" [host_validation_verifier]="$TOOLS/q1_host_validation_binding_v1.py" [job_builder]="$TOOLS/q1_candidate_job_joint_kernel_ref_v1.py" [stage1_job_lib]="$TOOLS/q1_candidate_job.py" [job_builder_v2]="$TOOLS/q1_candidate_job_v2.py" [layer_registry]="$TOOLS/q1_candidate_layer_registry_v1.py" [target_kv_witness]="$TOOLS/q1_target_kv_witness_v1.py" [conv_publication_witness]="$TOOLS/q1_conv_publication_witness_v2.py" [replay_publication_witness]="$TOOLS/q1_replay_publication_witness_v1.py" [case_binding]="$TOOLS/q1_candidate_case_binding_v2.py" [corpus_tool]="$TOOLS/q1_native_corpus_v1.py" [native_corpus]="$NATIVE_CORPUS" [native_reduction]="$NATIVE_REDUCTION" [native_result_acceptance]="$NATIVE_RESULT" [stage1_result_acceptance]="$STAGE1_RESULT" [prepared_job]="$PREPARED_JOB" [cycle0_gate]="$TOOLS/q1_candidate_joint_kernel_ref_gate_v1.py" [model_config]="$REPO/$C/workload-plan/inspections/codex-worker-binding-20260928T225042Z/config.json" [driver]="$TOOLS/q1_candidate_driver_joint_v1.py" [candidate_seal_auth]="$TOOLS/q1_candidate_joint_seal_auth_v1.py" [reducer]="$TOOLS/q1_candidate_joint_full_audit_v1.py"
+   [reference_hooks_v2_1]="$TOOLS/q1_reference_hooks_v2_1.py" [reference_driver_v2]="$TOOLS/q1_reference_driver_v2.py" [seams]="$REPO/$C/fullmodel/Q1-CANDIDATE-SEAMS.v1.json" [launch_env]="$REPO/$C/fullmodel/candidate-launch-env.v2.5.json" [launch_env_v2_1]="$REPO/$C/fullmodel/candidate-launch-env.v2.1.json" [launch_env_v2]="$REPO/$C/fullmodel/candidate-launch-env.v2.json" [host_env]="$HOST_ENV" [launch_env_renderer]="$TOOLS/q1_candidate_launch_env_v2_5.py" [launch_env_renderer_v2_1]="$TOOLS/q1_candidate_launch_env_v2_1.py" [launch_env_renderer_v2]="$TOOLS/q1_candidate_launch_env_v2.py" [readiness_consumer]="$READINESS_CONSUMER" [probe_manifest]="$PROBE"
+   [generated_runner]="$REPO/$C/identity/generated_source/probe-20260928T035847Z/logs/generated/gpu_model_runner.patched.py" [generated_rejection_sampler]="$REPO/$C/identity/generated_source/probe-20260928T035847Z/logs/generated/rejection_sampler.patched.py"
+   [token_fixtures]="$REPO/$C/fullmodel/fixtures/token-fixtures.v1.json" [prefix_token_ids]="$REPO/$C/prefix-plan/selected/calibration-short_available/token-ids.u32le" [native_run_receipt]="$NATIVE_DIR/RUN-RECEIPT.json"
+@@ -75,6 +75,30 @@
+ REVIEWED[closure_q1_spec_off_engine_config_v2_1]="$TOOLS/q1_spec_off_engine_config_v2_1.py"
+ REVIEWED[closure_q1_spec_off_joint_source_config_v1]="$TOOLS/q1_spec_off_joint_source_config_v1.py"
+ REVIEWED[accepted_base_diag_launcher]="$TOOLS/generated/fr14_leg3_launch_nomiddleware.q1diag.v3_9.sh"
++# Additional exact native-reference source/data identities; candidate runtime unchanged.
++REVIEWED[native_reference_bulk_snapshot]="$REPO/$C/tools/q1_native_kv_snapshot_bulk_v1.py"
++REVIEWED[native_reference_cleanup_lib]="$REPO/$C/tools/q1_native_smoke_cleanup_v2_3.sh"
++REVIEWED[native_reference_config]="$REPO/$C/tools/q1_spec_off_joint_kernel_pin_config_v1.py"
++REVIEWED[native_reference_corpus_tool]="$REPO/$C/tools/q1_native_joint_kernel_pin_plan_v1.py"
++REVIEWED[native_reference_driver_v2]="$REPO/$C/tools/q1_reference_driver_joint_common_o0_v1.py"
++REVIEWED[native_reference_fa2_install]="$REPO/$C/tools/q1_reference_fa2_install.py"
++REVIEWED[native_reference_fa2_source_index]="$REPO/$C/identity/native_source/fa2_source_index.json"
++REVIEWED[native_reference_hooks]="$REPO/$C/tools/q1_reference_hooks_joint_common_o0_v1.py"
++REVIEWED[native_reference_kernel_cache]="$REPO/$C/runs/q1-native-mtp-interference/q1-native-mtp-kernels-20260930T000700Z-A/q1_ref/runtime_diagnostic/flashinfer-autotune.json"
++REVIEWED[native_reference_kernel_pin_hooks]="$REPO/$C/tools/q1_native_joint_kernel_pin_hooks_v1.py"
++REVIEWED[native_reference_kernel_pin_loader]="$REPO/$C/tools/q1_flashinfer_cache_pin_v1.py"
++REVIEWED[native_reference_kernel_pin_patch]="$REPO/$C/tools/q1_native_joint_kernel_pin_patch_v1.py"
++REVIEWED[native_reference_launcher]="$REPO/$C/tools/run_q1_native_joint_kernel_pin_v1.sh"
++REVIEWED[native_reference_local_q1_native_joint_common_o0_v1]="$REPO/$C/tools/q1_native_joint_common_o0_v1.py"
++REVIEWED[native_reference_local_q1_patch_native_mtp_joint_common_o0_v1]="$REPO/$C/tools/q1_patch_native_mtp_joint_common_o0_v1.py"
++REVIEWED[native_reference_local_q1_reference_hooks_common_o0_v2]="$REPO/$C/tools/q1_reference_hooks_common_o0_v2.py"
++REVIEWED[native_reference_local_q1_spec_off_joint_common_o0_config_v1]="$REPO/$C/tools/q1_spec_off_joint_common_o0_config_v1.py"
++REVIEWED[native_reference_memory_runner]="$REPO/$C/tools/memory_recovery_v2_8.py"
++REVIEWED[native_reference_patcher]="$REPO/$C/tools/q1_apply_native_mtp_joint_common_o0_v1.py"
++REVIEWED[native_reference_q1_reference_hooks_v2_2_mtp]="$REPO/$C/tools/q1_reference_hooks_v2_2_mtp.py"
++REVIEWED[native_reference_q1_reference_hooks_v2_4_mtp]="$REPO/$C/tools/q1_reference_hooks_v2_4_mtp.py"
++REVIEWED[native_reference_readiness_consumer]="$REPO/$C/tools/q1_readiness_consumer_v1.py"
++REVIEWED[native_reference_stock_runner_copy]="$REPO/$C/identity/native_source/vllm__v1__worker__gpu_model_runner.py"
+ if [[ "${1:-}" == "--print-dependency-hashes" ]]; then for k in "${!REVIEWED[@]}"; do [[ -f "${REVIEWED[$k]}" ]] && printf '%s %s\n' "$k" "$(sha "${REVIEWED[$k]}")"; done | sort; exit 0; fi
+ echo "RUN_ID=$RUN_ID OUT=$OUT CONTAINER=$CONTAINER ARM=$ARM CASE=$CASE REPEATS=$REPEATS"
+ DRY=0; [[ "${1:-}" == "--dry-run" ]] && DRY=1
+@@ -94,7 +118,7 @@
+     with open(path,'rb') as f: digest=hashlib.file_digest(f,'sha256').hexdigest()
+     if digest != rh.get(key): raise SystemExit('reviewed dependency hash mismatch: '+key)
+ sys.path.insert(0,tools)
+-from q1_candidate_joint_gate_v1 import validate
++from q1_candidate_joint_kernel_ref_gate_v1 import validate
+ result=validate(g,paths,run_id=run_id,process=process,output=os.environ['CAND_EXPECTED_OUT'],native_run=native_run,native_dir=native_dir)
+ print(json.dumps(result))
+ PYGATE
+--- q1_candidate_joint_parent_plan_v1.py
++++ q1_candidate_joint_kernel_ref_parent_plan_v1.py
+@@ -10,8 +10,8 @@
+ import os
+ import re
+ 
+-WRAPPER_SHA = '4320bfb110179ee4dd5e2402e7e72cb788e5c403b918f23bd39b8d005cb60a8b'
+-FREEZE_SHA = '6ad7cc5f8e9872b3f79abce8134cee7d351c0f00525f8335d9d2b8e8fdb4b7c6'
++WRAPPER_SHA = '87ba77e5bf87d281d895496556e9a43fea1f19672edd4456a855c8b5c63480ee'
++FREEZE_SHA = '82c70e3669d5891160c3b637861ca43513db4291542109ee8c0f98d8722300fb'
+ STAGE1_GATE_SHA = 'a29db844567f45053f88af2a3430b9e8e181c1746e6ded54c22b263322ba53bd'
+ # Existing independently reviewed operational/identity successors outside the
+ # joint scientific62-file freeze. These pins do not authorize an operation.
+@@ -49,7 +49,7 @@
+     campaign = repo / CAMPAIGN_REL
+     tools = campaign / 'tools'
+     monitor = campaign.parents[1] / 'p0/monitor/review-response-20260927'
+-    wrapper = tools / 'run_q1_candidate_joint_v1.sh'
++    wrapper = tools / 'run_q1_candidate_joint_kernel_ref_v1.sh'
+     require(sha(wrapper) == WRAPPER_SHA, 'candidate wrapper changed')
+     variables = dict(REPO=str(repo), C=str(CAMPAIGN_REL), MON=str(monitor), TOOLS=str(tools),
+                      TIERB_RES=str(repo / 'results/fr14_nvfp4_port_20260816'),
+@@ -68,7 +68,7 @@
+                      STAGE1_RESULT=str(stage1_acceptance), PREPARED_JOB=str(prepared_job))
+     text = wrapper.read_text().split('if [[ "${1:-}" == "--print-dependency-hashes" ]]')[0]
+     assignments = re.findall(r'\[([A-Za-z0-9_]+)\]="([^"]+)"', text)
+-    require(len(assignments) == len({key for key, _ in assignments}) == 112, 'duplicate/missing wrapper dependency')
++    require(len(assignments) == len({key for key, _ in assignments}) == 135, 'duplicate/missing wrapper dependency')
+     paths = {}
+     for key, value in assignments:
+         def replace(match):
+@@ -100,7 +100,7 @@
+                                       native_reduction=paths['native_reduction'], native_acceptance=paths['native_result_acceptance'],
+                                       stage1_acceptance=paths['stage1_result_acceptance'], prepared_job=paths['prepared_job'])
+     require(paths == expected_paths, 'dependency table differs from exact frozen wrapper')
+-    freeze_path = campaign / 'FREEZE-Q1-CANDIDATE-JOINT-v1.json'
++    freeze_path = campaign / 'FREEZE-Q1-CANDIDATE-JOINT-KERNEL-REF-v1.json'
+     require(sha(freeze_path) == FREEZE_SHA, 'candidate source freeze changed')
+     freeze = json.loads(freeze_path.read_bytes())
+     frozen = {}
+@@ -137,7 +137,7 @@
+                                       authority_dir=str(campaign / 'runs/memory-recovery')),
+                 readiness_treatment_disposition='settled_recovery_receipt_required',
+                 scientific_criteria_changed=False, full_Q1_qualification=False, workload_attempt_authorized=False)
+-    import q1_candidate_joint_gate_v1 as Admission
++    import q1_candidate_joint_kernel_ref_gate_v1 as Admission
+     Admission.validate(gate, paths, run_id=run_id, process=process, output=output,
+                        native_run=native_run, native_dir=native_dir, now=now)
+     return gate
+--- q1_candidate_joint_pair_reduce_v1.py
++++ q1_candidate_joint_kernel_ref_pair_reduce_v1.py
+@@ -12,7 +12,7 @@
+ 
+ HERE = Path(__file__).resolve().parent
+ PAPER = HERE.parents[2]
+-FREEZE_SHA = '6ad7cc5f8e9872b3f79abce8134cee7d351c0f00525f8335d9d2b8e8fdb4b7c6'
++FREEZE_SHA = '82c70e3669d5891160c3b637861ca43513db4291542109ee8c0f98d8722300fb'
+ 
+ 
+ def require(ok, message):
+@@ -38,7 +38,7 @@
+ 
+ 
+ def source_check():
+-    freeze = checked(HERE.parent / 'FREEZE-Q1-CANDIDATE-JOINT-v1.json', FREEZE_SHA)
++    freeze = checked(HERE.parent / 'FREEZE-Q1-CANDIDATE-JOINT-KERNEL-REF-v1.json', FREEZE_SHA)
+     for row in freeze['files']:
+         path = PAPER / row['path']
+         require(path.is_file() and path.stat().st_size == row['bytes'] and sha(path) == row['sha256'],
+@@ -156,8 +156,8 @@
+     source_check()  # Verify the accepted dependency closure before importing it.
+     import q1_candidate_joint_full_audit_v1 as A
+     import q1_joint_categorical_v1 as Cat
+-    import q1_native_joint_common_o0_plan_v1 as Plan
+-    import q1_candidate_job_joint_v1 as Job
++    import q1_native_joint_kernel_pin_plan_v1 as Plan
++    import q1_candidate_job_joint_kernel_ref_v1 as Job
+     acceptance = checked(native_acceptance, native_acceptance_sha)
+     cm, native = read(corpus), read(native_reduction)
+     require(acceptance['gate'] == 'Q1-NATIVE-JOINT-COMMON-O0-RESULT' and acceptance['approved'] is True,
