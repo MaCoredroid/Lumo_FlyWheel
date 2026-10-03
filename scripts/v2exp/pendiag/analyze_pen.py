@@ -80,8 +80,17 @@ def build(step):
             dep[j] = topk_topp((pre + d_obs) / T_, exact_k=True)
             cor[j] = topk_topp((pre + c_cor) / T_, exact_k=False)
         rows[kind] = (dep, cor)
-    drafts = torch.tensor([pos[t] for t in spec])
-    return rows, drafts, hist, V
+    # compress to the columns that are finite in any processed row, plus the draft tokens (order preserved)
+    keep = torch.zeros(V, dtype=torch.bool)
+    for dep, cor in rows.values():
+        keep |= torch.isfinite(dep).any(0) | torch.isfinite(cor).any(0)
+    for t in spec:
+        keep[pos[t]] = True
+    idx = keep.nonzero().flatten()
+    remap = {int(c): i for i, c in enumerate(idx.tolist())}
+    rows = {k: (d[:, idx].contiguous(), c[:, idx].contiguous()) for k, (d, c) in rows.items()}
+    drafts = torch.tensor([remap[pos[t]] for t in spec])
+    return rows, drafts, hist, int(idx.numel())
 
 
 def tv(a, b):
@@ -121,10 +130,14 @@ def main():
                       "target_rows_shifted": (torch.roll(td, 1, 0), sd, None)}
             u = torch.rand(walks, int(M.T.WALK_CAP), 3); u[:, :, 1] = u[:, :, 0]
             faults["correlated_uniforms"] = (td, sd, u)
+            u2 = torch.rand(walks, int(M.T.WALK_CAP), 3); u2[:, :, 1] = 0.0
+            faults["always_accept"] = (td, sd, u2)
+            u3 = torch.rand(walks, int(M.T.WALK_CAP), 3); u3[:, :, 2] = 0.5
+            faults["fixed_residual_draw"] = (td, sd, u3)
             nt = td.clone(); ns = sd.clone()
             rec["faults"] = {}
             for name, (a, b, uu) in faults.items():
-                if name == "correlated_uniforms":
+                if uu is not None:
                     r = M.test(td, sd, drafts, td, sd, walks, uniforms=uu)
                 else:
                     r = M.test(a, b, drafts, td, sd, walks)

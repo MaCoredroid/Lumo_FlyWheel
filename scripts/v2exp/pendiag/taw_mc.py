@@ -87,14 +87,16 @@ def expected(target, selfr, ch):
 
 def g_test(cnt, p):
     n = int(cnt.sum())
+    if bool((cnt[p <= 0] > 0).any()):      # a token with zero target probability was emitted: impossible event
+        return float("inf"), 0.0, n
     e = p * n
     big = e >= 5
     obs = torch.cat([cnt[big].double(), cnt[~big].double().sum().view(1)])
     ex = torch.cat([e[big], e[~big].sum().view(1)])
     keep = ex > 0
     obs, ex = obs[keep], ex[keep]
-    if (obs[ex == 0] > 0).any():
-        return float("inf"), 0.0, n
+    if obs.numel() < 2:                       # single support bin: only the zero-probability check applies
+        return 0.0, 1.0, n
     g = 2 * float((obs[obs > 0] * (obs[obs > 0] / ex[obs > 0]).log()).sum())
     df = max(1, int(keep.sum()) - 1)
     # Wilson-Hilferty chi-square tail
