@@ -1,0 +1,41 @@
+### PROBE rows=1 k=2048 n=355584 pat=random
+DEVICE name=NVIDIA GB10 cc=12.1 sms=48 sharedPerBlockOptin=101376 sharedPerBlock=49152 sharedPerMultiprocessor=102400
+CONST kThreadsPerBlock=1024 RADIX_THRESHOLD=22016 kSmemMedium=35968 kFixedSmemLarge=2080 kDetMaxCtasPerGroup=64 det_fixed512=6400 det_fixed1024=6400 det_fixed2048=6400
+DIAG rows=1 k=2048 n=355584 pat=random rep=0 sms=48 optin=101376 eff_smem=35968 vec=4 static_smem=4256 avail=29632 max_chunk=7408 active_w=355584 ctas0=48 chunk0=7408 smem_pre_det=35968 det_want=94464 dyn_cap=97120 smem=94464 occ=1 coop=1 hw_cap=48 max_res=48 groups=1 total_ctas=48 ctas_pg=48 chunk=7408 FORCE_SINGLE_CTA=0 status=0 took_sampled=0 took_filtered=0 expected_rej=0 msg=""
+RESULT rows=1 k=2048 n=355584 pat=random rep=0 rep=0 outcome=PASS exact=1 repro=1 poison_left=0 ms=2.925 force_single_cta=0 detail=""
+SUMMARY rows=1 k=2048 n=355584 pat=random all_pass=1
+PROBE_EXIT=0
+### PROBE rows=1 k=2048 n=355588 pat=random
+DEVICE name=NVIDIA GB10 cc=12.1 sms=48 sharedPerBlockOptin=101376 sharedPerBlock=49152 sharedPerMultiprocessor=102400
+CONST kThreadsPerBlock=1024 RADIX_THRESHOLD=22016 kSmemMedium=35968 kFixedSmemLarge=2080 kDetMaxCtasPerGroup=64 det_fixed512=6400 det_fixed1024=6400 det_fixed2048=6400
+INSTR single_cta_branch force_single_cta=1 seq_len=355588 ctas_per_group=1 gridDim=1 det_smem_bytes=94464
+INSTR det_select_row n=355588 smem_bytes=94464 fixed=6400 CACHED=0
+DIAG rows=1 k=2048 n=355588 pat=random rep=0 sms=48 optin=101376 eff_smem=35968 vec=4 static_smem=4256 avail=29632 max_chunk=7408 active_w=355588 ctas0=49 chunk0=7260 smem_pre_det=35968 det_want=94464 dyn_cap=97120 smem=94464 occ=1 coop=1 hw_cap=48 max_res=48 groups=1 total_ctas=1 ctas_pg=1 chunk=7408 FORCE_SINGLE_CTA=1 status=0 took_sampled=0 took_filtered=0 expected_rej=0 msg=""
+RESULT rows=1 k=2048 n=355588 pat=random rep=0 rep=0 outcome=PASS exact=1 repro=1 poison_left=0 ms=2.947 force_single_cta=1 detail=""
+SUMMARY rows=1 k=2048 n=355588 pat=random all_pass=1
+PROBE_EXIT=0
+### PROBE rows=1 k=2048 n=400000 pat=random
+DEVICE name=NVIDIA GB10 cc=12.1 sms=48 sharedPerBlockOptin=101376 sharedPerBlock=49152 sharedPerMultiprocessor=102400
+CONST kThreadsPerBlock=1024 RADIX_THRESHOLD=22016 kSmemMedium=35968 kFixedSmemLarge=2080 kDetMaxCtasPerGroup=64 det_fixed512=6400 det_fixed1024=6400 det_fixed2048=6400
+INSTR single_cta_branch force_single_cta=1 seq_len=400000 ctas_per_group=1 gridDim=1 det_smem_bytes=94464
+INSTR det_select_row n=400000 smem_bytes=94464 fixed=6400 CACHED=0
+DIAG rows=1 k=2048 n=400000 pat=random rep=0 sms=48 optin=101376 eff_smem=35968 vec=4 static_smem=4256 avail=29632 max_chunk=7408 active_w=400000 ctas0=54 chunk0=7408 smem_pre_det=35968 det_want=94464 dyn_cap=97120 smem=94464 occ=1 coop=1 hw_cap=48 max_res=48 groups=1 total_ctas=1 ctas_pg=1 chunk=7408 FORCE_SINGLE_CTA=1 status=0 took_sampled=0 took_filtered=0 expected_rej=0 msg=""
+RESULT rows=1 k=2048 n=400000 pat=random rep=0 rep=0 outcome=PASS exact=1 repro=1 poison_left=0 ms=3.280 force_single_cta=1 detail=""
+SUMMARY rows=1 k=2048 n=400000 pat=random all_pass=1
+PROBE_EXIT=0
+### PROBE rows=4 k=512 n=474112 pat=tie
+DEVICE name=NVIDIA GB10 cc=12.1 sms=48 sharedPerBlockOptin=101376 sharedPerBlock=49152 sharedPerMultiprocessor=102400
+CONST kThreadsPerBlock=1024 RADIX_THRESHOLD=22016 kSmemMedium=35968 kFixedSmemLarge=2080 kDetMaxCtasPerGroup=64 det_fixed512=6400 det_fixed1024=6400 det_fixed2048=6400
+INSTR single_cta_branch force_single_cta=1 seq_len=474112 ctas_per_group=1 gridDim=4 det_smem_bytes=94464
+INSTR det_select_row n=474112 smem_bytes=94464 fixed=6400 CACHED=0
+DIAG rows=4 k=512 n=474112 pat=tie rep=0 sms=48 optin=101376 eff_smem=35968 vec=4 static_smem=4256 avail=29632 max_chunk=7408 active_w=474112 ctas0=64 chunk0=7408 smem_pre_det=35968 det_want=94464 dyn_cap=97120 smem=94464 occ=1 coop=1 hw_cap=48 max_res=48 groups=4 total_ctas=4 ctas_pg=1 chunk=7408 FORCE_SINGLE_CTA=1 status=0 took_sampled=0 took_filtered=0 expected_rej=0 msg=""
+RESULT rows=4 k=512 n=474112 pat=tie rep=0 rep=0 outcome=PASS exact=1 repro=1 poison_left=0 ms=3.153 force_single_cta=1 detail=""
+SUMMARY rows=4 k=512 n=474112 pat=tie all_pass=1
+PROBE_EXIT=0
+### PROBE rows=4 k=2048 n=474116 pat=random
+DEVICE name=NVIDIA GB10 cc=12.1 sms=48 sharedPerBlockOptin=101376 sharedPerBlock=49152 sharedPerMultiprocessor=102400
+CONST kThreadsPerBlock=1024 RADIX_THRESHOLD=22016 kSmemMedium=35968 kFixedSmemLarge=2080 kDetMaxCtasPerGroup=64 det_fixed512=6400 det_fixed1024=6400 det_fixed2048=6400
+DIAG rows=4 k=2048 n=474116 pat=random rep=0 sms=48 optin=101376 eff_smem=35968 vec=4 static_smem=4256 avail=29632 max_chunk=7408 active_w=474116 ctas0=65 chunk0=7296 smem_pre_det=0 det_want=0 dyn_cap=0 smem=0 occ=0 coop=0 hw_cap=0 max_res=0 groups=0 total_ctas=0 ctas_pg=0 chunk=0 FORCE_SINGLE_CTA=0 status=1 took_sampled=0 took_filtered=0 expected_rej=1 msg="persistent_topk: ctas_per_group 65 exceeds 64"
+RESULT rows=4 k=2048 n=474116 pat=random rep=0 rep=0 outcome=REJECTED_PRELAUNCH_EXPECTED detail="persistent_topk: ctas_per_group 65 exceeds 64"
+SUMMARY rows=4 k=2048 n=474116 pat=random all_pass=1
+PROBE_EXIT=0

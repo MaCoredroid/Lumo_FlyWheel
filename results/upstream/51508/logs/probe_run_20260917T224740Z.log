@@ -1,0 +1,42 @@
+=== run 2026-09-17T22:47:40Z host=gx10-edb9 py=/home/mark/shared/vllm-head/.venv/bin/python
+=== nvidia-smi
+NVIDIA GB10, 590.48.01
+=== procs on GPU
+=== sha256 of probe sources
+3ab3669c59234f4cbc2d172026add0b34ce2a13a69adb1edb2525858581ba5b7  probe_wrongstate.py
+3a28b74276c5ad90359798d7998dc78c3f9cf50fa6d3b5952310fd742351b84b  probe_zero_accept.py
+37e66dfb23738642823d59e974667b65819a56a8bf7bff81d6547ff27dffac99  variant_main.py
+b9c587686ac015d6f586226205a14da2a340f4305d5b114066cfaee5c8c45dd9  variant_pr48475.py
+4e19a179e1b8a2abe14ac9e495f7825a27213cb11644fa22dd13a54f66e695b6  variant_pr50021.py
+06b8d95a2a83902f39fe25dc792298e86b1c14f2e12d09983323f61e62579250  variant_pr51508.py
+=== probe_zero_accept.py
+device=NVIDIA GB10 torch=2.13.0+cu132
+row0 blocks=[5, 6, 7, 8] row1 blocks=[9, 10, 11, 12] planted-before-tensor=7
+
+variant    case  status                 row0(stale) wrote      row1(live) wrote     other
+-----------------------------------------------------------------------------------------
+main       C     ok                     [5, 6]                 [9, 10]              []
+main       Z     ok                     [5, 6]                 [9, 10]              []
+main       N     ok                     []                     [9, 10]              []
+
+pr48475    C     ok                     [5, 6]                 [9, 10]              []
+pr48475    Z     ok                     [5, 6]                 [9, 10]              []
+pr48475    N     ok                     []                     [9, 10]              []
+
+pr50021    C     ok                     [5, 6]                 [9, 10]              []
+pr50021    Z     ok                     []                     [9, 10]              []
+pr50021    N     ok                     []                     [9, 10]              []
+
+pr51508    C     ok                     [5, 6]                 [9, 10]              []
+pr51508    Z     ok                     [5, 6]                 [9, 10]              []
+pr51508    N     ok                     []                     [9, 10]              []
+
+=== exit=0
+=== probe_wrongstate.py
+variant    block5 after Z(=0) vs Z1(=1)       max|diff|
+main       DIFFERENT -> wrong initial state   1.57916
+pr48475    same (correct slot-0 resume)       0
+pr50021    DIFFERENT -> wrong initial state   2.17392
+pr51508    same (correct slot-0 resume)       0
+=== exit=0
+=== end 2026-09-17T22:47:43Z
