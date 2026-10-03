@@ -37,3 +37,22 @@ The LumoTree per-step split here is similar to the tuning corpus: 185.2 ms wall 
 - **Lead over MTP-5 reproduces:** about +12% here.
 - **LumoTree vs SGLang is not resolved.** With one replay per arm on this set (corrected 2026-10-02: an earlier wording said "parity"), the +1.4% here and the -3% to -4% on the tuning corpus do not establish parity or a difference. Replicates, ideally with identical token IDs, are needed.
 - **Caveat:** single replicates per arm on this set.
+
+
+## Replicates (added 2026-10-02 evening; same set and harness; SGLang not repeated)
+
+| Arm (confirmation set) | Replicates | Pooled rate (tok/s) | Mean | Accepted tokens per step | Step wall (ms) |
+|---|---|---|---|---|---|
+| LumoTree (deployed) | CT1–CT3 | 30.67, 29.92, 31.67 | **30.75** | 4.72, 4.57, 4.89 | 185.2, 185.1, 184.9 |
+| native vLLM MTP-5 | CM1–CM3 | 27.41, 27.44, 27.71 | **27.52** | 3.31, 3.23, 3.28 | — |
+
+**LumoTree vs MTP-5.** The ratio of means is **+11.7%**.
+- Every LumoTree replicate exceeds every MTP-5 replicate.
+- The narrowest pairing (worst LumoTree vs best MTP-5) is +8.0%.
+- The widest pairing (best LumoTree vs worst MTP-5) is +15.5%.
+
+On the 43-request tuning corpus the ratio was about +10%, so the advantage holds on unseen tasks.
+
+**LumoTree's per-step split is stable across replicates:** target forward 109.4–110.0 ms, drafter 48.1–48.2 ms, committer (publication) 20.9–21.0 ms.
+
+**LumoTree vs SGLang is still unresolved:** there is one SGLang replicate on this set, and the identical-token comparison is not repeated.
