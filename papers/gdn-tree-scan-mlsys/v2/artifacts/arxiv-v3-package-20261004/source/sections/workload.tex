@@ -1,0 +1,29 @@
+The coding-agent study completes 30 attempts: ten selected Astropy tasks, once each under \sys{}, native MTP-5, and SGLang EAGLE. All arms use Qwen Code 0.19.4, the same checkpoint, a 24,000-token response cap, and a 9,000-second task budget. The agent inspects repositories, edits files, and executes tools. Table~\ref{tab:agent-study} summarizes all attempts, including six empty patches; Appendix~\ref{app:workload} gives task-level results. All arms use presence penalty 1.0; the \sys{} arm applies per-path penalty histories (Section~\ref{sec:sampling-validation}).
+
+For completed request $r$, let $n_r$ be the output-token count, $\ell_r$ the server-recorded end-to-end latency, and $f_r$ the time to first output. We report the pooled decode rate
+\begin{equation}
+ D_{\mathrm{pool}} =
+ \frac{\sum_{r=1}^{R}(n_r-1)}{\sum_{r=1}^{R}(\ell_r-f_r)}.
+ \label{eq:pooled-decode}
+\end{equation}
+Counts and durations cover the same completed requests, including requests that summarize an overlong agent context. The numerator counts output intervals; the denominator excludes first-output latency and between-request agent/tool work. Thus $D_{\mathrm{pool}}$ measures token production over accumulated request durations, rather than aggregate wall-clock throughput.
+
+\begin{table}[t]
+\caption{Ten-task coding-agent study, one attempt per task and arm. Minutes sum agent durations, including tools but excluding server startup and evaluation. Decode rates use server-counter differences in Eq.~\ref{eq:pooled-decode}.}
+\label{tab:agent-study}
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Arm & Resolved & Requests & Tokens/s & Minutes \\
+\midrule
+\sys{} & 5/10 & 248 & 26.12 & 190.8 \\
+Native MTP-5 & 6/10 & 224 & 27.17 & 99.5 \\
+SGLang EAGLE & 5/10 & 210 & 29.89 & 103.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\sys{} produces eight nonempty patches, three of which fail tests, and two empty patches. Native MTP-5 produces six resolving patches, two failing-test patches, and two empty patches; SGLang produces five, three, and two respectively. Empty patches count as failures without invoking the test evaluator. These are descriptive outcomes on the selected tasks, not benchmark-wide quality estimates.
+
+The live agent trajectories differ: \sys{} emits 258,889 output tokens, compared with 134,643 for MTP-5 and 158,827 for SGLang. Their request counts, prompt lengths, and tool calls therefore differ as well. The lower \sys{} decode rate and longer summed agent duration in this study contrast with the fixed-request replay results below. Sharing tasks and agent settings does not isolate a verifier's effect on task completion.

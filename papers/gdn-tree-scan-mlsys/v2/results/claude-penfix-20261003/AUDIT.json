@@ -335,5 +335,47 @@
     }
    }
   }
+ },
+ "output_length_comparability": {
+  "tuning_corpus": {
+   "tree_mean_total": 18916.333333333332,
+   "mtp5_mean_total": 18503.666666666668,
+   "requests_tree_longer": 23,
+   "requests": 43,
+   "tree_run_totals": [
+    19991,
+    18315,
+    18443
+   ],
+   "mtp5_run_totals": [
+    18158,
+    18288,
+    19065
+   ]
+  },
+  "confirmation_set": {
+   "tree_mean_total": 15270.333333333334,
+   "mtp5_mean_total": 15453.333333333334,
+   "requests_tree_longer": 19,
+   "requests": 43,
+   "tree_run_totals": [
+    14544,
+    14136,
+    17131
+   ],
+   "mtp5_run_totals": [
+    15841,
+    14655,
+    15864
+   ]
+  },
+  "mtp5_runs": [
+   "mtp5-sampled-20261001T062146Z",
+   "mtp5-sampled-20261001T070447Z",
+   "mtp5-sampled-20261001T074648Z",
+   "mtp5-cfM1-sampled-20261002T214201Z",
+   "mtp5-cfM2-sampled-20261002T235646Z",
+   "mtp5-cfM3-sampled-20261003T003136Z"
+  ]
  }
 }

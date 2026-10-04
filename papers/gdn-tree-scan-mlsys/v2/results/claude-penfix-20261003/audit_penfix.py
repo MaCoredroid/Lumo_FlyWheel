@@ -180,10 +180,29 @@ assert out["workload"]["resolved"] + out["workload"]["failed_tests"] + out["work
 prev = read(V2 / "results/claude-results-20261002/summaries/swe_study_20261001.json")
 out["workload"]["prefix_reference"] = {a_: {k: prev[a_][k] for k in ("resolved", "agent_min_total", "pooled")} for a_ in prev if isinstance(prev[a_], dict)}
 
+
+# ---- output-length comparability on identical prompts (tree fixed vs MTP-5 reference runs) ----------------
+def lengths(p):
+    rows = [json.loads(l) for l in Path(p).read_text().splitlines()]
+    return {r["request"]: r["completion_tokens"] for r in rows}
+def length_compare(tree_runs, mtp_glob_dirs):
+    tl = [lengths(HERE / "raw/replay" / r["run"] / "replay.jsonl") for r in tree_runs]
+    ml = [lengths(p) for p in mtp_glob_dirs]
+    assert len(tl) == 3 and len(ml) == 3
+    reqs = sorted(tl[0]); assert all(sorted(x) == reqs for x in tl + ml)
+    mt = {q: sum(x[q] for x in tl) / 3 for q in reqs}; mm = {q: sum(x[q] for x in ml) / 3 for q in reqs}
+    return {"tree_mean_total": sum(mt.values()), "mtp5_mean_total": sum(mm.values()),
+            "requests_tree_longer": sum(mt[q] > mm[q] for q in reqs), "requests": len(reqs),
+            "tree_run_totals": [sum(x.values()) for x in tl], "mtp5_run_totals": [sum(x.values()) for x in ml]}
+mtp_tune = [p for p in sorted((V2 / "results").glob("*/raw/replay/mtp5-sampled-20261001T0[67]*/replay.jsonl"))]
+mtp_tune = sorted({p.parent.name: p for p in mtp_tune}.values(), key=lambda p: p.parent.name)
+mtp_conf = sorted({p.parent.name: p for p in (V2 / "results").glob("*/raw/replay/mtp5-cfM*/replay.jsonl")}.values(), key=lambda p: p.parent.name)
+out["output_length_comparability"] = {"tuning_corpus": length_compare(tuning, mtp_tune), "confirmation_set": length_compare(confirm, mtp_conf),
+                                      "mtp5_runs": [p.parent.name for p in mtp_tune + mtp_conf]}
 (HERE / "AUDIT.json").write_text(json.dumps(out, indent=1, default=str))
 print(json.dumps({"tuning": {k: out["tuning_corpus"]["tree_fixed"][k] for k in ("pooled_tokens_s", "run_rates", "accepted_per_event")}, "tuning_ratio": out["tuning_corpus"]["ratio_fixed_over_mtp5"],
                   "tuning_timers": out["tuning_corpus"]["tree_fixed_timer_means_ms"],
                   "confirm": {k: out["confirmation_set"]["tree_fixed"][k] for k in ("pooled_tokens_s", "run_rates", "accepted_per_event")}, "confirm_ratio": out["confirmation_set"]["ratio_fixed_over_mtp5"],
                   "confirm_timers": out["confirmation_set"]["tree_fixed_timer_means_ms"], "sampling": {k: out["sampling"][k] for k in out["sampling"] if k != "residual_nodes"},
                   "ties": out["sampling"]["residual_nodes"], "fullmodel": {k: out["fullmodel"][k] for k in out["fullmodel"] if k != "run"},
-                  "workload": {k: out["workload"][k] for k in out["workload"] if k not in ("tasks", "prefix_reference")}, "tasks": {k: (t["outcome"], round(t["agent_s"] / 60, 1)) for k, t in sorted(tasks.items())}}, indent=1, default=str))
+                  "workload": {k: out["workload"][k] for k in out["workload"] if k not in ("tasks", "prefix_reference")}, "output_lengths": out["output_length_comparability"], "tasks": {k: (t["outcome"], round(t["agent_s"] / 60, 1)) for k, t in sorted(tasks.items())}}, indent=1, default=str))

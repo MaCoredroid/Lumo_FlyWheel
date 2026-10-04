@@ -1,20 +1,20 @@
 {
- "schema": "claude.penfix-delivery.v1",
- "utc": "2026-10-04T05:12:27Z",
+ "schema": "claude.penfix-delivery.v2",
+ "utc": "2026-10-04T19:20:45Z",
  "manuscript_pdf": {
   "path": "artifacts/penfix-delivery-20261004/lumotree-penfix-20261004.pdf",
-  "sha256": "8d25c1e15b8377164325ee6a65b8d48cf5c49a235c2160a61905f7de49d1b5a2",
+  "sha256": "4315c2ff2acb63c48a75cf4cbe67c8fa9c26b236b211dc003519922f3ab33728",
   "pages": 15
  },
  "source_archive": {
   "path": "artifacts/penfix-delivery-20261004/lumotree-source-penfix-20261004.tar.gz",
-  "sha256": "ddc61fe992fa3a87e78d56ea71563994fa6c859f3d407be5b959609deec4e491"
+  "sha256": "a3d82363b75d7004eca4d9e62542775cec416d06d2a5d3da0d288076587fb2f9"
  },
  "sources": {
-  "main.tex": "2ec6c83eff9edd8f4533525d6ee821a2dafec4b7624867b5bd12806f238761f1",
+  "main.tex": "ad4585030850783480e859cce103d234b66fd9a2f58703d59863d87fea85c005",
   "abstract.tex": "6df1bdc2006279afc460b73e1232d9fc439687cfd18d4afadd3c9e9842bd9a45",
-  "ref.bib": "6cba931832435ef088018bcb885b1117e0154863cb081e9da974c5ec2bffa7a2",
-  "main.bbl": "392512456ceb65b6d3e8b5e06b522910508f4984792a8654bde42b0e6df67c30",
+  "ref.bib": "4e1718e00509b43903184061606fcb6d07b9c26976eabf2aeff3c90140b0f3e5",
+  "main.bbl": "f80f356c1630be07883899192bafccdf783c2dd9a668daee7491c761d9e4f337",
   "IEEEtran.cls": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b",
   "sections/execution-costs.tex": "61a10ac34261a5f99a59d37a33cc72eea870e396f49a38f392532d5e1b5a2954",
   "sections/fullmodel-protocol.tex": "cb62d56162bb107789222945e9c2ef37dc47234e5e408daa40784a871e8ac3b5",
@@ -26,8 +26,8 @@
   "sections/recurrent-validation.tex": "4b8540c9162a2de4c44574ef10178e42674480cc579efca0cfca14fc70edc953",
   "sections/replay-protocol.tex": "1adda3b0fa834ddb493b6b239f47f09d7ad21c1acab7bb9de64aada0aa072cc1",
   "sections/request-replay.tex": "a48985b9deed99ff2cfb1f7a991c38cb6d89c575d27d38d9cbea5bbc4a4e4365",
-  "sections/sampling-validation.tex": "2e848d6eeb22727a58815cb623933aa2172da272590dee30243d5c36364539c0",
-  "sections/workload-configuration.tex": "5d71a8bcbe69cb256e73aa1c84d1737ea4514a8eedee5c7975503f65cddbcbbd",
+  "sections/sampling-validation.tex": "9332a02f44219aa4ac4cfa66e53f18edb86ab2c69df0533fdcb2211389429e81",
+  "sections/workload-configuration.tex": "f4ee1d9feb75ddcd7dbbdfb9e3df7e60875fa564b7381b5baa9858c00a03657e",
   "sections/workload-details.tex": "e1277d71030d6d1f658e5d0f81913226967e4539f42883a3e540c562464db4ce",
   "sections/workload.tex": "f0a3c739d4926c50cb81524952d19277d714ed27c0b7aa68953048f88857d114",
   "figures/cost-breakdown.tikz": "a29baf437e9f19ee1c33111a07645daed2ace8857492b6daf29468452ee62fee",
@@ -40,20 +40,21 @@
   "figures/spine-layout.tikz": "390a6d64b34627e93a2d63cae64d971abe54569be978fa5477984e3228d5579c",
   "figures/state-contract.tikz": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898"
  },
- "extracted_rebuild": {
-  "pages": 15,
-  "latexmk_rc": 0,
-  "text_identical_to_canonical": true,
-  "latex_warnings_in_main_log": 0
+ "arxiv_v3_package": {
+  "path": "artifacts/arxiv-v3-package-20261004/lumotree-v3-arxiv-source.tar.gz",
+  "sha256": "6a270eabb5d361a8cdb6b114d9cba0b8d51b78fbcf430094e914611416a9a23d",
+  "clean_build_text_identical": true
  },
+ "latex_warnings_in_main_log": 0,
  "evidence": {
   "audit": "results/claude-penfix-20261003/AUDIT.json",
-  "audit_sha256": "851ea26c56748cd5d63cbd1c1e118df0745bcec1a70666f786830ffe4fe7be25",
+  "audit_sha256": "ca21e55197e11d14ace518d9be9fcedf2c8107ca3fa63b8a5f0b5f8fb31c0d86",
   "manifest_sha256": "8bd98958e7d7a93deff032972fdfbccc6c48ee0c83855505a6c32d31a9a25172",
   "pre_edit_snapshot": "artifacts/before-penfix-20261004/"
  },
- "readme_sha256": "d7edfdd5060e242978c56cb2f5bce41c36b3386cad7e35dc138153f21bcd7c8b",
+ "readme_sha256": "24440852b66c029d193aab88e06dcf882259451649b9a3a23d21b9c3dc1e0892",
  "config_sha256": "89efd203f8173af72dbd0496d158cffe84c1ea6caf86593f7e3394f2d8df07b6",
+ "second_red_team": "notes/venue-redteam-20261003.md (addendum, 4 October)",
  "actions_not_taken": [
   "no inference",
   "no arXiv action",

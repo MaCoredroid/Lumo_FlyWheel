@@ -1,0 +1,86 @@
+Table~\ref{tab:request-replay} reports complete configuration runs, each containing all 43 requests. Across three runs per arm, \sys{} records 28.13 pooled tokens/s and five-token native MTP records 26.12, a 7.7\% difference on this corpus. Their individual run rates range from 27.40 to 28.78 and from 26.04 to 26.23 tokens/s, respectively. Plain autoregressive decoding records 10.54 tokens/s in one run. The native MTP sweep uses one, three, five, or seven draft tokens; five-token MTP has the highest observed pooled rate among these settings.
+
+\begin{table}[t]
+\caption{Sampled replay of 43 recorded requests, capped at 1,024 output tokens. Rates pool matched token and time totals across all runs. Ranges describe individual run rates, not confidence intervals. SGLang receives the same input token IDs but uses a different stack and streaming endpoint.}
+\label{tab:request-replay}
+\centering\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Configuration & Runs & Tokens/s & Run range \\
+\midrule
+vLLM autoregressive & 1 & 10.54 & --- \\
+vLLM MTP, 1 token & 1 & 15.37 & --- \\
+vLLM MTP, 3 tokens & 1 & 22.06 & --- \\
+vLLM MTP, 5 tokens & 3 & 26.12 & 26.04--26.23 \\
+vLLM MTP, 7 tokens & 1 & 25.72 & --- \\
+\sys{} & 3 & 28.13 & 27.40--28.78 \\
+\midrule
+SGLang EAGLE, 7/8 & 3 & 29.69 & 28.91--30.90 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For SGLang, the paired setting denotes speculative steps and draft-token capacity; EAGLE top-$k$ is one. Seven steps and eight draft tokens yield 29.69 pooled tokens/s over three runs with identical incoming token IDs. Attention, prefill settings, and endpoint timing still differ (Section~\ref{sec:limitations}). The native MTP sweep is exploratory and has unequal repetition counts.
+
+Additional runs disable individual \sys{} optimizations (Table~\ref{tab:replay-variants}). The variant, phase-timer, and drafting-pass measurements in Tables~\ref{tab:replay-variants}--\ref{tab:drafting-passes} were taken before the penalty-history correction of Section~\ref{sec:sampling-validation}; each compares configurations under one sampler, and the deployed rows in Tables~\ref{tab:request-replay} and~\ref{tab:disjoint-replay} are post-correction measurements. The stock-attention variant completes all 43 requests in three runs and records 26.82 pooled tokens/s. Disabling fused draft selection or precomputed tap-operand preparation records 29.40 and 29.02 in one run each. Stochastic output lengths and limited replication prevent attributing these differences to the individual transformations. Phase and boot-allocation observations below characterize selected variants, without a complete per-optimization decomposition.
+
+\begin{table}[t]
+\caption{Exploratory replay variants. Each run contains all 43 requests. These measurements do not establish isolated optimization effects.}
+\label{tab:replay-variants}
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Disabled optimization & Runs & Tokens/s & Run range \\
+\midrule
+Grouped split-K tree attention & 3 & 26.82 & 26.67--27.11 \\
+Fused draft top-$k$ selection & 1 & 29.40 & --- \\
+Precomputed tap-operand preparation & 1 & 29.02 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\input{sections/optimization-spans}
+
+Output-side counters pooled over the repeated vLLM runs report 4.35 accepted drafts per speculative event for \sys{} and 3.17 for five-token MTP. These counters describe emitted drafts, excluding the correction or bonus token, and do not identify the committed path. SGLang reports only windowed acceptance averages, so no corresponding cumulative acceptance comparison is reported.
+
+\paragraph{Disjoint request corpus}
+Table~\ref{tab:disjoint-replay} reports a separately frozen 43-request corpus from four additional Astropy task conversations. Across three runs per vLLM arm, \sys{} records 30.76 pooled tokens/s versus native MTP-5's 27.52, an 11.8\% difference. Every individual tree rate exceeds every MTP-5 rate in these runs. This second corpus supports the direction of the observed replay difference, without establishing statistical significance, equal output distributions, or task-completion improvement.
+
+\begin{table}[t]
+\caption{Disjoint 43-request replay. Rates pool matched totals; ranges are individual run rates. Request messages are shared, but SGLang uses a different chat serialization.}
+\label{tab:disjoint-replay}
+\centering\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Configuration & Runs & Tokens/s & Run range \\
+\midrule
+\sys{} & 3 & 30.76 & 30.38--31.14 \\
+vLLM MTP, 5 tokens & 3 & 27.52 & 27.41--27.71 \\
+SGLang EAGLE, 7/8 & 1 & 30.24 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+SGLang records 30.24 tokens/s in its single run. Limited cross-stack replication, different output lengths, and pooled duration weights preclude a superiority or equivalence claim. The small pooled tree--SGLang difference changes sign between the two corpora. SGLang's serialized prompt lengths exceed vLLM's by 33--156 tokens here, unlike the exact-token-ID comparison in Table~\ref{tab:request-replay}.
+
+\paragraph{Drafting-pass sensitivity}
+The deployed tree's maximum depth is eleven, but neural drafting uses only five MTP passes; suffix lookup supplies the deeper tail. We therefore measure three-pass drafting and a suffix-dependent three/five-pass policy while retaining 32 physical verification rows (Table~\ref{tab:drafting-passes}). These are drafting-policy variants, not measurements of newly constructed 16-node or shallower tree topologies.
+
+\begin{table}[t]
+\caption{Exploratory drafting-pass variants on the first 43-request corpus. The deployed row pools two runs; each variant has one. GPU drafting and step wall durations use their own timer counts.}
+\label{tab:drafting-passes}
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Policy & Tokens/s & \shortstack{Accepted\\drafts/event} & \shortstack{Draft\\ms} & \shortstack{Step\\ms} \\
+\midrule
+Five passes & 28.69 & 4.45 & 49.84 & 189.35 \\
+Three passes & 28.94 & 3.97 & 32.01 & 171.27 \\
+Conditional three/five & 27.05 & 4.09 & 47.71 & 187.55 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three-pass drafting saves approximately 18\,ms per cycle but reduces accepted drafts per event by about 11\%. Its 0.9\% pooled-rate difference from the deployed runs is small relative to the observed variation of the repeated configuration; no reliable gain is established. The conditional policy has a lower pooled rate. The five-pass configuration is retained. An initial shortened-pass implementation duplicated principal tokens into inactive sibling leaves, producing misleadingly low acceptance; the reported variants use the repaired implementation. Those earlier measurements and the correction remain in the supplement.

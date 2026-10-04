@@ -1,32 +1,8 @@
 Rc files read:
   NONE
 Latexmk: This is Latexmk, John Collins, 29 September 2020, version: 4.70b.
-Rule 'bibtex main': File changes, etc:
-   Changed files, or newly in use since previous run(s):
-      'ref.bib'
-------------
-Run number 1 of rule 'bibtex main'
-------------
-------------
-Running 'bibtex  "main.aux"'
-------------
-Latexmk: applying rule 'bibtex main'...
-For rule 'bibtex main', running '&run_bibtex(  )' ...
-This is BibTeX, Version 0.99d (TeX Live 2021)
-The top-level auxiliary file: main.aux
-The style file: IEEEtran.bst
-Database file #1: ref.bib
--- IEEEtran.bst version 1.14 (2015/08/26) by Michael Shell.
--- http://www.michaelshell.org/tex/ieeetran/bibtex/
--- See the "IEEEtran_bst_HOWTO.pdf" manual for usage information.
-
-Done.
-Rule 'pdflatex': File changes, etc:
-   Changed files, or newly in use since previous run(s):
-      'main.bbl'
-      'main.tex'
-      'sections/sampling-validation.tex'
-      'sections/workload-configuration.tex'
+Rule 'pdflatex': The following rules & subrules became out-of-date:
+      'pdflatex'
 ------------
 Run number 1 of rule 'pdflatex'
 ------------
@@ -312,26 +288,489 @@ s been generated with the most recent feature set (\pgfplotsset{compat=1.17}).
 (/usr/local/texlive/2021/texmf-dist/tex/latex/hyperref/nameref.sty
 (/usr/local/texlive/2021/texmf-dist/tex/latex/refcount/refcount.sty)
 (/usr/local/texlive/2021/texmf-dist/tex/generic/gettitlestring/gettitlestring.s
-ty)) (./main.out) (./main.out)
-(/usr/local/texlive/2021/texmf-dist/tex/latex/microtype/mt-ptm.cfg)
+ty)) (/usr/local/texlive/2021/texmf-dist/tex/latex/microtype/mt-ptm.cfg)
 (/usr/local/texlive/2021/texmf-dist/tex/latex/psnfss/t1pcr.fd) (./abstract.tex)
- (./figures/pipeline.tikz
+
+
+LaTeX Warning: Citation `leviathan2023fast' on page 1 undefined on input line 4
+1.
+
+
+LaTeX Warning: Citation `chen2023sampling' on page 1 undefined on input line 41
+.
+
+
+LaTeX Warning: Citation `miao2023specinfer' on page 1 undefined on input line 4
+1.
+
+
+LaTeX Warning: Citation `yang2024gated' on page 1 undefined on input line 41.
+
+
+LaTeX Warning: Citation `wu2025stree' on page 1 undefined on input line 41.
+
+(./figures/pipeline.tikz
 (/usr/local/texlive/2021/texmf-dist/tex/latex/psnfss/t1phv.fd)
 (/usr/local/texlive/2021/texmf-dist/tex/latex/microtype/mt-cmr.cfg)
 (/usr/local/texlive/2021/texmf-dist/tex/latex/amsfonts/umsa.fd)
 (/usr/local/texlive/2021/texmf-dist/tex/latex/microtype/mt-msa.cfg)
 (/usr/local/texlive/2021/texmf-dist/tex/latex/amsfonts/umsb.fd)
-(/usr/local/texlive/2021/texmf-dist/tex/latex/microtype/mt-msb.cfg)) [1{/usr/lo
-cal/texlive/2021/texmf-var/fonts/map/pdftex/updmap/pdftex.map}] [2]
-(./figures/state-contract.tikz) [3] (./figures/scan-replay.tikz) [4] [5]
-[6] (./sections/replay-protocol.tex) [7] (./sections/workload.tex)
-(./sections/request-replay.tex (./sections/optimization-spans.tex [8]))
-(./sections/execution-costs.tex) (./sections/recurrent-validation.tex [9])
-(./sections/fullmodel-validation.tex [10]) (./sections/sampling-validation.tex)
-(./sections/recurrent-comparison.tex [11]) (./sections/mechanism-costs.tex)
-[12] (./sections/workload-configuration.tex) [13]
-(./sections/workload-details.tex) (./sections/fullmodel-protocol.tex)
-(./main.bbl [14])
+(/usr/local/texlive/2021/texmf-dist/tex/latex/microtype/mt-msb.cfg))
+
+LaTeX Warning: Citation `wang2026specla' on page 1 undefined on input line 54.
+
+
+LaTeX Warning: Citation `oda2026marginals' on page 1 undefined on input line 54
+.
+
+
+LaTeX Warning: Reference `sec:limitations' on page 1 undefined on input line 54
+.
+
+
+LaTeX Warning: Citation `jimenez2024swe' on page 1 undefined on input line 56.
+
+
+LaTeX Warning: Reference `sec:sampling-validation' on page 1 undefined on input
+ line 56.
+
+
+LaTeX Warning: Reference `sec:related' on page 1 undefined on input line 58.
+
+
+LaTeX Warning: Reference `sec:contract' on page 1 undefined on input line 58.
+
+
+LaTeX Warning: Reference `sec:kernel' on page 1 undefined on input line 58.
+
+
+LaTeX Warning: Reference `sec:optimization' on page 1 undefined on input line 5
+8.
+
+
+LaTeX Warning: Reference `app:audit' on page 1 undefined on input line 58.
+
+
+LaTeX Warning: Citation `leviathan2023fast' on page 1 undefined on input line 6
+3.
+
+
+LaTeX Warning: Citation `chen2023sampling' on page 1 undefined on input line 63
+.
+
+
+LaTeX Warning: Citation `miao2023specinfer' on page 1 undefined on input line 6
+3.
+
+
+LaTeX Warning: Citation `chen2024sequoia' on page 1 undefined on input line 63.
+
+
+
+LaTeX Warning: Citation `li2024eagle' on page 1 undefined on input line 63.
+
+
+LaTeX Warning: Citation `wang2024opt' on page 1 undefined on input line 63.
+
+
+LaTeX Warning: Citation `li2025eagle3' on page 1 undefined on input line 63.
+
+
+LaTeX Warning: Citation `chen2026dflash' on page 1 undefined on input line 63.
+
+[1{/usr/local/texlive/2021/texmf-var/fonts/map/pdftex/updmap/pdftex.map}]
+
+LaTeX Warning: Citation `kwon2023efficient' on page 2 undefined on input line 6
+5.
+
+
+LaTeX Warning: Citation `zheng2024sglang' on page 2 undefined on input line 65.
+
+
+
+LaTeX Warning: Citation `pan2024marconi' on page 2 undefined on input line 65.
+
+
+LaTeX Warning: Citation `pytorch2025sglang' on page 2 undefined on input line 6
+5.
+
+
+LaTeX Warning: Citation `sglang2026qwen' on page 2 undefined on input line 65.
+
+
+LaTeX Warning: Citation `dao2023flashdecoding' on page 2 undefined on input lin
+e 65.
+
+
+LaTeX Warning: Citation `ye2025flashinfer' on page 2 undefined on input line 65
+.
+
+
+LaTeX Warning: Citation `yao2024deft' on page 2 undefined on input line 65.
+
+
+LaTeX Warning: Citation `pan2025fasttree' on page 2 undefined on input line 65.
+
+
+
+LaTeX Warning: Citation `dao2023flashattention' on page 2 undefined on input li
+ne 65.
+
+
+LaTeX Warning: Citation `yang2024gated' on page 2 undefined on input line 68.
+
+
+LaTeX Warning: Citation `yang2024delta' on page 2 undefined on input line 68.
+
+
+LaTeX Warning: Citation `wu2024snakes' on page 2 undefined on input line 68.
+
+
+LaTeX Warning: Citation `wu2025stree' on page 2 undefined on input line 68.
+
+
+LaTeX Warning: Citation `wu2025stree' on page 2 undefined on input line 68.
+
+
+LaTeX Warning: Citation `zhong2025specmamba' on page 2 undefined on input line 
+68.
+
+
+LaTeX Warning: Citation `borobia2026component' on page 2 undefined on input lin
+e 68.
+
+
+LaTeX Warning: Citation `oda2026marginals' on page 2 undefined on input line 71
+.
+
+
+LaTeX Warning: Citation `wang2026specla' on page 2 undefined on input line 73.
+
+
+LaTeX Warning: Citation `wang2026bole' on page 2 undefined on input line 75.
+
+
+LaTeX Warning: Citation `wang2026bole' on page 2 undefined on input line 77.
+
+
+LaTeX Warning: Reference `sec:reconstruction-numerics' on page 2 undefined on i
+nput line 77.
+
+
+LaTeX Warning: Citation `ghantasala2026treewy' on page 2 undefined on input lin
+e 79.
+
+
+LaTeX Warning: Citation `ghantasala2026treewycode' on page 2 undefined on input
+ line 79.
+
+[2]
+
+LaTeX Warning: Citation `replayssm2026' on page 3 undefined on input line 81.
+
+
+LaTeX Warning: Citation `yang2026onela' on page 3 undefined on input line 81.
+
+
+LaTeX Warning: Reference `tab:related' on page 3 undefined on input line 81.
+
+
+LaTeX Warning: Citation `oda2026marginals' on page 3 undefined on input line 99
+.
+
+
+LaTeX Warning: Citation `wang2026specla' on page 3 undefined on input line 99.
+
+
+LaTeX Warning: Citation `wang2026bole' on page 3 undefined on input line 99.
+
+
+LaTeX Warning: Citation `ghantasala2026treewycode' on page 3 undefined on input
+ line 99.
+
+
+LaTeX Warning: Citation `replayssm2026' on page 3 undefined on input line 99.
+
+
+LaTeX Warning: Citation `yang2026onela' on page 3 undefined on input line 99.
+
+
+LaTeX Warning: Citation `he2025determinism' on page 3 undefined on input line 1
+03.
+
+
+LaTeX Warning: Reference `fig:contract' on page 3 undefined on input line 114.
+
+
+LaTeX Warning: Citation `yang2024gated' on page 3 undefined on input line 117.
+
+
+LaTeX Warning: Reference `fig:pipeline' on page 3 undefined on input line 129.
+
+
+LaTeX Warning: Citation `oliaro2025suffix' on page 3 undefined on input line 12
+9.
+
+
+LaTeX Warning: Citation `arctic2026suffix' on page 3 undefined on input line 12
+9.
+
+
+LaTeX Warning: Citation `hu2024sam' on page 3 undefined on input line 129.
+
+
+LaTeX Warning: Reference `sec:protocol' on page 3 undefined on input line 129.
+
+(./figures/state-contract.tikz) [3]
+
+LaTeX Warning: Reference `alg:verify' on page 4 undefined on input line 165.
+
+
+LaTeX Warning: Reference `sec:sampling-validation' on page 4 undefined on input
+ line 165.
+
+
+LaTeX Warning: Citation `wang2026specla' on page 4 undefined on input line 170.
+
+
+(./figures/scan-replay.tikz)
+
+LaTeX Warning: Citation `wang2026specla' on page 4 undefined on input line 231.
+
+
+
+LaTeX Warning: Citation `oda2026marginals' on page 4 undefined on input line 23
+1.
+
+
+LaTeX Warning: Citation `wang2026bole' on page 4 undefined on input line 231.
+
+
+LaTeX Warning: Citation `ghantasala2026treewycode' on page 4 undefined on input
+ line 231.
+
+[4]
+
+LaTeX Warning: Reference `sec:kernel' on page 5 undefined on input line 235.
+
+
+LaTeX Warning: Reference `tab:optimization-map' on page 5 undefined on input li
+ne 235.
+
+
+LaTeX Warning: Citation `he2025determinism' on page 5 undefined on input line 2
+63.
+
+[5]
+
+LaTeX Warning: Citation `yao2024deft' on page 6 undefined on input line 267.
+
+
+LaTeX Warning: Citation `pan2025fasttree' on page 6 undefined on input line 267
+.
+
+[6]
+
+LaTeX Warning: Citation `jimenez2024swe' on page 7 undefined on input line 283.
+
+
+
+LaTeX Warning: Reference `app:settings' on page 7 undefined on input line 287.
+
+(./sections/replay-protocol.tex
+
+LaTeX Warning: Reference `sec:sampling-validation' on page 7 undefined on input
+ line 1.
+
+
+LaTeX Warning: Reference `eq:pooled-decode' on page 7 undefined on input line 7
+.
+
+) [7] (./sections/workload.tex
+
+LaTeX Warning: Reference `tab:agent-study' on page 8 undefined on input line 1.
+
+
+
+LaTeX Warning: Reference `app:workload' on page 8 undefined on input line 1.
+
+
+LaTeX Warning: Reference `sec:sampling-validation' on page 8 undefined on input
+ line 1.
+
+
+LaTeX Warning: Reference `eq:pooled-decode' on page 8 undefined on input line 1
+2.
+
+) (./sections/request-replay.tex
+
+LaTeX Warning: Reference `tab:request-replay' on page 8 undefined on input line
+ 1.
+
+
+LaTeX Warning: Reference `sec:limitations' on page 8 undefined on input line 23
+.
+
+
+LaTeX Warning: Reference `tab:replay-variants' on page 8 undefined on input lin
+e 25.
+
+
+LaTeX Warning: Reference `tab:replay-variants' on page 8 undefined on input lin
+e 25.
+
+
+LaTeX Warning: Reference `tab:drafting-passes' on page 8 undefined on input lin
+e 25.
+
+
+LaTeX Warning: Reference `sec:sampling-validation' on page 8 undefined on input
+ line 25.
+
+
+LaTeX Warning: Reference `tab:request-replay' on page 8 undefined on input line
+ 25.
+
+
+LaTeX Warning: Reference `tab:disjoint-replay' on page 8 undefined on input lin
+e 25.
+
+(./sections/optimization-spans.tex
+
+LaTeX Warning: Reference `tab:optimization-spans' on page 8 undefined on input 
+line 1.
+
+[8])
+
+LaTeX Warning: Reference `tab:disjoint-replay' on page 9 undefined on input lin
+e 48.
+
+
+LaTeX Warning: Reference `tab:request-replay' on page 9 undefined on input line
+ 65.
+
+
+LaTeX Warning: Reference `tab:drafting-passes' on page 9 undefined on input lin
+e 68.
+
+) (./sections/execution-costs.tex
+
+LaTeX Warning: Reference `tab:recovered-telemetry' on page 9 undefined on input
+ line 20.
+
+) (./sections/recurrent-validation.tex [9]
+
+LaTeX Warning: Reference `tab:gdn-component' on page 10 undefined on input line
+ 23.
+
+) (./sections/fullmodel-validation.tex
+
+LaTeX Warning: Reference `app:fullmodel-protocol' on page 10 undefined on input
+ line 1.
+
+
+LaTeX Warning: Reference `tab:fullmodel-agreement' on page 10 undefined on inpu
+t line 9.
+
+[10]
+
+LaTeX Warning: Reference `sec:sampling-validation' on page 11 undefined on inpu
+t line 31.
+
+) (./sections/sampling-validation.tex
+
+LaTeX Warning: Reference `tab:sampling-faults' on page 11 undefined on input li
+ne 7.
+
+) (./sections/recurrent-comparison.tex [11]
+
+LaTeX Warning: Reference `tab:m1-qualification' on page 12 undefined on input l
+ine 32.
+
+
+LaTeX Warning: Reference `sec:limitations' on page 12 undefined on input line 3
+2.
+
+) (./sections/mechanism-costs.tex
+
+LaTeX Warning: Reference `tab:mechanism-memory-error' on page 12 undefined on i
+nput line 45.
+
+
+LaTeX Warning: Reference `sec:kernel' on page 12 undefined on input line 45.
+
+
+LaTeX Warning: Reference `sec:m1-qualification' on page 12 undefined on input l
+ine 47.
+
+
+LaTeX Warning: Reference `tab:m1-qualification' on page 12 undefined on input l
+ine 47.
+
+) [12]
+
+LaTeX Warning: Citation `lumo2026archive' on page 13 undefined on input line 35
+1.
+
+(./sections/workload-configuration.tex
+
+LaTeX Warning: Reference `tab:agent-study' on page 13 undefined on input line 2
+4.
+
+
+LaTeX Warning: Reference `tab:request-replay' on page 13 undefined on input lin
+e 24.
+
+
+LaTeX Warning: Reference `tab:disjoint-replay' on page 13 undefined on input li
+ne 24.
+
+
+LaTeX Warning: Reference `tab:recovered-telemetry' on page 13 undefined on inpu
+t line 24.
+
+
+LaTeX Warning: Reference `tab:fullmodel-agreement' on page 13 undefined on inpu
+t line 24.
+
+
+LaTeX Warning: Reference `tab:swe-tasks' on page 13 undefined on input line 24.
+
+
+
+LaTeX Warning: Reference `sec:sampling-validation' on page 13 undefined on inpu
+t line 24.
+
+
+LaTeX Warning: Reference `tab:replay-variants' on page 13 undefined on input li
+ne 24.
+
+
+LaTeX Warning: Reference `tab:drafting-passes' on page 13 undefined on input li
+ne 24.
+
+)
+
+LaTeX Warning: Reference `eq:pooled-decode' on page 13 undefined on input line 
+354.
+
+
+LaTeX Warning: Citation `leviathan2023fast' on page 13 undefined on input line 
+356.
+
+
+LaTeX Warning: Citation `chen2023sampling' on page 13 undefined on input line 3
+56.
+
+
+LaTeX Warning: Reference `sec:sampling-validation' on page 13 undefined on inpu
+t line 356.
+
+[13] (./sections/workload-details.tex
+
+LaTeX Warning: Reference `tab:swe-tasks' on page 14 undefined on input line 1.
+
+) (./sections/fullmodel-protocol.tex) (./main.bbl [14])
 
 ** Conference Paper **
 Before submitting the final camera ready copy, remember to:
@@ -345,7 +784,15 @@ Before submitting the final camera ready copy, remember to:
 
 [15] (./main.aux)
 
+LaTeX Warning: There were undefined references.
+
+
 LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+
+
+Package rerunfilecheck Warning: File `main.out' has changed.
+(rerunfilecheck)                Rerun to get outlines right
+(rerunfilecheck)                or use package `bookmark'.
 
  ){/usr/local/texlive/2021/texmf-dist/fonts/enc/dvips/base/8r.enc}</usr/local/t
 exlive/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/local/te
@@ -372,11 +819,134 @@ elvetic/uhvb8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/urw/helvetic
 b></usr/local/texlive/2021/texmf-dist/fonts/type1/urw/times/utmbi8a.pfb></usr/l
 ocal/texlive/2021/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/local/texli
 ve/2021/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (15 pages, 356359 bytes).
+Output written on main.pdf (15 pages, 350901 bytes).
 Transcript written on main.log.
 Latexmk: Found input bbl file 'main.bbl'
 Latexmk: References changed.
+Latexmk: References changed.
 Latexmk: Log file says output to 'main.pdf'
+Latexmk: List of undefined refs and citations:
+  Citation `arctic2026suffix' on page 3 undefined on input line 129
+  Citation `borobia2026component' on page 2 undefined on input line 68
+  Citation `chen2023sampling' on page 1 undefined on input line 41
+  Citation `chen2023sampling' on page 1 undefined on input line 63
+  Citation `chen2023sampling' on page 13 undefined on input line 356
+  Citation `chen2024sequoia' on page 1 undefined on input line 63
+  Citation `chen2026dflash' on page 1 undefined on input line 63
+  Citation `dao2023flashattention' on page 2 undefined on input line 65
+  Citation `dao2023flashdecoding' on page 2 undefined on input line 65
+  Citation `ghantasala2026treewy' on page 2 undefined on input line 79
+  Citation `ghantasala2026treewycode' on page 2 undefined on input line 79
+  Citation `ghantasala2026treewycode' on page 3 undefined on input line 99
+  Citation `ghantasala2026treewycode' on page 4 undefined on input line 231
+  Citation `he2025determinism' on page 3 undefined on input line 103
+  Citation `he2025determinism' on page 5 undefined on input line 263
+  Citation `hu2024sam' on page 3 undefined on input line 129
+  Citation `jimenez2024swe' on page 1 undefined on input line 56
+  Citation `jimenez2024swe' on page 7 undefined on input line 283
+  Citation `kwon2023efficient' on page 2 undefined on input line 65
+  Citation `leviathan2023fast' on page 1 undefined on input line 41
+  Citation `leviathan2023fast' on page 1 undefined on input line 63
+  Citation `leviathan2023fast' on page 13 undefined on input line 356
+  Citation `li2024eagle' on page 1 undefined on input line 63
+  Citation `li2025eagle3' on page 1 undefined on input line 63
+  Citation `lumo2026archive' on page 13 undefined on input line 351
+  Citation `miao2023specinfer' on page 1 undefined on input line 41
+  Citation `miao2023specinfer' on page 1 undefined on input line 63
+  Citation `oda2026marginals' on page 1 undefined on input line 54
+  Citation `oda2026marginals' on page 2 undefined on input line 71
+  Citation `oda2026marginals' on page 3 undefined on input line 99
+  Citation `oda2026marginals' on page 4 undefined on input line 231
+  Citation `oliaro2025suffix' on page 3 undefined on input line 129
+  Citation `pan2024marconi' on page 2 undefined on input line 65
+  Citation `pan2025fasttree' on page 2 undefined on input line 65
+  Citation `pan2025fasttree' on page 6 undefined on input line 267
+  Citation `pytorch2025sglang' on page 2 undefined on input line 65
+  Citation `replayssm2026' on page 3 undefined on input line 81
+  Citation `replayssm2026' on page 3 undefined on input line 99
+  Citation `sglang2026qwen' on page 2 undefined on input line 65
+  Citation `wang2024opt' on page 1 undefined on input line 63
+  Citation `wang2026bole' on page 2 undefined on input line 75
+  Citation `wang2026bole' on page 2 undefined on input line 77
+  Citation `wang2026bole' on page 3 undefined on input line 99
+  Citation `wang2026bole' on page 4 undefined on input line 231
+  Citation `wang2026specla' on page 1 undefined on input line 54
+  Citation `wang2026specla' on page 2 undefined on input line 73
+  Citation `wang2026specla' on page 3 undefined on input line 99
+  Citation `wang2026specla' on page 4 undefined on input line 170
+  Citation `wang2026specla' on page 4 undefined on input line 231
+  Citation `wu2024snakes' on page 2 undefined on input line 68
+  Citation `wu2025stree' on page 1 undefined on input line 41
+  Citation `wu2025stree' on page 2 undefined on input line 68
+  Citation `yang2024delta' on page 2 undefined on input line 68
+  Citation `yang2024gated' on page 1 undefined on input line 41
+  Citation `yang2024gated' on page 2 undefined on input line 68
+  Citation `yang2024gated' on page 3 undefined on input line 117
+  Citation `yang2026onela' on page 3 undefined on input line 81
+  Citation `yang2026onela' on page 3 undefined on input line 99
+  Citation `yao2024deft' on page 2 undefined on input line 65
+  Citation `yao2024deft' on page 6 undefined on input line 267
+  Citation `ye2025flashinfer' on page 2 undefined on input line 65
+  Citation `zheng2024sglang' on page 2 undefined on input line 65
+  Citation `zhong2025specmamba' on page 2 undefined on input line 68
+  Reference `alg:verify' on page 4 undefined on input line 165
+  Reference `app:audit' on page 1 undefined on input line 58
+  Reference `app:fullmodel-protocol' on page 10 undefined on input line 1
+  Reference `app:settings' on page 7 undefined on input line 287
+  Reference `app:workload' on page 8 undefined on input line 1
+  Reference `eq:pooled-decode' on page 13 undefined on input line 354
+  Reference `eq:pooled-decode' on page 7 undefined on input line 7
+  Reference `eq:pooled-decode' on page 8 undefined on input line 12
+  Reference `fig:contract' on page 3 undefined on input line 114
+  Reference `fig:pipeline' on page 3 undefined on input line 129
+  Reference `sec:contract' on page 1 undefined on input line 58
+  Reference `sec:kernel' on page 1 undefined on input line 58
+  Reference `sec:kernel' on page 12 undefined on input line 45
+  Reference `sec:kernel' on page 5 undefined on input line 235
+  Reference `sec:limitations' on page 1 undefined on input line 54
+  Reference `sec:limitations' on page 12 undefined on input line 32
+  Reference `sec:limitations' on page 8 undefined on input line 23
+  Reference `sec:m1-qualification' on page 12 undefined on input line 47
+  Reference `sec:optimization' on page 1 undefined on input line 58
+  Reference `sec:protocol' on page 3 undefined on input line 129
+  Reference `sec:reconstruction-numerics' on page 2 undefined on input line 77
+  Reference `sec:related' on page 1 undefined on input line 58
+  Reference `sec:sampling-validation' on page 1 undefined on input line 56
+  Reference `sec:sampling-validation' on page 11 undefined on input line 31
+  Reference `sec:sampling-validation' on page 13 undefined on input line 24
+  Reference `sec:sampling-validation' on page 13 undefined on input line 356
+  Reference `sec:sampling-validation' on page 4 undefined on input line 165
+  Reference `sec:sampling-validation' on page 7 undefined on input line 1
+  Reference `sec:sampling-validation' on page 8 undefined on input line 1
+  Reference `sec:sampling-validation' on page 8 undefined on input line 25
+  Reference `tab:agent-study' on page 13 undefined on input line 24
+  Reference `tab:agent-study' on page 8 undefined on input line 1
+  Reference `tab:disjoint-replay' on page 13 undefined on input line 24
+  Reference `tab:disjoint-replay' on page 8 undefined on input line 25
+  Reference `tab:disjoint-replay' on page 9 undefined on input line 48
+  Reference `tab:drafting-passes' on page 13 undefined on input line 24
+  Reference `tab:drafting-passes' on page 8 undefined on input line 25
+  Reference `tab:drafting-passes' on page 9 undefined on input line 68
+  Reference `tab:fullmodel-agreement' on page 10 undefined on input line 9
+  Reference `tab:fullmodel-agreement' on page 13 undefined on input line 24
+  Reference `tab:gdn-component' on page 10 undefined on input line 23
+  Reference `tab:m1-qualification' on page 12 undefined on input line 32
+  Reference `tab:m1-qualification' on page 12 undefined on input line 47
+  Reference `tab:mechanism-memory-error' on page 12 undefined on input line 45
+  Reference `tab:optimization-map' on page 5 undefined on input line 235
+  Reference `tab:optimization-spans' on page 8 undefined on input line 1
+  Reference `tab:recovered-telemetry' on page 13 undefined on input line 24
+  Reference `tab:recovered-telemetry' on page 9 undefined on input line 20
+  Reference `tab:related' on page 3 undefined on input line 81
+  Reference `tab:replay-variants' on page 13 undefined on input line 24
+  Reference `tab:replay-variants' on page 8 undefined on input line 25
+  Reference `tab:request-replay' on page 13 undefined on input line 24
+  Reference `tab:request-replay' on page 8 undefined on input line 1
+  Reference `tab:request-replay' on page 8 undefined on input line 25
+  Reference `tab:request-replay' on page 9 undefined on input line 65
+  Reference `tab:sampling-faults' on page 11 undefined on input line 7
+  Reference `tab:swe-tasks' on page 13 undefined on input line 24
+  Reference `tab:swe-tasks' on page 14 undefined on input line 1
 Latexmk: Examining 'main.log'
 === TeX engine is 'pdfTeX'
 Latexmk: Found bibliography file(s) [ref.bib]
@@ -384,7 +954,7 @@ Rule 'bibtex main': File changes, etc:
    Changed files, or newly in use since previous run(s):
       'main.aux'
 ------------
-Run number 2 of rule 'bibtex main'
+Run number 1 of rule 'bibtex main'
 ------------
 ------------
 Running 'bibtex  "main.aux"'
@@ -403,6 +973,7 @@ Done.
 Rule 'pdflatex': File changes, etc:
    Changed files, or newly in use since previous run(s):
       'main.aux'
+      'main.out'
 ------------
 Run number 2 of rule 'pdflatex'
 ------------
