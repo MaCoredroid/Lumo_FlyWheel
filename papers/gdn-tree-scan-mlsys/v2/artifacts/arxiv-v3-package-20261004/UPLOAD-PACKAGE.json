@@ -1,11 +1,11 @@
 {
- "created_at_utc": "2026-10-04T19:20:45Z",
+ "created_at_utc": "2026-10-04T20:54:01Z",
  "article_id": "2609.23900",
  "replaces": "v2 (2026-10-01)",
  "title": "LumoTree: Path-Parallel Speculative Verification for Hybrid Language Models",
  "scope": "Manuscript compilation closure only; no README, private notes, logs, evidence archives, or generated output PDF included. Full-line author comments removed; class license comments retained.",
- "archive_bytes": 110965,
- "archive_sha256": "6a270eabb5d361a8cdb6b114d9cba0b8d51b78fbcf430094e914611416a9a23d",
+ "archive_bytes": 110924,
+ "archive_sha256": "a536bdedf42e043492680325a1670d61a448f4f9a09983dc43f0c3517847d7e0",
  "members": [
   {
    "path": "IEEEtran.cls",
@@ -44,18 +44,18 @@
   },
   {
    "path": "main.bbl",
-   "bytes": 13024,
-   "sha256": "f80f356c1630be07883899192bafccdf783c2dd9a668daee7491c761d9e4f337"
+   "bytes": 12982,
+   "sha256": "4342a389397fca6e7877a3b5ae84e3631aa32efbadb59082efcb4ba4c8c1be75"
   },
   {
    "path": "main.tex",
-   "bytes": 47751,
-   "sha256": "ad4585030850783480e859cce103d234b66fd9a2f58703d59863d87fea85c005"
+   "bytes": 47672,
+   "sha256": "dc9b4a56b78b0217e2271a8cf77d0c42ed630adfce939c484ce29c0ae26df531"
   },
   {
    "path": "ref.bib",
-   "bytes": 13939,
-   "sha256": "4e1718e00509b43903184061606fcb6d07b9c26976eabf2aeff3c90140b0f3e5"
+   "bytes": 13899,
+   "sha256": "3f13715510010210ba096d3de3a592a144a6de89d55903880292670ea8afee79"
   },
   {
    "path": "sections/execution-costs.tex",
@@ -136,7 +136,7 @@
  },
  "arxiv_pdf": {
   "path": "artifacts/arxiv-v3-package-20261004/arxiv-compiled-v3.pdf",
-  "sha256": "e28997559a03ea497f0751b5729f3dec51b242402a40a4858e34f6b7ef0535c5",
+  "sha256": "44d45b08a0b7a766d8802c6894335d3c9d55739ab7e366bf5836d7a747fff2b1",
   "pages": 15
  },
  "suggested_metadata": {
@@ -145,5 +145,6 @@
  },
  "uploaded": false,
  "submitted": false,
- "handoff": "User reviews and uploads; no arXiv action taken by this session"
+ "handoff": "User reviews and uploads; no arXiv action taken by this session",
+ "artifact_tag": "lumotree-v2-artifact-r2"
 }

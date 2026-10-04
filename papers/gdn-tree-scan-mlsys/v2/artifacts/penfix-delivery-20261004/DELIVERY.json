@@ -1,20 +1,20 @@
 {
  "schema": "claude.penfix-delivery.v2",
- "utc": "2026-10-04T19:20:45Z",
+ "utc": "2026-10-04T20:54:01Z",
  "manuscript_pdf": {
   "path": "artifacts/penfix-delivery-20261004/lumotree-penfix-20261004.pdf",
-  "sha256": "4315c2ff2acb63c48a75cf4cbe67c8fa9c26b236b211dc003519922f3ab33728",
+  "sha256": "a0bdd06b62d822e0c8b84beabe7763ff8fa236da5f5a02a8d25bd5e594467d23",
   "pages": 15
  },
  "source_archive": {
   "path": "artifacts/penfix-delivery-20261004/lumotree-source-penfix-20261004.tar.gz",
-  "sha256": "a3d82363b75d7004eca4d9e62542775cec416d06d2a5d3da0d288076587fb2f9"
+  "sha256": "1d2bdc40ef02a574d61f892c0dc58eee3e5cf0512c38520d1cfe57d54fd3be63"
  },
  "sources": {
-  "main.tex": "ad4585030850783480e859cce103d234b66fd9a2f58703d59863d87fea85c005",
+  "main.tex": "dc9b4a56b78b0217e2271a8cf77d0c42ed630adfce939c484ce29c0ae26df531",
   "abstract.tex": "6df1bdc2006279afc460b73e1232d9fc439687cfd18d4afadd3c9e9842bd9a45",
-  "ref.bib": "4e1718e00509b43903184061606fcb6d07b9c26976eabf2aeff3c90140b0f3e5",
-  "main.bbl": "f80f356c1630be07883899192bafccdf783c2dd9a668daee7491c761d9e4f337",
+  "ref.bib": "3f13715510010210ba096d3de3a592a144a6de89d55903880292670ea8afee79",
+  "main.bbl": "4342a389397fca6e7877a3b5ae84e3631aa32efbadb59082efcb4ba4c8c1be75",
   "IEEEtran.cls": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b",
   "sections/execution-costs.tex": "61a10ac34261a5f99a59d37a33cc72eea870e396f49a38f392532d5e1b5a2954",
   "sections/fullmodel-protocol.tex": "cb62d56162bb107789222945e9c2ef37dc47234e5e408daa40784a871e8ac3b5",
@@ -42,7 +42,7 @@
  },
  "arxiv_v3_package": {
   "path": "artifacts/arxiv-v3-package-20261004/lumotree-v3-arxiv-source.tar.gz",
-  "sha256": "6a270eabb5d361a8cdb6b114d9cba0b8d51b78fbcf430094e914611416a9a23d",
+  "sha256": "a536bdedf42e043492680325a1670d61a448f4f9a09983dc43f0c3517847d7e0",
   "clean_build_text_identical": true
  },
  "latex_warnings_in_main_log": 0,
@@ -52,12 +52,13 @@
   "manifest_sha256": "8bd98958e7d7a93deff032972fdfbccc6c48ee0c83855505a6c32d31a9a25172",
   "pre_edit_snapshot": "artifacts/before-penfix-20261004/"
  },
- "readme_sha256": "24440852b66c029d193aab88e06dcf882259451649b9a3a23d21b9c3dc1e0892",
+ "readme_sha256": "7f35bc20aa7696eccadac9e5bcb1e5b25f521364dc5976e1eea9eea045535904",
  "config_sha256": "89efd203f8173af72dbd0496d158cffe84c1ea6caf86593f7e3394f2d8df07b6",
  "second_red_team": "notes/venue-redteam-20261003.md (addendum, 4 October)",
  "actions_not_taken": [
   "no inference",
   "no arXiv action",
   "release tag unchanged"
- ]
+ ],
+ "artifact_tag": "lumotree-v2-artifact-r2"
 }

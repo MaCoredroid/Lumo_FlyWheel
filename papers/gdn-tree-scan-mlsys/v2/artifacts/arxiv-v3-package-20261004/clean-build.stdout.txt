@@ -819,7 +819,7 @@ elvetic/uhvb8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/urw/helvetic
 b></usr/local/texlive/2021/texmf-dist/fonts/type1/urw/times/utmbi8a.pfb></usr/l
 ocal/texlive/2021/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/local/texli
 ve/2021/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (15 pages, 350901 bytes).
+Output written on main.pdf (15 pages, 349266 bytes).
 Transcript written on main.log.
 Latexmk: Found input bbl file 'main.bbl'
 Latexmk: References changed.
@@ -1315,7 +1315,7 @@ ype1/urw/helvetic/uhvr8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/ur
 w/times/utmb8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/urw/times/ut
 mbi8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/urw/times/utmr8a.pfb>
 </usr/local/texlive/2021/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (15 pages, 356359 bytes).
+Output written on main.pdf (15 pages, 354705 bytes).
 Transcript written on main.log.
 Latexmk: Found input bbl file 'main.bbl'
 Latexmk: Log file says output to 'main.pdf'
