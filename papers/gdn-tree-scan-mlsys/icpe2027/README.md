@@ -1,6 +1,6 @@
 # ICPE 2027 research-track submission draft
 
-Started 4 October 2026 from the v3 manuscript (`../v2`, commit 18eae0c55) and the penalty-fix records (`../v2/results/claude-penfix-20261003/`). Build: `latexmk -pdf main.tex` (acmart sigconf, `anonymous,review`). Current state: 12 pages total, body ends on page 8 (limit: 10 pages excluding references and appendices), zero LaTeX warnings, no author-identifying strings in the sources or rendered text.
+Started 4 October 2026 from the v3 manuscript (`../v2`, commit 18eae0c55) and the penalty-fix records (`../v2/results/claude-penfix-20261003/`). Build: `latexmk -pdf main.tex` (acmart sigconf, `anonymous,review`). Current state: 13 pages total, body ends on page 9 (limit: 10 pages excluding references and appendices), zero LaTeX warnings, no author-identifying strings in the sources or rendered text.
 
 **Framing.** The verifier makes tree speculation possible on a recurrent-hybrid model at the cost of a tuned chain-speculation stack; the measurement and audit methodology is the second contribution; parity with SGLang's chain configuration is the cost of hosting tree verification, not a shortfall.
 

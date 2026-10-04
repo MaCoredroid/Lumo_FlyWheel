@@ -7,7 +7,7 @@
   "port_head": "bdfdb596fd75c572b7fe4d5bf9bed42f2d29ad98"
  },
  "patcher_sha256": "9de17bba337f0c5be1198ca4d164c6983291870deb23f0ae293098d68b1d1cbf",
- "synced_utc": "2026-10-04T05:08:20Z",
+ "synced_utc": "2026-10-04T22:27:11Z",
  "files": [
   {
    "path": "code/fr13_fixed32_topology.py",
@@ -1820,6 +1820,96 @@
    "sha256": "ea060a06237b16b39501632efdf232224a734551d18df8d9cf60fd600d8f2a03"
   },
   {
+   "path": "raw/replay/sglang-s7k1d8-cfS2-sampled-20261004T215426Z/container_id.txt",
+   "bytes": 65,
+   "sha256": "54bfdbb732ffa99cba255cc7ef7a7cd814d0d898ebaf7d7a1c63b772d80b9e4d"
+  },
+  {
+   "path": "raw/replay/sglang-s7k1d8-cfS2-sampled-20261004T215426Z/driver.log",
+   "bytes": 4811,
+   "sha256": "21f78583449ec8e2687dba9dbf6cff1e2f4863e2c02d51609695ebe7ede86f3a"
+  },
+  {
+   "path": "raw/replay/sglang-s7k1d8-cfS2-sampled-20261004T215426Z/engine.log",
+   "bytes": 95371,
+   "sha256": "b2ce630c4db74ee5ebf3a96bc854874e877580eee88a0622b652bface4d57f10"
+  },
+  {
+   "path": "raw/replay/sglang-s7k1d8-cfS2-sampled-20261004T215426Z/free_before_boot.txt",
+   "bytes": 207,
+   "sha256": "3280c0755609084aeb728878ef2c6f92d5081f3eca0984426c22f84c39072858"
+  },
+  {
+   "path": "raw/replay/sglang-s7k1d8-cfS2-sampled-20261004T215426Z/metrics_boot.txt",
+   "bytes": 63621,
+   "sha256": "4978e36726eed75b41766bec07ec434f5c3be94258311fd46e99a8ce653ba463"
+  },
+  {
+   "path": "raw/replay/sglang-s7k1d8-cfS2-sampled-20261004T215426Z/metrics_end.txt",
+   "bytes": 83902,
+   "sha256": "92705b1fe0739d8cc0ad75f2dcb0a73bb7eee42e9ad6319b12ad608bfe136b6e"
+  },
+  {
+   "path": "raw/replay/sglang-s7k1d8-cfS2-sampled-20261004T215426Z/replay.jsonl",
+   "bytes": 90438,
+   "sha256": "be8dc7fc47f1812f5925b24baae593aaf2e549514a4d2666e8a87e8c4037c405"
+  },
+  {
+   "path": "raw/replay/sglang-s7k1d8-cfS2-sampled-20261004T215426Z/serve_cmd.txt",
+   "bytes": 667,
+   "sha256": "c3dcf294c57eac6ced0d613ac427d1b8a60fdb5ba02a256839e8e98c8a35a093"
+  },
+  {
+   "path": "raw/replay/sglang-s7k1d8-cfS2-sampled-20261004T215426Z/warmup.jsonl",
+   "bytes": 853,
+   "sha256": "b0f65cf267017cd9a6c7a7a1dd26c6393ad11fab0277c81f7be11e1bd7ae5e33"
+  },
+  {
+   "path": "raw/replay/sglang-s7k1d8-cfS3-sampled-20261004T221008Z/container_id.txt",
+   "bytes": 65,
+   "sha256": "8fb1d79de7c61deb53ee85b40e4d49ef12789a7cb49713bd14a80abe66f88fff"
+  },
+  {
+   "path": "raw/replay/sglang-s7k1d8-cfS3-sampled-20261004T221008Z/driver.log",
+   "bytes": 4814,
+   "sha256": "95f9a135d2e70104b9bc1e8ff0a355c19f24e3237582bff35cfd5d050c8bf4fc"
+  },
+  {
+   "path": "raw/replay/sglang-s7k1d8-cfS3-sampled-20261004T221008Z/engine.log",
+   "bytes": 94836,
+   "sha256": "c73de4cf4e8269512f6257a4c81e32f5d3fe7b8242141aeac056a4d4b55ab79c"
+  },
+  {
+   "path": "raw/replay/sglang-s7k1d8-cfS3-sampled-20261004T221008Z/free_before_boot.txt",
+   "bytes": 207,
+   "sha256": "3280c0755609084aeb728878ef2c6f92d5081f3eca0984426c22f84c39072858"
+  },
+  {
+   "path": "raw/replay/sglang-s7k1d8-cfS3-sampled-20261004T221008Z/metrics_boot.txt",
+   "bytes": 63621,
+   "sha256": "5ab7aaf9b70da4a9d4dc7052ad3c6572461bd912ba907180d08c723b2ae10b6d"
+  },
+  {
+   "path": "raw/replay/sglang-s7k1d8-cfS3-sampled-20261004T221008Z/metrics_end.txt",
+   "bytes": 83898,
+   "sha256": "c5d0557076a9ccb74761a6078ed256cdcefa0449c677b0a50d3b6f7128f0d548"
+  },
+  {
+   "path": "raw/replay/sglang-s7k1d8-cfS3-sampled-20261004T221008Z/replay.jsonl",
+   "bytes": 88088,
+   "sha256": "947038fbe5b90024125be77ed813f65b7b371339d3a875ccc22fadec243627f5"
+  },
+  {
+   "path": "raw/replay/sglang-s7k1d8-cfS3-sampled-20261004T221008Z/serve_cmd.txt",
+   "bytes": 667,
+   "sha256": "c3dcf294c57eac6ced0d613ac427d1b8a60fdb5ba02a256839e8e98c8a35a093"
+  },
+  {
+   "path": "raw/replay/sglang-s7k1d8-cfS3-sampled-20261004T221008Z/warmup.jsonl",
+   "bytes": 853,
+   "sha256": "1ab5ab7c40099486a56640f6af6b714aa3a0b2018a6fd781dc0d2b43aa2b195c"
+  },
+  {
    "path": "raw/replay/tree-cfPF1-sampled-20261003T201945Z/container_after_teardown.log",
    "bytes": 134906,
    "sha256": "480d2ebd62479985495662528c99f3b133facff0e9a9c7673cfc7dcc39df4531"
@@ -3594,5 +3684,6 @@
   "q1v3v3 tensor objects and the vehicle serve tree",
   "SWE logs/fr13_fixed32_work_census.jsonl (358 MB) and per-task dcgm_samples.jsonl",
   "replay *.samples.* timer sample files"
- ]
+ ],
+ "additions_20261004": "SGLang EAGLE 7/8 replicates cfS2 and cfS3 on the confirmation set (GB10 branch a4d76cc64)"
 }

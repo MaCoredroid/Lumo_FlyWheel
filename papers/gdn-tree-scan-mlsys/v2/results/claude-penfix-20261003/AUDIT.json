@@ -6,7 +6,7 @@
   "wt_head": "1dd1cbf1f56c38abc488bb227202b795b162ceca",
   "port_head": "bdfdb596fd75c572b7fe4d5bf9bed42f2d29ad98"
  },
- "synced_files_sha_verified": 716,
+ "synced_files_sha_verified": 734,
  "tuning_corpus": {
   "tree_fixed": {
    "runs": 3,
@@ -78,7 +78,23 @@
    ]
   },
   "ratio_fixed_over_mtp5": 1.1177704031357178,
-  "all_fixed_tree_rates_above_all_mtp5": true
+  "all_fixed_tree_rates_above_all_mtp5": true,
+  "sglang_s7k1d8": {
+   "runs": 3,
+   "pooled_tokens_s": 30.494787968013636,
+   "run_rates": [
+    30.235708245813672,
+    30.877448515723763,
+    30.370295102462084
+   ],
+   "run_names": [
+    "sglang-s7k1d8-cfS1-sampled-20261002T220022Z",
+    "sglang-s7k1d8-cfS2-sampled-20261004T215426Z",
+    "sglang-s7k1d8-cfS3-sampled-20261004T221008Z"
+   ],
+   "input_parity": "chat endpoint; messages shared, serialized token IDs not matched"
+  },
+  "ratio_fixed_tree_over_sglang": 1.0087245323680023
  },
  "sampling": {
   "captured_rows": 2480,

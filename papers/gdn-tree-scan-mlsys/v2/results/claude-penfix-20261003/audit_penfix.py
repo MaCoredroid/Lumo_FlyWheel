@@ -199,6 +199,20 @@ mtp_tune = sorted({p.parent.name: p for p in mtp_tune}.values(), key=lambda p: p
 mtp_conf = sorted({p.parent.name: p for p in (V2 / "results").glob("*/raw/replay/mtp5-cfM*/replay.jsonl")}.values(), key=lambda p: p.parent.name)
 out["output_length_comparability"] = {"tuning_corpus": length_compare(tuning, mtp_tune), "confirmation_set": length_compare(confirm, mtp_conf),
                                       "mtp5_runs": [p.parent.name for p in mtp_tune + mtp_conf]}
+
+# ---- SGLang EAGLE 7/8 on the confirmation set: three replicates (cfS1 earlier tree, cfS2/cfS3 here) -------
+sg = sorted({q.parent.name: q for q in list((V2 / "results").glob("*/raw/replay/sglang-s7k1d8-cfS*/replay.jsonl"))}.values(), key=lambda q: q.parent.name)
+def replay_sg(q):
+    rows = [json.loads(l) for l in Path(q).read_text().splitlines()]
+    assert len(rows) == 43 and not any(r.get("error") for r in rows)
+    n = sum(r["completion_tokens"] for r in rows); t = sum(r["t_e2e_s"] - r["t_ttft_s"] for r in rows)
+    return {"run": Path(q).parent.name, "output_tokens": n, "decode_seconds": t, "tokens_s": (n - 43) / t}
+sgr = [replay_sg(q) for q in sg]
+assert len(sgr) == 3
+out["confirmation_set"]["sglang_s7k1d8"] = {"runs": 3, "pooled_tokens_s": sum(r["output_tokens"] - 43 for r in sgr) / sum(r["decode_seconds"] for r in sgr),
+                                            "run_rates": [r["tokens_s"] for r in sgr], "run_names": [r["run"] for r in sgr],
+                                            "input_parity": "chat endpoint; messages shared, serialized token IDs not matched"}
+out["confirmation_set"]["ratio_fixed_tree_over_sglang"] = out["confirmation_set"]["tree_fixed"]["pooled_tokens_s"] / out["confirmation_set"]["sglang_s7k1d8"]["pooled_tokens_s"]
 (HERE / "AUDIT.json").write_text(json.dumps(out, indent=1, default=str))
 print(json.dumps({"tuning": {k: out["tuning_corpus"]["tree_fixed"][k] for k in ("pooled_tokens_s", "run_rates", "accepted_per_event")}, "tuning_ratio": out["tuning_corpus"]["ratio_fixed_over_mtp5"],
                   "tuning_timers": out["tuning_corpus"]["tree_fixed_timer_means_ms"],
