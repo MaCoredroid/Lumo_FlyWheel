@@ -1,150 +1,158 @@
 {
- "created_at_utc": "2026-10-04T21:05:16Z",
- "article_id": "2609.23900",
- "replaces": "v2 (2026-10-01)",
- "title": "LumoTree: Path-Parallel Speculative Verification for Hybrid Language Models",
- "scope": "Manuscript compilation closure only; no README, private notes, logs, evidence archives, or generated output PDF included. Full-line author comments removed; class license comments retained.",
- "archive_bytes": 110965,
- "archive_sha256": "8492892fe950346a98c34de7cd50d03ce22161b79eb27e52bc8211e809ea8550",
- "members": [
-  {
-   "path": "IEEEtran.cls",
-   "bytes": 281789,
-   "sha256": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b"
+  "created_at_utc": "2026-10-04T21:05:16Z",
+  "article_id": "2609.23900",
+  "replaces": "v2 (2026-10-01)",
+  "title": "LumoTree: Path-Parallel Speculative Verification for Hybrid Language Models",
+  "scope": "Manuscript compilation closure only; no README, private notes, logs, evidence archives, or generated output PDF included. Full-line author comments removed; class license comments retained.",
+  "archive_bytes": 110965,
+  "archive_sha256": "8492892fe950346a98c34de7cd50d03ce22161b79eb27e52bc8211e809ea8550",
+  "members": [
+    {
+      "path": "IEEEtran.cls",
+      "bytes": 281789,
+      "sha256": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b"
+    },
+    {
+      "path": "abstract.tex",
+      "bytes": 999,
+      "sha256": "6df1bdc2006279afc460b73e1232d9fc439687cfd18d4afadd3c9e9842bd9a45"
+    },
+    {
+      "path": "figures/cost-breakdown.tikz",
+      "bytes": 1038,
+      "sha256": "a29baf437e9f19ee1c33111a07645daed2ace8857492b6daf29468452ee62fee"
+    },
+    {
+      "path": "figures/pipeline.tikz",
+      "bytes": 4669,
+      "sha256": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c"
+    },
+    {
+      "path": "figures/scan-replay.tikz",
+      "bytes": 1035,
+      "sha256": "19c984883a8b70cc5209c33fa4f62e98aba708ad2b025568d1b2d600a3e4ecd0"
+    },
+    {
+      "path": "figures/spine-layout.tikz",
+      "bytes": 820,
+      "sha256": "390a6d64b34627e93a2d63cae64d971abe54569be978fa5477984e3228d5579c"
+    },
+    {
+      "path": "figures/state-contract.tikz",
+      "bytes": 1056,
+      "sha256": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898"
+    },
+    {
+      "path": "main.bbl",
+      "bytes": 12870,
+      "sha256": "a45c471c4f83bb0b65f1252a1a4c46a45a97bd57ff4f9282498fe1d9fd49fa28"
+    },
+    {
+      "path": "main.tex",
+      "bytes": 48172,
+      "sha256": "58d1af812d4f1ad0abc809ac0b1f26bb47711d60abf0b372ee1855bb04ce92a9"
+    },
+    {
+      "path": "ref.bib",
+      "bytes": 13789,
+      "sha256": "f39c5bf840489483b80cef32db4ac4e41c16772b84a57181dce6f7c15af0f764"
+    },
+    {
+      "path": "sections/execution-costs.tex",
+      "bytes": 1284,
+      "sha256": "61a10ac34261a5f99a59d37a33cc72eea870e396f49a38f392532d5e1b5a2954"
+    },
+    {
+      "path": "sections/fullmodel-protocol.tex",
+      "bytes": 2540,
+      "sha256": "cb62d56162bb107789222945e9c2ef37dc47234e5e408daa40784a871e8ac3b5"
+    },
+    {
+      "path": "sections/fullmodel-validation.tex",
+      "bytes": 3347,
+      "sha256": "fe34af1c037a52890ba86fb3ca41bc8def41876b2d3fd013272f8f7508526457"
+    },
+    {
+      "path": "sections/mechanism-costs.tex",
+      "bytes": 5057,
+      "sha256": "fbc21f0b2fc66bf650706f49bdb8ef5bfa7856839570e5ebb5e16843769a0f2a"
+    },
+    {
+      "path": "sections/native-continuation.tex",
+      "bytes": 2388,
+      "sha256": "366222cac0b744bbc996cca7924e96ebc262a50c115cf89a83f245ecf0928266"
+    },
+    {
+      "path": "sections/optimization-spans.tex",
+      "bytes": 1630,
+      "sha256": "ae35b3b0ea31e4ee1c3baa532a9b6d0438e51422294d631ec4d647dd5e5e89a5"
+    },
+    {
+      "path": "sections/recurrent-comparison.tex",
+      "bytes": 2777,
+      "sha256": "0ac8ea1e338af46351a0feaac63f910c8698d30ba3bfa15c898c2ee5db3f3814"
+    },
+    {
+      "path": "sections/recurrent-validation.tex",
+      "bytes": 1986,
+      "sha256": "bc1748a5cbcec41f4c13fad78e585170ca5066504a274861b11eb878936f850a"
+    },
+    {
+      "path": "sections/replay-protocol.tex",
+      "bytes": 2673,
+      "sha256": "1adda3b0fa834ddb493b6b239f47f09d7ad21c1acab7bb9de64aada0aa072cc1"
+    },
+    {
+      "path": "sections/request-replay.tex",
+      "bytes": 6683,
+      "sha256": "147cb289430238caf111cb891877ed416310b25ba1a864db92b2762b4a8e4b90"
+    },
+    {
+      "path": "sections/sampling-validation.tex",
+      "bytes": 3605,
+      "sha256": "30bff91f581d9f1d46c7aff8d8b7055d8c6d4c3f4873bb0e7cd5ef4b47893ed3"
+    },
+    {
+      "path": "sections/workload-configuration.tex",
+      "bytes": 1770,
+      "sha256": "d75f438abb83b0e03447add75e55f9fde800c85575a44436f51499cf762bad49"
+    },
+    {
+      "path": "sections/workload-details.tex",
+      "bytes": 1106,
+      "sha256": "ef4cc006e9f17f8b71e05c825f410b5960e7f821036046b15bddb25613430997"
+    },
+    {
+      "path": "sections/workload.tex",
+      "bytes": 2672,
+      "sha256": "f0a3c739d4926c50cb81524952d19277d714ed27c0b7aa68953048f88857d114"
+    }
+  ],
+  "clean_build": {
+    "success": true,
+    "pages": 15,
+    "latex_warnings": 0,
+    "text_equal_to_current_pdf": true
   },
-  {
-   "path": "abstract.tex",
-   "bytes": 999,
-   "sha256": "6df1bdc2006279afc460b73e1232d9fc439687cfd18d4afadd3c9e9842bd9a45"
+  "arxiv_pdf": {
+    "path": "artifacts/arxiv-v3-package-20261004/arxiv-compiled-v3.pdf",
+    "sha256": "f8e1db195dba6ed2d714970ad06fe72bd6d1a3b33bc84eb2ea3723babd1b29b0",
+    "pages": 15
   },
-  {
-   "path": "figures/cost-breakdown.tikz",
-   "bytes": 1038,
-   "sha256": "a29baf437e9f19ee1c33111a07645daed2ace8857492b6daf29468452ee62fee"
+  "suggested_metadata": {
+    "comments": "15 pages, 3 figures. v3: measurements re-taken with corrected per-path penalty histories in the tree sampler",
+    "primary_category": "cs.LG"
   },
-  {
-   "path": "figures/pipeline.tikz",
-   "bytes": 4669,
-   "sha256": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c"
-  },
-  {
-   "path": "figures/scan-replay.tikz",
-   "bytes": 1035,
-   "sha256": "19c984883a8b70cc5209c33fa4f62e98aba708ad2b025568d1b2d600a3e4ecd0"
-  },
-  {
-   "path": "figures/spine-layout.tikz",
-   "bytes": 820,
-   "sha256": "390a6d64b34627e93a2d63cae64d971abe54569be978fa5477984e3228d5579c"
-  },
-  {
-   "path": "figures/state-contract.tikz",
-   "bytes": 1056,
-   "sha256": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898"
-  },
-  {
-   "path": "main.bbl",
-   "bytes": 12870,
-   "sha256": "a45c471c4f83bb0b65f1252a1a4c46a45a97bd57ff4f9282498fe1d9fd49fa28"
-  },
-  {
-   "path": "main.tex",
-   "bytes": 48172,
-   "sha256": "58d1af812d4f1ad0abc809ac0b1f26bb47711d60abf0b372ee1855bb04ce92a9"
-  },
-  {
-   "path": "ref.bib",
-   "bytes": 13789,
-   "sha256": "f39c5bf840489483b80cef32db4ac4e41c16772b84a57181dce6f7c15af0f764"
-  },
-  {
-   "path": "sections/execution-costs.tex",
-   "bytes": 1284,
-   "sha256": "61a10ac34261a5f99a59d37a33cc72eea870e396f49a38f392532d5e1b5a2954"
-  },
-  {
-   "path": "sections/fullmodel-protocol.tex",
-   "bytes": 2540,
-   "sha256": "cb62d56162bb107789222945e9c2ef37dc47234e5e408daa40784a871e8ac3b5"
-  },
-  {
-   "path": "sections/fullmodel-validation.tex",
-   "bytes": 3347,
-   "sha256": "fe34af1c037a52890ba86fb3ca41bc8def41876b2d3fd013272f8f7508526457"
-  },
-  {
-   "path": "sections/mechanism-costs.tex",
-   "bytes": 5057,
-   "sha256": "fbc21f0b2fc66bf650706f49bdb8ef5bfa7856839570e5ebb5e16843769a0f2a"
-  },
-  {
-   "path": "sections/native-continuation.tex",
-   "bytes": 2388,
-   "sha256": "366222cac0b744bbc996cca7924e96ebc262a50c115cf89a83f245ecf0928266"
-  },
-  {
-   "path": "sections/optimization-spans.tex",
-   "bytes": 1630,
-   "sha256": "ae35b3b0ea31e4ee1c3baa532a9b6d0438e51422294d631ec4d647dd5e5e89a5"
-  },
-  {
-   "path": "sections/recurrent-comparison.tex",
-   "bytes": 2777,
-   "sha256": "0ac8ea1e338af46351a0feaac63f910c8698d30ba3bfa15c898c2ee5db3f3814"
-  },
-  {
-   "path": "sections/recurrent-validation.tex",
-   "bytes": 1986,
-   "sha256": "bc1748a5cbcec41f4c13fad78e585170ca5066504a274861b11eb878936f850a"
-  },
-  {
-   "path": "sections/replay-protocol.tex",
-   "bytes": 2673,
-   "sha256": "1adda3b0fa834ddb493b6b239f47f09d7ad21c1acab7bb9de64aada0aa072cc1"
-  },
-  {
-   "path": "sections/request-replay.tex",
-   "bytes": 6683,
-   "sha256": "147cb289430238caf111cb891877ed416310b25ba1a864db92b2762b4a8e4b90"
-  },
-  {
-   "path": "sections/sampling-validation.tex",
-   "bytes": 3605,
-   "sha256": "30bff91f581d9f1d46c7aff8d8b7055d8c6d4c3f4873bb0e7cd5ef4b47893ed3"
-  },
-  {
-   "path": "sections/workload-configuration.tex",
-   "bytes": 1770,
-   "sha256": "d75f438abb83b0e03447add75e55f9fde800c85575a44436f51499cf762bad49"
-  },
-  {
-   "path": "sections/workload-details.tex",
-   "bytes": 1106,
-   "sha256": "ef4cc006e9f17f8b71e05c825f410b5960e7f821036046b15bddb25613430997"
-  },
-  {
-   "path": "sections/workload.tex",
-   "bytes": 2672,
-   "sha256": "f0a3c739d4926c50cb81524952d19277d714ed27c0b7aa68953048f88857d114"
+  "uploaded": true,
+  "submitted": true,
+  "handoff": "Submitted through arXiv UI by Codex after explicit user authorization; awaiting processing and announcement",
+  "artifact_tag": "lumotree-v2-artifact-r2",
+  "submission_id": "8178517",
+  "submission_status": "processing",
+  "submission_receipt": "SUBMISSION-RECEIPT.json",
+  "server_pdf": {
+    "path": "arxiv-server-v3.pdf",
+    "pages": 16,
+    "sha256": "111831a61be167e8e9432076352a061c8d16f1c046015f9eb6de7e6493fae0b0"
   }
- ],
- "clean_build": {
-  "success": true,
-  "pages": 15,
-  "latex_warnings": 0,
-  "text_equal_to_current_pdf": true
- },
- "arxiv_pdf": {
-  "path": "artifacts/arxiv-v3-package-20261004/arxiv-compiled-v3.pdf",
-  "sha256": "f8e1db195dba6ed2d714970ad06fe72bd6d1a3b33bc84eb2ea3723babd1b29b0",
-  "pages": 15
- },
- "suggested_metadata": {
-  "comments": "15 pages, 3 figures. v3: measurements re-taken with corrected per-path penalty histories in the tree sampler",
-  "primary_category": "cs.LG"
- },
- "uploaded": false,
- "submitted": false,
- "handoff": "User reviews and uploads; no arXiv action taken by this session",
- "artifact_tag": "lumotree-v2-artifact-r2"
 }

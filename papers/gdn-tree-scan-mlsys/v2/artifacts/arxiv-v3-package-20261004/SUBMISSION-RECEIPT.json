@@ -1,0 +1,36 @@
+{
+  "recorded_at_utc": "2026-10-04T21:38:30+00:00",
+  "article_id": "2609.23900",
+  "requested_version": "v3",
+  "replaces": "v2",
+  "submission_id": "8178517",
+  "submitted": true,
+  "status_observed": "processing",
+  "confirmation_observed": "Article submitted",
+  "submission_type_observed": "Replacement of 2609.23900",
+  "announcement_confirmed": false,
+  "announcement_time": null,
+  "article_url": "https://arxiv.org/abs/2609.23900",
+  "account_status_url": "https://arxiv.org/user/",
+  "source_commit": "106c40054e6674f0d77381feb5841a009ad4e1c7",
+  "source_archive": "lumotree-v3-arxiv-source.tar.gz",
+  "source_archive_sha256": "8492892fe950346a98c34de7cd50d03ce22161b79eb27e52bc8211e809ea8550",
+  "manuscript_edited_for_submission": false,
+  "compiler": "pdflatex (TeX Live 2025)",
+  "compiler_status_observed": "SUCCEEDED",
+  "server_pdf": {
+    "path": "arxiv-server-v3.pdf",
+    "pages": 16,
+    "sha256": "111831a61be167e8e9432076352a061c8d16f1c046015f9eb6de7e6493fae0b0"
+  },
+  "metadata": {
+    "title": "LumoTree: Path-Parallel Speculative Verification for Hybrid Language Models",
+    "authors": "Zhiyuan Ma",
+    "abstract": "Tree speculative decoding for recurrent-hybrid language models requires each accepted path to maintain consistent recurrent state, convolution history, and attention caches. We present LumoTree, a GPU serving design that coordinates verification and commitment through a shared tree descriptor. The verifier processes independent paths in parallel and reuses recurrent state tiles across local updates. Boundary states connect dependent paths. Accepted-path replay publishes the selected continuation into native running state, alongside coordinated convolution gathering and attention-cache remapping. Fused selection, device-resident acceptance, graph replay, and tree-aware attention integrate this organization into the serving cycle. The design separates temporary branch computation from persistent request state while retaining native prefix-cache interfaces. We evaluate numerical behavior, serving performance, and coding-agent outcomes on NVIDIA DGX Spark.",
+    "comments": "16 pages, 3 figures. v3: measurements re-taken with corrected per-path penalty histories in the tree sampler",
+    "primary_category": "cs.LG",
+    "license": "https://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+  },
+  "submission_agreement_authorization": "User explicitly replied: Accept and continue submitting v3",
+  "verification_note": "Uploaded frozen source archive; arXiv compilation succeeded. The server PDF has 16 pages versus the local 15-page build, with the final reference on page 16. Title, author, abstract, metadata, and processing status were verified in the arXiv UI."
+}

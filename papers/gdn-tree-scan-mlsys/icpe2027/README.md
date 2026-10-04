@@ -7,7 +7,7 @@ Started 4 October 2026 from the v3 manuscript (`../v2`, commit 18eae0c55) and th
 **Decisions still open (author).**
 - Title (current: "Hosting Tree Speculation on a Recurrent-Hybrid Model: Verifier Design, Audit Methodology, and Serving Evidence"); must differ from the arXiv title.
 - System name macro `\sys` (current placeholder: TreeHost). One line in `main.tex`.
-- Anonymized artifact: an anonymous repository holding the paper source, `results/claude-penfix-20261003/`, the reducers and the patcher diff with names and host paths scrubbed; the link goes through the submission system. Reference [1] (`anon2026artifact`) is the placeholder.
+- Anonymized artifact: done. Private source repo `MaCoredroid/icpe27-artifact` (scrubbed copy of `icpe2027/artifact/`), mirrored read-only at https://anonymous.4open.science/r/treehost-artifact/ (Anonymous GitHub, GitHub App scoped to that one repo; terms Lumo/LumoTree/Zhiyuan/MaCoredroid/FlyWheel/coredroid/Mark Ma redacted; expires 1 June 2027 and is removed, not redirected). Reference [1] (`anon2026artifact`) carries the link. To update the mirror, push to the private repo and press Refresh on the Anonymous GitHub dashboard.
 - Optional batch 2–4 replay sweep on GB10 (about one GPU day) to answer the "batch 1 only" threat.
 
 **Dates (AoE).** Abstract 9 Nov 2026, paper 16 Nov 2026, notification 25 Jan 2027, camera-ready 12 Mar 2027; conference 24–28 May 2027, Gothenburg. Artifact Evaluation and Emerging Research tracks: details TBA.
