@@ -1,0 +1,62 @@
+{
+ "schema": "claude.penfix-delivery.v1",
+ "utc": "2026-10-04T05:12:27Z",
+ "manuscript_pdf": {
+  "path": "artifacts/penfix-delivery-20261004/lumotree-penfix-20261004.pdf",
+  "sha256": "8d25c1e15b8377164325ee6a65b8d48cf5c49a235c2160a61905f7de49d1b5a2",
+  "pages": 15
+ },
+ "source_archive": {
+  "path": "artifacts/penfix-delivery-20261004/lumotree-source-penfix-20261004.tar.gz",
+  "sha256": "ddc61fe992fa3a87e78d56ea71563994fa6c859f3d407be5b959609deec4e491"
+ },
+ "sources": {
+  "main.tex": "2ec6c83eff9edd8f4533525d6ee821a2dafec4b7624867b5bd12806f238761f1",
+  "abstract.tex": "6df1bdc2006279afc460b73e1232d9fc439687cfd18d4afadd3c9e9842bd9a45",
+  "ref.bib": "6cba931832435ef088018bcb885b1117e0154863cb081e9da974c5ec2bffa7a2",
+  "main.bbl": "392512456ceb65b6d3e8b5e06b522910508f4984792a8654bde42b0e6df67c30",
+  "IEEEtran.cls": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b",
+  "sections/execution-costs.tex": "61a10ac34261a5f99a59d37a33cc72eea870e396f49a38f392532d5e1b5a2954",
+  "sections/fullmodel-protocol.tex": "cb62d56162bb107789222945e9c2ef37dc47234e5e408daa40784a871e8ac3b5",
+  "sections/fullmodel-validation.tex": "acc09b132dd0c5cb93f78a604a39c1b6f3989bd0f93d42a1a04e4b8a7e551814",
+  "sections/mechanism-costs.tex": "fbc21f0b2fc66bf650706f49bdb8ef5bfa7856839570e5ebb5e16843769a0f2a",
+  "sections/native-continuation.tex": "366222cac0b744bbc996cca7924e96ebc262a50c115cf89a83f245ecf0928266",
+  "sections/optimization-spans.tex": "ae35b3b0ea31e4ee1c3baa532a9b6d0438e51422294d631ec4d647dd5e5e89a5",
+  "sections/recurrent-comparison.tex": "0ac8ea1e338af46351a0feaac63f910c8698d30ba3bfa15c898c2ee5db3f3814",
+  "sections/recurrent-validation.tex": "4b8540c9162a2de4c44574ef10178e42674480cc579efca0cfca14fc70edc953",
+  "sections/replay-protocol.tex": "1adda3b0fa834ddb493b6b239f47f09d7ad21c1acab7bb9de64aada0aa072cc1",
+  "sections/request-replay.tex": "a48985b9deed99ff2cfb1f7a991c38cb6d89c575d27d38d9cbea5bbc4a4e4365",
+  "sections/sampling-validation.tex": "2e848d6eeb22727a58815cb623933aa2172da272590dee30243d5c36364539c0",
+  "sections/workload-configuration.tex": "5d71a8bcbe69cb256e73aa1c84d1737ea4514a8eedee5c7975503f65cddbcbbd",
+  "sections/workload-details.tex": "e1277d71030d6d1f658e5d0f81913226967e4539f42883a3e540c562464db4ce",
+  "sections/workload.tex": "f0a3c739d4926c50cb81524952d19277d714ed27c0b7aa68953048f88857d114",
+  "figures/cost-breakdown.tikz": "a29baf437e9f19ee1c33111a07645daed2ace8857492b6daf29468452ee62fee",
+  "figures/e1-timing.json": "b1e2f4bb8bbb0ad269a8d7df4d3a21be4bff55e3083155698d68bf5595b15e3f",
+  "figures/e1-timing.pdf": "9fc36e22047056751bb540da8ce27983f1683baf4ec69ebad787c72cd06bdf61",
+  "figures/e1-timing.png": "3bf52a3535c5028acfa1c2a670c821e442c5f00bb9b3d4565c933fa9e4043904",
+  "figures/pipeline-preview.png": "1cb62f14b0e5d192c3f2cc8c90de10ed3459184a0a44887ff0532c05252db2bc",
+  "figures/pipeline.tikz": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c",
+  "figures/scan-replay.tikz": "19c984883a8b70cc5209c33fa4f62e98aba708ad2b025568d1b2d600a3e4ecd0",
+  "figures/spine-layout.tikz": "390a6d64b34627e93a2d63cae64d971abe54569be978fa5477984e3228d5579c",
+  "figures/state-contract.tikz": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898"
+ },
+ "extracted_rebuild": {
+  "pages": 15,
+  "latexmk_rc": 0,
+  "text_identical_to_canonical": true,
+  "latex_warnings_in_main_log": 0
+ },
+ "evidence": {
+  "audit": "results/claude-penfix-20261003/AUDIT.json",
+  "audit_sha256": "851ea26c56748cd5d63cbd1c1e118df0745bcec1a70666f786830ffe4fe7be25",
+  "manifest_sha256": "8bd98958e7d7a93deff032972fdfbccc6c48ee0c83855505a6c32d31a9a25172",
+  "pre_edit_snapshot": "artifacts/before-penfix-20261004/"
+ },
+ "readme_sha256": "d7edfdd5060e242978c56cb2f5bce41c36b3386cad7e35dc138153f21bcd7c8b",
+ "config_sha256": "89efd203f8173af72dbd0496d158cffe84c1ea6caf86593f7e3394f2d8df07b6",
+ "actions_not_taken": [
+  "no inference",
+  "no arXiv action",
+  "release tag unchanged"
+ ]
+}

@@ -1,0 +1,48 @@
+{
+ "dir": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261003T223952Z_20261003T223952Z/hydra27_fixed32_promoab_C_v2swe20261003T223952Z/",
+ "tasks": {
+  "13977": {
+   "verdict": "failed",
+   "agent_s": 648.6
+  },
+  "14096": {
+   "verdict": "resolved",
+   "agent_s": 1058.3
+  },
+  "14182": {
+   "verdict": "resolved",
+   "agent_s": 1461.3
+  },
+  "14309": {
+   "verdict": "resolved",
+   "agent_s": 671.9
+  },
+  "14365": {
+   "verdict": "failed",
+   "agent_s": 626.0
+  },
+  "14369": {
+   "verdict": "failed",
+   "agent_s": 1517.4
+  },
+  "14508": {
+   "verdict": "resolved",
+   "agent_s": 2272.6
+  },
+  "14539": {
+   "verdict": "failed",
+   "agent_s": 330.4
+  },
+  "14598": {
+   "verdict": "failed",
+   "agent_s": 2228.9
+  },
+  "14995": {
+   "verdict": "resolved",
+   "agent_s": 630.7
+  }
+ },
+ "resolved": 5,
+ "agent_min_total": 190.77,
+ "pooled": "{'pooled_decode_tok_s': 26.12, 'gen_tokens': 258889, 'requests': 248, 'e2e_s': 10759.8, 'ttft_s': 857.9}"
+}

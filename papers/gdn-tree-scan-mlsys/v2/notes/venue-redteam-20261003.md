@@ -57,3 +57,7 @@ Decision: ICPE 2027 research track, paper due 16 November 2026. This is also wha
 6. TACO extended version the week after 25 Jan 2027; EuroMLSys as floor if rejected.
 
 No inference, push, tag or arXiv action was performed for this note. Session-start commit excludes three raw GPU-run trees totalling ~125 GB via `.git/info/exclude` (`experiments/review-response-20260927`, `artifacts/machine-backup-20260929`, `p0/monitor/review-response-20260927`).
+
+## Addendum — 4 October 2026, after the penalty-history fix
+
+Finding 2 is closed: the deployed sampler now applies per-path penalty histories and the manuscript reports post-correction measurements (Tables III, IV, VII, IX, XI, XII, XVII; Sections I, III-C, VI, VII-A/B/C/E/F, VIII, IX, X; Appendices A/B). Tuning-corpus lead over MTP-5 is +7.7% (was +10.2%); confirmation set +11.8% (unchanged); continuation v3 EQUIVALENT on a fresh run; task study 5/10 with two empty patches, 248 requests, 190.8 agent minutes. The token-inflation conjecture in finding 2 is not supported: the corrected arm emitted 258,889 tokens versus 187,137 before, so the live-agent wall-time and token-volume gap is a property of the tree arm's trajectories, not of the defect. Findings 1 and 3–8 stand; the ICPE 2027 plan is unchanged. Evidence: `results/claude-penfix-20261003/AUDIT.json`; delivery receipt `artifacts/penfix-delivery-20261004/DELIVERY.json`.

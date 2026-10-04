@@ -1,0 +1,1412 @@
+{
+ "P": 34234,
+ "arm": "V",
+ "case_id": "p4__Nr",
+ "cases_sha256": "1e8d2ffc628a35c6518291a280006e75a786f8fb69878eb01452f9ed72b91609",
+ "control": {
+  "arm": "V",
+  "cache_salt": null,
+  "case_id": "p4__Nr",
+  "mutation": null,
+  "natural_digest": true,
+  "o0_mode": "none",
+  "obs_id": "V__p4__Nr__r0",
+  "seq": 11,
+  "written_utc": "2026-10-03T22:22:57Z"
+ },
+ "hooks_sha256": "d4b219a6bf7f7ecf3eccf8672e5a43573206433a803763b42e8d9851ff3b4ccc",
+ "kind": "native",
+ "obs_id": "V__p4__Nr__r0",
+ "pid": 54,
+ "problems": [],
+ "prompt_sha256": "eddf314162ff17f8d7a980f05d5f938dcd25e4a710e9d77668f7377bc99ad5c4",
+ "record_sha256": "2f5117f70b8da376a7846d382f0cd9b45b131558d6797e6fda3ee21d6ea3d8fb",
+ "records": {
+  "consumed": [
+   {
+    "i": 0,
+    "position": 34234,
+    "token": 2324
+   },
+   {
+    "i": 1,
+    "position": 34235,
+    "token": 220
+   },
+   {
+    "i": 2,
+    "position": 34236,
+    "token": 16
+   },
+   {
+    "i": 3,
+    "position": 34237,
+    "token": 22
+   },
+   {
+    "i": 4,
+    "position": 34238,
+    "token": 19
+   },
+   {
+    "i": 5,
+    "position": 34239,
+    "token": 6813
+   },
+   {
+    "i": 6,
+    "position": 34240,
+    "token": 1440
+   },
+   {
+    "i": 7,
+    "position": 34241,
+    "token": 13
+   },
+   {
+    "i": 8,
+    "position": 34242,
+    "token": 6558
+   },
+   {
+    "i": 9,
+    "position": 34243,
+    "token": 728
+   },
+   {
+    "i": 10,
+    "position": 34244,
+    "token": 1048
+   },
+   {
+    "i": 11,
+    "position": 34245,
+    "token": 1542
+   },
+   {
+    "i": 12,
+    "position": 34246,
+    "token": 279
+   },
+   {
+    "i": 13,
+    "position": 34247,
+    "token": 25971
+   },
+   {
+    "i": 14,
+    "position": 34248,
+    "token": 6198
+   },
+   {
+    "i": 15,
+    "position": 34249,
+    "token": 86917
+   },
+   {
+    "i": 16,
+    "position": 34250,
+    "token": 1228
+   },
+   {
+    "i": 17,
+    "position": 34251,
+    "token": 15705
+   },
+   {
+    "i": 18,
+    "position": 34252,
+    "token": 310
+   },
+   {
+    "i": 19,
+    "position": 34253,
+    "token": 1236
+   },
+   {
+    "i": 20,
+    "position": 34254,
+    "token": 2617
+   },
+   {
+    "i": 21,
+    "position": 34255,
+    "token": 4161
+   },
+   {
+    "i": 22,
+    "position": 34256,
+    "token": 745
+   },
+   {
+    "i": 23,
+    "position": 34257,
+    "token": 369
+   },
+   {
+    "i": 24,
+    "position": 34258,
+    "token": 10548
+   },
+   {
+    "i": 25,
+    "position": 34259,
+    "token": 198
+   },
+   {
+    "i": 26,
+    "position": 34260,
+    "token": 248069
+   },
+   {
+    "i": 27,
+    "position": 34261,
+    "token": 271
+   }
+  ],
+  "logits": [
+   {
+    "i": [
+     0
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0000.bin",
+     "sha256": "e9c64cab5e9f8c71f66ef023f9d1c974440f66e743decab231bc3e7dd4912e3c",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     1
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0001.bin",
+     "sha256": "8aa6e073fb93ce9301e8815c21e847a11a3d4c68501de351d2ff14fd5e02cc54",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     2
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0002.bin",
+     "sha256": "56d77faf273f27a90ec9d3e9a36d8d8d223f361fb50b44227be9243a64f73109",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     3
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0003.bin",
+     "sha256": "d41ecdff0187ced75b70983f74949ce37a7751fbbca47f058b50b87c2e266d80",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     4
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0004.bin",
+     "sha256": "3a4a3924cf25dbb8073cc3714111b894dcceb247211b2a0c04343cab0d3e6e45",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     5
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0005.bin",
+     "sha256": "7ee99625862a22d04b158f7b7a33d41617d25525892657c7cb1e28f4eaacc0fa",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     6
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0006.bin",
+     "sha256": "19dc0a038dda66fdbba6c93bf41d1007c79809305be894b8240b9ee87e34b052",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     7
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0007.bin",
+     "sha256": "0d1020dfb7d19328b90a2ce7df8324acb86fcc664a336ca60909da309f66a30b",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     8
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0008.bin",
+     "sha256": "f650daadc7838e34cb0377a04a7f2b4efaf94ba65eaccf803dafcabfc55447c7",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     9
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0009.bin",
+     "sha256": "a1a8eab22b20397cf0a3f57e5ddfa1ed6a3b90cd5ddaafb474189c7c26bee258",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     10
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0010.bin",
+     "sha256": "65c383f0466cee7fc9984ef8df8a0a14412063594f30a101b451614bf9052eef",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     11
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0011.bin",
+     "sha256": "171cf4bd9104771b8425faa4ccb2e12321693039c5d42cd5a53d76bc1b4ef7e1",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     12
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0012.bin",
+     "sha256": "22d302d9c85923e27f16bc86f28e2c06ba01e6ee1e0f2e72d298b0f1858102f8",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     13
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0013.bin",
+     "sha256": "2a39291e0f377ba2008f9301bc4eacc5aec84a473091e4a59ed3675bf4b26498",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     14
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0014.bin",
+     "sha256": "0135b0848388a64768fb6a2863a6410bb8f854a1064e70fe674404dec98edd62",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     15
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0015.bin",
+     "sha256": "5c5409ab703a16bd33c8495d84590e9e2131cb53664b25b582a0fbd7796999e6",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     16
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0016.bin",
+     "sha256": "59487d69232c66e2b6cbf42f8f993fbee579f0594ee8247e7c07cb0c5b99191a",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     17
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0017.bin",
+     "sha256": "008ab34e737f3d13b0387a8bedffd577c2477d944bdc6a88eb66b07e4793ee59",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     18
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0018.bin",
+     "sha256": "b1472085deff216a34c3df4bd6b6dcc382a9688b72981d69d833292458110a1b",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     19
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0019.bin",
+     "sha256": "0518f4b6a9e1bbd358be390e1f21eaa0dd355d988829956a6a0dd0c1e27d7774",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     20
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0020.bin",
+     "sha256": "f7f8c9227dfc82d99e14690dafc92e4a8a10a55a1a387c3ecd8b636706c2612d",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     21
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0021.bin",
+     "sha256": "5062d4e1d3dbcaa11732941ef09cd439108e7dea8bef515085ca86e7a8781093",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     22
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0022.bin",
+     "sha256": "86fa90d0293b5b0022736db2f39bd10f324813c0340314d407eae7a6868e948b",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     23
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0023.bin",
+     "sha256": "d41bf6108f8dac5cbb4eecd03ea35256983501f478a4089970fcd978317cf324",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     24
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0024.bin",
+     "sha256": "9b885c2e93bf3a0058f0829485d49ec4f94a00e63a583f19532ca12f21606272",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     25
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0025.bin",
+     "sha256": "889c15550105bbd637339a5a1b280a15b6ad065e675ced5ad6f4d80fb83e85e0",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     26
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0026.bin",
+     "sha256": "6787f34f63dd3489b018776c24f6e0e00bb8b3fcb7373be55bd136ef398aa4d0",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   },
+   {
+    "i": [
+     27
+    ],
+    "obj": {
+     "bytes": 496640,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/logits/i0027.bin",
+     "sha256": "e46d3e553622d90495a5ba54728662d5fc24a8136c0c4d94a0328b383de5fc1d",
+     "shape": [
+      1,
+      248320
+     ]
+    }
+   }
+  ],
+  "mutation_log": [],
+  "natural_drafts": [],
+  "natural_sampled": [
+   {
+    "j": 0,
+    "natural": 2324
+   },
+   {
+    "j": 1,
+    "natural": 220
+   },
+   {
+    "j": 2,
+    "natural": 16
+   },
+   {
+    "j": 3,
+    "natural": 22
+   },
+   {
+    "j": 4,
+    "natural": 19
+   },
+   {
+    "j": 5,
+    "natural": 6813
+   },
+   {
+    "j": 6,
+    "natural": 1440
+   },
+   {
+    "j": 7,
+    "natural": 13
+   },
+   {
+    "j": 8,
+    "natural": 6558
+   },
+   {
+    "j": 9,
+    "natural": 728
+   },
+   {
+    "j": 10,
+    "natural": 1048
+   },
+   {
+    "j": 11,
+    "natural": 1542
+   },
+   {
+    "j": 12,
+    "natural": 279
+   },
+   {
+    "j": 13,
+    "natural": 25971
+   },
+   {
+    "j": 14,
+    "natural": 7221
+   },
+   {
+    "j": 15,
+    "natural": 807
+   },
+   {
+    "j": 16,
+    "natural": 1228
+   },
+   {
+    "j": 17,
+    "natural": 15705
+   },
+   {
+    "j": 18,
+    "natural": 310
+   },
+   {
+    "j": 19,
+    "natural": 381
+   },
+   {
+    "j": 20,
+    "natural": 2617
+   },
+   {
+    "j": 21,
+    "natural": 4161
+   },
+   {
+    "j": 22,
+    "natural": 745
+   },
+   {
+    "j": 23,
+    "natural": 369
+   },
+   {
+    "j": 24,
+    "natural": 10548
+   },
+   {
+    "j": 25,
+    "natural": 13
+   },
+   {
+    "j": 26,
+    "natural": 248069
+   },
+   {
+    "j": 27,
+    "natural": 271
+   },
+   {
+    "j": 28,
+    "natural": 2324
+   }
+  ],
+  "o0": {
+   "natural": {
+    "P": 34234,
+    "conv_sha256": "3db7b4e6c1a31c6426ab6044aa534ff40fd0d4464f666e77051ac8d4066542df",
+    "kv_sha256": "cb8495c59b92d65f5f720335fb2e610de51ee9750af06ef6171cd43be201b5c3",
+    "ssm_sha256": "e394e2aa23467fd186414bbc0001b03d8d726d5881a8201ee7b502a6c8df835f"
+   },
+   "none": {
+    "prefill_chunks": [
+     {
+      "ncomp": 33792,
+      "scheduled": 442
+     }
+    ]
+   }
+  },
+  "o1": {
+   "0": {
+    "conv": {
+     "bytes": 2949120,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/o1_0/conv.bin",
+     "sha256": "62ca87a2d1ce8da36efb3d82b2aa0fb9e3e8f3d7630eb4a3ed1b2b499c0de363",
+     "shape": [
+      48,
+      3,
+      10240
+     ]
+    },
+    "conv_pad_nonzero": 0,
+    "finite": true,
+    "kv": {
+     "bytes": 393216,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/o1_0/kv.bin",
+     "sha256": "0cb0911d6c899f9f0bf6a06d01e9ba1436a9eaaf29e6e18a16a2335e37258220",
+     "shape": [
+      16,
+      2,
+      6,
+      4,
+      256
+     ]
+    },
+    "kv_start": 34234,
+    "n_ctx": 34240,
+    "pages": [
+     64
+    ],
+    "rows": [
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686
+    ],
+    "ssm": {
+     "bytes": 150994944,
+     "dtype": "torch.float32",
+     "file": "objects/V__p4__Nr__r0/o1_0/ssm.bin",
+     "sha256": "da2597b400d64825ac83c72f481160f9ae471a1a1dcb192869e528999b8c3b34",
+     "shape": [
+      48,
+      48,
+      128,
+      128
+     ]
+    },
+    "tag": "o1_0"
+   },
+   "1": {
+    "conv": {
+     "bytes": 2949120,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/o1_1/conv.bin",
+     "sha256": "68383f383c21ecffa01156777730bd6f5650aee942015254f398932be33087ec",
+     "shape": [
+      48,
+      3,
+      10240
+     ]
+    },
+    "conv_pad_nonzero": 0,
+    "finite": true,
+    "kv": {
+     "bytes": 851968,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/o1_1/kv.bin",
+     "sha256": "59733d103a66706d4db9bb9e6527d05096a897b9fd8026febf96451d758d9911",
+     "shape": [
+      16,
+      2,
+      13,
+      4,
+      256
+     ]
+    },
+    "kv_start": 34234,
+    "n_ctx": 34247,
+    "pages": [
+     64
+    ],
+    "rows": [
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686
+    ],
+    "ssm": {
+     "bytes": 150994944,
+     "dtype": "torch.float32",
+     "file": "objects/V__p4__Nr__r0/o1_1/ssm.bin",
+     "sha256": "00c99a0a73a9c8298f7e6cabf1a636cfb1277953a8758f29142e148d922f9e24",
+     "shape": [
+      48,
+      48,
+      128,
+      128
+     ]
+    },
+    "tag": "o1_1"
+   },
+   "2": {
+    "conv": {
+     "bytes": 2949120,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/o1_2/conv.bin",
+     "sha256": "71d9fefff087487f8410633b59d33694d9408c99604324e81ebc3f3f75d845e3",
+     "shape": [
+      48,
+      3,
+      10240
+     ]
+    },
+    "conv_pad_nonzero": 0,
+    "finite": true,
+    "kv": {
+     "bytes": 917504,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/o1_2/kv.bin",
+     "sha256": "5d4beb2cd1163ed707ee4c49a4c351f8e242ec42db3b7644e385fa1808e21c1b",
+     "shape": [
+      16,
+      2,
+      14,
+      4,
+      256
+     ]
+    },
+    "kv_start": 34234,
+    "n_ctx": 34248,
+    "pages": [
+     64
+    ],
+    "rows": [
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686
+    ],
+    "ssm": {
+     "bytes": 150994944,
+     "dtype": "torch.float32",
+     "file": "objects/V__p4__Nr__r0/o1_2/ssm.bin",
+     "sha256": "0efa04996d10e22955dad73b8104f7678e537458748077ebe43dd029b42af793",
+     "shape": [
+      48,
+      48,
+      128,
+      128
+     ]
+    },
+    "tag": "o1_2"
+   },
+   "3": {
+    "conv": {
+     "bytes": 2949120,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/o1_3/conv.bin",
+     "sha256": "0213bd4a08e31fcbe50e651aec6f3422c3ab3f82fdd32668ac05f4f95c34a777",
+     "shape": [
+      48,
+      3,
+      10240
+     ]
+    },
+    "conv_pad_nonzero": 0,
+    "finite": true,
+    "kv": {
+     "bytes": 1048576,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/o1_3/kv.bin",
+     "sha256": "996b08c2bc7ae63c09d2b1bec04d71d22591d58af146e3e2e75f2db08cbc5f97",
+     "shape": [
+      16,
+      2,
+      16,
+      4,
+      256
+     ]
+    },
+    "kv_start": 34234,
+    "n_ctx": 34250,
+    "pages": [
+     64
+    ],
+    "rows": [
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686
+    ],
+    "ssm": {
+     "bytes": 150994944,
+     "dtype": "torch.float32",
+     "file": "objects/V__p4__Nr__r0/o1_3/ssm.bin",
+     "sha256": "2397be4bf8583141086f1357e4b02505b3988f68ffddcf97b32920e30d89bd3a",
+     "shape": [
+      48,
+      48,
+      128,
+      128
+     ]
+    },
+    "tag": "o1_3"
+   },
+   "4": {
+    "conv": {
+     "bytes": 2949120,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/o1_4/conv.bin",
+     "sha256": "31d71084d6989db45be0127322e99aaf26291d72a8d5c6d501569fa4246efd04",
+     "shape": [
+      48,
+      3,
+      10240
+     ]
+    },
+    "conv_pad_nonzero": 0,
+    "finite": true,
+    "kv": {
+     "bytes": 1441792,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/o1_4/kv.bin",
+     "sha256": "d39e7d827506329f6753994bd2e18416223b16249146283ea1a521ddce07a481",
+     "shape": [
+      16,
+      2,
+      22,
+      4,
+      256
+     ]
+    },
+    "kv_start": 34234,
+    "n_ctx": 34256,
+    "pages": [
+     64
+    ],
+    "rows": [
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686
+    ],
+    "ssm": {
+     "bytes": 150994944,
+     "dtype": "torch.float32",
+     "file": "objects/V__p4__Nr__r0/o1_4/ssm.bin",
+     "sha256": "fd30eb919a4b3bb570a7e3a04f12f0b97a97b995f79e1b02b1bf11c77c3d88cb",
+     "shape": [
+      48,
+      48,
+      128,
+      128
+     ]
+    },
+    "tag": "o1_4"
+   },
+   "5": {
+    "conv": {
+     "bytes": 2949120,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/o1_5/conv.bin",
+     "sha256": "69f45e0ca6bdbbb2cb83dbe656b78c491f1cc2a2c62df7ab151bac299797eb0f",
+     "shape": [
+      48,
+      3,
+      10240
+     ]
+    },
+    "conv_pad_nonzero": 0,
+    "finite": true,
+    "kv": {
+     "bytes": 1703936,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/o1_5/kv.bin",
+     "sha256": "ae25a2bb3c4f58e9d67c68b1311f104cd3a7e7be34d88bfd4ad8a45937ea953b",
+     "shape": [
+      16,
+      2,
+      26,
+      4,
+      256
+     ]
+    },
+    "kv_start": 34234,
+    "n_ctx": 34260,
+    "pages": [
+     64
+    ],
+    "rows": [
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686
+    ],
+    "ssm": {
+     "bytes": 150994944,
+     "dtype": "torch.float32",
+     "file": "objects/V__p4__Nr__r0/o1_5/ssm.bin",
+     "sha256": "82361705cacdea325cf94022ba82a8c1ab26df9a0785ed5e0bed410da4560e0f",
+     "shape": [
+      48,
+      48,
+      128,
+      128
+     ]
+    },
+    "tag": "o1_5"
+   },
+   "6": {
+    "conv": {
+     "bytes": 2949120,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/o1_6/conv.bin",
+     "sha256": "c64f955e6669b69fbf7884a342d98cbafc8695204e1fada806399b4108fc35b9",
+     "shape": [
+      48,
+      3,
+      10240
+     ]
+    },
+    "conv_pad_nonzero": 0,
+    "finite": true,
+    "kv": {
+     "bytes": 1769472,
+     "dtype": "torch.bfloat16",
+     "file": "objects/V__p4__Nr__r0/o1_6/kv.bin",
+     "sha256": "fec58f3d7d0feb80124ae50e99ba9ef25bb5b3587bdf28dc853d5e1bd3ecd23c",
+     "shape": [
+      16,
+      2,
+      27,
+      4,
+      256
+     ]
+    },
+    "kv_start": 34234,
+    "n_ctx": 34261,
+    "pages": [
+     64
+    ],
+    "rows": [
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     686,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686,
+     687,
+     687,
+     685,
+     686,
+     687,
+     685,
+     686
+    ],
+    "ssm": {
+     "bytes": 150994944,
+     "dtype": "torch.float32",
+     "file": "objects/V__p4__Nr__r0/o1_6/ssm.bin",
+     "sha256": "4bc2ca552785a095c03a5cf108c701f50d21eccbfd51fecde94938c7db666de2",
+     "shape": [
+      48,
+      48,
+      128,
+      128
+     ]
+    },
+    "tag": "o1_6"
+   }
+  },
+  "prefill_chunks": [
+   {
+    "ncomp": 33792,
+    "scheduled": 442
+   }
+  ],
+  "publication": [],
+  "taw": []
+ },
+ "schema": "q1v3.case-record.v1",
+ "sealed_utc": "2026-10-03T22:23:02Z",
+ "structural_mismatches": [],
+ "valid": true
+}

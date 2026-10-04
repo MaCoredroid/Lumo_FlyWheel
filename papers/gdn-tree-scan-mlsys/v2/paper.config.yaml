@@ -1,6 +1,6 @@
 topic: LumoTree
 paper_type: empirical
-status: "completed_heldout_numerical_agreement_sampling_claim_narrowed"
+status: "penalty_history_corrected_remeasured_20261004"
 format: IEEEtran conference
 main_tex: main.tex
 bibliography: ref.bib
@@ -8,17 +8,17 @@ performance_scope: "two_fixed_request_corpora_separate_from_live_agent_trajector
 application_case: "ten_Astropy_tasks_three_arms_30_attempts"
 performance_estimator: "pooled_completed_request_decode_rate_client_replay_and_server_workload"
 performance_formula: (total_output_tokens - completed_requests) / (summed_E2E_latency - summed_TTFT)
-performance_evidence: "results/claude-closure-20261002/AUDIT.json; results/claude-results-20261002/AUDIT.json"
+performance_evidence: "results/claude-penfix-20261003/AUDIT.json; results/claude-closure-20261002/AUDIT.json; results/claude-results-20261002/AUDIT.json"
 excluded_performance: local_document_E1_E8_and_superseded_rate_proxies
 runtime:
   python: "/Users/zhiyuanma/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3"
   experiment_execution: "completed_snapshot_no_new_GPU_launches_in_paper_update"
   remote_worktree: "/home/mark/shared/lumotree-v2exp-20260930"
-  remaining_claim_gap: "no_bitwise_or_strict_greedy_fullmodel_equality; approximate_measured_penalty_sampling; no_controlled_task_speedup"
+  remaining_claim_gap: "no_bitwise_or_strict_greedy_fullmodel_equality; topk_tie_convention_and_ignored_minp_differ_from_single_row; no_controlled_task_speedup"
   historical_campaign: "review_response_20260927_closed_with_supported_narrowing; not the new 30-attempt study"
 
 current_method: NVFP4_Hydra27_fixed32_patched_FA2_splitK4_graph_cache
-replay_evidence: results/claude-replay-20261001/AUDITED-RATES.json
+replay_evidence: results/claude-penfix-20261003/AUDIT.json (fixed-sampler tree runs); results/claude-replay-20261001/AUDITED-RATES.json (native arms)
 replay_protocol: 43_recorded_requests_two_Astropy_sessions_sampled_B1_cap1024
 replay_scope: same_vllm_stack_rate_comparison_not_task_completion_or_fullmodel_correctness
 replay_runtime: /home/mark/shared/lumotree-v2exp-20260930
@@ -47,18 +47,19 @@ followup_main_timed_cells: 12
 followup_shape_sweep_cells_summary_only: 40
 followup_distribution_status: "10boots8000continuations_completed_sensitivity_failed_uninformative"
 followup_fullmodel_status: "5completed_boots_33schedules147cycles_frozen_INCONCLUSIVE_1of10faults_detected"
-followup_agent_study: "completed30_attempts_same10_Astropy_tasks_once_per_arm_resolved_tree5_MTP6_SG5"
-current_results_evidence: "results/claude-closure-20261002/AUDIT.json"
-current_results_manifest: "results/claude-closure-20261002/SYNC-MANIFEST.json"
-disjoint_replay: "43requests_four_additional_tasks_five_conversations; 3runs_each_tree30.7359_MTP27.5198_pooled; SG1run30.24"
+followup_agent_study: "tree_arm_rerun_with_fixed_sampler_20261003_resolved5_requests248_tokens258889_rate26.12_minutes190.8; MTP6_SG5_unchanged; pre_fix_tree_attempt_preserved"
+current_results_evidence: "results/claude-penfix-20261003/AUDIT.json"
+current_results_manifest: "results/claude-penfix-20261003/SYNC-MANIFEST.json"
+disjoint_replay: "43requests_four_additional_tasks_five_conversations; 3runs_each_tree30.7608_fixed_sampler_MTP27.5198_pooled; SG1run30.24"
 disjoint_sglang_input_status: "chat_API_prompt_counts33to156tokens_longer_not_exact_ID_parity"
 drafting_pass_sweep: "2deployed_repeats_1each_repaired_threepass_and_conditionalpolicy_no_convincing_gain; proposed_new_topologies_not_executed"
 posthoc_analysis: "descriptive_after_outcomes; state ratios <1.30 and 8statefaults >2.83; original_inconclusive_verdict_preserved"
 
-heldout_fullmodel_status: "5fresh_boots_18schedules126cycles_all_frozen_bounds_pass_all10faults_detected; tolerance_agreement_not_bitwise_or_strict_greedy_equality"
+heldout_fullmodel_status: "fixed_sampler_run_q1v3v3-penfix-20261003T214045Z_EQUIVALENT_max_ratio1.336_10of10faults_greedy121of126; prior_fixed_run_also_EQUIVALENT; tolerance_agreement_not_bitwise_or_strict_greedy_equality"
 heldout_cache_coverage: "30observations_atleast91.99pct_cached; not_full_cache_lifecycle"
-exact_sampling_scope: "presence0_frequency0_repetition1_minp0_matching_probability_filters_and_ties; conditional_on_correct_supplied_target_rows"
-measured_sampling_disposition: "presence1.0; flat_draft_history_defect; departs_from_exact_sampling_after_first_token_each_step"
-sampling_audit: "40steps2480rows_all_flat_history; CPU_oracle6steps200000walks_each; 0of54node_tests_reject_supplied_rows; corrected_path_rejected5of6steps; 5faulttypes_detected"
+exact_sampling_scope: "per_path_penalty_histories_deployed; remaining_differences_topk_exact_k_ties_and_ignored_minp; conditional_on_correct_supplied_target_rows"
+measured_sampling_disposition: "presence1.0_with_per_path_histories; captured_rows_2480of2480_per_path; walk_exact_on_inputs_0of48; vs_autoregressive_rows_1of48_rejected_exact_topk_tie; max_node_TV0.028"
+sampling_audit: "40steps2480rows_all_per_path_history_20261003; CPU_oracle6steps200000walks_each; 0of48node_tests_reject_supplied_rows; 1of48_vs_corrected_rows_exact_tie; 5faulttypes_detected; prior_defect_capture_20261002_preserved"
 replay_randomness_scope: "process_seed0_reuses_random_sequences; boot_repetitions_not_independent_sampling_replicates"
 variant_allocation_scope: "boot_reported_model_and_graph_pools_not_peak_serving_memory; unequal_KVcapacities; phase_spans_descriptive"
+penalty_fix: "FR13_TREE_PENALTY_HISTORY lumotree-v2exp 9902ccca2 / PORT bdfdb596f; patcher sha256 9de17bba337f0c5b...; tuning 28.13 pooled 3 runs (+7.7% vs MTP-5), confirmation 30.76 (+11.8%)"

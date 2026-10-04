@@ -1,0 +1,23 @@
+{
+ "files": {
+  "PROTOCOL.md": "b43489f86027bc21bd24c794741e1c3a8e4cb3be1fc3150e72d2cb08f03d6a1e",
+  "cases.json": "1e8d2ffc628a35c6518291a280006e75a786f8fb69878eb01452f9ed72b91609",
+  "cases.py": "05588c27a6a6cef5ada43125707a03109681530b7efa711d9c0348eb67d646e8",
+  "client.py": "ee2b2fdbeee0464394c56f81805dab5fc34b31e0de8032b80262d175d299ced5",
+  "fixtures/requests/p1.json": "45311b63453147c62439156c749d5d981785e45b489c4f2d6dd1f81f8b3a43d6",
+  "fixtures/requests/p2.json": "6f6ff8747860581402f46fa575d2dcd4646c4187e8902ca3256c0d63719e66cd",
+  "fixtures/requests/p3.json": "8562b09b0683701a6165b25287f5bca2831e19889271ab2e6c9a52de3756d85b",
+  "fixtures/requests/p4.json": "313ac371f940d3f87e86b96ce77e6fa67f2a284d53981cbe1daac5196018c577",
+  "fixtures/requests/p5.json": "a9d1929e397d962185fd662d7c46aa2dd7c7f6c8c6b6d10daf1e45cd7e9f1c63",
+  "fixtures/requests/p6.json": "37ed07170026cd8481d1eb5558ecf117d97afb6ee3d1f84320b2a46a5c7acb56",
+  "make_cand_launch.py": "70edb1f60163cfaeaa1870f2115ff857633675388ff2257883b6c8507972314b",
+  "patch_runner.py": "bcf123ad26402e1a88150911154d33818eb3bc7bb9404d8ee4ac998e84aae0c9",
+  "q1v3_common.py": "4b355071ad6ed6271131296776cdeb682975fd9a50e9a19c7d5de2c3c92fb1ee",
+  "q1v3_hooks.py": "d4b219a6bf7f7ecf3eccf8672e5a43573206433a803763b42e8d9851ff3b4ccc",
+  "reduce.py": "3484a432f57fc492c790ecce6d4b764bdb69e2e5fa76597330bf84f3c1812bf8",
+  "run_all.sh": "2b2a4c4f7941bf15e122f274dc42613b466bd94bf3aecfe5f7b987849a9ba288",
+  "serve_native_q1v3.sh": "1ef21bfcb1977712047bc632d8b969e032428287edc186090394567e69d6d12b"
+ },
+ "schema": "q1v3.freeze.v1",
+ "utc": "2026-10-03T00:59:10Z"
+}

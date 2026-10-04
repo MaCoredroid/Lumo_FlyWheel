@@ -6,7 +6,7 @@ For state or logit surface $s$ at cycle $c$, the frozen reference envelope is
 \end{equation}
 where $A$ is the sequential reference, $B$ a separate process, $V$ a native cache-capacity control, and $P$ a native packed-kernel variant. State distance is the maximum per-layer relative $L_2$ error, with floor $F_s=0.02$; next-token KL divergence uses $F_s=0.15$ nats. The candidate must satisfy $d_s\leq2R_s$ on every surface and cycle. Constants were calibrated on an earlier collection and frozen before these fresh prefixes were evaluated.
 
-All 126 cycles satisfy the numerical rule (Table~\ref{tab:fullmodel-agreement}), and all ten injected faults are detected at their mutation cycles. The candidate greedy token matches $A$ on 122/126 cycles; the four disagreements satisfy the frozen logit-margin allowance. The separate-process, cache-capacity, and packed-kernel controls agree on 119, 124, and 119 cycles, respectively. Thus the result establishes agreement under the stated bounds, not bitwise model equality or strict greedy-output equality.
+All 126 cycles satisfy the numerical rule (Table~\ref{tab:fullmodel-agreement}), and all ten injected faults are detected at their mutation cycles. The candidate greedy token matches $A$ on 121/126 cycles; the five disagreements occur where the reference's top two logits tie exactly and satisfy the frozen logit-margin allowance. The separate-process, cache-capacity, and packed-kernel controls agree on 125, 125, and 123 cycles, respectively. Thus the result establishes agreement under the stated bounds, not bitwise model equality or strict greedy-output equality.
 
 \begin{table}[t]
 \caption{Full-model continuation over 126 cycles. Maximum candidate error and candidate-to-native-envelope ratio may occur at different cycles. Every ratio is below the frozen limit of 2. State errors are relative $L_2$; KL is in nats.}
@@ -17,15 +17,15 @@ All 126 cycles satisfy the numerical rule (Table~\ref{tab:fullmodel-agreement}),
 \toprule
 Surface & Maximum error & Maximum ratio \\
 \midrule
-GDN recurrent state & 0.435 & 1.08 \\
-Convolution history & 0.304 & 1.22 \\
-KV, newly committed positions & 0.375 & 1.22 \\
-KV, earlier positions & 0.234 & 1.17 \\
-Next-token KL divergence & 0.111 & 0.74 \\
+GDN recurrent state & 0.422 & 1.09 \\
+Convolution history & 0.350 & 1.11 \\
+KV, newly committed positions & 0.373 & 1.34 \\
+KV, earlier positions & 0.248 & 1.07 \\
+Next-token KL divergence & 0.095 & 0.63 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 The ten faults comprise five types on two prefixes: omitted convolution gathering, omitted recurrent replay, incorrect KV remapping, stale root input, and sibling-state publication. Every cache-resumed case starts with at least 91.9\% of its prefix cached, across all five arms (30 observations). One candidate repeat is bitwise identical over its seven cycles. This covers prefix restoration on the tested inputs, rather than the full cache-admission and eviction lifecycle.
 
-The separate calibration collection does not count as held-out validation; its original inconclusive verdict is preserved in the supplement. MTP drafter state and batch sizes above one are outside this comparison.
+This collection was taken with the corrected sampler of Section~\ref{sec:sampling-validation}; an earlier held-out collection with the pre-correction sampler satisfied the same frozen rule and is preserved in the supplement, as is the separate calibration collection, which does not count as held-out validation and keeps its original inconclusive verdict. MTP drafter state and batch sizes above one are outside this comparison.

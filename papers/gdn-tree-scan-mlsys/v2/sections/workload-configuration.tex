@@ -21,4 +21,4 @@ Sampling & Temperature 0.6; top-$p$ 0.95; top-$k$ 20; min-$p$ 0; presence penalt
 \end{tabularx}
 \end{table}
 
-All measured tree runs use presence penalty 1.0. Exact-sampling claims apply only to penalty-free, filter-matched settings with correct target probabilities; the measured tree deployment departs from exact sampling after the first token of each step (Section~\ref{sec:sampling-validation}).
+All measured tree runs use presence penalty 1.0 with per-path penalty histories (Section~\ref{sec:sampling-validation}); the sampler's exact-$k$ top-$k$ convention and ignored min-$p$ remain the stated differences from single-row decoding.
