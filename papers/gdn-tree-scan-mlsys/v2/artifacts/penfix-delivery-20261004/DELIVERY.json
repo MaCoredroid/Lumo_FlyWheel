@@ -1,17 +1,17 @@
 {
  "schema": "claude.penfix-delivery.v2",
- "utc": "2026-10-04T20:54:01Z",
+ "utc": "2026-10-04T21:03:07Z",
  "manuscript_pdf": {
   "path": "artifacts/penfix-delivery-20261004/lumotree-penfix-20261004.pdf",
-  "sha256": "a0bdd06b62d822e0c8b84beabe7763ff8fa236da5f5a02a8d25bd5e594467d23",
+  "sha256": "f797df4552dcf344f99000edaabc213269be5ad5bcece6503ca681d3f899becc",
   "pages": 15
  },
  "source_archive": {
   "path": "artifacts/penfix-delivery-20261004/lumotree-source-penfix-20261004.tar.gz",
-  "sha256": "1d2bdc40ef02a574d61f892c0dc58eee3e5cf0512c38520d1cfe57d54fd3be63"
+  "sha256": "ecda3cd648d0aff98481431b9b9e71b8360fc6633f88b1eb7124320fcf08e3f1"
  },
  "sources": {
-  "main.tex": "dc9b4a56b78b0217e2271a8cf77d0c42ed630adfce939c484ce29c0ae26df531",
+  "main.tex": "a373854fcbd632f632d72f2d3d2c7beb83b45727ab0f0417d256d953d58e52a5",
   "abstract.tex": "6df1bdc2006279afc460b73e1232d9fc439687cfd18d4afadd3c9e9842bd9a45",
   "ref.bib": "3f13715510010210ba096d3de3a592a144a6de89d55903880292670ea8afee79",
   "main.bbl": "4342a389397fca6e7877a3b5ae84e3631aa32efbadb59082efcb4ba4c8c1be75",
@@ -42,7 +42,7 @@
  },
  "arxiv_v3_package": {
   "path": "artifacts/arxiv-v3-package-20261004/lumotree-v3-arxiv-source.tar.gz",
-  "sha256": "a536bdedf42e043492680325a1670d61a448f4f9a09983dc43f0c3517847d7e0",
+  "sha256": "c43dce8cd6b1fe8460460319b46d42cf856a2f90d84bdc46b397d4635fbd4860",
   "clean_build_text_identical": true
  },
  "latex_warnings_in_main_log": 0,
