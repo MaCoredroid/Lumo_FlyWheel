@@ -288,8 +288,7 @@ Y.~Hu, K.~Wang, X.~Zhang, F.~Zhang, C.~Li, H.~Chen, and J.~Zhang, ``{SAM
 \bibitem{lumo2026archive}
 Z.~Ma, ``{LumoTree: Implementation and Experiment Artifact},''
   \url{https://github.com/MaCoredroid/Lumo_FlyWheel/tree/lumotree-v2-artifact-r2/papers/gdn-tree-scan-mlsys/v2},
-  2026, version 2 (4 October 2026); paper source, evaluated implementations
-  including the corrected tree sampler, and supporting experiment records.
-  Version 1 is the pre-correction snapshot.
+  2026, version 2; corrected tree sampler, paper source, and experiment
+  records.
 
 \end{thebibliography}

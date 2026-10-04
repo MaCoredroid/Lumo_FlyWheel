@@ -672,26 +672,25 @@ LaTeX Warning: Reference `app:fullmodel-protocol' on page 10 undefined on input
 LaTeX Warning: Reference `tab:fullmodel-agreement' on page 10 undefined on inpu
 t line 9.
 
-[10]
 
-LaTeX Warning: Reference `sec:sampling-validation' on page 11 undefined on inpu
+LaTeX Warning: Reference `sec:sampling-validation' on page 10 undefined on inpu
 t line 31.
 
-) (./sections/sampling-validation.tex
+) [10] (./sections/sampling-validation.tex
 
 LaTeX Warning: Reference `tab:sampling-faults' on page 11 undefined on input li
 ne 7.
 
-) (./sections/recurrent-comparison.tex [11]
+) (./sections/recurrent-comparison.tex
 
-LaTeX Warning: Reference `tab:m1-qualification' on page 12 undefined on input l
+LaTeX Warning: Reference `tab:m1-qualification' on page 11 undefined on input l
 ine 32.
 
 
-LaTeX Warning: Reference `sec:limitations' on page 12 undefined on input line 3
+LaTeX Warning: Reference `sec:limitations' on page 11 undefined on input line 3
 2.
 
-) (./sections/mechanism-costs.tex
+) [11] (./sections/mechanism-costs.tex
 
 LaTeX Warning: Reference `tab:mechanism-memory-error' on page 12 undefined on i
 nput line 45.
@@ -707,11 +706,7 @@ ine 47.
 LaTeX Warning: Reference `tab:m1-qualification' on page 12 undefined on input l
 ine 47.
 
-)
-
-LaTeX Warning: Reference `sec:results' on page 12 undefined on input line 334.
-
-[12]
+) [12]
 
 LaTeX Warning: Citation `lumo2026archive' on page 13 undefined on input line 35
 1.
@@ -753,11 +748,12 @@ ne 24.
 LaTeX Warning: Reference `tab:drafting-passes' on page 13 undefined on input li
 ne 24.
 
-) [13]
+)
 
-LaTeX Warning: Reference `eq:pooled-decode' on page 14 undefined on input line 
+LaTeX Warning: Reference `eq:pooled-decode' on page 13 undefined on input line 
 354.
 
+[13]
 
 LaTeX Warning: Citation `leviathan2023fast' on page 14 undefined on input line 
 356.
@@ -774,7 +770,7 @@ t line 356.
 
 LaTeX Warning: Reference `tab:swe-tasks' on page 14 undefined on input line 1.
 
-) (./sections/fullmodel-protocol.tex) [14] (./main.bbl [15])
+) (./sections/fullmodel-protocol.tex) (./main.bbl [14])
 
 ** Conference Paper **
 Before submitting the final camera ready copy, remember to:
@@ -786,7 +782,7 @@ Before submitting the final camera ready copy, remember to:
  uses only Type 1 fonts and that every step in the generation
  process uses the appropriate paper size.
 
-[16] (./main.aux)
+[15] (./main.aux)
 
 LaTeX Warning: There were undefined references.
 
@@ -823,7 +819,7 @@ elvetic/uhvb8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/urw/helvetic
 b></usr/local/texlive/2021/texmf-dist/fonts/type1/urw/times/utmbi8a.pfb></usr/l
 ocal/texlive/2021/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/local/texli
 ve/2021/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (16 pages, 350486 bytes).
+Output written on main.pdf (15 pages, 349212 bytes).
 Transcript written on main.log.
 Latexmk: Found input bbl file 'main.bbl'
 Latexmk: References changed.
@@ -898,7 +894,7 @@ Latexmk: List of undefined refs and citations:
   Reference `app:fullmodel-protocol' on page 10 undefined on input line 1
   Reference `app:settings' on page 7 undefined on input line 287
   Reference `app:workload' on page 8 undefined on input line 1
-  Reference `eq:pooled-decode' on page 14 undefined on input line 354
+  Reference `eq:pooled-decode' on page 13 undefined on input line 354
   Reference `eq:pooled-decode' on page 7 undefined on input line 7
   Reference `eq:pooled-decode' on page 8 undefined on input line 12
   Reference `fig:contract' on page 3 undefined on input line 114
@@ -908,16 +904,15 @@ Latexmk: List of undefined refs and citations:
   Reference `sec:kernel' on page 12 undefined on input line 45
   Reference `sec:kernel' on page 5 undefined on input line 235
   Reference `sec:limitations' on page 1 undefined on input line 54
-  Reference `sec:limitations' on page 12 undefined on input line 32
+  Reference `sec:limitations' on page 11 undefined on input line 32
   Reference `sec:limitations' on page 8 undefined on input line 23
   Reference `sec:m1-qualification' on page 12 undefined on input line 47
   Reference `sec:optimization' on page 1 undefined on input line 58
   Reference `sec:protocol' on page 3 undefined on input line 129
   Reference `sec:reconstruction-numerics' on page 2 undefined on input line 77
   Reference `sec:related' on page 1 undefined on input line 58
-  Reference `sec:results' on page 12 undefined on input line 334
   Reference `sec:sampling-validation' on page 1 undefined on input line 56
-  Reference `sec:sampling-validation' on page 11 undefined on input line 31
+  Reference `sec:sampling-validation' on page 10 undefined on input line 31
   Reference `sec:sampling-validation' on page 13 undefined on input line 24
   Reference `sec:sampling-validation' on page 14 undefined on input line 356
   Reference `sec:sampling-validation' on page 4 undefined on input line 165
@@ -935,7 +930,7 @@ Latexmk: List of undefined refs and citations:
   Reference `tab:fullmodel-agreement' on page 10 undefined on input line 9
   Reference `tab:fullmodel-agreement' on page 13 undefined on input line 24
   Reference `tab:gdn-component' on page 10 undefined on input line 23
-  Reference `tab:m1-qualification' on page 12 undefined on input line 32
+  Reference `tab:m1-qualification' on page 11 undefined on input line 32
   Reference `tab:m1-qualification' on page 12 undefined on input line 47
   Reference `tab:mechanism-memory-error' on page 12 undefined on input line 45
   Reference `tab:optimization-map' on page 5 undefined on input line 235
@@ -1282,8 +1277,8 @@ cal/texlive/2021/texmf-var/fonts/map/pdftex/updmap/pdftex.map}] [2]
 (./sections/fullmodel-validation.tex [10]) (./sections/sampling-validation.tex)
 (./sections/recurrent-comparison.tex [11]) (./sections/mechanism-costs.tex)
 [12] (./sections/workload-configuration.tex) [13]
-(./sections/workload-details.tex) (./sections/fullmodel-protocol.tex) [14]
-(./main.bbl [15])
+(./sections/workload-details.tex) (./sections/fullmodel-protocol.tex)
+(./main.bbl [14])
 
 ** Conference Paper **
 Before submitting the final camera ready copy, remember to:
@@ -1295,34 +1290,39 @@ Before submitting the final camera ready copy, remember to:
  uses only Type 1 fonts and that every step in the generation
  process uses the appropriate paper size.
 
-[16] (./main.aux) ){/usr/local/texlive/2021/texmf-dist/fonts/enc/dvips/base/8r.
-enc}</usr/local/texlive/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.p
-fb></usr/local/texlive/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pf
-b></usr/local/texlive/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb>
-</usr/local/texlive/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></
-usr/local/texlive/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></us
-r/local/texlive/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi9.pfb></usr/
-local/texlive/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/lo
-cal/texlive/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmr5.pfb></usr/local
-/texlive/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/local/te
-xlive/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/local/texli
-ve/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/local/texlive/
-2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/local/texlive/202
-1/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive/2021
-/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/local/texlive/2021/t
-exmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/local/texlive/2021/tex
-mf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/local/texlive/2021/texmf
--dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb></usr/local/texlive/2021/texmf-d
-ist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/local/texlive/2021/tex
-mf-dist/fonts/type1/urw/courier/ucrr8a.pfb></usr/local/texlive/2021/texmf-dist/
-fonts/type1/urw/helvetic/uhvb8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/t
-ype1/urw/helvetic/uhvr8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/ur
-w/times/utmb8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/urw/times/ut
-mbi8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/urw/times/utmr8a.pfb>
-</usr/local/texlive/2021/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (16 pages, 355899 bytes).
+[15] (./main.aux)
+
+LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+
+ ){/usr/local/texlive/2021/texmf-dist/fonts/enc/dvips/base/8r.enc}</usr/local/t
+exlive/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/local/te
+xlive/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/local/tex
+live/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb></usr/local/texli
+ve/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr/local/texlive
+/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/local/texlive/2
+021/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi9.pfb></usr/local/texlive/202
+1/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/local/texlive/2021/
+texmf-dist/fonts/type1/public/amsfonts/cm/cmr5.pfb></usr/local/texlive/2021/tex
+mf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/local/texlive/2021/texmf-
+dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/local/texlive/2021/texmf-dis
+t/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/local/texlive/2021/texmf-dist/f
+onts/type1/public/amsfonts/cm/cmr9.pfb></usr/local/texlive/2021/texmf-dist/font
+s/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive/2021/texmf-dist/fonts
+/type1/public/amsfonts/cm/cmsy6.pfb></usr/local/texlive/2021/texmf-dist/fonts/t
+ype1/public/amsfonts/cm/cmsy7.pfb></usr/local/texlive/2021/texmf-dist/fonts/typ
+e1/public/amsfonts/cm/cmsy8.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1
+/public/amsfonts/cm/cmsy9.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/p
+ublic/amsfonts/symbols/msbm10.pfb></usr/local/texlive/2021/texmf-dist/fonts/typ
+e1/urw/courier/ucrr8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/urw/h
+elvetic/uhvb8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/urw/helvetic
+/uhvr8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/urw/times/utmb8a.pf
+b></usr/local/texlive/2021/texmf-dist/fonts/type1/urw/times/utmbi8a.pfb></usr/l
+ocal/texlive/2021/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/local/texli
+ve/2021/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
+Output written on main.pdf (15 pages, 354645 bytes).
 Transcript written on main.log.
 Latexmk: Found input bbl file 'main.bbl'
+Latexmk: References changed.
 Latexmk: Log file says output to 'main.pdf'
 Latexmk: Examining 'main.log'
 === TeX engine is 'pdfTeX'
@@ -1653,8 +1653,8 @@ cal/texlive/2021/texmf-var/fonts/map/pdftex/updmap/pdftex.map}] [2]
 (./sections/fullmodel-validation.tex [10]) (./sections/sampling-validation.tex)
 (./sections/recurrent-comparison.tex [11]) (./sections/mechanism-costs.tex)
 [12] (./sections/workload-configuration.tex) [13]
-(./sections/workload-details.tex) (./sections/fullmodel-protocol.tex) [14]
-(./main.bbl [15])
+(./sections/workload-details.tex) (./sections/fullmodel-protocol.tex)
+(./main.bbl [14])
 
 ** Conference Paper **
 Before submitting the final camera ready copy, remember to:
@@ -1666,7 +1666,7 @@ Before submitting the final camera ready copy, remember to:
  uses only Type 1 fonts and that every step in the generation
  process uses the appropriate paper size.
 
-[16] (./main.aux) ){/usr/local/texlive/2021/texmf-dist/fonts/enc/dvips/base/8r.
+[15] (./main.aux) ){/usr/local/texlive/2021/texmf-dist/fonts/enc/dvips/base/8r.
 enc}</usr/local/texlive/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.p
 fb></usr/local/texlive/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pf
 b></usr/local/texlive/2021/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb>
@@ -1691,7 +1691,7 @@ ype1/urw/helvetic/uhvr8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/ur
 w/times/utmb8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/urw/times/ut
 mbi8a.pfb></usr/local/texlive/2021/texmf-dist/fonts/type1/urw/times/utmr8a.pfb>
 </usr/local/texlive/2021/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on main.pdf (16 pages, 355899 bytes).
+Output written on main.pdf (15 pages, 354645 bytes).
 Transcript written on main.log.
 Latexmk: Found input bbl file 'main.bbl'
 Latexmk: Log file says output to 'main.pdf'

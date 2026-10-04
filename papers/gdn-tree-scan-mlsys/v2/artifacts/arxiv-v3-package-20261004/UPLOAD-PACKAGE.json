@@ -1,11 +1,11 @@
 {
- "created_at_utc": "2026-10-04T21:03:07Z",
+ "created_at_utc": "2026-10-04T21:05:16Z",
  "article_id": "2609.23900",
  "replaces": "v2 (2026-10-01)",
  "title": "LumoTree: Path-Parallel Speculative Verification for Hybrid Language Models",
  "scope": "Manuscript compilation closure only; no README, private notes, logs, evidence archives, or generated output PDF included. Full-line author comments removed; class license comments retained.",
- "archive_bytes": 111201,
- "archive_sha256": "c43dce8cd6b1fe8460460319b46d42cf856a2f90d84bdc46b397d4635fbd4860",
+ "archive_bytes": 110965,
+ "archive_sha256": "8492892fe950346a98c34de7cd50d03ce22161b79eb27e52bc8211e809ea8550",
  "members": [
   {
    "path": "IEEEtran.cls",
@@ -44,18 +44,18 @@
   },
   {
    "path": "main.bbl",
-   "bytes": 12982,
-   "sha256": "4342a389397fca6e7877a3b5ae84e3631aa32efbadb59082efcb4ba4c8c1be75"
+   "bytes": 12870,
+   "sha256": "a45c471c4f83bb0b65f1252a1a4c46a45a97bd57ff4f9282498fe1d9fd49fa28"
   },
   {
    "path": "main.tex",
-   "bytes": 48484,
-   "sha256": "a373854fcbd632f632d72f2d3d2c7beb83b45727ab0f0417d256d953d58e52a5"
+   "bytes": 48172,
+   "sha256": "58d1af812d4f1ad0abc809ac0b1f26bb47711d60abf0b372ee1855bb04ce92a9"
   },
   {
    "path": "ref.bib",
-   "bytes": 13899,
-   "sha256": "3f13715510010210ba096d3de3a592a144a6de89d55903880292670ea8afee79"
+   "bytes": 13789,
+   "sha256": "f39c5bf840489483b80cef32db4ac4e41c16772b84a57181dce6f7c15af0f764"
   },
   {
    "path": "sections/execution-costs.tex",
@@ -69,8 +69,8 @@
   },
   {
    "path": "sections/fullmodel-validation.tex",
-   "bytes": 3442,
-   "sha256": "acc09b132dd0c5cb93f78a604a39c1b6f3989bd0f93d42a1a04e4b8a7e551814"
+   "bytes": 3347,
+   "sha256": "fe34af1c037a52890ba86fb3ca41bc8def41876b2d3fd013272f8f7508526457"
   },
   {
    "path": "sections/mechanism-costs.tex",
@@ -104,23 +104,23 @@
   },
   {
    "path": "sections/request-replay.tex",
-   "bytes": 6773,
-   "sha256": "a48985b9deed99ff2cfb1f7a991c38cb6d89c575d27d38d9cbea5bbc4a4e4365"
+   "bytes": 6683,
+   "sha256": "147cb289430238caf111cb891877ed416310b25ba1a864db92b2762b4a8e4b90"
   },
   {
    "path": "sections/sampling-validation.tex",
-   "bytes": 3646,
-   "sha256": "9332a02f44219aa4ac4cfa66e53f18edb86ab2c69df0533fdcb2211389429e81"
+   "bytes": 3605,
+   "sha256": "30bff91f581d9f1d46c7aff8d8b7055d8c6d4c3f4873bb0e7cd5ef4b47893ed3"
   },
   {
    "path": "sections/workload-configuration.tex",
-   "bytes": 1836,
-   "sha256": "f4ee1d9feb75ddcd7dbbdfb9e3df7e60875fa564b7381b5baa9858c00a03657e"
+   "bytes": 1770,
+   "sha256": "d75f438abb83b0e03447add75e55f9fde800c85575a44436f51499cf762bad49"
   },
   {
    "path": "sections/workload-details.tex",
-   "bytes": 1162,
-   "sha256": "e1277d71030d6d1f658e5d0f81913226967e4539f42883a3e540c562464db4ce"
+   "bytes": 1106,
+   "sha256": "ef4cc006e9f17f8b71e05c825f410b5960e7f821036046b15bddb25613430997"
   },
   {
    "path": "sections/workload.tex",
@@ -136,7 +136,7 @@
  },
  "arxiv_pdf": {
   "path": "artifacts/arxiv-v3-package-20261004/arxiv-compiled-v3.pdf",
-  "sha256": "bb629ce0f3cb4dd18fa300edd440afb6d71f65946126d492f5e522fe1048ca69",
+  "sha256": "f8e1db195dba6ed2d714970ad06fe72bd6d1a3b33bc84eb2ea3723babd1b29b0",
   "pages": 15
  },
  "suggested_metadata": {

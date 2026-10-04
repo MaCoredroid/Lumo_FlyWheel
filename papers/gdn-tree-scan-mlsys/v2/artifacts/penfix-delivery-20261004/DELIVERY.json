@@ -1,34 +1,34 @@
 {
  "schema": "claude.penfix-delivery.v2",
- "utc": "2026-10-04T21:03:07Z",
+ "utc": "2026-10-04T21:05:16Z",
  "manuscript_pdf": {
   "path": "artifacts/penfix-delivery-20261004/lumotree-penfix-20261004.pdf",
-  "sha256": "f797df4552dcf344f99000edaabc213269be5ad5bcece6503ca681d3f899becc",
+  "sha256": "2e99f86e47661ca8a5cda646212933ae3a4032f4750fb5bceef94e3e0990a464",
   "pages": 15
  },
  "source_archive": {
   "path": "artifacts/penfix-delivery-20261004/lumotree-source-penfix-20261004.tar.gz",
-  "sha256": "ecda3cd648d0aff98481431b9b9e71b8360fc6633f88b1eb7124320fcf08e3f1"
+  "sha256": "7451736291665959c415be582ac6a09d3b3f838a9379864bb05820a4241aa7bd"
  },
  "sources": {
-  "main.tex": "a373854fcbd632f632d72f2d3d2c7beb83b45727ab0f0417d256d953d58e52a5",
+  "main.tex": "58d1af812d4f1ad0abc809ac0b1f26bb47711d60abf0b372ee1855bb04ce92a9",
   "abstract.tex": "6df1bdc2006279afc460b73e1232d9fc439687cfd18d4afadd3c9e9842bd9a45",
-  "ref.bib": "3f13715510010210ba096d3de3a592a144a6de89d55903880292670ea8afee79",
-  "main.bbl": "4342a389397fca6e7877a3b5ae84e3631aa32efbadb59082efcb4ba4c8c1be75",
+  "ref.bib": "f39c5bf840489483b80cef32db4ac4e41c16772b84a57181dce6f7c15af0f764",
+  "main.bbl": "a45c471c4f83bb0b65f1252a1a4c46a45a97bd57ff4f9282498fe1d9fd49fa28",
   "IEEEtran.cls": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b",
   "sections/execution-costs.tex": "61a10ac34261a5f99a59d37a33cc72eea870e396f49a38f392532d5e1b5a2954",
   "sections/fullmodel-protocol.tex": "cb62d56162bb107789222945e9c2ef37dc47234e5e408daa40784a871e8ac3b5",
-  "sections/fullmodel-validation.tex": "acc09b132dd0c5cb93f78a604a39c1b6f3989bd0f93d42a1a04e4b8a7e551814",
+  "sections/fullmodel-validation.tex": "fe34af1c037a52890ba86fb3ca41bc8def41876b2d3fd013272f8f7508526457",
   "sections/mechanism-costs.tex": "fbc21f0b2fc66bf650706f49bdb8ef5bfa7856839570e5ebb5e16843769a0f2a",
   "sections/native-continuation.tex": "366222cac0b744bbc996cca7924e96ebc262a50c115cf89a83f245ecf0928266",
   "sections/optimization-spans.tex": "ae35b3b0ea31e4ee1c3baa532a9b6d0438e51422294d631ec4d647dd5e5e89a5",
   "sections/recurrent-comparison.tex": "0ac8ea1e338af46351a0feaac63f910c8698d30ba3bfa15c898c2ee5db3f3814",
   "sections/recurrent-validation.tex": "4b8540c9162a2de4c44574ef10178e42674480cc579efca0cfca14fc70edc953",
   "sections/replay-protocol.tex": "1adda3b0fa834ddb493b6b239f47f09d7ad21c1acab7bb9de64aada0aa072cc1",
-  "sections/request-replay.tex": "a48985b9deed99ff2cfb1f7a991c38cb6d89c575d27d38d9cbea5bbc4a4e4365",
-  "sections/sampling-validation.tex": "9332a02f44219aa4ac4cfa66e53f18edb86ab2c69df0533fdcb2211389429e81",
-  "sections/workload-configuration.tex": "f4ee1d9feb75ddcd7dbbdfb9e3df7e60875fa564b7381b5baa9858c00a03657e",
-  "sections/workload-details.tex": "e1277d71030d6d1f658e5d0f81913226967e4539f42883a3e540c562464db4ce",
+  "sections/request-replay.tex": "147cb289430238caf111cb891877ed416310b25ba1a864db92b2762b4a8e4b90",
+  "sections/sampling-validation.tex": "30bff91f581d9f1d46c7aff8d8b7055d8c6d4c3f4873bb0e7cd5ef4b47893ed3",
+  "sections/workload-configuration.tex": "d75f438abb83b0e03447add75e55f9fde800c85575a44436f51499cf762bad49",
+  "sections/workload-details.tex": "ef4cc006e9f17f8b71e05c825f410b5960e7f821036046b15bddb25613430997",
   "sections/workload.tex": "f0a3c739d4926c50cb81524952d19277d714ed27c0b7aa68953048f88857d114",
   "figures/cost-breakdown.tikz": "a29baf437e9f19ee1c33111a07645daed2ace8857492b6daf29468452ee62fee",
   "figures/e1-timing.json": "b1e2f4bb8bbb0ad269a8d7df4d3a21be4bff55e3083155698d68bf5595b15e3f",
@@ -42,7 +42,7 @@
  },
  "arxiv_v3_package": {
   "path": "artifacts/arxiv-v3-package-20261004/lumotree-v3-arxiv-source.tar.gz",
-  "sha256": "c43dce8cd6b1fe8460460319b46d42cf856a2f90d84bdc46b397d4635fbd4860",
+  "sha256": "8492892fe950346a98c34de7cd50d03ce22161b79eb27e52bc8211e809ea8550",
   "clean_build_text_identical": true
  },
  "latex_warnings_in_main_log": 0,
