@@ -1,0 +1,23 @@
+diff --git a/astropy/io/ascii/qdp.py b/astropy/io/ascii/qdp.py
+index 83a4f004a..29412dc5f 100644
+--- a/astropy/io/ascii/qdp.py
++++ b/astropy/io/ascii/qdp.py
+@@ -46,6 +46,8 @@ def _line_type(line, delimiter=None):
+     'data,6'
+     >>> _line_type(" 21345.45 ! a comment to disturb")
+     'data,1'
++    >>> _line_type("read serr 3")
++    'command'
+     >>> _line_type("NO NO NO NO NO")
+     'new'
+     >>> _line_type("NO,NO,NO,NO,NO", delimiter=',')
+@@ -60,7 +62,8 @@ def _line_type(line, delimiter=None):
+     ValueError: Unrecognized QDP line...
+     """
+     _decimal_re = r"[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?"
+-    _command_re = r"READ [TS]ERR(\s+[0-9]+)+"
++    # QDP commands are case-insensitive (e.g. "read serr 1" is valid).
++    _command_re = r"[Rr][Ee][Aa][Dd] ([Ss][Ee][Rr][Rr]|[Tt][Ee][Rr][Rr])(\s+[0-9]+)+"
+ 
+     sep = delimiter
+     if delimiter is None:

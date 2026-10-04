@@ -1,0 +1,26 @@
+{
+ "schema": "q1v3.cand-launch-generation.v1",
+ "files": {
+  "promoab": {
+   "source": "/home/user/shared/treehost-v2exp-20260930/scripts/v2exp/promoab_tail10_serve_only.sh",
+   "source_sha256": "dfc9558868f0739787f64fcce5ba099227cc95c17dff12f33a3973b48f40c024",
+   "generated": "/home/user/shared/treehost-v2exp-runs/q1v3v3/runs/q1v3v3-penfix-20261003T214045Z/CAND/gen/promoab_q1v3.sh",
+   "generated_sha256": "d20ddb4c4585f83150f88701ec45a77e8db266bf72b67090c3690542db74283d",
+   "edits": 2
+  },
+  "variant": {
+   "source": "/home/user/shared/treehost-v2exp-20260930/scripts/v2exp_serve_only_variant.sh",
+   "source_sha256": "e614a8e93cbcc9c2f34f1da496055e536cab02ebd629a7545432e3c506616001",
+   "generated": "/home/user/shared/treehost-v2exp-runs/q1v3v3/runs/q1v3v3-penfix-20261003T214045Z/CAND/gen/variant_q1v3.sh",
+   "generated_sha256": "408c4421387629f8b2e26e70b50d16d069e7e9bdfc583233d7fed9b13ba49a61",
+   "edits": 2
+  },
+  "launcher": {
+   "source": "/home/user/shared/repo-nvfp4-port-20260816/scripts/fr13_launch_forked_fa2_tree_server.sh",
+   "source_sha256": "55c1b67fb4ae7e3c177638cbfcae2ec03ea17f6b49568e68a8676e700416d4b3",
+   "generated": "/home/user/shared/treehost-v2exp-runs/q1v3v3/runs/q1v3v3-penfix-20261003T214045Z/CAND/gen/launcher_q1v3.sh",
+   "generated_sha256": "11e4951ee20feb4465076102485dcc27d26cf8d4a7cf4e6b09ceda06b7952cda",
+   "edits": 5
+  }
+ }
+}

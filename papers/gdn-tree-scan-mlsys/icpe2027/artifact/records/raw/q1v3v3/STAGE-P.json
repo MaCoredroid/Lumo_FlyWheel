@@ -1,0 +1,13 @@
+{
+ "arm": "P",
+ "client_rc": 0,
+ "summary": {
+  "arm": "P",
+  "attempted": 18,
+  "planned": 18,
+  "sealed": 18,
+  "utc": "2026-10-03T22:35:07Z",
+  "valid": 18
+ },
+ "complete": true
+}

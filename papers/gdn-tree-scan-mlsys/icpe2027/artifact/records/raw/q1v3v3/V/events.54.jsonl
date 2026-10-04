@@ -1,0 +1,55 @@
+{"utc": "2026-10-03T22:20:09Z", "what": "hooks_import", "pid": 54, "hooks_sha256": "d4b219a6bf7f7ecf3eccf8672e5a43573206433a803763b42e8d9851ff3b4ccc", "cases_sha256": "1e8d2ffc628a35c6518291a280006e75a786f8fb69878eb01452f9ed72b91609"}
+{"utc": "2026-10-03T22:20:09Z", "what": "control", "obs_id": "V__p1__N__r0"}
+{"utc": "2026-10-03T22:20:09Z", "what": "bind", "obs_id": "V__p1__N__r0", "rid": "chatcmpl-890c6f2e20fb4c41-b8ad6bf6", "P": 23376, "prompt_sha256": "de8b4227bfcfc38e6f105b8f6fd5a628c467321279cfab0032513096e1a9691d"}
+{"utc": "2026-10-03T22:20:50Z", "what": "sealed", "obs_id": "V__p1__N__r0", "valid": true}
+{"utc": "2026-10-03T22:20:50Z", "what": "control", "obs_id": "V__p1__Nb__r0"}
+{"utc": "2026-10-03T22:20:50Z", "what": "bind", "obs_id": "V__p1__Nb__r0", "rid": "chatcmpl-8255a313f8d2bbec-a6bcb560", "P": 23376, "prompt_sha256": "de8b4227bfcfc38e6f105b8f6fd5a628c467321279cfab0032513096e1a9691d"}
+{"utc": "2026-10-03T22:21:05Z", "what": "sealed", "obs_id": "V__p1__Nb__r0", "valid": true}
+{"utc": "2026-10-03T22:21:05Z", "what": "control", "obs_id": "V__p1__Nr__r0"}
+{"utc": "2026-10-03T22:21:05Z", "what": "bind", "obs_id": "V__p1__Nr__r0", "rid": "chatcmpl-a59604a5c34615ed-acb715b7", "P": 23376, "prompt_sha256": "de8b4227bfcfc38e6f105b8f6fd5a628c467321279cfab0032513096e1a9691d"}
+{"utc": "2026-10-03T22:21:11Z", "what": "sealed", "obs_id": "V__p1__Nr__r0", "valid": true}
+{"utc": "2026-10-03T22:21:11Z", "what": "control", "obs_id": "V__p2__N__r0"}
+{"utc": "2026-10-03T22:21:11Z", "what": "bind", "obs_id": "V__p2__N__r0", "rid": "chatcmpl-a80cd302e44d5a21-a892592e", "P": 28146, "prompt_sha256": "ace0810667de737ea78d7b7cbc8e2ca6edadea8167fcf31814d5c8cfb8d4cd31"}
+{"utc": "2026-10-03T22:21:32Z", "what": "sealed", "obs_id": "V__p2__N__r0", "valid": true}
+{"utc": "2026-10-03T22:21:32Z", "what": "control", "obs_id": "V__p2__Nb__r0"}
+{"utc": "2026-10-03T22:21:32Z", "what": "bind", "obs_id": "V__p2__Nb__r0", "rid": "chatcmpl-b28e79631283fb85-8fcd3ce6", "P": 28146, "prompt_sha256": "ace0810667de737ea78d7b7cbc8e2ca6edadea8167fcf31814d5c8cfb8d4cd31"}
+{"utc": "2026-10-03T22:21:42Z", "what": "sealed", "obs_id": "V__p2__Nb__r0", "valid": true}
+{"utc": "2026-10-03T22:21:42Z", "what": "control", "obs_id": "V__p2__Nr__r0"}
+{"utc": "2026-10-03T22:21:42Z", "what": "bind", "obs_id": "V__p2__Nr__r0", "rid": "chatcmpl-8a0111cdb17747c6-b7fda206", "P": 28146, "prompt_sha256": "ace0810667de737ea78d7b7cbc8e2ca6edadea8167fcf31814d5c8cfb8d4cd31"}
+{"utc": "2026-10-03T22:21:48Z", "what": "sealed", "obs_id": "V__p2__Nr__r0", "valid": true}
+{"utc": "2026-10-03T22:21:48Z", "what": "control", "obs_id": "V__p3__N__r0"}
+{"utc": "2026-10-03T22:21:48Z", "what": "bind", "obs_id": "V__p3__N__r0", "rid": "chatcmpl-97632e2ea8062848-be14e48a", "P": 27482, "prompt_sha256": "6b4134140362e1ad00e92d8cdc165c564d9c85e876353746f43d03b941f31983"}
+{"utc": "2026-10-03T22:22:08Z", "what": "sealed", "obs_id": "V__p3__N__r0", "valid": true}
+{"utc": "2026-10-03T22:22:08Z", "what": "control", "obs_id": "V__p3__Nb__r0"}
+{"utc": "2026-10-03T22:22:08Z", "what": "bind", "obs_id": "V__p3__Nb__r0", "rid": "chatcmpl-b64a63aac15d5b5f-b14a3288", "P": 27482, "prompt_sha256": "6b4134140362e1ad00e92d8cdc165c564d9c85e876353746f43d03b941f31983"}
+{"utc": "2026-10-03T22:22:18Z", "what": "sealed", "obs_id": "V__p3__Nb__r0", "valid": true}
+{"utc": "2026-10-03T22:22:18Z", "what": "control", "obs_id": "V__p3__Nr__r0"}
+{"utc": "2026-10-03T22:22:18Z", "what": "bind", "obs_id": "V__p3__Nr__r0", "rid": "chatcmpl-b1be229945bca678-8c056bd9", "P": 27482, "prompt_sha256": "6b4134140362e1ad00e92d8cdc165c564d9c85e876353746f43d03b941f31983"}
+{"utc": "2026-10-03T22:22:23Z", "what": "sealed", "obs_id": "V__p3__Nr__r0", "valid": true}
+{"utc": "2026-10-03T22:22:23Z", "what": "control", "obs_id": "V__p4__N__r0"}
+{"utc": "2026-10-03T22:22:23Z", "what": "bind", "obs_id": "V__p4__N__r0", "rid": "chatcmpl-8d7abf5868809618-99a5dc60", "P": 34234, "prompt_sha256": "eddf314162ff17f8d7a980f05d5f938dcd25e4a710e9d77668f7377bc99ad5c4"}
+{"utc": "2026-10-03T22:22:49Z", "what": "sealed", "obs_id": "V__p4__N__r0", "valid": true}
+{"utc": "2026-10-03T22:22:49Z", "what": "control", "obs_id": "V__p4__Nb__r0"}
+{"utc": "2026-10-03T22:22:49Z", "what": "bind", "obs_id": "V__p4__Nb__r0", "rid": "chatcmpl-912f66297dcab91e-80b6b348", "P": 34234, "prompt_sha256": "eddf314162ff17f8d7a980f05d5f938dcd25e4a710e9d77668f7377bc99ad5c4"}
+{"utc": "2026-10-03T22:22:57Z", "what": "sealed", "obs_id": "V__p4__Nb__r0", "valid": true}
+{"utc": "2026-10-03T22:22:57Z", "what": "control", "obs_id": "V__p4__Nr__r0"}
+{"utc": "2026-10-03T22:22:57Z", "what": "bind", "obs_id": "V__p4__Nr__r0", "rid": "chatcmpl-aa60d010e21281d1-a3325553", "P": 34234, "prompt_sha256": "eddf314162ff17f8d7a980f05d5f938dcd25e4a710e9d77668f7377bc99ad5c4"}
+{"utc": "2026-10-03T22:23:02Z", "what": "sealed", "obs_id": "V__p4__Nr__r0", "valid": true}
+{"utc": "2026-10-03T22:23:02Z", "what": "control", "obs_id": "V__p5__N__r0"}
+{"utc": "2026-10-03T22:23:02Z", "what": "bind", "obs_id": "V__p5__N__r0", "rid": "chatcmpl-93d3e7e035a519b3-9da19cd1", "P": 28298, "prompt_sha256": "3ebef5e6e4faa2c0ea5ba43a35921919acb80a465b3ab282fabd58dbd226c9bd"}
+{"utc": "2026-10-03T22:23:24Z", "what": "sealed", "obs_id": "V__p5__N__r0", "valid": true}
+{"utc": "2026-10-03T22:23:24Z", "what": "control", "obs_id": "V__p5__Nb__r0"}
+{"utc": "2026-10-03T22:23:24Z", "what": "bind", "obs_id": "V__p5__Nb__r0", "rid": "chatcmpl-b0ab99f3ec1c9fc6-b7dda534", "P": 28298, "prompt_sha256": "3ebef5e6e4faa2c0ea5ba43a35921919acb80a465b3ab282fabd58dbd226c9bd"}
+{"utc": "2026-10-03T22:23:35Z", "what": "sealed", "obs_id": "V__p5__Nb__r0", "valid": true}
+{"utc": "2026-10-03T22:23:35Z", "what": "control", "obs_id": "V__p5__Nr__r0"}
+{"utc": "2026-10-03T22:23:35Z", "what": "bind", "obs_id": "V__p5__Nr__r0", "rid": "chatcmpl-b25dd778b00b92e3-8629f6d8", "P": 28298, "prompt_sha256": "3ebef5e6e4faa2c0ea5ba43a35921919acb80a465b3ab282fabd58dbd226c9bd"}
+{"utc": "2026-10-03T22:23:42Z", "what": "sealed", "obs_id": "V__p5__Nr__r0", "valid": true}
+{"utc": "2026-10-03T22:23:42Z", "what": "control", "obs_id": "V__p6__N__r0"}
+{"utc": "2026-10-03T22:23:42Z", "what": "bind", "obs_id": "V__p6__N__r0", "rid": "chatcmpl-af535fb03cf265cc-a5f0b2ff", "P": 46234, "prompt_sha256": "8f9574c7f747c3be371a124cdd5b16673e636bb436cbd9e45f3d37c8d401c99e"}
+{"utc": "2026-10-03T22:24:17Z", "what": "sealed", "obs_id": "V__p6__N__r0", "valid": true}
+{"utc": "2026-10-03T22:24:18Z", "what": "control", "obs_id": "V__p6__Nb__r0"}
+{"utc": "2026-10-03T22:24:18Z", "what": "bind", "obs_id": "V__p6__Nb__r0", "rid": "chatcmpl-8d4ac43381a6c302-8212db54", "P": 46234, "prompt_sha256": "8f9574c7f747c3be371a124cdd5b16673e636bb436cbd9e45f3d37c8d401c99e"}
+{"utc": "2026-10-03T22:24:43Z", "what": "sealed", "obs_id": "V__p6__Nb__r0", "valid": true}
+{"utc": "2026-10-03T22:24:43Z", "what": "control", "obs_id": "V__p6__Nr__r0"}
+{"utc": "2026-10-03T22:24:43Z", "what": "bind", "obs_id": "V__p6__Nr__r0", "rid": "chatcmpl-9eae23c17de430f2-bed44e42", "P": 46234, "prompt_sha256": "8f9574c7f747c3be371a124cdd5b16673e636bb436cbd9e45f3d37c8d401c99e"}
+{"utc": "2026-10-03T22:24:49Z", "what": "sealed", "obs_id": "V__p6__Nr__r0", "valid": true}

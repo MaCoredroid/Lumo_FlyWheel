@@ -1,0 +1,7 @@
+mode=hydra27_fixed32
+pid=/logs/fr13_fixed32_engine_pid
+request=/logs/fr13_fixed32_flush_request.json
+ack=/logs/fr13_fixed32_flush_ack.json
+census=/logs/fr13_fixed32_work_census.jsonl
+engine_ingress=/logs/fr13_fixed32_engine_ingress.jsonl
+boundary=/logs/fr13_fixed32_boundary_snapshot

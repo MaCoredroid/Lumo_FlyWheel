@@ -1,0 +1,37 @@
+Additional runs on the first corpus disable individual \sys{} optimizations (Table~\ref{tab:replay-variants}). The stock-attention variant completes all 43 requests in three runs and records 26.82 pooled tokens/s, 6.5\% below the deployed configuration measured under the same sampler; disabling fused draft selection or precomputed tap-operand preparation records 29.40 and 29.02 in one run each, within the deployed configuration's run-to-run spread. Phase timers (Table~\ref{tab:optimization-spans}) show the stock-attention variant with a 14.6\,ms longer target span and a 15.1\,ms longer step than two instrumented deployed repeats; fused selection off adds 0.7\,ms to the drafter span; operand-preparation removal has no clear separation. Boot logs report 20.54\,GiB of model-loading allocation in every variant and CUDA-graph pools of 1.52--1.59\,GiB (deployed), 0.42--0.50\,GiB (stock attention), 1.97\,GiB (fused selection off), and 1.47\,GiB (operand preparation off); deployed KV capacity is 203,776 tokens versus 197,632--198,656 for stock attention. Generated trajectories, acceptance lengths, and KV capacities differ across variants, so these are not isolated causal effects at identical computation.
+
+\begin{table}[h]
+\caption{Exploratory replay variants on the first corpus. Each run contains all 43 requests.}
+\label{tab:replay-variants}
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Disabled optimization & Runs & Tokens/s & Run range \\
+\midrule
+Grouped split-K tree attention & 3 & 26.82 & 26.67--27.11 \\
+Fused draft top-$k$ selection & 1 & 29.40 & --- \\
+Precomputed tap-operand preparation & 1 & 29.02 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\input{sections/optimization-spans}
+
+The deployed tree's maximum depth is eleven, but neural drafting uses only five MTP passes; suffix lookup supplies the deeper tail. Three-pass drafting and a suffix-dependent three/five-pass policy, retaining 32 physical verification rows (Table~\ref{tab:drafting-passes}), are drafting-policy variants rather than new tree topologies. Three-pass drafting saves about 18\,ms per cycle but reduces accepted drafts per event by about 11\%; its 0.9\% pooled-rate difference from the deployed runs is within the observed variation, and the conditional policy has a lower pooled rate, so the five-pass configuration is retained.
+
+\begin{table}[h]
+\caption{Exploratory drafting-pass variants on the first corpus. The deployed row pools two runs; each variant has one. GPU drafting and step wall durations use their own timer counts.}
+\label{tab:drafting-passes}
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Policy & Tokens/s & \shortstack{Accepted\\drafts/event} & \shortstack{Draft\\ms} & \shortstack{Step\\ms} \\
+\midrule
+Five passes & 28.69 & 4.45 & 49.84 & 189.35 \\
+Three passes & 28.94 & 3.97 & 32.01 & 171.27 \\
+Conditional three/five & 27.05 & 4.09 & 47.71 & 187.55 \\
+\bottomrule
+\end{tabular}
+\end{table}

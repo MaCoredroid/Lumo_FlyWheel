@@ -1,0 +1,59 @@
+{
+  "forward_step_interval": {
+    "end_forward_step": 7558,
+    "expected_complete_events": 4642,
+    "start_forward_step": 2916
+  },
+  "instance_id": "astropy__astropy-14096",
+  "mode": "hydra27_fixed32",
+  "post": {
+    "action": "snapshot",
+    "counters": {
+      "cfwd_pending": 0,
+      "complete_work_census_events": 7558,
+      "dfwd_pending": 0,
+      "pure_decode_forward_steps": 7558,
+      "sfwd_pending": 0,
+      "work_census_first_forward_step": 0,
+      "work_census_last_forward_step": 7557
+    },
+    "generation": 4,
+    "mode": "hydra27_fixed32",
+    "nonce": "eda068f9c651e0d4afb69b6e9174dcdd3eb698048a58476d3b725d7cacfca8d3",
+    "producer_pid": 156,
+    "schema": "fr13-fixed32-flush-ack-v1",
+    "status": "ok"
+  },
+  "post_runtime_snapshot": {
+    "generation": 4,
+    "path": "/home/user/shared/treehost-v2exp-runs/swe/fr14_promoab_C_v2swe20261003T223952Z_20261003T223952Z/hydra27_fixed32_promoab_C_v2swe20261003T223952Z/logs/fr13_fixed32_boundary_snapshot.4.json",
+    "schema": "fr13-fixed32-boundary-snapshot-v4",
+    "sha256": "262c6b03aa9a0f83149832faf23a294b4102e5f19c39ab2e37e6b628c054383e"
+  },
+  "pre": {
+    "action": "snapshot",
+    "counters": {
+      "cfwd_pending": 0,
+      "complete_work_census_events": 2916,
+      "dfwd_pending": 0,
+      "pure_decode_forward_steps": 2916,
+      "sfwd_pending": 0,
+      "work_census_first_forward_step": 0,
+      "work_census_last_forward_step": 2915
+    },
+    "generation": 3,
+    "mode": "hydra27_fixed32",
+    "nonce": "256efe3a6c67af68d7393669c55ab7e2262533bcb19bdbaea89908d160921cc2",
+    "producer_pid": 156,
+    "schema": "fr13-fixed32-flush-ack-v1",
+    "status": "ok"
+  },
+  "pre_runtime_snapshot": {
+    "generation": 3,
+    "path": "/home/user/shared/treehost-v2exp-runs/swe/fr14_promoab_C_v2swe20261003T223952Z_20261003T223952Z/hydra27_fixed32_promoab_C_v2swe20261003T223952Z/logs/fr13_fixed32_boundary_snapshot.3.json",
+    "schema": "fr13-fixed32-boundary-snapshot-v4",
+    "sha256": "7ea50e69ec5ec72b16427c864a09337aa212deb02750253572ac281eaf57f17c"
+  },
+  "producer_pid": 156,
+  "schema": "fr13-fixed32-task-boundary-v1"
+}

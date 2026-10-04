@@ -1,0 +1,18 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 1b3285ddc..b1d42e7ba 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -859,7 +859,12 @@ class Card(_Verify):
+                     return kw, vc
+ 
+                 value = m.group("strg") or ""
+-                value = value.rstrip().replace("''", "'")
++                # Keep the fragment in its encoded form (single quotes still
++                # doubled).  The fragments are joined and re-wrapped below and
++                # parsed as a whole, so quote escaping is undone exactly once;
++                # unescaping per fragment would collapse quote pairs that fall
++                # on a card boundary.
++                value = value.rstrip()
+                 if value and value[-1] == "&":
+                     value = value[:-1]
+                 values.append(value)
