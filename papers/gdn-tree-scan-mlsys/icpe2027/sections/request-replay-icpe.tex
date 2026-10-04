@@ -1,0 +1,38 @@
+Table~\ref{tab:request-replay} reports complete configuration runs on the first corpus, each containing all 43 requests. Across three runs per arm, \sys{} records 28.13 pooled tokens/s and five-token native MTP records 26.12, a 7.7\% difference; individual run rates span 27.40--28.78 and 26.04--26.23 tokens/s. Plain autoregressive decoding records 10.54 tokens/s in one run, and five-token MTP has the highest pooled rate of the exploratory native sweep. SGLang EAGLE with seven steps and eight draft tokens, whose top-$k$ of one makes the draft a chain, yields 29.69 pooled tokens/s over three runs with identical incoming token IDs; attention, prefill settings, and endpoint timing still differ. Output-side counters pooled over the repeated vLLM runs give 4.35 accepted drafts per speculative event for \sys{} and 3.17 for five-token MTP; these counters describe emitted drafts, excluding the correction or bonus token. Exploratory variants that disable individual \sys{} optimizations, with their phase timers and drafting-pass sensitivity, are in Appendix~\ref{app:variants}; they predate the penalty-history correction and do not isolate single effects.
+
+\begin{table}[t]
+\caption{Sampled replay of 43 recorded requests, capped at 1,024 output tokens. Rates pool matched token and time totals across runs; ranges are individual run rates, not confidence intervals. SGLang receives the same input token IDs on a different stack and streaming endpoint.}
+\label{tab:request-replay}
+\centering\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Configuration & Runs & Tokens/s & Run range \\
+\midrule
+vLLM autoregressive & 1 & 10.54 & --- \\
+vLLM MTP, 1 token & 1 & 15.37 & --- \\
+vLLM MTP, 3 tokens & 1 & 22.06 & --- \\
+vLLM MTP, 5 tokens & 3 & 26.12 & 26.04--26.23 \\
+vLLM MTP, 7 tokens & 1 & 25.72 & --- \\
+\sys{} & 3 & 28.13 & 27.40--28.78 \\
+\midrule
+SGLang EAGLE, 7/8 & 3 & 29.69 & 28.91--30.90 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\caption{Disjoint 43-request replay. Rates pool matched totals; ranges are individual run rates. Request messages are shared, but SGLang uses a different chat serialization.}
+\label{tab:disjoint-replay}
+\centering\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Configuration & Runs & Tokens/s & Run range \\
+\midrule
+\sys{} & 3 & 30.76 & 30.38--31.14 \\
+vLLM MTP, 5 tokens & 3 & 27.52 & 27.41--27.71 \\
+SGLang EAGLE, 7/8 & 1 & 30.24 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On the disjoint corpus (Table~\ref{tab:disjoint-replay}), \sys{} records 30.76 pooled tokens/s against native MTP-5's 27.52, an 11.8\% difference, and every individual tree rate exceeds every MTP-5 rate. SGLang records 30.24 in its single run. The pooled tree--SGLang difference is within 5\% on both corpora and changes sign between them: \sys{} reaches a chain stack's rate while verifying 27-candidate trees, so that comparison measures the cost of hosting tree verification rather than a gain from it. The second corpus supports the direction of the MTP-5 difference without establishing statistical significance, equal output distributions, or task-completion improvement.

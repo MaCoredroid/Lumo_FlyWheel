@@ -1,0 +1,308 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+\usepackage{booktabs,array,tabularx}
+\usepackage{algorithm,algpseudocode}
+\algrenewcommand{\algorithmicrequire}{\textbf{Input:}}
+\algrenewcommand{\algorithmicensure}{\textbf{Output:}}
+\algrenewcommand{\algorithmicindent}{1.25em}
+\algnewcommand{\algorithmicparallelfor}{\textbf{parallel for}}
+\algdef{SE}[PAR]{ParallelFor}{EndParallelFor}[1]
+  {\algorithmicparallelfor\ #1\ \algorithmicdo}{\algorithmicend\ \algorithmicfor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc}
+\definecolor{inkblue}{RGB}{42,97,130}
+\definecolor{mutedgreen}{RGB}{71,123,103}
+\definecolor{mutedamber}{RGB}{173,124,52}
+\definecolor{mutedred}{RGB}{153,77,82}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+% System name macro: the preprint name is withheld for double-anonymous review.
+\newcommand{\sys}{TreeHost}
+\setcopyright{none}
+\acmConference[ICPE '27]{18th ACM/SPEC International Conference on Performance Engineering}{May 24--28, 2027}{Gothenburg, Sweden}
+\acmYear{2027}
+\settopmatter{printacmref=false}
+\acmISBN{}
+\acmDOI{}
+\begin{document}
+\title{Hosting Tree Speculation on a Recurrent-Hybrid Model: Verifier Design, Audit Methodology, and Serving Evidence}
+\author{Anonymous Author(s)}
+\affiliation{\institution{Anonymous Institution}\country{}}
+\begin{abstract}
+Tree speculative decoding verifies many candidate continuations per step, but a recurrent-hybrid language model can host it only if every accepted path leaves consistent recurrent state, convolution history, and attention cache behind. We present \sys{}, a vLLM serving design in which a shared tree descriptor drives path-parallel recurrent verification, device-resident acceptance, and coordinated publication of the selected path into native running state. Because speculative serving on hybrid models has no settled measurement practice, we also contribute an audit methodology: a pooled completed-request decode-rate estimator with explicit exclusions, frozen recorded-request corpora with a disjoint-task generalization check, a frozen native-envelope numerical rule with planted state faults, a captured-row and Monte-Carlo sampler audit with planted faults, and an identical-prompt output-length comparability check. On Qwen3.8-27B NVFP4 on an NVIDIA DGX Spark, \sys{} verifies 27-candidate trees at 28.13 and 30.76 pooled tokens/s on two corpora, 7.7\% and 11.8\% above the same stack's five-token chain speculation and within 5\% of a tuned chain-speculation stack on a second serving system; 126 held-out continuation cycles stay within the frozen numerical bound while all ten planted faults are detected, and the deployed sampler shows no departure from the autoregressive target beyond a top-$k$ tie convention. A ten-task coding-agent study is reported descriptively. Tree verification is thereby available on a hybrid model at chain-stack cost; tree drafters are the untested next step.
+\end{abstract}
+\begin{CCSXML}
+<ccs2012>
+<concept><concept_id>10010147.10010178.10010179</concept_id><concept_desc>Computing methodologies~Natural language processing</concept_desc><concept_significance>300</concept_significance></concept>
+<concept><concept_id>10011007.10010940.10010971.10011682</concept_id><concept_desc>Software and its engineering~Software performance</concept_desc><concept_significance>500</concept_significance></concept>
+<concept><concept_id>10002944.10011122.10002945</concept_id><concept_desc>General and reference~Measurement</concept_desc><concept_significance>500</concept_significance></concept>
+</ccs2012>
+\end{CCSXML}
+\ccsdesc[500]{Software and its engineering~Software performance}
+\ccsdesc[500]{General and reference~Measurement}
+\ccsdesc[300]{Computing methodologies~Natural language processing}
+\keywords{speculative decoding, hybrid language models, Gated DeltaNet, LLM serving, measurement methodology, numerical reproducibility}
+\maketitle
+
+\section{Introduction}
+Speculative decoding reduces serial target-model invocations by verifying draft tokens in parallel; its sampling guarantee assumes that verification supplies the intended target probabilities, and tree speculation widens the candidate set without relaxing that assumption~\cite{leviathan2023fast,chen2023sampling,miao2023specinfer}. Recurrent-hybrid models such as Qwen3-Next, which interleave Gated DeltaNet (GDN) layers with softmax attention, complicate the verifier: a candidate must inherit the recurrent state, convolution history, and attention cache of its ancestors, and the next serving iteration must inherit exactly the path selected for continuation~\cite{yang2024gated,wu2025stree}. A verifier can compute plausible candidate logits and still publish the wrong state.
+
+This paper makes three contributions. \textit{First}, a verifier design that hosts 27-candidate trees on a hybrid model inside a production serving engine: branch paths are scanned in parallel from shared boundary states, acceptance runs on the device, and one accepted path is replayed into the native recurrent, convolution, and attention state through a shared logical-to-physical descriptor. A chain verifier cannot host tree drafters at all; this design is the substrate they need. \textit{Second}, a measurement and audit methodology for speculative serving on hybrid models, where decode rates, numerical agreement, and sampling correctness are each easy to mismeasure: a pooled completed-request decode-rate estimator with explicit exclusions; two frozen recorded-request corpora with a disjoint-task generalization check; a native-envelope numerical rule frozen before data collection, with ten planted state faults; a captured-row and Monte-Carlo audit of the acceptance walk with planted sampler faults; and an identical-prompt output-length comparability check. The methodology transfers to any speculative method on any hybrid model. \textit{Third}, evidence under that methodology on Qwen3.8-27B NVFP4 on an NVIDIA DGX Spark (GB10): \sys{} exceeds the same stack's five-token chain speculation by 7.7\% and 11.8\% pooled tokens/s on the two corpora and is within 5\% of a tuned chain-speculation stack on a second serving system, which measures the cost of hosting tree verification rather than a gain from it; 126 held-out continuation cycles satisfy the frozen numerical bound with every planted fault detected; the deployed sampler, audited on 2,480 captured rows, shows no departure from the autoregressive target beyond a top-$k$ tie convention. A ten-task SWE-bench Verified coding-agent study is reported descriptively.
+
+The target workload is a long-running coding agent: generation alternates with repository inspection, tool execution, and tests, so performance depends on completed work as well as token production. We therefore report the model, serving route, task cohort, and measurement definition together, and we separate recorded-request replay, which fixes the prompts, from live agent runs, which do not. Section~\ref{sec:related} positions the design against the closest mechanisms; Section~\ref{sec:design} describes it; Section~\ref{sec:method} defines the methodology; Section~\ref{sec:results} reports the evidence; Section~\ref{sec:discussion} bounds it. Raw records, reducers, and the serving patches are in the anonymized artifact~\cite{anon2026artifact}.
+
+\section{Background and Closest Designs}
+\label{sec:related}
+Speculative sampling constructs an exact target sample from proposal and residual distributions, conditional on the probabilities actually supplied~\cite{leviathan2023fast,chen2023sampling}. SpecInfer supplies the tree-verification framing; Sequoia, EAGLE-2, OPT-Tree, EAGLE-3, and DFlash study tree construction and drafters~\cite{miao2023specinfer,chen2024sequoia,li2024eagle,wang2024opt,li2025eagle3,chen2026dflash}; these drafting mechanisms are distinct from the verifier and state-publication choices studied here. PagedAttention and SGLang supply the scheduling and memory substrate, Marconi addresses prefix caching for hybrid models, and hybrid serving manages recurrent-state pools alongside KV storage~\cite{kwon2023efficient,zheng2024sglang,pan2024marconi,pytorch2025sglang,sglang2026qwen}. Flash-Decoding, FlashInfer, DeFT, and FastTree establish split-KV execution and tree-aware KV reuse~\cite{dao2023flashdecoding,ye2025flashinfer,yao2024deft,pan2025fasttree}; our modified FlashAttention-2 decode kernel applies grouped split-K execution under the tree's visibility and slot mapping~\cite{dao2023flashattention}.
+
+Gated DeltaNet augments a decayed recurrent state with a data-dependent delta update~\cite{yang2024gated,yang2024delta}. Snakes and Ladders and STree use activation replay to recover state-space continuation state; SpecMamba and component-aware self-speculation study hybrid speculation further~\cite{wu2024snakes,wu2025stree,zhong2025specmamba,borobia2026component}. These works motivate an explicit state lineage; they do not make every recurrent update or numerical implementation interchangeable.
+
+Six designs verify GDN trees or share recurrent state across candidates (Table~\ref{tab:related}). Weaver verifies with an ancestor-masked triangular solve and replays the selected path at commit time~\cite{oda2026marginals}; SpecLA keeps value tiles of recurrent state on chip within a chain, schedules ready chains in parallel, and buffers accepted factors for a later fused update~\cite{wang2026specla}; Bole evaluates a tree-structured finite-Neumann closed form, stores compact factors, reconstructs the accepted state, and integrates with SGLang~\cite{wang2026bole}; TreeWY solves a triangular system and fuses reconstruction of the previous accepted state with the next verification~\cite{ghantasala2026treewy,ghantasala2026treewycode}; ReplaySSM caches inputs and defers state materialization~\cite{replayssm2026}; OneLA shares a prompt-derived state across recommendation beams~\cite{yang2026onela}. Read-only verification followed by accepted-path replay and parallel chain scheduling are therefore direct prior art. \sys{} differs in continuation policy: it replays recorded operands through the serving engine's native per-layer GDN updates immediately after acceptance and publishes convolution and attention state through the same descriptor, so each iteration returns to the native state representation that prefix caching and serving graphs already use. Published speed ratios from different models and workloads are not combined into a ranking.
+
+\begin{table}[t]
+\caption{Recurrent verification and continuation policies. Mechanism comparison only; no performance ranking.}
+\label{tab:related}
+\centering\footnotesize
+\begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}p{0.2\columnwidth}YY@{}}
+\toprule
+Method & Verification work & Continuation state \\
+\midrule
+Weaver~\cite{oda2026marginals} & Ancestor-masked triangular solve & Short selected-path recurrence \\
+SpecLA~\cite{wang2026specla} & Resident state tiles; parallel chains & Buffered factors; later fused update \\
+Bole~\cite{wang2026bole} & Finite-Neumann correction solve & Compact factors; state reconstruction \\
+TreeWY~\cite{ghantasala2026treewycode} & Triangular solve in fused kernel & Prior-path reconstruction with next verify \\
+ReplaySSM~\cite{replayssm2026} & Corrected inputs; cached transitions & Deferred state update \\
+OneLA~\cite{yang2026onela} & Shared-base projections across beams & Compact per-beam transition records \\
+\sys{} & Resident state tiles; parallel paths & Native replay; coordinated convolution and KV publication \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Verifier Design}
+\label{sec:design}
+\subsection{State boundary and shared descriptor}
+Let $m$ be a materialized token prefix, the tokens already consumed by the target's forward computation, with persistent state $\mathcal{S}(m)=(R(m),C(m),K(m))$: recurrent matrices $R$, convolution histories $C$, and attention KV entries $K$. The logical emitted prefix may include a newly sampled token $b$ not yet consumed, so the continuation boundary is $(\mathcal{S}(m),b)$ rather than a claim that $\mathcal{S}(mb)$ exists. A tree descriptor holds candidate token IDs, parent indices, positions, attention visibility, and the map between logical nodes and physical slots. For one GDN head with state $R\in\mathbb{R}^{d_v\times d_k}$, decay $\alpha_i$, and write strength $\beta_i$, a node applies~\cite{yang2024gated}
+\begin{align}
+R'_i &= \alpha_i R_{\pi(i)}, & \delta_i &= \beta_i\bigl(v_i-R'_i k_i\bigr), & R_i &= R'_i+\delta_i k_i^\top, & o_i &= R_iq_i,
+\end{align}
+where $\pi(i)$ is the parent, which need not be the previous packed row. Causal convolution likewise needs path predecessors, and attention visibility must select the same logical ancestry; a correct attention mask cannot repair a wrong recurrent parent.
+
+Figure~\ref{fig:pipeline} shows the cycle. Native multi-token prediction (MTP) supplies a principal chain and runner-up candidates; suffix prediction extends selected paths within a bounded capacity~\cite{oliaro2025suffix,arctic2026suffix,hu2024sam}. The verifier derives attention visibility, physical packing, path scheduling, and the acceptance walk from one logical topology; padding keeps execution shapes reusable while remaining invisible to attention and selection. The attention layout places the principal spine first in the physical suffix and applies the same permutation to KV write slots and ancestry-mask key columns, retaining logical query-row and position order; acceptance stays in logical-node space and publication maps selected nodes back to physical slots, so a layout optimization cannot silently change which entries a branch reads. Algorithm~\ref{alg:verify} states the contract: verification, selection, and publication all consume the same materialized path $A$, and a newly sampled token $b^*$ can be emitted while remaining pending. History-dependent logits processing (penalties) builds each verification row's history from its own root-to-node path (Section~\ref{sec:method-sampler}). Figure~\ref{fig:contract} summarizes the interface: all three state surfaces describe the same materialized prefix, and a pending token is created by the next forward.
+
+\begin{figure}[t]
+\centering
+\input{figures/state-contract.tikz}
+\caption{The accepted-prefix interface. Recurrent, convolution, and attention-KV state must all describe the same materialized prefix; a newly sampled correction or bonus token can remain pending until the next forward.}
+\label{fig:contract}
+\end{figure}
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{figures/pipeline.tikz}}
+\caption{Tree verification and accepted-path commitment. (a) Drafting provides a candidate tree and proposal probabilities $q$. (b) Branch-local computation produces target probabilities $p$ and retains temporary state. (c) Sampling selects a materialized path (here $a,d$); recurrent replay, convolution gathering, and KV remapping publish $\mathcal{S}(mad)$. The newly sampled token $b^*$ remains pending. One descriptor keeps logical ancestry and physical storage aligned.}
+\label{fig:pipeline}
+\end{figure*}
+
+\begin{algorithm}[t]
+\caption{Tree verification and native continuation}
+\label{alg:verify}
+\small
+\begin{algorithmic}[1]
+\Require Native continuation state; candidate tree $T$; proposal probabilities $q$
+\Ensure Emitted tokens; updated native state; next drafter input; any pending token
+\State Map $T$ to physical slots, positions, and ancestor masks.
+\State $p\gets$ target probabilities from path-local GDN, convolution, and attention computation; retain candidate hidden states, rounded replay operands, convolution histories, and temporary KV entries.
+\State $(A,b^*)\gets$ accepted materialized path and pending token from sampling with $p$ and $q$.
+\For{each GDN layer}
+  \State Replay recorded operands along $A$ into the native recurrent state; gather the convolution history for $A$ into the native running row.
+\EndFor
+\State Remap the accepted KV entries with the same logical-to-physical slot map; select the matching hidden-state row for the next drafter input.
+\State Advance positions along $A$; keep $b^*$ pending until its target forward.
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Path-parallel scan and accepted-path replay}
+The GDN verifier decomposes the tree into dependent path groups, a scheduling family also used by SpecLA~\cite{wang2026specla}. A first path starts from the request's pre-tree state and exports the cut states that downstream paths need; a second level evaluates independent branch paths from those cut states. Each GPU program covers one path, head, and value tile and keeps the full key dimension in its working tile, so sequential updates reuse the tile through the path loop instead of loading a full recurrent state per node. Cut states and operand rings are temporary within a step; the durable continuation lives in the request-owned native running rows, and prefix-cache snapshots use that native layout. The two levels run as separate launches and exchange only boundary states. If a program exports $N_c$ cut states of value-tile width $B_v$ and key dimension $d_k$, their fp32 payload is $4N_cB_vd_k$ bytes; the reusable scratch allocation reserves a full slot per node, so allocated bytes differ from state traffic.
+
+Verification uses sequential path scans with fp32 carried state, raw gate inputs, and in-kernel query/key normalization. Accepted-path replay uses the engine's native fused GDN update with the recorded accepted operands, one native call per layer in a captured graph, publishing in place to the fp32 state bank. Normalization, beta conversion, gate evaluation, and output casts can differ between the two implementations, so their finite-precision agreement is a measured property (Section~\ref{sec:res-component}), not a consequence of the shared real-arithmetic recurrence. Replay carries one state tile through a bounded path loop, $O(B_vd_k)$ in tree size; recorded operands and candidate outputs scale with the verification shape. Figure~\ref{fig:scan-replay} shows the state lifetime; Algorithm~\ref{alg:scan-replay} in Appendix~\ref{app:scan} gives the full procedure. Path decomposition caches state only where downstream paths branch and reuses it across independent work; recomputing ancestry would remove exports at the cost of repeated updates, and exporting every candidate state would trade more writes for less recomputation. The two-level schedule is one point in that space, and neither a shorter logical path nor fewer state writes alone establishes a faster complete request, which is why Section~\ref{sec:method} measures complete cycles.
+
+\begin{figure}[t]
+\centering
+\input{figures/scan-replay.tikz}
+\caption{State lifetime in the path-scan verifier. Temporary cut states connect path groups; recorded operands support selected-path replay. Only the accepted frontier becomes native persistent state.}
+\label{fig:scan-replay}
+\end{figure}
+
+\subsection{Implementation changes around the verifier}
+Three representations must agree: logical tree nodes, temporary verification storage, and the native state used by the next forward. Table~\ref{tab:optimization-map} lists the five implementation changes that carry one accepted path across them and the constraint that makes each nontrivial. \paragraph{One device-selected path drives continuation} Selecting output tokens does not update a hybrid model's state: the recurrent matrix must contain the accepted updates, convolution must retain the accepted history, attention must reference the accepted KV entries, and the drafter must receive the matching hidden row. Reconstructing these choices on the host inserts path-list preparation and synchronization between acceptance and publication. \sys{} instead emits fixed-shape device products (accepted node indices, path lengths, emitted tokens, the selected final row) that feed captured native replay, convolution gathering, KV remapping, and drafter-row selection. Recorded operands are staged for the native per-layer updates in one captured committer graph; emitted and materialized tokens stay distinct, and padded path entries never advance state. Serving, drafter, and committer stages are captured as separate graphs.
+
+\paragraph{One slot map governs attention and publication} An ancestry mask specifies visible keys but not their physical placement or reduction groups; interleaving masked branch columns with spine keys changes the online-softmax reduction layout even when visibility is unchanged, which matters for finite-precision execution~\cite{he2025determinism}. \sys{} places the principal spine contiguously, applies the same permutation to KV write slots and mask key columns, keeps acceptance in logical-node space, and translates the selected nodes through that map at publication. The patched FlashAttention-2 decode kernel adds grouped query heads over shared staged KV tiles and split-K context partitions, established techniques~\cite{yao2024deft,pan2025fasttree} applied here under the tree's visibility and slot mapping; the component tests in Section~\ref{sec:res-component} measure its repeatability and reduction-order error, and the isolated effect of spine placement remains an ablation question.
+
+\paragraph{Precomputed branch histories with preserved arithmetic} Static gather indices derived from the topology, windows gathered from the prior convolution history and candidate inputs, and fused ordered taps replace per-node history construction repeated across layers. Tap order and cast boundaries affect the values recorded for replay, and unused history positions must keep their padding, so the fused implementation retains the ordered operations and conversion points while replacing only the data movement; each layer still records and replays its own operands.
+
+\paragraph{Fused draft selection that preserves proposals} At each MTP depth one full-vocabulary logits tensor serves the principal token and sibling candidates, and a fused kernel writes the spine token and three ordered candidate indices into reusable graph buffers. Reference argmax and top-$k$ do not share tie behavior, so taking the first top-$k$ result as the spine token would change the proposal tree; the fused selection preserves both reference outputs, including duplicate proposals where the reference produces them, and exact-output and captured-replay tests check it (Section~\ref{sec:res-component}).
+
+\begin{table*}[t]
+\caption{Implementation changes around the path verifier and the coordination or numerical constraint that makes each nontrivial. Workload rates measure their combined execution.}
+\label{tab:optimization-map}
+\centering\footnotesize
+\renewcommand{\arraystretch}{1.1}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.23\textwidth}YY@{}}
+\toprule
+Starting work or constraint & \sys{} change & What must remain consistent \\
+\midrule
+Host path-list construction between acceptance and publication & Device-selected path feeds captured native replay, convolution, KV and drafter selection & All consumers select the same materialized prefix; pending and padded tokens do not advance state \\
+Logical ancestry does not determine physical KV placement & Spine-contiguous slots with coordinated writes, mask columns and accepted-path remap & Logical query order, physical source slots and native destination positions agree \\
+Per-node convolution histories and repeated layer preparation & Static ancestry gathers, fused ordered taps and per-layer operand buffers & Tap order, cast boundaries, history padding and layer identity \\
+Separate score preparation and argmax/top-$k$ operations & One shared logits tensor and fused selection into graph buffers & Both reference tie conventions, candidate order and duplicate behavior \\
+Repeated KV staging and limited decode parallelism & Grouped query heads and split-K in the patched tree-attention kernel & Tree visibility and slot mapping across partitions; characterized reduction error \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+\section{Measurement and Audit Methodology}
+\label{sec:method}
+\subsection{Platform, arms, and workloads}
+All experiments use Qwen3.8-27B on one NVIDIA DGX Spark (GB10) with a ModelOpt mixed-precision checkpoint: NVFP4 target MLP weights and vocabulary projection, FP8 attention projections, BF16 activations and KV storage, FP32 recurrent state, and the checkpoint's one-layer BF16 MTP module as the only drafter in every arm. Three serving arms share this checkpoint: \sys{} and native five-token chain MTP on the same vLLM build, and SGLang EAGLE on a separate stack that invokes the same MTP module. The evaluated tree has 27 draft candidates and one root padded to 32 verification rows: five MTP passes supply 15 candidates and suffix prediction adds a six-token principal tail and rescue branches of four and two, for a maximum depth of eleven. Attention groups query heads in pairs over four context partitions; the model has 48 GDN and 16 attention layers. Sampling is temperature 0.6, top-$p$ 0.95, top-$k$ 20, min-$p$ 0, presence penalty 1.0, with no per-request seed. Appendix~\ref{app:settings} lists the serving settings. Three workloads are used: (i) a live coding-agent study, Qwen Code 0.19.4 on ten explicitly identified SWE-bench Verified Astropy tasks~\cite{jimenez2024swe}, once per task and arm, with a 24,000-token response cap and a 9,000-second task budget, where the benchmark evaluator tests nonempty patches and empty patches count as unresolved; (ii) recorded-request replay on two frozen corpora; and (iii) full-model continuation and component diagnostics.
+
+\subsection{Decode-rate estimator and replay corpora}
+\label{sec:method-rate}
+For completed request $r$, let $n_r$ be the output-token count, $\ell_r$ the end-to-end latency, and $f_r$ the time to first output. We report the pooled decode rate
+\begin{equation}
+ D_{\mathrm{pool}} = \frac{\sum_{r=1}^{R}(n_r-1)}{\sum_{r=1}^{R}(\ell_r-f_r)},
+ \label{eq:pooled-decode}
+\end{equation}
+over the same completed requests, so that the numerator counts output intervals and the denominator excludes first-output latency and between-request agent or tool work. Pooling matched token and time totals across runs weights long requests by their duration; the estimator measures token production over accumulated request time, not aggregate wall-clock throughput, and a change in it is not a task-completion speedup. For the live study the counts come from server metric counters bracketing each arm, checked for continuity, resets, and outstanding requests at task boundaries; for replay they come from the client stream and server completion counts.
+
+The first replay corpus holds 43 requests recorded from two Astropy task conversations (prompt lengths 23,024--68,557 tokens); each configuration receives the same saved messages and tool definitions sequentially with one active request, a 1,024-token response cap, and the sampling settings above, and generated tool calls are not executed. vLLM arms share image, tokenizer, chat template, prefix caching, chunked prefill, and a 131,072-token context. For the cross-stack comparison the complete input token sequence is captured from vLLM's tokenizer and passed as IDs to SGLang, so all 43 inputs are token-identical. The second, disjoint corpus selects 43 of 61 requests captured from native-MTP agent executions on four further tasks across five conversations, allocated proportionally and spaced through capture order, with its manifest frozen before any replay and no message overlap with the first corpus; SGLang uses its chat endpoint there, so inputs match as messages but not as serialized IDs. Replay timing starts at the first nonempty streamed delta (first streamed completion-count increase for SGLang's token-ID endpoint) and ends at stream completion. Each principal vLLM arm is replayed three times per corpus; an exploratory native MTP sweep over one, three, five, and seven draft tokens and SGLang step/capacity settings has unequal repetition.
+
+\subsection{Numerical agreement rule and planted faults}
+\label{sec:method-numeric}
+Component tests compare the tree verifier and the native chain on synthetic operand sets with the deployed tree geometry (32 physical rows, 28 accepted publication paths, 48 recurrent instances per set) against a float64 recurrence, requiring both root-mean-square and maximum absolute error to satisfy $E_{\mathrm{tree}}\leq 1.10E_{\mathrm{native}}+2^{-24}M_{64}+2^{-149}$, where $M_{64}$ is the reference's corresponding magnitude; each block runs twice in two fresh processes, and planted controls (sibling substitution, swapped state rings, stale publication metadata, off-path poisoning, zero replay) must be rejected.
+
+The full-model comparison replays harvested natural accepted paths over six fresh prefixes of 23,000--46,000 tokens from four task conversations disjoint from both replay corpora, in five fresh serving processes: a sequential reference $A$, an independent process $B$, a native cache-capacity control $V$ matched to the candidate's KV allocation, a native packed-GDN-kernel variant $P$, and \sys{}. Each prefix supplies three seven-cycle schedules (cold with a common starting-state import, a cache-priming repeat, and a cache-resumed case without import), 126 cycles in total including a final root-only cycle that consumes the last pending token; every candidate forward is checked against all 32 recorded tree-input rows. For state or logit surface $s$ at cycle $c$ the reference envelope is $R_s(c)=\max\{F_s,d_s(B,A;c),d_s(V,A;c),d_s(P,A;c)\}$, with state distance the maximum per-layer relative $L_2$ error (floor $F_s=0.02$) and next-token KL divergence (floor $0.15$ nats); the candidate must satisfy $d_s\le 2R_s$ on every surface and cycle, and a greedy mismatch is tolerated only when $A$'s top-two logit margin lies within the native controls' own logit spread. The rule and constants were calibrated on an earlier collection and frozen before the fresh prefixes were evaluated. Ten planted faults, five types on two prefixes each (omitted convolution gathering, omitted recurrent replay, incorrect KV remapping, stale root input, sibling-state publication), must each exceed the base case's bound on the designated surface; cache-resumed cases must start at least 90\% cached; one candidate case is repeated in-process. Appendix~\ref{app:fullmodel-protocol} details the protocol.
+
+\subsection{Sampler audit}
+\label{sec:method-sampler}
+The sampling rule is exact only when the supplied probabilities are correct, which for history-dependent processing means that a target row's penalty history is the path through its parent and a leaf continuation row's history includes the leaf. The audit has two parts. A record-only runtime wrapper captures, for 40 tree steps on four requests, the token set whose logits the processors changed in each of 2,480 target and continuation rows, and compares it with the per-path history reconstructed from the tree's parent table and with the flattened chain history a chain combiner would build. Then the deployed acceptance walk, whose CPU floating-point oracle the CUDA path matches byte for byte, is sampled 200,000 times on each of six captured steps; emitted-token counts conditional on visiting a node are compared with the supplied row and, separately, with the autoregressive row reconstructed under the native tie-keeping top-$k$, using an approximate chi-square $G$-test with pooled rare bins, at least 2,000 visits per node, and a Bonferroni-adjusted per-step threshold of $10^{-3}$. Five planted faults (temperature applied twice, target rows shifted, fixed residual draw, unconditional acceptance, correlated random draws) establish sensitivity. Two known differences from single-row decoding remain outside the audit: the tree path ignores min-$p$, and its top-$k$ retains exactly $k$ tokens where native decoding keeps boundary ties.
+
+\subsection{Output-length comparability}
+\label{sec:method-length}
+If two arms sample the same target distribution, identical prompts must yield the same output-length distribution. For each replay corpus we compare, request by request, the mean output length over three tree runs with the mean over three chain-MTP runs, and report totals, the number of requests on which the tree arm is longer, and response-cap hits. This check separates sampling effects from trajectory effects in the live agent study, where arms diverge after their first tool call. Table~\ref{tab:instruments} summarizes what each instrument can and cannot establish.
+
+\begin{table*}[t]
+\caption{The measurement and audit instruments, what each establishes, and what it leaves open.}
+\label{tab:instruments}
+\centering\footnotesize
+\renewcommand{\arraystretch}{1.1}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.2\textwidth}YY@{}}
+\toprule
+Instrument & Establishes & Leaves open \\
+\midrule
+Pooled decode rate, Eq.~\ref{eq:pooled-decode}, on frozen replay corpora & Serving-rate differences between arms on identical requests, with run-to-run spread & Task-completion speed; endpoint and stack differences for SGLang; batch sizes above one \\
+Disjoint-task corpus & Whether a difference tuned on one corpus reappears on unseen tasks & Statistical significance; one SGLang run; chat-level rather than token-level input parity \\
+Component checks against a float64 recurrence & Verifier and committer error relative to the native chain on the deployed geometry, with planted controls & Behavior inside the full model; attention and convolution interplay \\
+Frozen native-envelope rule with planted faults & Full-model continuation error within twice the native spread on every surface and cycle; detectability of five fault types & Bitwise or strict greedy equality; live acceptance loop; cache admission and eviction; 18 of all path combinations \\
+Captured-row and Monte-Carlo sampler audit & Penalty histories on 2,480 rows; walk exactness on supplied rows; departure beyond the top-$k$ tie convention; fault sensitivity & Universal exactness; min-$p$; batch sizes above one \\
+Identical-prompt output lengths & Whether two arms' length distributions agree on fixed prompts & Agent-trajectory divergence after the first tool call \\
+Live coding-agent study & Outcomes, request counts, token volumes, and pooled rate per arm on ten named tasks & Benchmark-wide quality; isolated serving effects; trajectory variance with one attempt per arm \\
+\bottomrule
+\end{tabularx}
+\end{table*}
+
+\section{Results}
+\label{sec:results}
+\subsection{Recorded-request replay}
+\label{sec:res-replay}
+\input{sections/request-replay-icpe}
+
+\subsection{Coding-agent study}
+\label{sec:res-agent}
+\input{sections/workload-icpe}
+
+\subsection{Acceptance and execution spans}
+\label{sec:res-spans}
+\input{sections/execution-costs}
+
+\subsection{Component numerical checks}
+\label{sec:res-component}
+\input{sections/recurrent-validation}
+
+The fused selection kernel records zero byte mismatches against the reference argmax and top-$k$ over 1,368 input cases and five block-count settings (6,840 configurations) and over 24 captured-graph replays; planted controls fire. The patched attention kernel gives bit-identical output and log-sum-exp across repeats in sixteen determinism cases with matching digests across two processes; on synthetic operands at model scales, 93.31\% of outputs agree with the reference within two ULP, the maximum output difference is $2^{-8}$, and log-sum-exp disagreement is at most four ULP, with all nine declared checks passing. Runtime traces confirm the specialized kernel in all sixteen attention layers, fused selection, device acceptance, and captured publication during the workload runs.
+
+\subsection{Full-model continuation}
+\label{sec:res-fullmodel}
+\input{sections/fullmodel-validation-icpe}
+
+\subsection{Sampler audit}
+\label{sec:res-sampler}
+\input{sections/sampling-validation-icpe}
+
+\section{Discussion and Threats to Validity}
+\label{sec:discussion}
+\subsection{Interpretation}
+The design couples tree geometry, physical layout, and continuation publication: optimizing any one in isolation moves work elsewhere or invalidates another stage's mapping, and native replay pays accepted-path update work to return persistent state to the serving representation each iteration. The evidence supports three statements and no more. \sys{} exceeds the same stack's chain speculation by 7.7\% and 11.8\% pooled tokens/s on two corpora of fixed requests, and reaches a tuned chain stack's rate on a second serving system while verifying 27-candidate trees; tree drafters, which chain verification cannot host, are not evaluated. The implemented verifier and committer agree with native decoding within a frozen envelope that every planted state fault violates, and the deployed sampler shows no departure from the autoregressive target beyond the top-$k$ tie convention on the audited rows. The coding-agent study is descriptive: arms execute different request and tool trajectories, one attempt per arm cannot separate serving effects from trajectory variance, and identical-prompt output lengths show the token gap is not a sampling effect.
+
+\subsection{Threats to validity}
+\paragraph{External} Measurements use one model, one quantization, one GPU, and batch size one; equal memory-fraction settings do not equalize KV capacity, and boot allocation logs are not peak-memory measurements. \paragraph{Internal} Each principal vLLM arm has three replay repetitions, SGLang has one run on the disjoint corpus, and repeated tree boots reuse a process-seeded random sequence, so none of the differences carries a significance claim or a parity claim. \paragraph{Construct} The pooled estimator weights long requests by duration, subtracting one token approximates the first output interval, stream parsing remains inside the measured duration, and exact token-ID parity holds only for the first corpus's SGLang comparison. The numerical rule permits native-relative error and margin-bounded greedy disagreement rather than bitwise equality; 18 schedules do not exhaust path combinations. The sampler audit covers 2,480 captured rows and six Monte-Carlo steps; the ignored min-$p$ and the exact-$k$ top-$k$ convention are known, unaudited differences. The exploratory variant measurements in Appendix~\ref{app:variants} isolate only the split-K attention effect, and the isolated GDN kernel comparisons in Appendix~\ref{app:recurrent} use distinct numerical conventions and establish no accuracy ranking.
+
+\section{Conclusion}
+\sys{} hosts tree speculative verification on a recurrent-hybrid model inside a production engine by scanning paths in parallel and replaying one accepted path into native state through a shared descriptor. Under a frozen measurement and audit methodology, it verifies 27-candidate trees at 28.13 and 30.76 pooled tokens/s on two recorded corpora, 7.7\% and 11.8\% above same-stack chain speculation and within 5\% of a tuned chain stack, with 126 held-out continuation cycles inside the numerical bound, all ten planted faults detected, and a sampler audited on captured rows. Tree verification is thereby available on a hybrid model at chain-stack cost; the methodology is reusable for the tree drafters that should follow.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{ref}
+
+\appendix
+\section{Serving Configuration and Measurement Notes}
+\label{app:settings}
+\input{sections/workload-configuration}
+Workload rates use Eq.~\ref{eq:pooled-decode}; token counts and latency sums cover the same completed requests. First-output latency, tools, and evaluator time remain distinct from decode duration. GPU phase times divide each timer's duration sum by its own span count. Output-side acceptance counters describe emitted draft lengths and do not identify the committed tree path. For target probabilities $p$ and proposal probabilities $q$, rejection sampling combines accepted mass $\min(p,q)$ with residual mass proportional to $(p-q)_+$, which gives the target marginal for the probabilities actually supplied~\cite{leviathan2023fast,chen2023sampling}; serving additionally requires that subsequent forwards consume the state of the accepted path and that logits processing constructs that path's target distribution. The artifact~\cite{anon2026artifact} holds the serving patches, captured rows, reducers, and every record behind the tables.
+
+\section{Task-Level Outcomes}
+\label{app:workload}
+\input{sections/workload-details}
+
+\section{Full-Model Comparison Protocol}
+\label{app:fullmodel-protocol}
+\input{sections/fullmodel-protocol}
+
+\section{Path-Parallel Scan and Replay Procedure}
+\label{app:scan}
+\begin{algorithm}[h]
+\caption{Path-parallel scan and accepted-path replay}
+\label{alg:scan-replay}
+\small
+\begin{algorithmic}[1]
+\Require Candidate tree $T$ and the pre-tree recurrent state for each GDN layer
+\Ensure Recurrent outputs for all candidates; native recurrent state for the accepted path
+\For{each GDN layer reached during the target forward}
+  \State Compute and record this layer's rounded node operands.
+  \For{each path group, in dependency order}
+    \ParallelFor{each ready path, head, and value tile}
+      \State Load the working state tile from the pre-tree state or a saved parent cut state.
+      \For{each node on this path, in ancestry order}
+        \State Update the working tile with this node's operands; write its recurrent output.
+        \State Save the tile if a downstream path needs this node's state.
+      \EndFor
+    \EndParallelFor
+  \EndFor
+\EndFor
+\State Complete the target forward and sampling to obtain the accepted materialized path $A$.
+\For{each GDN layer}
+  \State Start from this layer's pre-tree recurrent state.
+  \For{each node on $A$, in path order}
+    \State Apply the native GDN update using this layer's recorded operands.
+  \EndFor
+  \State Publish the resulting recurrent state to the request's native running row.
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+\section{Exploratory Replay Variants}
+\label{app:variants}
+These measurements predate the penalty-history correction of Section~\ref{sec:method-sampler} and compare configurations under one sampler; they do not isolate single optimization effects.
+\input{sections/variants-icpe}
+
+\section{Recurrent Agreement and Costs Under Distinct References}
+\label{app:recurrent}
+\input{sections/recurrent-comparison}
+\input{sections/mechanism-costs}
+\end{document}

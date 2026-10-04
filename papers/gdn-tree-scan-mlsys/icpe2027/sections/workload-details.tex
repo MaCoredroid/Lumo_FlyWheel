@@ -1,0 +1,23 @@
+Table~\ref{tab:swe-tasks} retains every attempt in the three-arm task study; the \sys{} column is the attempt with the corrected sampler; the earlier pre-correction attempt is preserved in the supplement. Agent duration includes model service and tool execution, excluding server startup and subsequent evaluation. Empty-patch outcomes are distinguished from patches that reach the test evaluator.
+
+\begin{table}[!htbp]
+\caption{Task-level outcomes. IDs have prefix \texttt{astropy\_\_astropy-}. Each cell gives rounded agent minutes and outcome: R, resolved; F, failed tests; E, empty patch.}
+\label{tab:swe-tasks}
+\centering\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Task suffix & \sys{} & MTP-5 & SGLang \\
+\midrule
+13977 & 11 / E & 10 / F & 21 / F \\
+14096 & 18 / R & 20 / E & 10 / E \\
+14182 & 24 / R & 6 / E & 1 / E \\
+14309 & 11 / R & 2 / R & 2 / R \\
+14365 & 10 / F & 2 / R & 3 / R \\
+14369 & 25 / F & 18 / R & 16 / F \\
+14508 & 38 / R & 7 / R & 7 / R \\
+14539 & 6 / E & 3 / R & 17 / R \\
+14598 & 37 / F & 27 / F & 20 / F \\
+14995 & 11 / R & 5 / R & 5 / R \\
+\bottomrule
+\end{tabular}
+\end{table}

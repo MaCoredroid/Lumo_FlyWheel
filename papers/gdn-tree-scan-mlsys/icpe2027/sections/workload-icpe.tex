@@ -1,0 +1,17 @@
+The coding-agent study completes 30 attempts, one per task and arm (Table~\ref{tab:agent-study}; task-level outcomes in Appendix~\ref{app:workload}). \sys{} resolves five tasks with eight nonempty patches, of which three fail tests, and two empty patches; native MTP-5 resolves six with two failing and two empty; SGLang resolves five with three failing and two empty. Empty patches count as failures without invoking the evaluator. The live trajectories diverge after the first tool call: \sys{} emits 258,889 output tokens over 248 requests, against 134,643 over 224 for MTP-5 and 158,827 over 210 for SGLang, so its lower pooled decode rate and longer summed agent duration here contrast with the fixed-request replays. Section~\ref{sec:res-sampler} shows that this gap is not a sampling effect. The study is descriptive: one attempt per arm, ten selected tasks, no plain-decoding agent control, and no benchmark-wide quality estimate.
+
+\begin{table}[t]
+\caption{Ten-task coding-agent study, one attempt per task and arm. Minutes sum agent durations, including tools but excluding server startup and evaluation. Decode rates use server-counter differences in Eq.~\ref{eq:pooled-decode}.}
+\label{tab:agent-study}
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Arm & Resolved & Requests & Tokens/s & Minutes \\
+\midrule
+\sys{} & 5/10 & 248 & 26.12 & 190.8 \\
+Native MTP-5 & 6/10 & 224 & 27.17 & 99.5 \\
+SGLang EAGLE & 5/10 & 210 & 29.89 & 103.0 \\
+\bottomrule
+\end{tabular}
+\end{table}

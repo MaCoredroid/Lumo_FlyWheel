@@ -1,0 +1,20 @@
+The task study emits an average of 4.21 accepted drafts per \sys{} speculative event. This output-side counter excludes the correction or bonus token and does not identify the branch published into persistent state. Physical draft slots include padding and are distinct from logical candidates.
+
+\begin{table}[t]
+\caption{\sys{} acceptance and mean execution spans. Dispatch includes acceptance, path handling, and state commitment. GPU timers divide each duration sum by its own span count; wall time covers the decoding step. Disjoint replay pools three runs.}
+\label{tab:recovered-telemetry}
+\centering\small
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Metric & Task study & Disjoint replay \\
+\midrule
+Accepted drafts per event & 4.21 & 4.73 \\
+Target GPU span (ms) & 115.43 & 109.84 \\
+Drafter GPU span (ms) & 55.64 & 48.17 \\
+Dispatch GPU span (ms) & 20.27 & 20.99 \\
+Step wall time (ms) & 198.88 & 185.16 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:recovered-telemetry} characterizes the complete \sys{} cycle on these workloads. Dispatch combines sampling and native replay; the GPU spans do not form an isolated critical-path decomposition. Acceptance and phase durations vary with the request corpus, so higher replay acceptance is not evidence of better task quality.

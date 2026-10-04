@@ -1,0 +1,20 @@
+All 2,480 captured rows carry the per-path penalty history; 82 coincide with the flattened chain history where the two agree. This capture postdates a correction: an earlier capture of the same deployment found all 2,480 rows flattened, with node-level total variation above 0.01 on about 22\% of deeper decisions (maximum 0.421), which the audit exposed and the serving patch repaired; every measurement in this paper uses the corrected sampler except the exploratory variants in Appendix~\ref{app:variants}. The Monte-Carlo test detects no departure in 48 node tests against the supplied rows. Against autoregressive rows reconstructed with the native tie-keeping top-$k$, one of 48 node tests rejects; across all 1,120 node-steps the reconstructed total variation is at most 0.028, and the three nodes above 0.01, including the rejected one, are exact ties at the top-$k$ boundary. All five planted fault types are detected in at least one of six steps (Table~\ref{tab:sampling-faults}). Non-rejection supports this finite check and does not prove universal exactness.
+
+\begin{table}[t]
+\caption{Sampler-audit fault sensitivity on six captured steps. Detection depends on which nodes the walk visits.}
+\label{tab:sampling-faults}
+\centering\small
+\begin{tabular}{@{}lr@{}}
+\toprule
+Injected fault & Steps detected \\
+\midrule
+Temperature applied twice & 5/6 \\
+Target rows shifted & 6/6 \\
+Fixed residual draw & 4/6 \\
+Unconditional acceptance & 3/6 \\
+Correlated random draws & 1/6 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The output-length check agrees: on identical prompts the corrected tree arm and MTP-5 produce 18,916 versus 18,504 mean output tokens over three runs on the first corpus and 15,270 versus 15,453 on the disjoint corpus, with the tree arm longer on 23 and 19 of 43 requests and similar response-cap counts. The live agent study's token gap therefore arises from diverging trajectories, not from sampling on a fixed prompt. An earlier ten-boot output-distribution diagnostic failed its frozen sensitivity requirement and is uninformative; the tree sampler seeds one process-wide generator with zero, so repeated boots with identical request order are not independent sampling replicates.
