@@ -1,0 +1,168 @@
+[q1v3 2026-10-03T00:59:26Z] run=/home/mark/shared/lumotree-v2exp-runs/q1v3v3/runs/q1v3v3-20261003T005926Z stages=A,CAND,B,V,P commit=3dd8cf917ca59b70a374355d65f8636f7b6ff36a dirty=0
+freeze verified (17 files)
+{"ok": true, "cases": 18, "cycles": 126, "negative_controls": 10, "accepted_length_usage": {"0": 24, "1": 15, "2": 27, "3": 9, "4": 12, "5": 21, "6": 9, "7": 3, "8": 6}}
+[q1v3 2026-10-03T00:59:27Z] stage A: kv_bytes=42949672960 packed=0
+[q1v3 2026-10-03T00:59:27Z] waiting for the GPU to become idle
+started q1v3-native-A 89330bf6cc3e53a042141165061a252e2973455755d512668ddca67b96f7a09f
+[q1v3 2026-10-03T01:11:20Z] q1v3-native-A healthy after 320s
+[A 1/18] A__p1__N__r0 http=200 42.864s sealed=True valid=True 
+[A 2/18] A__p1__Nb__r0 http=200 15.068s sealed=True valid=True 
+[A 3/18] A__p1__Nr__r0 http=200 6.216s sealed=True valid=True 
+[A 4/18] A__p2__N__r0 http=200 22.867s sealed=True valid=True 
+[A 5/18] A__p2__Nb__r0 http=200 10.405s sealed=True valid=True 
+[A 6/18] A__p2__Nr__r0 http=200 5.443s sealed=True valid=True 
+[A 7/18] A__p3__N__r0 http=200 20.686s sealed=True valid=True 
+[A 8/18] A__p3__Nb__r0 http=200 9.798s sealed=True valid=True 
+[A 9/18] A__p3__Nr__r0 http=200 5.196s sealed=True valid=True 
+[A 10/18] A__p4__N__r0 http=200 25.548s sealed=True valid=True 
+[A 11/18] A__p4__Nb__r0 http=200 8.359s sealed=True valid=True 
+[A 12/18] A__p4__Nr__r0 http=200 5.46s sealed=True valid=True 
+[A 13/18] A__p5__N__r0 http=200 22.113s sealed=True valid=True 
+[A 14/18] A__p5__Nb__r0 http=200 11.238s sealed=True valid=True 
+[A 15/18] A__p5__Nr__r0 http=200 6.082s sealed=True valid=True 
+[A 16/18] A__p6__N__r0 http=200 37.486s sealed=True valid=True 
+[A 17/18] A__p6__Nb__r0 http=200 26.15s sealed=True valid=True 
+[A 18/18] A__p6__Nr__r0 http=200 5.555s sealed=True valid=True 
+{"arm": "A", "planned": 18, "attempted": 18, "sealed": 18, "valid": 18, "utc": "2026-10-03T01:16:08Z"}
+[q1v3 2026-10-03T01:16:13Z] removed q1v3-native-A
+{"arm": "A", "client_rc": 0, "summary": {"arm": "A", "attempted": 18, "planned": 18, "sealed": 18, "utc": "2026-10-03T01:16:08Z", "valid": 18}, "complete": true}
+[q1v3 2026-10-03T01:16:13Z] candidate vehicle pid=3089662
+[q1v3 2026-10-03T01:21:58Z] candidate READY after 345s: /home/mark/shared/lumotree-v2exp-runs/q1v3v3/runs/q1v3v3-20261003T005926Z/CAND/serve/fr14_promoab_C_q1v320261003T011613Z_20261003T011613Z
+{"applied": true, "problems": []}
+[CAND 1/29] CAND__p1__N__r0 http=200 43.779s sealed=True valid=True 
+[CAND 2/29] CAND__p1__Nb__r0 http=200 14.671s sealed=True valid=True 
+[CAND 3/29] CAND__p1__Nr__r0 http=200 4.888s sealed=True valid=True 
+[CAND 4/29] CAND__p2__N__r0 http=200 23.296s sealed=True valid=True 
+[CAND 5/29] CAND__p2__Nb__r0 http=200 10.76s sealed=True valid=True 
+[CAND 6/29] CAND__p2__Nr__r0 http=200 5.495s sealed=True valid=True 
+[CAND 7/29] CAND__p3__N__r0 http=200 21.908s sealed=True valid=True 
+[CAND 8/29] CAND__p3__Nb__r0 http=200 10.404s sealed=True valid=True 
+[CAND 9/29] CAND__p3__Nr__r0 http=200 5.601s sealed=True valid=True 
+[CAND 10/29] CAND__p4__N__r0 http=200 27.483s sealed=True valid=True 
+[CAND 11/29] CAND__p4__Nb__r0 http=200 8.518s sealed=True valid=True 
+[CAND 12/29] CAND__p4__Nr__r0 http=200 5.813s sealed=True valid=True 
+[CAND 13/29] CAND__p5__N__r0 http=200 23.034s sealed=True valid=True 
+[CAND 14/29] CAND__p5__Nb__r0 http=200 10.971s sealed=True valid=True 
+[CAND 15/29] CAND__p5__Nr__r0 http=200 5.673s sealed=True valid=True 
+[CAND 16/29] CAND__p6__N__r0 http=200 38.788s sealed=True valid=True 
+[CAND 17/29] CAND__p6__Nb__r0 http=200 29.731s sealed=True valid=True 
+[CAND 18/29] CAND__p6__Nr__r0 http=200 6.585s sealed=True valid=True 
+[CAND 19/29] CAND__p1__N__r1 http=200 10.348s sealed=True valid=True 
+[CAND 20/29] CAND__p1__N__NC_CONV http=200 4.212s sealed=True valid=True 
+[CAND 21/29] CAND__p3__N__NC_CONV http=200 6.843s sealed=True valid=True 
+[CAND 22/29] CAND__p1__N__NC_GDN http=200 4.903s sealed=True valid=True 
+[CAND 23/29] CAND__p3__N__NC_GDN http=200 5.617s sealed=True valid=True 
+[CAND 24/29] CAND__p1__N__NC_KV http=200 4.953s sealed=True valid=True 
+[CAND 25/29] CAND__p3__N__NC_KV http=200 5.688s sealed=True valid=True 
+[CAND 26/29] CAND__p1__N__NC_STALE http=200 4.901s sealed=True valid=True 
+[CAND 27/29] CAND__p3__N__NC_STALE http=200 5.682s sealed=True valid=True 
+[CAND 28/29] CAND__p1__N__NC_SIB http=200 4.886s sealed=True valid=True 
+[CAND 29/29] CAND__p3__N__NC_SIB http=200 5.578s sealed=True valid=True 
+{"arm": "CAND", "planned": 29, "attempted": 29, "sealed": 29, "valid": 29, "utc": "2026-10-03T01:28:00Z"}
+[q1v3 2026-10-03T01:28:00Z] stop requested; waiting for vehicle teardown
+[q1v3 2026-10-03T01:28:30Z] vehicle rc=16
+[q1v3 2026-10-03T01:28:33Z] removed own container 530eda37086b
+{"arm": "CAND", "client_rc": 0, "summary": {"arm": "CAND", "attempted": 29, "planned": 29, "sealed": 29, "utc": "2026-10-03T01:28:00Z", "valid": 29}, "complete": true}
+[q1v3 2026-10-03T01:28:33Z] stage B: kv_bytes=42949672960 packed=0
+started q1v3-native-B c77877e7dbe4c7331d4a7b870d8e2b5ff2733e3f39d5840f8af97b64ca036108
+[q1v3 2026-10-03T01:33:47Z] q1v3-native-B healthy after 311s
+[B 1/18] B__p1__N__r0 http=200 41.211s sealed=True valid=True 
+[B 2/18] B__p1__Nb__r0 http=200 14.747s sealed=True valid=True 
+[B 3/18] B__p1__Nr__r0 http=200 6.06s sealed=True valid=True 
+[B 4/18] B__p2__N__r0 http=200 21.839s sealed=True valid=True 
+[B 5/18] B__p2__Nb__r0 http=200 10.449s sealed=True valid=True 
+[B 6/18] B__p2__Nr__r0 http=200 5.531s sealed=True valid=True 
+[B 7/18] B__p3__N__r0 http=200 20.408s sealed=True valid=True 
+[B 8/18] B__p3__Nb__r0 http=200 9.775s sealed=True valid=True 
+[B 9/18] B__p3__Nr__r0 http=200 5.351s sealed=True valid=True 
+[B 10/18] B__p4__N__r0 http=200 25.295s sealed=True valid=True 
+[B 11/18] B__p4__Nb__r0 http=200 8.446s sealed=True valid=True 
+[B 12/18] B__p4__Nr__r0 http=200 5.584s sealed=True valid=True 
+[B 13/18] B__p5__N__r0 http=200 21.997s sealed=True valid=True 
+[B 14/18] B__p5__Nb__r0 http=200 11.332s sealed=True valid=True 
+[B 15/18] B__p5__Nr__r0 http=200 6.315s sealed=True valid=True 
+[B 16/18] B__p6__N__r0 http=200 34.188s sealed=True valid=True 
+[B 17/18] B__p6__Nb__r0 http=200 26.127s sealed=True valid=True 
+[B 18/18] B__p6__Nr__r0 http=200 5.92s sealed=True valid=True 
+{"arm": "B", "planned": 18, "attempted": 18, "sealed": 18, "valid": 18, "utc": "2026-10-03T01:38:28Z"}
+[q1v3 2026-10-03T01:38:32Z] removed q1v3-native-B
+{"arm": "B", "client_rc": 0, "summary": {"arm": "B", "attempted": 18, "planned": 18, "sealed": 18, "utc": "2026-10-03T01:38:28Z", "valid": 18}, "complete": true}
+[q1v3 2026-10-03T01:38:32Z] stage V: kv_bytes=56686018560 packed=0
+started q1v3-native-V 6bbae52c26d63a1de265652c1b5ef9b6e2cae6c3007d489480b4025367cbdc51
+[q1v3 2026-10-03T01:43:58Z] q1v3-native-V healthy after 321s
+[V 1/18] V__p1__N__r0 http=200 41.317s sealed=True valid=True 
+[V 2/18] V__p1__Nb__r0 http=200 14.55s sealed=True valid=True 
+[V 3/18] V__p1__Nr__r0 http=200 5.773s sealed=True valid=True 
+[V 4/18] V__p2__N__r0 http=200 21.239s sealed=True valid=True 
+[V 5/18] V__p2__Nb__r0 http=200 10.318s sealed=True valid=True 
+[V 6/18] V__p2__Nr__r0 http=200 5.396s sealed=True valid=True 
+[V 7/18] V__p3__N__r0 http=200 20.175s sealed=True valid=True 
+[V 8/18] V__p3__Nb__r0 http=200 9.697s sealed=True valid=True 
+[V 9/18] V__p3__Nr__r0 http=200 5.157s sealed=True valid=True 
+[V 10/18] V__p4__N__r0 http=200 25.097s sealed=True valid=True 
+[V 11/18] V__p4__Nb__r0 http=200 8.229s sealed=True valid=True 
+[V 12/18] V__p4__Nr__r0 http=200 5.389s sealed=True valid=True 
+[V 13/18] V__p5__N__r0 http=200 21.758s sealed=True valid=True 
+[V 14/18] V__p5__Nb__r0 http=200 11.127s sealed=True valid=True 
+[V 15/18] V__p5__Nr__r0 http=200 5.909s sealed=True valid=True 
+[V 16/18] V__p6__N__r0 http=200 35.108s sealed=True valid=True 
+[V 17/18] V__p6__Nb__r0 http=200 26.056s sealed=True valid=True 
+[V 18/18] V__p6__Nr__r0 http=200 5.561s sealed=True valid=True 
+{"arm": "V", "planned": 18, "attempted": 18, "sealed": 18, "valid": 18, "utc": "2026-10-03T01:48:37Z"}
+[q1v3 2026-10-03T01:48:42Z] removed q1v3-native-V
+{"arm": "V", "client_rc": 0, "summary": {"arm": "V", "attempted": 18, "planned": 18, "sealed": 18, "utc": "2026-10-03T01:48:37Z", "valid": 18}, "complete": true}
+[q1v3 2026-10-03T01:48:42Z] stage P: kv_bytes=42949672960 packed=1
+started q1v3-native-P 0d55c3127a126e9433c0f4ad45540bf909ee6475661866e3ccca0e3d1110b0b1
+[q1v3 2026-10-03T01:54:15Z] q1v3-native-P healthy after 311s
+[P 1/18] P__p1__N__r0 http=200 41.121s sealed=True valid=True 
+[P 2/18] P__p1__Nb__r0 http=200 14.733s sealed=True valid=True 
+[P 3/18] P__p1__Nr__r0 http=200 6.029s sealed=True valid=True 
+[P 4/18] P__p2__N__r0 http=200 21.426s sealed=True valid=True 
+[P 5/18] P__p2__Nb__r0 http=200 10.494s sealed=True valid=True 
+[P 6/18] P__p2__Nr__r0 http=200 5.533s sealed=True valid=True 
+[P 7/18] P__p3__N__r0 http=200 20.398s sealed=True valid=True 
+[P 8/18] P__p3__Nb__r0 http=200 9.867s sealed=True valid=True 
+[P 9/18] P__p3__Nr__r0 http=200 5.438s sealed=True valid=True 
+[P 10/18] P__p4__N__r0 http=200 25.233s sealed=True valid=True 
+[P 11/18] P__p4__Nb__r0 http=200 8.351s sealed=True valid=True 
+[P 12/18] P__p4__Nr__r0 http=200 5.785s sealed=True valid=True 
+[P 13/18] P__p5__N__r0 http=200 22.101s sealed=True valid=True 
+[P 14/18] P__p5__Nb__r0 http=200 11.323s sealed=True valid=True 
+[P 15/18] P__p5__Nr__r0 http=200 6.409s sealed=True valid=True 
+[P 16/18] P__p6__N__r0 http=200 34.82s sealed=True valid=True 
+[P 17/18] P__p6__Nb__r0 http=200 26.058s sealed=True valid=True 
+[P 18/18] P__p6__Nr__r0 http=200 5.908s sealed=True valid=True 
+{"arm": "P", "planned": 18, "attempted": 18, "sealed": 18, "valid": 18, "utc": "2026-10-03T01:58:57Z"}
+[q1v3 2026-10-03T01:59:01Z] removed q1v3-native-P
+{"arm": "P", "client_rc": 0, "summary": {"arm": "P", "attempted": 18, "planned": 18, "sealed": 18, "utc": "2026-10-03T01:58:57Z", "valid": 18}, "complete": true}
+[q1v3 2026-10-03T01:59:01Z] reducing
+{
+ "verdict": "EQUIVALENT",
+ "gates": {
+  "R1_integrity": true,
+  "R2_prompt_parity": true,
+  "R3_o0_import": true,
+  "R5_native_categorical": true,
+  "R6_discrimination": true
+ },
+ "reasons": [],
+ "rule": {
+  "C": {
+   "next_kl": 2.0,
+   "gdn_rel": 2.0,
+   "conv_rel": 2.0,
+   "kv_new_rel": 2.0,
+   "kv_hist_rel": 2.0
+  },
+  "floors": {
+   "next_kl": 0.15,
+   "gdn_rel": 0.02,
+   "conv_rel": 0.02,
+   "kv_new_rel": 0.02,
+   "kv_hist_rel": 0.02
+  }
+ },
+ "cache_reuse_exercised": true,
+ "candidate_failing_cells": 0
+}
+[q1v3 2026-10-03T02:03:35Z] done failed_stages=0 reducer_rc=0 verdict=EQUIVALENT

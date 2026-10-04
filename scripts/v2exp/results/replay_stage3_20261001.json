@@ -1,0 +1,30 @@
+{
+ "sglang_eagle_s7_d8_identical_tokens": {
+  "runs": [
+   29.45,
+   28.91,
+   30.9
+  ],
+  "mean": 29.75,
+  "sd": 1.03
+ },
+ "lumotree": {
+  "runs": [
+   28.64,
+   28.38,
+   29.41
+  ],
+  "mean": 28.81,
+  "sd": 0.54
+ },
+ "lumotree_stock_attention": {
+  "runs": [
+   27.11,
+   26.7,
+   26.67
+  ],
+  "mean": 26.83,
+  "sd": 0.25
+ },
+ "notes": "Identical-token SGLang runs feed vLLM-rendered prompt IDs to SGLang /generate (prompt counts match vLLM exactly on all 43 requests). Same 43-request replay protocol as replay_summary_20261001.json."
+}

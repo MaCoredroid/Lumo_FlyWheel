@@ -1,0 +1,156 @@
+{
+ "deployed (T1,T2)": {
+  "replicates": [
+   {
+    "run": "tree-swT1-sampled-20261002T174951Z",
+    "n": 43,
+    "rate": 28.780920041040943,
+    "acc_per_step": 4.468733578560168,
+    "wall_ms": 189.14490037924423,
+    "target_ms": 112.04363745793589,
+    "drafter_ms": 49.685232068639195,
+    "commit_ms": 20.82618642013838,
+    "weights_gib": 20.54,
+    "kv_avail_gib": 52.97,
+    "graph_pool_gib": 1.59,
+    "kv_tokens": 203776.0
+   },
+   {
+    "run": "tree-swT2-sampled-20261002T185812Z",
+    "n": 43,
+    "rate": 28.5895028358033,
+    "acc_per_step": 4.4405845051006345,
+    "drafter_ms": 50.00584367935818,
+    "wall_ms": 189.56351884036928,
+    "target_ms": 112.23279659524823,
+    "commit_ms": 20.78878987388666,
+    "weights_gib": 20.54,
+    "kv_avail_gib": 52.94,
+    "graph_pool_gib": 1.52,
+    "kv_tokens": 203776.0
+   }
+  ],
+  "mean": {
+   "rate": 28.685211438422122,
+   "acc_per_step": 4.454659041830402,
+   "wall_ms": 189.35420960980676,
+   "target_ms": 112.13821702659206,
+   "drafter_ms": 49.84553787399869,
+   "commit_ms": 20.80748814701252,
+   "kv_avail_gib": 52.955,
+   "graph_pool_gib": 1.5550000000000002
+  }
+ },
+ "split-K off (stock FA2)": {
+  "replicates": [
+   {
+    "run": "tree-fa2stock-sampled-20261001T093533Z",
+    "n": 43,
+    "rate": 27.10846959289272,
+    "acc_per_step": 4.544903263066705,
+    "drafter_ms": 49.85312278593718,
+    "wall_ms": 203.77293072685907,
+    "target_ms": 126.29896578562587,
+    "commit_ms": 21.107499584424477,
+    "weights_gib": 20.54,
+    "kv_avail_gib": 51.51,
+    "graph_pool_gib": 0.46,
+    "kv_tokens": 197632.0
+   },
+   {
+    "run": "tree-fa2stock-sampled-20261001T211905Z",
+    "n": 43,
+    "rate": 26.697059802517682,
+    "acc_per_step": 4.5014180374361885,
+    "commit_ms": 21.24038489007879,
+    "drafter_ms": 50.118624005390934,
+    "wall_ms": 205.1509344779313,
+    "target_ms": 127.11134987462702,
+    "weights_gib": 20.54,
+    "kv_avail_gib": 51.65,
+    "graph_pool_gib": 0.42,
+    "kv_tokens": 198656.0
+   },
+   {
+    "run": "tree-fa2stock-sampled-20261001T220159Z",
+    "n": 43,
+    "rate": 26.668390247975175,
+    "acc_per_step": 4.471094380209734,
+    "wall_ms": 204.3730641649544,
+    "target_ms": 126.91640793841306,
+    "commit_ms": 21.05836710907129,
+    "drafter_ms": 49.849646347442096,
+    "weights_gib": 20.54,
+    "kv_avail_gib": 51.35,
+    "graph_pool_gib": 0.5,
+    "kv_tokens": 197632.0
+   }
+  ],
+  "mean": {
+   "rate": 26.82463988112853,
+   "acc_per_step": 4.505805226904209,
+   "wall_ms": 204.4323097899149,
+   "target_ms": 126.77557453288864,
+   "drafter_ms": 49.940464379590075,
+   "commit_ms": 21.13541719452485,
+   "kv_avail_gib": 51.50333333333333,
+   "graph_pool_gib": 0.45999999999999996
+  }
+ },
+ "fused top-k off": {
+  "replicates": [
+   {
+    "run": "tree-topk0-sampled-20261001T081505Z",
+    "n": 43,
+    "rate": 29.396775567652206,
+    "acc_per_step": 4.618798955613577,
+    "commit_ms": 21.07620125928803,
+    "drafter_ms": 50.56618638194443,
+    "wall_ms": 190.38088702913623,
+    "target_ms": 112.31972382940737,
+    "weights_gib": 20.54,
+    "kv_avail_gib": 52.76,
+    "graph_pool_gib": 1.97,
+    "kv_tokens": 202752.0
+   }
+  ],
+  "mean": {
+   "rate": 29.396775567652206,
+   "acc_per_step": 4.618798955613577,
+   "wall_ms": 190.38088702913623,
+   "target_ms": 112.31972382940737,
+   "drafter_ms": 50.56618638194443,
+   "commit_ms": 21.07620125928803,
+   "kv_avail_gib": 52.76,
+   "graph_pool_gib": 1.97
+  }
+ },
+ "prep bake off": {
+  "replicates": [
+   {
+    "run": "tree-h27nobake-sampled-20261001T095752Z",
+    "n": 43,
+    "rate": 29.024223291142317,
+    "acc_per_step": 4.505328827657915,
+    "commit_ms": 20.746502413375737,
+    "wall_ms": 188.9712117220709,
+    "target_ms": 111.84520076397833,
+    "drafter_ms": 49.851428159501545,
+    "weights_gib": 20.54,
+    "kv_avail_gib": 52.74,
+    "graph_pool_gib": 1.47,
+    "kv_tokens": 202752.0
+   }
+  ],
+  "mean": {
+   "rate": 29.024223291142317,
+   "acc_per_step": 4.505328827657915,
+   "wall_ms": 188.9712117220709,
+   "target_ms": 111.84520076397833,
+   "drafter_ms": 49.851428159501545,
+   "commit_ms": 20.746502413375737,
+   "kv_avail_gib": 52.74,
+   "graph_pool_gib": 1.47
+  }
+ }
+}

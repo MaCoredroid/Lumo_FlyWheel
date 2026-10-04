@@ -1,0 +1,5 @@
+{
+ "rule1_validity_NULL_p_ge_0.01": false,
+ "rule2_sensitivity_NEG_p_lt_0.01": true,
+ "conclusion": "INVALID per DIST-PROTOCOL.md rule 1: the independent plain-decoding replicate (seed 1) is rejected against the reference (p=0.001); no candidate conclusion is drawn."
+}

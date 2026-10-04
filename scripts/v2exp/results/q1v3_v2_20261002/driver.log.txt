@@ -1,0 +1,235 @@
+[q1v3 2026-10-02T13:25:34Z] run=/home/mark/shared/lumotree-v2exp-runs/q1v3/q1v3v2-20261002T132534Z stages=A,CAND,B,V,P commit=4c4e18d4a6c5dd7c3ca6a2ae3c93c41e2efe9df8 dirty=0
+freeze verified (18 files)
+{"ok": true, "cases": 33, "cycles": 147, "negative_controls": 10, "path_usage": {"S11": 34, "R0": 37, "S3": 19, "B21": 6, "B6": 7, "B13": 12, "B5": 7, "B11": 6, "S1": 12, "B20": 6, "B16": 1}}
+[q1v3 2026-10-02T13:25:35Z] stage A: kv_bytes=42949672960 packed=0
+started q1v3-native-A 5a79b1df247ced94f831cc583a36a788d8829ee967ac08a9ac6f59b1bd991a59
+[q1v3 2026-10-02T13:30:48Z] q1v3-native-A healthy after 311s
+[A 1/33] A__cal-short__C1-spine-bonus__r0 http=200 35.485s sealed=True valid=True 
+[A 2/33] A__cal-short__C2-nc-base__r0 http=200 8.724s sealed=True valid=True 
+[A 3/33] A__cal-short__C3-branch-leaf__r0 http=200 2.655s sealed=True valid=True 
+[A 4/33] A__cal-short__C4-root-only__r0 http=200 1.503s sealed=True valid=True 
+[A 5/33] A__cal-short__C5-deep-branch__r0 http=200 3.396s sealed=True valid=True 
+[A 6/33] A__cal-medium__C1-spine-bonus__r0 http=200 21.205s sealed=True valid=True 
+[A 7/33] A__cal-medium__C2-nc-base__r0 http=200 16.046s sealed=True valid=True 
+[A 8/33] A__cal-medium__C3-branch-leaf__r0 http=200 2.736s sealed=True valid=True 
+[A 9/33] A__cal-medium__C4-root-only__r0 http=200 1.571s sealed=True valid=True 
+[A 10/33] A__cal-medium__C5-deep-branch__r0 http=200 3.476s sealed=True valid=True 
+[A 11/33] A__cal-long__C1-spine-bonus__r0 http=200 47.203s sealed=True valid=True 
+[A 12/33] A__cal-long__C2-nc-base__r0 http=200 32.306s sealed=True valid=True 
+[A 13/33] A__cal-long__C3-branch-leaf__r0 http=200 3.362s sealed=True valid=True 
+[A 14/33] A__cal-long__C4-root-only__r0 http=200 2.045s sealed=True valid=True 
+[A 15/33] A__cal-long__C5-deep-branch__r0 http=200 4.176s sealed=True valid=True 
+[A 16/33] A__eval-short__C1-spine-bonus__r0 http=200 13.736s sealed=True valid=True 
+[A 17/33] A__eval-short__C2-nc-base__r0 http=200 6.02s sealed=True valid=True 
+[A 18/33] A__eval-short__C3-branch-leaf__r0 http=200 2.637s sealed=True valid=True 
+[A 19/33] A__eval-short__C4-root-only__r0 http=200 1.47s sealed=True valid=True 
+[A 20/33] A__eval-short__C5-deep-branch__r0 http=200 3.346s sealed=True valid=True 
+[A 21/33] A__eval-medium__C1-spine-bonus__r0 http=200 21.444s sealed=True valid=True 
+[A 22/33] A__eval-medium__C2-nc-base__r0 http=200 16.048s sealed=True valid=True 
+[A 23/33] A__eval-medium__C3-branch-leaf__r0 http=200 2.705s sealed=True valid=True 
+[A 24/33] A__eval-medium__C4-root-only__r0 http=200 1.552s sealed=True valid=True 
+[A 25/33] A__eval-medium__C5-deep-branch__r0 http=200 3.46s sealed=True valid=True 
+[A 26/33] A__eval-long__C1-spine-bonus__r0 http=200 37.408s sealed=True valid=True 
+[A 27/33] A__eval-long__C2-nc-base__r0 http=200 24.808s sealed=True valid=True 
+[A 28/33] A__eval-long__C3-branch-leaf__r0 http=200 3.145s sealed=True valid=True 
+[A 29/33] A__eval-long__C4-root-only__r0 http=200 1.846s sealed=True valid=True 
+[A 30/33] A__eval-long__C5-deep-branch__r0 http=200 3.93s sealed=True valid=True 
+[A 31/33] A__bnd-25535__K1-cross-inside__r0 http=200 23.464s sealed=True valid=True 
+[A 32/33] A__bnd-25535__K2-cross-last-draft__r0 http=200 12.829s sealed=True valid=True 
+[A 33/33] A__bnd-25535__K3-pending-at-boundary__r0 http=200 8.366s sealed=True valid=True 
+{"arm": "A", "planned": 33, "attempted": 33, "sealed": 33, "valid": 33, "utc": "2026-10-02T13:37:03Z"}
+[q1v3 2026-10-02T13:37:09Z] removed q1v3-native-A
+{"arm": "A", "client_rc": 0, "summary": {"arm": "A", "attempted": 33, "planned": 33, "sealed": 33, "utc": "2026-10-02T13:37:03Z", "valid": 33}, "complete": true}
+[q1v3 2026-10-02T13:37:09Z] candidate vehicle pid=2804030
+[q1v3 2026-10-02T13:42:54Z] candidate READY after 345s: /home/mark/shared/lumotree-v2exp-runs/q1v3/q1v3v2-20261002T132534Z/CAND/serve/fr14_promoab_C_q1v320261002T133709Z_20261002T133709Z
+{"applied": true, "problems": []}
+[CAND 1/44] CAND__cal-short__C1-spine-bonus__r0 http=200 38.58s sealed=True valid=True 
+[CAND 2/44] CAND__cal-short__C2-nc-base__r0 http=200 9.2s sealed=True valid=True 
+[CAND 3/44] CAND__cal-short__C3-branch-leaf__r0 http=200 2.592s sealed=True valid=True 
+[CAND 4/44] CAND__cal-short__C4-root-only__r0 http=200 2.681s sealed=True valid=True 
+[CAND 5/44] CAND__cal-short__C5-deep-branch__r0 http=200 2.662s sealed=True valid=True 
+[CAND 6/44] CAND__cal-medium__C1-spine-bonus__r0 http=200 22.091s sealed=True valid=True 
+[CAND 7/44] CAND__cal-medium__C2-nc-base__r0 http=200 17.733s sealed=True valid=True 
+[CAND 8/44] CAND__cal-medium__C3-branch-leaf__r0 http=200 2.91s sealed=True valid=True 
+[CAND 9/44] CAND__cal-medium__C4-root-only__r0 http=200 2.925s sealed=True valid=True 
+[CAND 10/44] CAND__cal-medium__C5-deep-branch__r0 http=200 2.939s sealed=True valid=True 
+[CAND 11/44] CAND__cal-long__C1-spine-bonus__r0 http=200 49.615s sealed=True valid=True 
+[CAND 12/44] CAND__cal-long__C2-nc-base__r0 http=200 36.484s sealed=True valid=True 
+[CAND 13/44] CAND__cal-long__C3-branch-leaf__r0 http=200 3.792s sealed=True valid=True 
+[CAND 14/44] CAND__cal-long__C4-root-only__r0 http=200 3.824s sealed=True valid=True 
+[CAND 15/44] CAND__cal-long__C5-deep-branch__r0 http=200 3.818s sealed=True valid=True 
+[CAND 16/44] CAND__eval-short__C1-spine-bonus__r0 http=200 12.328s sealed=True valid=True 
+[CAND 17/44] CAND__eval-short__C2-nc-base__r0 http=200 6.011s sealed=True valid=True 
+[CAND 18/44] CAND__eval-short__C3-branch-leaf__r0 http=200 2.636s sealed=True valid=True 
+[CAND 19/44] CAND__eval-short__C4-root-only__r0 http=200 2.593s sealed=True valid=True 
+[CAND 20/44] CAND__eval-short__C5-deep-branch__r0 http=200 2.642s sealed=True valid=True 
+[CAND 21/44] CAND__eval-medium__C1-spine-bonus__r0 http=200 22.172s sealed=True valid=True 
+[CAND 22/44] CAND__eval-medium__C2-nc-base__r0 http=200 17.543s sealed=True valid=True 
+[CAND 23/44] CAND__eval-medium__C3-branch-leaf__r0 http=200 2.946s sealed=True valid=True 
+[CAND 24/44] CAND__eval-medium__C4-root-only__r0 http=200 2.926s sealed=True valid=True 
+[CAND 25/44] CAND__eval-medium__C5-deep-branch__r0 http=200 2.929s sealed=True valid=True 
+[CAND 26/44] CAND__eval-long__C1-spine-bonus__r0 http=200 39.167s sealed=True valid=True 
+[CAND 27/44] CAND__eval-long__C2-nc-base__r0 http=200 27.909s sealed=True valid=True 
+[CAND 28/44] CAND__eval-long__C3-branch-leaf__r0 http=200 3.5s sealed=True valid=True 
+[CAND 29/44] CAND__eval-long__C4-root-only__r0 http=200 3.548s sealed=True valid=True 
+[CAND 30/44] CAND__eval-long__C5-deep-branch__r0 http=200 3.536s sealed=True valid=True 
+[CAND 31/44] CAND__bnd-25535__K1-cross-inside__r0 http=200 20.444s sealed=True valid=True 
+[CAND 32/44] CAND__bnd-25535__K2-cross-last-draft__r0 http=200 9.297s sealed=True valid=True 
+[CAND 33/44] CAND__bnd-25535__K3-pending-at-boundary__r0 http=200 4.355s sealed=True valid=True 
+[CAND 34/44] CAND__cal-short__C2-nc-base__r1 http=200 7.582s sealed=True valid=True 
+[CAND 35/44] CAND__cal-medium__C2-nc-base__NC_CONV http=200 13.505s sealed=True valid=True 
+[CAND 36/44] CAND__cal-short__C2-nc-base__NC_CONV http=200 3.562s sealed=True valid=True 
+[CAND 37/44] CAND__cal-medium__C2-nc-base__NC_GDN http=200 4.145s sealed=True valid=True 
+[CAND 38/44] CAND__cal-short__C2-nc-base__NC_GDN http=200 3.499s sealed=True valid=True 
+[CAND 39/44] CAND__cal-medium__C2-nc-base__NC_KV http=200 4.234s sealed=True valid=True 
+[CAND 40/44] CAND__cal-short__C2-nc-base__NC_KV http=200 3.553s sealed=True valid=True 
+[CAND 41/44] CAND__cal-medium__C2-nc-base__NC_STALE http=200 4.182s sealed=True valid=True 
+[CAND 42/44] CAND__cal-short__C2-nc-base__NC_STALE http=200 3.502s sealed=True valid=True 
+[CAND 43/44] CAND__cal-medium__C2-nc-base__NC_SIB http=200 4.125s sealed=True valid=True 
+[CAND 44/44] CAND__cal-short__C2-nc-base__NC_SIB http=200 3.455s sealed=True valid=True 
+{"arm": "CAND", "planned": 44, "attempted": 44, "sealed": 44, "valid": 44, "utc": "2026-10-02T13:50:19Z"}
+[q1v3 2026-10-02T13:50:19Z] stop requested; waiting for vehicle teardown
+[q1v3 2026-10-02T13:50:50Z] vehicle rc=16
+[q1v3 2026-10-02T13:50:53Z] removed own container 554a82b522ef
+{"arm": "CAND", "client_rc": 0, "summary": {"arm": "CAND", "attempted": 44, "planned": 44, "sealed": 44, "utc": "2026-10-02T13:50:19Z", "valid": 44}, "complete": true}
+[q1v3 2026-10-02T13:50:53Z] stage B: kv_bytes=42949672960 packed=0
+started q1v3-native-B ad067ab28a7a5306389971347989829655baacc7770ff5ed2dad75e2838424d5
+[q1v3 2026-10-02T13:56:06Z] q1v3-native-B healthy after 311s
+[B 1/33] B__cal-short__C1-spine-bonus__r0 http=200 34.019s sealed=True valid=True 
+[B 2/33] B__cal-short__C2-nc-base__r0 http=200 8.785s sealed=True valid=True 
+[B 3/33] B__cal-short__C3-branch-leaf__r0 http=200 2.618s sealed=True valid=True 
+[B 4/33] B__cal-short__C4-root-only__r0 http=200 1.557s sealed=True valid=True 
+[B 5/33] B__cal-short__C5-deep-branch__r0 http=200 3.424s sealed=True valid=True 
+[B 6/33] B__cal-medium__C1-spine-bonus__r0 http=200 21.216s sealed=True valid=True 
+[B 7/33] B__cal-medium__C2-nc-base__r0 http=200 16.234s sealed=True valid=True 
+[B 8/33] B__cal-medium__C3-branch-leaf__r0 http=200 2.895s sealed=True valid=True 
+[B 9/33] B__cal-medium__C4-root-only__r0 http=200 1.693s sealed=True valid=True 
+[B 10/33] B__cal-medium__C5-deep-branch__r0 http=200 3.651s sealed=True valid=True 
+[B 11/33] B__cal-long__C1-spine-bonus__r0 http=200 44.907s sealed=True valid=True 
+[B 12/33] B__cal-long__C2-nc-base__r0 http=200 32.469s sealed=True valid=True 
+[B 13/33] B__cal-long__C3-branch-leaf__r0 http=200 3.497s sealed=True valid=True 
+[B 14/33] B__cal-long__C4-root-only__r0 http=200 2.176s sealed=True valid=True 
+[B 15/33] B__cal-long__C5-deep-branch__r0 http=200 4.351s sealed=True valid=True 
+[B 16/33] B__eval-short__C1-spine-bonus__r0 http=200 12.286s sealed=True valid=True 
+[B 17/33] B__eval-short__C2-nc-base__r0 http=200 6.111s sealed=True valid=True 
+[B 18/33] B__eval-short__C3-branch-leaf__r0 http=200 2.639s sealed=True valid=True 
+[B 19/33] B__eval-short__C4-root-only__r0 http=200 1.49s sealed=True valid=True 
+[B 20/33] B__eval-short__C5-deep-branch__r0 http=200 3.391s sealed=True valid=True 
+[B 21/33] B__eval-medium__C1-spine-bonus__r0 http=200 21.132s sealed=True valid=True 
+[B 22/33] B__eval-medium__C2-nc-base__r0 http=200 16.295s sealed=True valid=True 
+[B 23/33] B__eval-medium__C3-branch-leaf__r0 http=200 2.855s sealed=True valid=True 
+[B 24/33] B__eval-medium__C4-root-only__r0 http=200 1.635s sealed=True valid=True 
+[B 25/33] B__eval-medium__C5-deep-branch__r0 http=200 3.579s sealed=True valid=True 
+[B 26/33] B__eval-long__C1-spine-bonus__r0 http=200 36.233s sealed=True valid=True 
+[B 27/33] B__eval-long__C2-nc-base__r0 http=200 25.011s sealed=True valid=True 
+[B 28/33] B__eval-long__C3-branch-leaf__r0 http=200 3.289s sealed=True valid=True 
+[B 29/33] B__eval-long__C4-root-only__r0 http=200 1.949s sealed=True valid=True 
+[B 30/33] B__eval-long__C5-deep-branch__r0 http=200 4.062s sealed=True valid=True 
+[B 31/33] B__bnd-25535__K1-cross-inside__r0 http=200 24.37s sealed=True valid=True 
+[B 32/33] B__bnd-25535__K2-cross-last-draft__r0 http=200 13.084s sealed=True valid=True 
+[B 33/33] B__bnd-25535__K3-pending-at-boundary__r0 http=200 8.662s sealed=True valid=True 
+{"arm": "B", "planned": 33, "attempted": 33, "sealed": 33, "valid": 33, "utc": "2026-10-02T14:02:18Z"}
+[q1v3 2026-10-02T14:02:24Z] removed q1v3-native-B
+{"arm": "B", "client_rc": 0, "summary": {"arm": "B", "attempted": 33, "planned": 33, "sealed": 33, "utc": "2026-10-02T14:02:18Z", "valid": 33}, "complete": true}
+[q1v3 2026-10-02T14:02:24Z] stage V: kv_bytes=56543412224 packed=0
+started q1v3-native-V 15acf393b07faeb20d7f4a8fbc98079f89c084d5a6def1ff13833bd86f9f66c5
+[q1v3 2026-10-02T14:07:59Z] q1v3-native-V healthy after 331s
+[V 1/33] V__cal-short__C1-spine-bonus__r0 http=200 34.444s sealed=True valid=True 
+[V 2/33] V__cal-short__C2-nc-base__r0 http=200 8.836s sealed=True valid=True 
+[V 3/33] V__cal-short__C3-branch-leaf__r0 http=200 2.638s sealed=True valid=True 
+[V 4/33] V__cal-short__C4-root-only__r0 http=200 1.556s sealed=True valid=True 
+[V 5/33] V__cal-short__C5-deep-branch__r0 http=200 3.429s sealed=True valid=True 
+[V 6/33] V__cal-medium__C1-spine-bonus__r0 http=200 21.228s sealed=True valid=True 
+[V 7/33] V__cal-medium__C2-nc-base__r0 http=200 16.266s sealed=True valid=True 
+[V 8/33] V__cal-medium__C3-branch-leaf__r0 http=200 2.896s sealed=True valid=True 
+[V 9/33] V__cal-medium__C4-root-only__r0 http=200 1.672s sealed=True valid=True 
+[V 10/33] V__cal-medium__C5-deep-branch__r0 http=200 3.657s sealed=True valid=True 
+[V 11/33] V__cal-long__C1-spine-bonus__r0 http=200 45.566s sealed=True valid=True 
+[V 12/33] V__cal-long__C2-nc-base__r0 http=200 32.684s sealed=True valid=True 
+[V 13/33] V__cal-long__C3-branch-leaf__r0 http=200 3.501s sealed=True valid=True 
+[V 14/33] V__cal-long__C4-root-only__r0 http=200 2.261s sealed=True valid=True 
+[V 15/33] V__cal-long__C5-deep-branch__r0 http=200 4.353s sealed=True valid=True 
+[V 16/33] V__eval-short__C1-spine-bonus__r0 http=200 12.429s sealed=True valid=True 
+[V 17/33] V__eval-short__C2-nc-base__r0 http=200 6.083s sealed=True valid=True 
+[V 18/33] V__eval-short__C3-branch-leaf__r0 http=200 2.637s sealed=True valid=True 
+[V 19/33] V__eval-short__C4-root-only__r0 http=200 1.451s sealed=True valid=True 
+[V 20/33] V__eval-short__C5-deep-branch__r0 http=200 3.364s sealed=True valid=True 
+[V 21/33] V__eval-medium__C1-spine-bonus__r0 http=200 21.196s sealed=True valid=True 
+[V 22/33] V__eval-medium__C2-nc-base__r0 http=200 10.148s sealed=True valid=True 
+[V 23/33] V__eval-medium__C3-branch-leaf__r0 http=200 2.886s sealed=True valid=True 
+[V 24/33] V__eval-medium__C4-root-only__r0 http=200 1.77s sealed=True valid=True 
+[V 25/33] V__eval-medium__C5-deep-branch__r0 http=200 3.622s sealed=True valid=True 
+[V 26/33] V__eval-long__C1-spine-bonus__r0 http=200 36.344s sealed=True valid=True 
+[V 27/33] V__eval-long__C2-nc-base__r0 http=200 25.117s sealed=True valid=True 
+[V 28/33] V__eval-long__C3-branch-leaf__r0 http=200 3.224s sealed=True valid=True 
+[V 29/33] V__eval-long__C4-root-only__r0 http=200 2.015s sealed=True valid=True 
+[V 30/33] V__eval-long__C5-deep-branch__r0 http=200 3.995s sealed=True valid=True 
+[V 31/33] V__bnd-25535__K1-cross-inside__r0 http=200 24.277s sealed=True valid=True 
+[V 32/33] V__bnd-25535__K2-cross-last-draft__r0 http=200 13.137s sealed=True valid=True 
+[V 33/33] V__bnd-25535__K3-pending-at-boundary__r0 http=200 8.634s sealed=True valid=True 
+{"arm": "V", "planned": 33, "attempted": 33, "sealed": 33, "valid": 33, "utc": "2026-10-02T14:14:07Z"}
+[q1v3 2026-10-02T14:14:11Z] removed q1v3-native-V
+{"arm": "V", "client_rc": 0, "summary": {"arm": "V", "attempted": 33, "planned": 33, "sealed": 33, "utc": "2026-10-02T14:14:07Z", "valid": 33}, "complete": true}
+[q1v3 2026-10-02T14:14:11Z] stage P: kv_bytes=42949672960 packed=1
+started q1v3-native-P 5ef08388b257ccbdbc35f67f994a6b0e4867d4a47a6d7138d6adb73f82676d0f
+[q1v3 2026-10-02T14:19:50Z] q1v3-native-P healthy after 311s
+[P 1/33] P__cal-short__C1-spine-bonus__r0 http=200 34.118s sealed=True valid=True 
+[P 2/33] P__cal-short__C2-nc-base__r0 http=200 8.8s sealed=True valid=True 
+[P 3/33] P__cal-short__C3-branch-leaf__r0 http=200 2.661s sealed=True valid=True 
+[P 4/33] P__cal-short__C4-root-only__r0 http=200 1.54s sealed=True valid=True 
+[P 5/33] P__cal-short__C5-deep-branch__r0 http=200 3.365s sealed=True valid=True 
+[P 6/33] P__cal-medium__C1-spine-bonus__r0 http=200 21.124s sealed=True valid=True 
+[P 7/33] P__cal-medium__C2-nc-base__r0 http=200 16.354s sealed=True valid=True 
+[P 8/33] P__cal-medium__C3-branch-leaf__r0 http=200 2.867s sealed=True valid=True 
+[P 9/33] P__cal-medium__C4-root-only__r0 http=200 1.673s sealed=True valid=True 
+[P 10/33] P__cal-medium__C5-deep-branch__r0 http=200 3.646s sealed=True valid=True 
+[P 11/33] P__cal-long__C1-spine-bonus__r0 http=200 45.617s sealed=True valid=True 
+[P 12/33] P__cal-long__C2-nc-base__r0 http=200 32.634s sealed=True valid=True 
+[P 13/33] P__cal-long__C3-branch-leaf__r0 http=200 3.502s sealed=True valid=True 
+[P 14/33] P__cal-long__C4-root-only__r0 http=200 2.184s sealed=True valid=True 
+[P 15/33] P__cal-long__C5-deep-branch__r0 http=200 4.336s sealed=True valid=True 
+[P 16/33] P__eval-short__C1-spine-bonus__r0 http=200 12.516s sealed=True valid=True 
+[P 17/33] P__eval-short__C2-nc-base__r0 http=200 6.074s sealed=True valid=True 
+[P 18/33] P__eval-short__C3-branch-leaf__r0 http=200 2.603s sealed=True valid=True 
+[P 19/33] P__eval-short__C4-root-only__r0 http=200 1.461s sealed=True valid=True 
+[P 20/33] P__eval-short__C5-deep-branch__r0 http=200 3.386s sealed=True valid=True 
+[P 21/33] P__eval-medium__C1-spine-bonus__r0 http=200 20.981s sealed=True valid=True 
+[P 22/33] P__eval-medium__C2-nc-base__r0 http=200 16.289s sealed=True valid=True 
+[P 23/33] P__eval-medium__C3-branch-leaf__r0 http=200 2.779s sealed=True valid=True 
+[P 24/33] P__eval-medium__C4-root-only__r0 http=200 1.683s sealed=True valid=True 
+[P 25/33] P__eval-medium__C5-deep-branch__r0 http=200 3.622s sealed=True valid=True 
+[P 26/33] P__eval-long__C1-spine-bonus__r0 http=200 36.43s sealed=True valid=True 
+[P 27/33] P__eval-long__C2-nc-base__r0 http=200 25.123s sealed=True valid=True 
+[P 28/33] P__eval-long__C3-branch-leaf__r0 http=200 3.271s sealed=True valid=True 
+[P 29/33] P__eval-long__C4-root-only__r0 http=200 2.007s sealed=True valid=True 
+[P 30/33] P__eval-long__C5-deep-branch__r0 http=200 4.095s sealed=True valid=True 
+[P 31/33] P__bnd-25535__K1-cross-inside__r0 http=200 23.823s sealed=True valid=True 
+[P 32/33] P__bnd-25535__K2-cross-last-draft__r0 http=200 13.204s sealed=True valid=True 
+[P 33/33] P__bnd-25535__K3-pending-at-boundary__r0 http=200 8.618s sealed=True valid=True 
+{"arm": "P", "planned": 33, "attempted": 33, "sealed": 33, "valid": 33, "utc": "2026-10-02T14:26:03Z"}
+[q1v3 2026-10-02T14:26:08Z] removed q1v3-native-P
+{"arm": "P", "client_rc": 0, "summary": {"arm": "P", "attempted": 33, "planned": 33, "sealed": 33, "utc": "2026-10-02T14:26:03Z", "valid": 33}, "complete": true}
+[q1v3 2026-10-02T14:26:08Z] reducing
+{
+ "verdict": "INCONCLUSIVE",
+ "gates": {
+  "R1_integrity": true,
+  "R2_prompt_parity": true,
+  "R3_o0_import": true,
+  "R4_heldout_reference": true,
+  "R5_native_categorical": true,
+  "R6_discrimination": false
+ },
+ "reasons": [
+  "R6: a required negative control was not executed or not detected on its target surface"
+ ],
+ "tolerance": {
+  "next_kl": 1.9612541929235803,
+  "gdn_rel": 1.0456804027111402,
+  "conv_rel": 1.1645878262694769,
+  "kv_new_rel": 1.5887361263890045,
+  "kv_hist_rel": 1.3245500528121454
+ },
+ "candidate_failing_cells": 0
+}
+[q1v3 2026-10-02T14:30:53Z] done failed_stages=0 reducer_rc=3 verdict=INCONCLUSIVE

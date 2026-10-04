@@ -1,0 +1,248 @@
+{
+ "schema": "v2exp.confirm_set.v1",
+ "source": "capture/mtp5-20261002T204445Z/proxy_request_dumps",
+ "tuning": "corpus/requests",
+ "target": 43,
+ "rule": "Freeze the disjoint confirmation request set from the capture run.\nRule (fixed before looking at any replay on it): drop dumps whose messages hash matches the tuning corpus\nor that lack messages; group by agent conversation (hash of the first user message); allocate ~TARGET requests across\ntasks proportionally to their request counts (largest remainder); within a task take evenly spaced\nrequests in capture order (filename timestamp). Writes copies + manifest with sha256 per file.",
+ "dropped": [],
+ "tasks": {
+  "0b07e7083d:astropy__astropy-14508": {
+   "available": 17,
+   "selected": 12
+  },
+  "26dccaecc9:astropy__astropy-14995": {
+   "available": 17,
+   "selected": 12
+  },
+  "663dd6b6d2:astropy__astropy-14096": {
+   "available": 9,
+   "selected": 6
+  },
+  "763ee7ecb7:astropy__astropy-14309": {
+   "available": 7,
+   "selected": 5
+  },
+  "d64e7310be:astropy__astropy-14995": {
+   "available": 11,
+   "selected": 8
+  }
+ },
+ "files": [
+  {
+   "name": "chatreq_1790974964496.json",
+   "task": "0b07e7083d:astropy__astropy-14508",
+   "sha256": "30dcbf4db209d97065578505df65a7391af797649322e68bad5e511c8188bd33"
+  },
+  {
+   "name": "chatreq_1790974976564.json",
+   "task": "0b07e7083d:astropy__astropy-14508",
+   "sha256": "b88387564b3c315198c641af34fdc402f962901305a890269037897364a39461"
+  },
+  {
+   "name": "chatreq_1790975092393.json",
+   "task": "0b07e7083d:astropy__astropy-14508",
+   "sha256": "7c36fe1b2288cd86094f6069e71571d89e395bc7407ed62f9397652161a9b8af"
+  },
+  {
+   "name": "chatreq_1790975098057.json",
+   "task": "0b07e7083d:astropy__astropy-14508",
+   "sha256": "45ae71d61e50d740e09ba00b5e486f420f8d089001831c54a6576df6e937565b"
+  },
+  {
+   "name": "chatreq_1790975105189.json",
+   "task": "0b07e7083d:astropy__astropy-14508",
+   "sha256": "c8ee574f43efd6b055d07a8659ba04586cb2b16ce72e99f44e383ea4b0126a4e"
+  },
+  {
+   "name": "chatreq_1790975109944.json",
+   "task": "0b07e7083d:astropy__astropy-14508",
+   "sha256": "94519c097f8616879b30d746322592a6a205e6a027471c03c0a2cd9961d7e6f1"
+  },
+  {
+   "name": "chatreq_1790975121133.json",
+   "task": "0b07e7083d:astropy__astropy-14508",
+   "sha256": "01c2e290e1244402e2254ecc21f9b3149fc861452eaebc3d6528fb370de85c32"
+  },
+  {
+   "name": "chatreq_1790975145832.json",
+   "task": "0b07e7083d:astropy__astropy-14508",
+   "sha256": "897dce3582b024b34ddea0a7f056a2abc2eb91c99875e3a35a98e97fb41e5dfc"
+  },
+  {
+   "name": "chatreq_1790975170245.json",
+   "task": "0b07e7083d:astropy__astropy-14508",
+   "sha256": "cbd78f61d49dd8a8af72a25a308f4c755451707d81c132da4127489f824c0d79"
+  },
+  {
+   "name": "chatreq_1790975192276.json",
+   "task": "0b07e7083d:astropy__astropy-14508",
+   "sha256": "8706b82f96e8718631317f0f8dfffb4c2c80056e259e37a408a90e76b0fe2463"
+  },
+  {
+   "name": "chatreq_1790975206432.json",
+   "task": "0b07e7083d:astropy__astropy-14508",
+   "sha256": "358b85946e3df1e9aa7749edeed3a2a5e0da9afe8cb54cc4aa1b7d961bffdfc3"
+  },
+  {
+   "name": "chatreq_1790975225764.json",
+   "task": "0b07e7083d:astropy__astropy-14508",
+   "sha256": "7880bad4a9fdf835875b7330fb28ccb196b8adaf6e8ecf43ae69303ebfe7a866"
+  },
+  {
+   "name": "chatreq_1790975574802.json",
+   "task": "26dccaecc9:astropy__astropy-14995",
+   "sha256": "6e4b29ae1497f55c45345eaecd619c521526b352b5f968d02f746d9271b4b501"
+  },
+  {
+   "name": "chatreq_1790975599672.json",
+   "task": "26dccaecc9:astropy__astropy-14995",
+   "sha256": "77266b9261c7f6a29ef6e745ba8532f8ff293ceaf517625dcae8b6224486badb"
+  },
+  {
+   "name": "chatreq_1790975643650.json",
+   "task": "26dccaecc9:astropy__astropy-14995",
+   "sha256": "b6db7d6ff91ad8e974283f0553a3fed2772bbd03cd7443adba0cb8181a5b0e4c"
+  },
+  {
+   "name": "chatreq_1790975651599.json",
+   "task": "26dccaecc9:astropy__astropy-14995",
+   "sha256": "aae323661b6f15a326e3779b71c91dd6f4135280464cdfe48922ec07c18b08c2"
+  },
+  {
+   "name": "chatreq_1790975672507.json",
+   "task": "26dccaecc9:astropy__astropy-14995",
+   "sha256": "cffc2f9029b200247f0184a7b858bc66f7e43e6443eb92b9c069a9485f4f14fa"
+  },
+  {
+   "name": "chatreq_1790975687891.json",
+   "task": "26dccaecc9:astropy__astropy-14995",
+   "sha256": "bd1148cf6f2ee7e6fac70e78445661c56de7c22656734f679d03db48c97dfbe2"
+  },
+  {
+   "name": "chatreq_1790975708683.json",
+   "task": "26dccaecc9:astropy__astropy-14995",
+   "sha256": "05ad7ccdf986ba19f874471837aeabfe1df2f242e83f9de15110633aa32e1690"
+  },
+  {
+   "name": "chatreq_1790975725293.json",
+   "task": "26dccaecc9:astropy__astropy-14995",
+   "sha256": "ee99e6f06c17ef4d88ecb5729e7ec44d15e14054e55f704748ff9a5569dccea2"
+  },
+  {
+   "name": "chatreq_1790975753660.json",
+   "task": "26dccaecc9:astropy__astropy-14995",
+   "sha256": "1da86096c19db66a58fb24161e4e7eef1bb3dfb4cef66c3febe90da537e72767"
+  },
+  {
+   "name": "chatreq_1790975761394.json",
+   "task": "26dccaecc9:astropy__astropy-14995",
+   "sha256": "f2665948c7059dab1b1b3c8e3534f25656344dbb0637c729ae5251800cce62b0"
+  },
+  {
+   "name": "chatreq_1790975853966.json",
+   "task": "26dccaecc9:astropy__astropy-14995",
+   "sha256": "185c11b4df37a9cae680a10798fdcc7d548a0919afcbfa84761df3535404cc3b"
+  },
+  {
+   "name": "chatreq_1790975902484.json",
+   "task": "26dccaecc9:astropy__astropy-14995",
+   "sha256": "4bec7e7cc1f1115e8c4628b73579f7958ebc24c58f07cb1d8f0e2026e9b25c49"
+  },
+  {
+   "name": "chatreq_1790974250261.json",
+   "task": "663dd6b6d2:astropy__astropy-14096",
+   "sha256": "cf5b556890ebd660101694ca708c89eb89f7370c9c5402bf1d0b883183d19a0f"
+  },
+  {
+   "name": "chatreq_1790974308675.json",
+   "task": "663dd6b6d2:astropy__astropy-14096",
+   "sha256": "0ee5ad5332cc6753278a18be733f47abde5df022825f3132051685ec7a4b4c9a"
+  },
+  {
+   "name": "chatreq_1790974311895.json",
+   "task": "663dd6b6d2:astropy__astropy-14096",
+   "sha256": "d31db160c77fcfa251add832668f72ae868c9320724a35a4ac4869e65d501261"
+  },
+  {
+   "name": "chatreq_1790974370080.json",
+   "task": "663dd6b6d2:astropy__astropy-14096",
+   "sha256": "dbe7cec803104e5d95f5c92e541a03f6d983814f8020bdcbe7fc2fa69f639de1"
+  },
+  {
+   "name": "chatreq_1790974394553.json",
+   "task": "663dd6b6d2:astropy__astropy-14096",
+   "sha256": "8529e9072a0a16a839e9e81624b19c6086aaa1b1ae6698689e87608c444ba1d0"
+  },
+  {
+   "name": "chatreq_1790974487166.json",
+   "task": "663dd6b6d2:astropy__astropy-14096",
+   "sha256": "a60134260942f579baf904cf9b3e77cc0fe0775711da037b74bd0c75cda36eea"
+  },
+  {
+   "name": "chatreq_1790974866602.json",
+   "task": "763ee7ecb7:astropy__astropy-14309",
+   "sha256": "4ca369b99219945dbe6f8cb6324cc52cecc687e13aeaef04f5ec26cbca672733"
+  },
+  {
+   "name": "chatreq_1790974885053.json",
+   "task": "763ee7ecb7:astropy__astropy-14309",
+   "sha256": "e83d6e5218d9725b3390303913511f0d5412a2510ea1bdbfa8cb16d6976d1ec4"
+  },
+  {
+   "name": "chatreq_1790974892777.json",
+   "task": "763ee7ecb7:astropy__astropy-14309",
+   "sha256": "fd9345a2f1b65469993e3091d175aa0767d9b6a92972064b9d1672a8f236ab4c"
+  },
+  {
+   "name": "chatreq_1790974896570.json",
+   "task": "763ee7ecb7:astropy__astropy-14309",
+   "sha256": "8a50f992386d75e49aab861c484c39fbf509665cc6a2c5b39deab36d15ece7b9"
+  },
+  {
+   "name": "chatreq_1790974913908.json",
+   "task": "763ee7ecb7:astropy__astropy-14309",
+   "sha256": "06e2846d744bb7115713be1e540aa4412fd32f614ca15ebaefbc69242d6d1191"
+  },
+  {
+   "name": "chatreq_1790975287592.json",
+   "task": "d64e7310be:astropy__astropy-14995",
+   "sha256": "a340fd0a5bf37f17beb7db84e8ed3bef89a263dcc0cb661e348de11c72e82956"
+  },
+  {
+   "name": "chatreq_1790975303755.json",
+   "task": "d64e7310be:astropy__astropy-14995",
+   "sha256": "257c122f3472ccbed52d292607e559b9ad62e87131c8ab9cd121f5c7192dc245"
+  },
+  {
+   "name": "chatreq_1790975319745.json",
+   "task": "d64e7310be:astropy__astropy-14995",
+   "sha256": "8d78d090ba7279862cc2b5e776f52c5ce3aaeafc80ae6a085daf9e0deb482fdc"
+  },
+  {
+   "name": "chatreq_1790975324377.json",
+   "task": "d64e7310be:astropy__astropy-14995",
+   "sha256": "d498fbb0c3612d6d2654d84814f12b4620f2ea7c69f680887f2306fc1dfa2105"
+  },
+  {
+   "name": "chatreq_1790975334814.json",
+   "task": "d64e7310be:astropy__astropy-14995",
+   "sha256": "f9d14c674f2ae8dddb01300dc11aa732cdb88a8fdb5e24b972a0e5158f2e2f3f"
+  },
+  {
+   "name": "chatreq_1790975360551.json",
+   "task": "d64e7310be:astropy__astropy-14995",
+   "sha256": "3fab7db6de97632caf5ed17d9ab7023a573712f2149388e34f351b0f091c7e26"
+  },
+  {
+   "name": "chatreq_1790975372794.json",
+   "task": "d64e7310be:astropy__astropy-14995",
+   "sha256": "f5844006954742b2ad3a2ad7f0147a5f62857a477c1b393c8bf5a284116b3812"
+  },
+  {
+   "name": "chatreq_1790975454147.json",
+   "task": "d64e7310be:astropy__astropy-14995",
+   "sha256": "83bde665aafea7ac79af756a303ff8ba3f445393125b4cb7a025e6953a0386c8"
+  }
+ ],
+ "n": 43
+}

@@ -1,0 +1,165 @@
+{
+ "lumotree": {
+  "dir": "/home/mark/shared/lumotree-v2exp-runs/swe/fr14_promoab_C_v2swe20261001T224407Z_20261001T224407Z/hydra27_fixed32_promoab_C_v2swe20261001T224407Z/",
+  "resolved": 5,
+  "agent_min_total": 144.0,
+  "pooled": {
+   "pooled_decode_tok_s": 26.19,
+   "gen_tokens": 187137,
+   "requests": 236,
+   "e2e_s": 7891.3,
+   "ttft_s": 753.8
+  },
+  "tasks": {
+   "13977": {
+    "verdict": "failed",
+    "agent_s": 489.8
+   },
+   "14096": {
+    "verdict": "resolved",
+    "agent_s": 1450.6
+   },
+   "14182": {
+    "verdict": "failed",
+    "agent_s": 348.9
+   },
+   "14309": {
+    "verdict": "resolved",
+    "agent_s": 189.1
+   },
+   "14365": {
+    "verdict": "failed",
+    "agent_s": 166.5
+   },
+   "14369": {
+    "verdict": "failed",
+    "agent_s": 1912.0
+   },
+   "14508": {
+    "verdict": "resolved",
+    "agent_s": 2216.6
+   },
+   "14539": {
+    "verdict": "resolved",
+    "agent_s": 369.1
+   },
+   "14598": {
+    "verdict": "failed",
+    "agent_s": 1254.4
+   },
+   "14995": {
+    "verdict": "resolved",
+    "agent_s": 243.8
+   }
+  }
+ },
+ "vllm_mtp5": {
+  "dir": "/home/mark/shared/lumotree-v2exp-runs/swe/mtp5-20261002T011503Z/",
+  "resolved": 6,
+  "agent_min_total": 99.5,
+  "pooled": {
+   "pooled_decode_tok_s": 27.17,
+   "gen_tokens": 134643,
+   "requests": 224,
+   "e2e_s": 5494.8,
+   "ttft_s": 548.2
+  },
+  "tasks": {
+   "13977": {
+    "verdict": "failed",
+    "agent_s": 586.4
+   },
+   "14096": {
+    "verdict": "failed",
+    "agent_s": 1181.6
+   },
+   "14182": {
+    "verdict": "failed",
+    "agent_s": 357.2
+   },
+   "14309": {
+    "verdict": "resolved",
+    "agent_s": 101.5
+   },
+   "14365": {
+    "verdict": "resolved",
+    "agent_s": 141.6
+   },
+   "14369": {
+    "verdict": "resolved",
+    "agent_s": 1071.9
+   },
+   "14508": {
+    "verdict": "resolved",
+    "agent_s": 440.0
+   },
+   "14539": {
+    "verdict": "resolved",
+    "agent_s": 206.4
+   },
+   "14598": {
+    "verdict": "failed",
+    "agent_s": 1592.4
+   },
+   "14995": {
+    "verdict": "resolved",
+    "agent_s": 291.9
+   }
+  }
+ },
+ "sglang_eagle_s7_d8": {
+  "dir": "/home/mark/shared/lumotree-v2exp-runs/swe/sglang-s7k1d8-20261002T030040Z/",
+  "resolved": 5,
+  "agent_min_total": 103.0,
+  "pooled": {
+   "pooled_decode_tok_s": 29.89,
+   "gen_tokens": 158827,
+   "requests": 210,
+   "e2e_s": 5688.3,
+   "ttft_s": 381.2
+  },
+  "tasks": {
+   "13977": {
+    "verdict": "failed",
+    "agent_s": 1256.3
+   },
+   "14096": {
+    "verdict": "failed",
+    "agent_s": 612.1
+   },
+   "14182": {
+    "verdict": "failed",
+    "agent_s": 67.9
+   },
+   "14309": {
+    "verdict": "resolved",
+    "agent_s": 119.7
+   },
+   "14365": {
+    "verdict": "resolved",
+    "agent_s": 167.5
+   },
+   "14369": {
+    "verdict": "failed",
+    "agent_s": 984.4
+   },
+   "14508": {
+    "verdict": "resolved",
+    "agent_s": 440.4
+   },
+   "14539": {
+    "verdict": "resolved",
+    "agent_s": 1031.6
+   },
+   "14598": {
+    "verdict": "failed",
+    "agent_s": 1220.2
+   },
+   "14995": {
+    "verdict": "resolved",
+    "agent_s": 279.8
+   }
+  }
+ },
+ "notes": "Same 10 Astropy tasks (subset_b4_sixteen_qc_remainder_10), same Qwen Code 0.19.4 agent/proxy (temp 0.6/top_p 0.95/top_k 20/presence 1.0, 24k output cap), 9000 s budgets, network-isolated agent, one attempt per task per arm. LumoTree via the Cqc10 vehicle on latest code (split-K); MTP-5 via serve_native.sh (same forked FA2, APC/cudagraph flags); SGLang via its chat API (prompts render ~146 tokens longer than vLLM). Pooled rate = paper Eq. 5 from server counters. Single run per arm."
+}
