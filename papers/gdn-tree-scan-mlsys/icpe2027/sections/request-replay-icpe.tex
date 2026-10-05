@@ -1,4 +1,4 @@
-Table~\ref{tab:request-replay} reports complete configuration runs on the first corpus, each containing all 43 requests. Across three runs per arm, \sys{} records 28.13 pooled tokens/s and five-token native MTP records 26.12, a 7.7\% difference; individual run rates span 27.40--28.78 and 26.04--26.23 tokens/s. Plain autoregressive decoding records 10.54 tokens/s in one run, and five-token MTP has the highest pooled rate of the exploratory native sweep. SGLang EAGLE with seven steps and eight draft tokens, whose top-$k$ of one makes the draft a chain, yields 29.69 pooled tokens/s over three runs with identical incoming token IDs, 5.3\% above \sys{}; attention, prefill settings, proposal depth, suffix extension, and endpoint timing all differ, so the gap is not a controlled measurement of any one factor. Output-side counters pooled over the repeated vLLM runs give 4.35 accepted drafts per speculative event for \sys{} and 3.17 for five-token MTP; these counters describe emitted drafts, excluding the correction or bonus token. Exploratory variants that disable individual \sys{} optimizations, with their phase timers and drafting-pass sensitivity, are in Appendix~\ref{app:variants}; they predate the penalty-history correction and do not isolate single effects.
+Table~\ref{tab:request-replay} reports complete configuration runs on the first corpus, each containing all 43 requests. Across three runs per arm, \sys{} records 28.13 pooled tokens/s and five-token native MTP records 26.12, a 7.7\% difference; individual run rates span 27.40--28.78 and 26.04--26.23 tokens/s. Plain autoregressive decoding records 10.54 tokens/s in one run; among the native chain depths, five-token MTP has the highest pooled rate (three-token 22.44 and seven-token 25.39 over three runs each, one-token 15.37 in one run). SGLang EAGLE with seven steps and eight draft tokens, whose top-$k$ of one makes the draft a chain, yields 29.69 pooled tokens/s over three runs with identical incoming token IDs, 5.3\% above \sys{}; attention, prefill settings, proposal depth, suffix extension, and endpoint timing all differ, so the gap is not a controlled measurement of any one factor. Output-side counters pooled over the repeated vLLM runs give 4.35 accepted drafts per speculative event for \sys{} and 3.17 for five-token MTP; these counters describe emitted drafts, excluding the correction or bonus token. Exploratory variants that disable individual \sys{} optimizations, with their phase timers and drafting-pass sensitivity, are in Appendix~\ref{app:variants}; they predate the penalty-history correction and do not isolate single effects.
 
 \begin{table}[t]
 \caption{Sampled replay of 43 recorded requests, capped at 1,024 output tokens. Rates pool matched token and time totals across runs; ranges are individual run rates, not confidence intervals. SGLang receives the same input token IDs on a different stack and streaming endpoint.}
@@ -10,9 +10,9 @@ Configuration & Runs & Tokens/s & Run range \\
 \midrule
 vLLM autoregressive & 1 & 10.54 & --- \\
 vLLM MTP, 1 token & 1 & 15.37 & --- \\
-vLLM MTP, 3 tokens & 1 & 22.06 & --- \\
+vLLM MTP, 3 tokens & 3 & 22.44 & 22.06--22.66 \\
 vLLM MTP, 5 tokens & 3 & 26.12 & 26.04--26.23 \\
-vLLM MTP, 7 tokens & 1 & 25.72 & --- \\
+vLLM MTP, 7 tokens & 3 & 25.39 & 24.00--26.47 \\
 \sys{} & 3 & 28.13 & 27.40--28.78 \\
 \midrule
 SGLang EAGLE, 7/8 & 3 & 29.69 & 28.91--30.90 \\
@@ -30,14 +30,15 @@ Configuration & Runs & Tokens/s & Run range \\
 \midrule
 \sys{} & 3 & 30.76 & 30.38--31.14 \\
 vLLM MTP, 5 tokens & 3 & 27.52 & 27.41--27.71 \\
+vLLM autoregressive & 1 & 10.78 & --- \\
 SGLang EAGLE, 7/8 & 3 & 30.49 & 30.24--30.88 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-On the disjoint corpus (Table~\ref{tab:disjoint-replay}), \sys{} records 30.76 pooled tokens/s against native MTP-5's 27.52, an 11.8\% difference, and every individual tree rate exceeds every MTP-5 rate. SGLang records 30.49 pooled over three runs (30.24--30.88), 0.9\% below \sys{}, with a different chat serialization. The second corpus supports the direction of the MTP-5 difference without establishing statistical significance, equal output distributions, or task-completion improvement.
+On the disjoint corpus (Table~\ref{tab:disjoint-replay}), \sys{} records 30.76 pooled tokens/s against native MTP-5's 27.52, an 11.8\% difference, and every individual tree rate exceeds every MTP-5 rate. SGLang records 30.49 pooled over three runs (30.24--30.88), 0.9\% below \sys{}, with a different chat serialization; plain decoding records 10.78 in one run. The second corpus supports the direction of the MTP-5 difference without establishing statistical significance, equal output distributions, or task-completion improvement.
 
-The cost of hosting tree verification is measured within one engine (Table~\ref{tab:per-step}): on identical prompts the 32-row tree step takes 189.0 and 184.8\,ms against 159.0 and 154.3\,ms for the six-row chain step, 19--20\% more, and accepts 5.32 and 5.68 tokens per step against 4.15 and 4.25, 28--34\% more; the pooled-rate advantage is the net of the two. Step times divide pooled decode seconds by speculative events. The native arm has no GPU phase timers, but the native sweep gives a cost curve: plain decoding takes 94.9\,ms per step with one verification row, and chain MTP with one, three, five, and seven drafts takes 122.5, 143.3, 159.0, and 180.7\,ms, about 9.7\,ms per additional drafter pass and verification row. \sys{} runs the same five drafter passes (its drafter span is 50\,ms), so against MTP-5 its extra 30\,ms decomposes into about 21\,ms of device acceptance and native replay (the dispatch span) and about 9\,ms for verifying 32 rather than six rows (target span 112\,ms), with suffix lookups on the host. The stock-attention variant (Appendix~\ref{app:variants}) takes 204\,ms per step at the same acceptance, which is the 15\,ms the grouped split-K kernel recovers. These attributions use the tree arm's timers and the native curve, not native phase timers.
+The cost of hosting tree verification is measured within one engine (Table~\ref{tab:per-step}): on identical prompts the 32-row tree step takes 189.0 and 184.8\,ms against 159.0 and 154.3\,ms for the six-row chain step, 19--20\% more, and accepts 5.32 and 5.68 tokens per step against 4.15 and 4.25, 28--34\% more; the pooled-rate advantage is the net of the two. Step times divide pooled decode seconds by speculative events. The native arm has no GPU phase timers, but the native sweep gives a cost curve: plain decoding takes 94.9\,ms per step with one verification row, and chain MTP with one, three, five, and seven drafts takes 122.5, 142.9, 159.0, and 180.7\,ms (one run for MTP-1, three runs each otherwise), about 9.7\,ms per additional drafter pass and verification row; on the disjoint corpus plain decoding takes 92.7\,ms per step. \sys{} runs the same five drafter passes (its drafter span is 50\,ms), so against MTP-5 its extra 30\,ms decomposes into about 21\,ms of device acceptance and native replay (the dispatch span) and about 9\,ms for verifying 32 rather than six rows (target span 112\,ms), with suffix lookups on the host. The stock-attention variant (Appendix~\ref{app:variants}) takes 204\,ms per step at the same acceptance, which is the 15\,ms the grouped split-K kernel recovers. These attributions use the tree arm's timers and the native curve, not native phase timers.
 
 \begin{table}[t]
 \caption{Same-engine per-step cost on identical prompts, pooled over the runs shown. Tokens per step count accepted drafts plus the correction or bonus token; plain decoding emits one token per step.}
@@ -50,11 +51,12 @@ Corpus & Arm & Runs & ms/step & Tokens/step & Tokens/s \\
 \midrule
 First & vLLM autoregressive & 1 & 94.9 & 1.00 & 10.54 \\
 First & vLLM MTP-1 & 1 & 122.5 & 1.88 & 15.37 \\
-First & vLLM MTP-3 & 1 & 143.3 & 3.16 & 22.06 \\
+First & vLLM MTP-3 & 3 & 142.9 & 3.21 & 22.44 \\
 First & vLLM MTP-5 & 3 & 159.0 & 4.15 & 26.12 \\
-First & vLLM MTP-7 & 1 & 180.7 & 4.65 & 25.72 \\
+First & vLLM MTP-7 & 3 & 180.7 & 4.59 & 25.39 \\
 First & \sys{}, stock attention & 3 & 204.2 & 5.48 & 26.82 \\
 First & \sys{} & 3 & 189.0 & 5.32 & 28.13 \\
+Disjoint & vLLM autoregressive & 1 & 92.7 & 1.00 & 10.78 \\
 Disjoint & vLLM MTP-5 & 3 & 154.3 & 4.25 & 27.52 \\
 Disjoint & \sys{} & 3 & 184.8 & 5.68 & 30.76 \\
 \bottomrule

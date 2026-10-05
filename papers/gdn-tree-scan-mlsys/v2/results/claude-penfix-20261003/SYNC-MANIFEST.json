@@ -8593,6 +8593,256 @@
    "path": "raw/workload/ar_attempt2/swe_out/verified/predictions.jsonl",
    "bytes": 22005,
    "sha256": "cd97efa0b7434ac2de3c3309f26eac7bd5c227e2a006303e00085e0edfc749f2"
+  },
+  {
+   "path": "raw/replay/ar-cfA1-sampled-20261005T135236Z/container_id.txt",
+   "bytes": 65,
+   "sha256": "22db62c84c50ddbdb089ab3aa57e12d97ae90229f8d8a258a095fa5486bf8634"
+  },
+  {
+   "path": "raw/replay/ar-cfA1-sampled-20261005T135236Z/driver.log",
+   "bytes": 4281,
+   "sha256": "7d190c472ce6774201b767df0558279786b70c8564c436b548e37af54a53addc"
+  },
+  {
+   "path": "raw/replay/ar-cfA1-sampled-20261005T135236Z/engine-logs/fa2_install_receipt.json",
+   "bytes": 1791,
+   "sha256": "b3a8e37bf9da732bc3c7d2a370f7692672d98f28aa1f9f527ce63b2137770f3e"
+  },
+  {
+   "path": "raw/replay/ar-cfA1-sampled-20261005T135236Z/engine.log",
+   "bytes": 83111,
+   "sha256": "c8577d62297bcbfc1803bbb9c8bba150597a3dcfcfdb75562bb53b035646c37d"
+  },
+  {
+   "path": "raw/replay/ar-cfA1-sampled-20261005T135236Z/free_before_boot.txt",
+   "bytes": 207,
+   "sha256": "d4b933c472806b715f725ae40bd931b807457ef86e65a0e3eb2db4d3fc326976"
+  },
+  {
+   "path": "raw/replay/ar-cfA1-sampled-20261005T135236Z/metrics_boot.txt",
+   "bytes": 54797,
+   "sha256": "5be04730793b917caaa31f66b799ec20bf2d809e6323943714e997643f63b87c"
+  },
+  {
+   "path": "raw/replay/ar-cfA1-sampled-20261005T135236Z/metrics_end.txt",
+   "bytes": 57389,
+   "sha256": "b108aff43747695a5d8cb472cccc21a3dff4f114f7e81d0c6c71ad35458caa14"
+  },
+  {
+   "path": "raw/replay/ar-cfA1-sampled-20261005T135236Z/replay.jsonl",
+   "bytes": 78034,
+   "sha256": "ed1b9eff57d24954177adc2d413c1da47ac299bfac23546bfd679603c0513592"
+  },
+  {
+   "path": "raw/replay/ar-cfA1-sampled-20261005T135236Z/serve_cmd.txt",
+   "bytes": 745,
+   "sha256": "c64ea56eb20b0d45533b518a1eef742967d0320cfb7df23b30be822f15968402"
+  },
+  {
+   "path": "raw/replay/ar-cfA1-sampled-20261005T135236Z/warmup.jsonl",
+   "bytes": 586,
+   "sha256": "cda1e3333496dc198ade4f19a7a65a8c36506b9e1e9397b92445aa178c1d7706"
+  },
+  {
+   "path": "raw/replay/mtp3-r2-sampled-20261005T142557Z/container_id.txt",
+   "bytes": 65,
+   "sha256": "23e0a026ff309661fdcfacd227128b1e97f4bff6e812cd524c401e6b7d8856de"
+  },
+  {
+   "path": "raw/replay/mtp3-r2-sampled-20261005T142557Z/driver.log",
+   "bytes": 4376,
+   "sha256": "0c6f803df463c552a2fa1fec2ac345ac03d1311833d9aaf31b65f0b146f0a0cd"
+  },
+  {
+   "path": "raw/replay/mtp3-r2-sampled-20261005T142557Z/engine-logs/fa2_install_receipt.json",
+   "bytes": 1791,
+   "sha256": "a04ffb5913f3869d584728b66190fa026c3c1089b700219967a764c4475bc9e4"
+  },
+  {
+   "path": "raw/replay/mtp3-r2-sampled-20261005T142557Z/engine.log",
+   "bytes": 99362,
+   "sha256": "7eb6f03200b87614bb754f97cfe7852397f354c540e23ce606b1afa3309d62b2"
+  },
+  {
+   "path": "raw/replay/mtp3-r2-sampled-20261005T142557Z/free_before_boot.txt",
+   "bytes": 207,
+   "sha256": "d4b933c472806b715f725ae40bd931b807457ef86e65a0e3eb2db4d3fc326976"
+  },
+  {
+   "path": "raw/replay/mtp3-r2-sampled-20261005T142557Z/metrics_boot.txt",
+   "bytes": 57313,
+   "sha256": "5cf31dfecf87331c87cea640faaf32ee0b0a235ca4bee7dab8080122387119bf"
+  },
+  {
+   "path": "raw/replay/mtp3-r2-sampled-20261005T142557Z/metrics_end.txt",
+   "bytes": 59903,
+   "sha256": "7c9f350910ae7a7f39741fc8f0396b5e9238288d5f791fa5f6482852f40635e2"
+  },
+  {
+   "path": "raw/replay/mtp3-r2-sampled-20261005T142557Z/replay.jsonl",
+   "bytes": 113719,
+   "sha256": "9010068f0016744b790b58a31c46719b343c064c5a823c0bbe034476de466121"
+  },
+  {
+   "path": "raw/replay/mtp3-r2-sampled-20261005T142557Z/serve_cmd.txt",
+   "bytes": 819,
+   "sha256": "5eb8015dd5e35a36f994a7a555c54d14397db6d07c79ed83de9d30411fcf0e2a"
+  },
+  {
+   "path": "raw/replay/mtp3-r2-sampled-20261005T142557Z/warmup.jsonl",
+   "bytes": 1346,
+   "sha256": "ab3b4c2d4f9606672ffbe74eb354d5f1c3ef8e65a76e943e38f5aca69ab346e7"
+  },
+  {
+   "path": "raw/replay/mtp3-r3-sampled-20261005T144829Z/container_id.txt",
+   "bytes": 65,
+   "sha256": "56fc5dd5eaf0c0c99cb156c79cf4f5e2dbb139da8c6b7bd80b29e9a44daa73e8"
+  },
+  {
+   "path": "raw/replay/mtp3-r3-sampled-20261005T144829Z/driver.log",
+   "bytes": 4382,
+   "sha256": "856f88492def2cf214bd45c73d1dde44e1b5372007f850ec33b507f472535cd7"
+  },
+  {
+   "path": "raw/replay/mtp3-r3-sampled-20261005T144829Z/engine-logs/fa2_install_receipt.json",
+   "bytes": 1791,
+   "sha256": "cf7443f03425466c956c4149ec2cf58b9a78e34de964c6805b1270d5bce9efe4"
+  },
+  {
+   "path": "raw/replay/mtp3-r3-sampled-20261005T144829Z/engine.log",
+   "bytes": 105638,
+   "sha256": "c794395ee8104cadf771f23663654d21d3760ba1faafdf09fc4c1beae3c1eaec"
+  },
+  {
+   "path": "raw/replay/mtp3-r3-sampled-20261005T144829Z/free_before_boot.txt",
+   "bytes": 207,
+   "sha256": "d4b933c472806b715f725ae40bd931b807457ef86e65a0e3eb2db4d3fc326976"
+  },
+  {
+   "path": "raw/replay/mtp3-r3-sampled-20261005T144829Z/metrics_boot.txt",
+   "bytes": 57305,
+   "sha256": "142580a86683f1da2116a73b70860ca8dc70f6b25a6195525e2662ff7d79ea73"
+  },
+  {
+   "path": "raw/replay/mtp3-r3-sampled-20261005T144829Z/metrics_end.txt",
+   "bytes": 59881,
+   "sha256": "5a02052f27cf85302d2b157f604c52b2951b6ebd52b183149ce78e1a4f88a79b"
+  },
+  {
+   "path": "raw/replay/mtp3-r3-sampled-20261005T144829Z/replay.jsonl",
+   "bytes": 125198,
+   "sha256": "cdec06d590b1f2844041e961f850155b7335876f27a33b67fba46bddc7481f07"
+  },
+  {
+   "path": "raw/replay/mtp3-r3-sampled-20261005T144829Z/serve_cmd.txt",
+   "bytes": 819,
+   "sha256": "5eb8015dd5e35a36f994a7a555c54d14397db6d07c79ed83de9d30411fcf0e2a"
+  },
+  {
+   "path": "raw/replay/mtp3-r3-sampled-20261005T144829Z/warmup.jsonl",
+   "bytes": 1372,
+   "sha256": "3eeb7229ae624850871629a1cc54bc2f0b82772dd945e80e0322481fc31b9c0b"
+  },
+  {
+   "path": "raw/replay/mtp7-r2-sampled-20261005T151251Z/container_id.txt",
+   "bytes": 65,
+   "sha256": "cc2b86ec8d21094d2c67a2b9cce7399dab7555bd8cfe4db2af52777777fb50ff"
+  },
+  {
+   "path": "raw/replay/mtp7-r2-sampled-20261005T151251Z/driver.log",
+   "bytes": 4376,
+   "sha256": "b3d4dca9d073ce3f8a958911a981b783e350cbff325b16412fd2ac1250609ec8"
+  },
+  {
+   "path": "raw/replay/mtp7-r2-sampled-20261005T151251Z/engine-logs/fa2_install_receipt.json",
+   "bytes": 1791,
+   "sha256": "841f4b22025663158c5c4dc69222e39eedcbcd5f6a6ffe75d2d625e871ed0714"
+  },
+  {
+   "path": "raw/replay/mtp7-r2-sampled-20261005T151251Z/engine.log",
+   "bytes": 101666,
+   "sha256": "387f306285e10a77545035f310bcfbe9d72afe38b29e851bb7c5cd918d042a87"
+  },
+  {
+   "path": "raw/replay/mtp7-r2-sampled-20261005T151251Z/free_before_boot.txt",
+   "bytes": 207,
+   "sha256": "d4b933c472806b715f725ae40bd931b807457ef86e65a0e3eb2db4d3fc326976"
+  },
+  {
+   "path": "raw/replay/mtp7-r2-sampled-20261005T151251Z/metrics_boot.txt",
+   "bytes": 58351,
+   "sha256": "f6931dc7d3916cfb880c25752f4c91acdbecf520a9238669c8bf8ec9cd342990"
+  },
+  {
+   "path": "raw/replay/mtp7-r2-sampled-20261005T151251Z/metrics_end.txt",
+   "bytes": 60930,
+   "sha256": "c4b435a78f1e9362d6ada8876bd97260154a5dedc8e256518d6148491f826214"
+  },
+  {
+   "path": "raw/replay/mtp7-r2-sampled-20261005T151251Z/replay.jsonl",
+   "bytes": 144427,
+   "sha256": "5aebe4c70eafe2167a86b42a6c3744a867ad524cfaf9838e4786ebf8958e0411"
+  },
+  {
+   "path": "raw/replay/mtp7-r2-sampled-20261005T151251Z/serve_cmd.txt",
+   "bytes": 819,
+   "sha256": "2b0be84eea442fe3e22d139587c0931cd4d299e603b14861e49213ab561011cf"
+  },
+  {
+   "path": "raw/replay/mtp7-r2-sampled-20261005T151251Z/warmup.jsonl",
+   "bytes": 1880,
+   "sha256": "9775cb856b9c806ba06afaf7f41f51fc5c12ba52efc6b87bf5383b22a6409068"
+  },
+  {
+   "path": "raw/replay/mtp7-r3-sampled-20261005T153520Z/container_id.txt",
+   "bytes": 65,
+   "sha256": "29c6d86c0c86a7ec517162a816d1e10cbf729929f8fbde26625611d833791ac2"
+  },
+  {
+   "path": "raw/replay/mtp7-r3-sampled-20261005T153520Z/driver.log",
+   "bytes": 4379,
+   "sha256": "d1bacc6af88fbf3a62045e37d1c9d7e71d33abdd5071b386809298f338b268da"
+  },
+  {
+   "path": "raw/replay/mtp7-r3-sampled-20261005T153520Z/engine-logs/fa2_install_receipt.json",
+   "bytes": 1791,
+   "sha256": "401b962325d0bf10e5ec7e087f5290925d495b675201db7774a2ce18b61a3eea"
+  },
+  {
+   "path": "raw/replay/mtp7-r3-sampled-20261005T153520Z/engine.log",
+   "bytes": 101687,
+   "sha256": "670880ecdf9f0e1439850937cd95f444a574a13630671dce5e9c5f9b68ebc178"
+  },
+  {
+   "path": "raw/replay/mtp7-r3-sampled-20261005T153520Z/free_before_boot.txt",
+   "bytes": 207,
+   "sha256": "d4b933c472806b715f725ae40bd931b807457ef86e65a0e3eb2db4d3fc326976"
+  },
+  {
+   "path": "raw/replay/mtp7-r3-sampled-20261005T153520Z/metrics_boot.txt",
+   "bytes": 58346,
+   "sha256": "8c91d4e91a56495ea9f4bab41b70e5659de203d277188d8a77df702a552e57b9"
+  },
+  {
+   "path": "raw/replay/mtp7-r3-sampled-20261005T153520Z/metrics_end.txt",
+   "bytes": 60924,
+   "sha256": "cf3d4239bd3832b3bbbc5264d0327843b5eb5bfd5e134e1b9bb8895d37438fa1"
+  },
+  {
+   "path": "raw/replay/mtp7-r3-sampled-20261005T153520Z/replay.jsonl",
+   "bytes": 139344,
+   "sha256": "62464f5900ea4baabc228337c90dd6de116f9e79fa4de7f5cf4070ce42da6adb"
+  },
+  {
+   "path": "raw/replay/mtp7-r3-sampled-20261005T153520Z/serve_cmd.txt",
+   "bytes": 819,
+   "sha256": "2b0be84eea442fe3e22d139587c0931cd4d299e603b14861e49213ab561011cf"
+  },
+  {
+   "path": "raw/replay/mtp7-r3-sampled-20261005T153520Z/warmup.jsonl",
+   "bytes": 1868,
+   "sha256": "87bcd052a3a70638a4e974e31a4be9eb53dedab255b7c01b7df55c21cef9de98"
   }
  ],
  "excluded": [
@@ -8604,5 +8854,6 @@
  ],
  "additions_20261004": "SGLang EAGLE 7/8 replicates cfS2 and cfS3 on the confirmation set (GB10 branch a4d76cc64)",
  "additions_20261005": "plain-decoding (AR) agent control on the ten-task study, GB10 run swe/ar-20261004T222602Z (v2exp worktree 349ca3b23, PORT bdfdb596f), synced 2026-10-05T01:30Z",
- "additions_20261005b": "second live attempt per arm on the ten-task study: tree swe/fr14_promoab_C_v2swe20261005T012230Z (sidecars from PORT output/fr13_sfwd_sidecar), mtp5-20261005T034101Z, sglang-s7k1d8-20261005T060811Z, ar-20261005T085214Z; synced 2026-10-05T14:00Z"
+ "additions_20261005b": "second live attempt per arm on the ten-task study: tree swe/fr14_promoab_C_v2swe20261005T012230Z (sidecars from PORT output/fr13_sfwd_sidecar), mtp5-20261005T034101Z, sglang-s7k1d8-20261005T060811Z, ar-20261005T085214Z; synced 2026-10-05T14:00Z",
+ "additions_20261005c": "fillers: plain decoding on the confirmation set (ar-cfA1), MTP-3 and MTP-7 replicates 2 and 3 on the tuning corpus (GB10 runs under replay/, worktree 182a8eccf); synced 2026-10-05T16:05Z"
 }
