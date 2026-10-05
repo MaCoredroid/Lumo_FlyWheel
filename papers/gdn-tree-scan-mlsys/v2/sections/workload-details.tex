@@ -1,23 +1,23 @@
-Table~\ref{tab:swe-tasks} retains every attempt in the three-arm task study; the \sys{} column is the attempt with the corrected sampler; the earlier pre-correction attempt is preserved in the supplement. Agent duration includes model service and tool execution, excluding server startup and subsequent evaluation. Empty-patch outcomes are distinguished from patches that reach the test evaluator.
+Table~\ref{tab:swe-tasks} retains every attempt in the four-arm task study, two per task and arm, listed in attempt order; the plain-decoding column is the same-build control without speculation; both \sys{} attempts use the corrected sampler, and the earlier pre-correction attempt is preserved in the supplement. Agent duration includes model service and tool execution, excluding server startup and subsequent evaluation. Empty-patch outcomes are distinguished from patches that reach the test evaluator.
 
 \begin{table}[!htbp]
-\caption{Task-level outcomes. IDs have prefix \texttt{astropy\_\_astropy-}. Each cell gives rounded agent minutes and outcome: R, resolved; F, failed tests; E, empty patch.}
+\caption{Task-level outcomes. IDs have prefix \texttt{astropy\_\_astropy-}. Each cell gives rounded agent minutes and outcome for attempt one, then attempt two: R, resolved; F, failed tests; E, empty patch.}
 \label{tab:swe-tasks}
-\centering\small
-\begin{tabular}{@{}lccc@{}}
+\centering\footnotesize
+\begin{tabular}{@{}lcccc@{}}
 \toprule
-Task suffix & \sys{} & MTP-5 & SGLang \\
+Task suffix & \sys{} & MTP-5 & SGLang & Plain \\
 \midrule
-13977 & 11 / E & 10 / F & 21 / F \\
-14096 & 18 / R & 20 / E & 10 / E \\
-14182 & 24 / R & 6 / E & 1 / E \\
-14309 & 11 / R & 2 / R & 2 / R \\
-14365 & 10 / F & 2 / R & 3 / R \\
-14369 & 25 / F & 18 / R & 16 / F \\
-14508 & 38 / R & 7 / R & 7 / R \\
-14539 & 6 / E & 3 / R & 17 / R \\
-14598 & 37 / F & 27 / F & 20 / F \\
-14995 & 11 / R & 5 / R & 5 / R \\
+13977 & 11E, 8F & 10F, 7F & 21F, 27F & 13F, 56F \\
+14096 & 18R, 11R & 20E, 7R & 10E, 15F & 33R, 38R \\
+14182 & 24R, 6F & 6E, 5F & 1E, 21R & 11R, 35R \\
+14309 & 11R, 3R & 2R, 2R & 2R, 4R & 4R, 6R \\
+14365 & 10F, 6R & 2R, 4R & 3R, 10F & 8F, 4F \\
+14369 & 25F, 35R & 18R, 68F & 16F, 15F & 29R, 34R \\
+14508 & 38R, 16E & 7R, 29R & 7R, 4R & 12R, 45R \\
+14539 & 6E, 20R & 3R, 3R & 17R, 8R & 20R, 11R \\
+14598 & 37F, 23F & 27F, 14F & 20F, 43F & 29F, 33F \\
+14995 & 11R, 5R & 5R, 3R & 5R, 11R & 12R, 32R \\
 \bottomrule
 \end{tabular}
 \end{table}

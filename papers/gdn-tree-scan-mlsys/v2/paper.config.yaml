@@ -1,11 +1,11 @@
 topic: LumoTree
 paper_type: empirical
-status: "penalty_history_corrected_remeasured_20261004"
+status: "arxiv_v4_control_second_attempts_cost_curve_20261005"
 format: IEEEtran conference
 main_tex: main.tex
 bibliography: ref.bib
 performance_scope: "two_fixed_request_corpora_separate_from_live_agent_trajectories"
-application_case: "ten_Astropy_tasks_three_arms_30_attempts"
+application_case: "ten_Astropy_tasks_four_arms_two_attempts_80_attempts"
 performance_estimator: "pooled_completed_request_decode_rate_client_replay_and_server_workload"
 performance_formula: (total_output_tokens - completed_requests) / (summed_E2E_latency - summed_TTFT)
 performance_evidence: "results/claude-penfix-20261003/AUDIT.json; results/claude-closure-20261002/AUDIT.json; results/claude-results-20261002/AUDIT.json"

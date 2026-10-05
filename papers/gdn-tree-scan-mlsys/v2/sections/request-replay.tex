@@ -1,4 +1,4 @@
-Table~\ref{tab:request-replay} reports complete configuration runs, each containing all 43 requests. Across three runs per arm, \sys{} records 28.13 pooled tokens/s and five-token native MTP records 26.12, a 7.7\% difference on this corpus. Their individual run rates range from 27.40 to 28.78 and from 26.04 to 26.23 tokens/s, respectively. Plain autoregressive decoding records 10.54 tokens/s in one run. The native MTP sweep uses one, three, five, or seven draft tokens; five-token MTP has the highest observed pooled rate among these settings.
+Table~\ref{tab:request-replay} reports complete configuration runs, each containing all 43 requests. Across three runs per arm, \sys{} records 28.13 pooled tokens/s and five-token native MTP records 26.12, a 7.7\% difference on this corpus. Their individual run rates range from 27.40 to 28.78 and from 26.04 to 26.23 tokens/s, respectively. Plain autoregressive decoding records 10.54 tokens/s in one run. The native MTP sweep uses one, three, five, or seven draft tokens, with three runs each at three, five, and seven; five-token MTP has the highest pooled rate among these settings (22.44, 26.12, and 25.39 tokens/s).
 
 \begin{table}[t]
 \caption{Sampled replay of 43 recorded requests, capped at 1,024 output tokens. Rates pool matched token and time totals across all runs. Ranges describe individual run rates, not confidence intervals. SGLang receives the same input token IDs but uses a different stack and streaming endpoint.}
@@ -10,9 +10,9 @@ Configuration & Runs & Tokens/s & Run range \\
 \midrule
 vLLM autoregressive & 1 & 10.54 & --- \\
 vLLM MTP, 1 token & 1 & 15.37 & --- \\
-vLLM MTP, 3 tokens & 1 & 22.06 & --- \\
+vLLM MTP, 3 tokens & 3 & 22.44 & 22.06--22.66 \\
 vLLM MTP, 5 tokens & 3 & 26.12 & 26.04--26.23 \\
-vLLM MTP, 7 tokens & 1 & 25.72 & --- \\
+vLLM MTP, 7 tokens & 3 & 25.39 & 24.00--26.47 \\
 \sys{} & 3 & 28.13 & 27.40--28.78 \\
 \midrule
 SGLang EAGLE, 7/8 & 3 & 29.69 & 28.91--30.90 \\
@@ -20,7 +20,7 @@ SGLang EAGLE, 7/8 & 3 & 29.69 & 28.91--30.90 \\
 \end{tabular}
 \end{table}
 
-For SGLang, the paired setting denotes speculative steps and draft-token capacity; EAGLE top-$k$ is one. Seven steps and eight draft tokens yield 29.69 pooled tokens/s over three runs with identical incoming token IDs. Attention, prefill settings, and endpoint timing still differ (Section~\ref{sec:limitations}). The native MTP sweep is exploratory and has unequal repetition counts.
+For SGLang, the paired setting denotes speculative steps and draft-token capacity; EAGLE top-$k$ is one. Seven steps and eight draft tokens yield 29.69 pooled tokens/s over three runs with identical incoming token IDs. Attention, prefill settings, and endpoint timing still differ (Section~\ref{sec:limitations}). The one-token MTP setting has a single run.
 
 Additional runs disable individual \sys{} optimizations (Table~\ref{tab:replay-variants}). Tables~\ref{tab:replay-variants}--\ref{tab:drafting-passes} predate the penalty-history correction of Section~\ref{sec:sampling-validation} and compare configurations under one sampler; the deployed rows in Tables~\ref{tab:request-replay} and~\ref{tab:disjoint-replay} are post-correction. The stock-attention variant completes all 43 requests in three runs and records 26.82 pooled tokens/s. Disabling fused draft selection or precomputed tap-operand preparation records 29.40 and 29.02 in one run each. Stochastic output lengths and limited replication prevent attributing these differences to the individual transformations. Phase and boot-allocation observations below characterize selected variants, without a complete per-optimization decomposition.
 
@@ -44,6 +44,31 @@ Precomputed tap-operand preparation & 1 & 29.02 & --- \\
 
 Output-side counters pooled over the repeated vLLM runs report 4.35 accepted drafts per speculative event for \sys{} and 3.17 for five-token MTP. These counters describe emitted drafts, excluding the correction or bonus token, and do not identify the committed path. SGLang reports only windowed acceptance averages, so no corresponding cumulative acceptance comparison is reported.
 
+The cost of hosting tree verification is measured within one engine (Table~\ref{tab:per-step}): on identical prompts the 32-row tree step takes 189.0 and 184.8\,ms against 159.0 and 154.3\,ms for the six-row chain step, 19--20\% more, and accepts 5.32 and 5.68 tokens per step against 4.15 and 4.25, 28--34\% more; the pooled-rate advantage is the net of the two. Step times divide pooled decode seconds by speculative events; plain decoding emits one token per step. The native arm has no GPU phase timers, but the native sweep gives a cost curve: plain decoding takes 94.9\,ms per step with one verification row, and chain MTP with one, three, five, and seven drafts takes 122.5, 142.9, 159.0, and 180.7\,ms (one run for MTP-1, three runs each otherwise), about 9.7\,ms per additional drafter pass and verification row; on the disjoint corpus plain decoding takes 92.7\,ms per step. \sys{} runs the same five drafter passes (its drafter span is 50\,ms), so against MTP-5 its extra 30\,ms decomposes into about 21\,ms of device acceptance and native replay (the dispatch span) and about 9\,ms for verifying 32 rather than six rows (target span 112\,ms), with suffix lookups on the host. The stock-attention variant (Table~\ref{tab:replay-variants}) takes 204\,ms per step at the same acceptance, which is the 15\,ms the grouped split-K kernel recovers. These attributions use the tree arm's timers and the native curve, not native phase timers.
+
+\begin{table}[t]
+\caption{Same-engine per-step cost on identical prompts, pooled over the runs shown. Tokens per step count accepted drafts plus the correction or bonus token; plain decoding emits one token per step.}
+\label{tab:per-step}
+\centering\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+Corpus & Arm & Runs & ms/step & Tokens/step & Tokens/s \\
+\midrule
+First & vLLM autoregressive & 1 & 94.9 & 1.00 & 10.54 \\
+First & vLLM MTP-1 & 1 & 122.5 & 1.88 & 15.37 \\
+First & vLLM MTP-3 & 3 & 142.9 & 3.21 & 22.44 \\
+First & vLLM MTP-5 & 3 & 159.0 & 4.15 & 26.12 \\
+First & vLLM MTP-7 & 3 & 180.7 & 4.59 & 25.39 \\
+First & \sys{}, stock attention & 3 & 204.2 & 5.48 & 26.82 \\
+First & \sys{} & 3 & 189.0 & 5.32 & 28.13 \\
+Disjoint & vLLM autoregressive & 1 & 92.7 & 1.00 & 10.78 \\
+Disjoint & vLLM MTP-5 & 3 & 154.3 & 4.25 & 27.52 \\
+Disjoint & \sys{} & 3 & 184.8 & 5.68 & 30.76 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \paragraph{Disjoint request corpus}
 Table~\ref{tab:disjoint-replay} reports a separately frozen 43-request corpus from four additional Astropy task conversations. Across three runs per vLLM arm, \sys{} records 30.76 pooled tokens/s versus native MTP-5's 27.52, an 11.8\% difference. Every individual tree rate exceeds every MTP-5 rate in these runs. This second corpus supports the direction of the observed replay difference, without establishing statistical significance, equal output distributions, or task-completion improvement.
 
@@ -57,12 +82,13 @@ Configuration & Runs & Tokens/s & Run range \\
 \midrule
 \sys{} & 3 & 30.76 & 30.38--31.14 \\
 vLLM MTP, 5 tokens & 3 & 27.52 & 27.41--27.71 \\
-SGLang EAGLE, 7/8 & 1 & 30.24 & --- \\
+SGLang EAGLE, 7/8 & 3 & 30.49 & 30.24--30.88 \\
+vLLM autoregressive & 1 & 10.78 & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-SGLang records 30.24 tokens/s in its single run. Limited cross-stack replication, different output lengths, and pooled duration weights preclude a superiority or equivalence claim. The small pooled tree--SGLang difference changes sign between the two corpora. SGLang's serialized prompt lengths exceed vLLM's by 33--156 tokens here, unlike the exact-token-ID comparison in Table~\ref{tab:request-replay}.
+SGLang records 30.49 pooled tokens/s over three runs, 0.9\% below \sys{}; plain decoding records 10.78 in one run. Different output lengths and pooled duration weights preclude a superiority or equivalence claim. The small pooled tree--SGLang difference changes sign between the two corpora. SGLang's serialized prompt lengths exceed vLLM's by 33--156 tokens here, unlike the exact-token-ID comparison in Table~\ref{tab:request-replay}.
 
 \paragraph{Drafting-pass sensitivity}
 The deployed tree's maximum depth is eleven, but neural drafting uses only five MTP passes; suffix lookup supplies the deeper tail. We therefore measure three-pass drafting and a suffix-dependent three/five-pass policy while retaining 32 physical verification rows (Table~\ref{tab:drafting-passes}). These are drafting-policy variants, not measurements of newly constructed 16-node or shallower tree topologies.
