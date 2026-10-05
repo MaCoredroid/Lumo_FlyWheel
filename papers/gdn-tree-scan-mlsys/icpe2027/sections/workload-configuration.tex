@@ -1,5 +1,5 @@
 \begin{table}[!htbp]
-\caption{Serving settings for the three-arm task study. Native MTP and \sys{} share the vLLM build. Exact versions and launch settings accompany the supplement.}
+\caption{Serving settings for the task study. Native MTP, plain decoding, and \sys{} share the vLLM build. Exact versions and launch settings accompany the supplement.}
 \label{tab:serving-config}
 \centering\footnotesize
 \renewcommand{\arraystretch}{1.12}
@@ -10,7 +10,7 @@ Setting & Configuration \\
 Target & Qwen3.8-27B; mixed NVFP4/FP8 weights, BF16 execution \\
 Drafter & Same-checkpoint one-layer BF16 MTP in all arms; no separate EAGLE draft weights \\
 \sys{} proposals & 27 drafts plus root, padded to 32 rows; maximum depth 11; five MTP passes and suffix extension \\
-Native proposals & MTP: five drafts; SGLang: seven steps, top-$k$ one, capacity eight drafts \\
+Native proposals & MTP: five drafts; plain decoding: none; SGLang: seven steps, top-$k$ one, capacity eight drafts \\
 Attention & vLLM: forked FlashAttention-2; \sys{} adds grouping 2 and split-K 4; SGLang: FlashInfer \\
 Scheduling & One active sequence; 4,096 prefill tokens for vLLM, 8,192 for SGLang \\
 Context / memory & 131,072 tokens; memory fraction 0.70; actual KV capacities not equalized \\

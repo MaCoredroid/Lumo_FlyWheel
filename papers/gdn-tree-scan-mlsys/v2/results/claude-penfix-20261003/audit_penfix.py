@@ -180,6 +180,33 @@ assert out["workload"]["resolved"] + out["workload"]["failed_tests"] + out["work
 prev = read(V2 / "results/claude-results-20261002/summaries/swe_study_20261001.json")
 out["workload"]["prefix_reference"] = {a_: {k: prev[a_][k] for k in ("resolved", "agent_min_total", "pooled")} for a_ in prev if isinstance(prev[a_], dict)}
 
+# ---- plain-decoding agent control (same harness, subset, budgets and sampling; no speculative decoding) ----
+A_ = HERE / "raw/workload/ar_control"
+ar_tasks = {}
+for l in (A_ / "swe_orchestrator.log").read_text().splitlines():
+    m = re.search(r"<- astropy__astropy-(\d+) verdict=(\w+) elapsed_total=([\d.]+)s", l)
+    if m: ar_tasks[m.group(1)] = {"verdict": m.group(2), "agent_s": float(m.group(3))}
+assert sorted(ar_tasks) == sorted(tasks)
+ar_reports = {Path(p).parts[-3].split("-")[-1]: read(p) for p in glob.glob(str(A_ / "swe_out/verified/per_task/*/eval/eval_report.json"))}
+assert len(ar_reports) == 10 and all(ar_reports[k]["verdict"] == ar_tasks[k]["verdict"] for k in ar_tasks)
+for k in ar_tasks:
+    r = ar_reports[k]
+    ar_tasks[k]["outcome"] = "R" if r["passed"] else ("E" if r.get("synthetic_no_patch") else "F")
+    ar_tasks[k]["failure_mode"] = r["failure_mode"]
+b, a = metrics(A_ / "metrics_before_swe.txt"), metrics(A_ / "metrics_after_swe.txt")
+n, r_, e, f = [a["vllm:" + x] - b.get("vllm:" + x, 0) for x in ("generation_tokens_total", "request_success_total", "e2e_request_latency_seconds_sum", "time_to_first_token_seconds_sum")]
+assert a.get("vllm:num_requests_running", 0) == 0 and a.get("vllm:num_requests_waiting", 0) == 0
+assert a.get("vllm:spec_decode_num_drafts_total", 0) == 0 and "--speculative" not in (A_ / "serve_cmd.txt").read_text()
+drv = (A_ / "driver.log").read_text()
+out["workload"]["ar_control"] = {"run": "swe/ar-20261004T222602Z", "arm": "ar", "worktree_head": re.search(r"wt=([0-9a-f]+)", drv).group(1),
+                                 "subset_sha256": re.search(r"subset_sha=([0-9a-f]+)", drv).group(1),
+                                 "output_tokens": n, "requests": r_, "e2e_s": e, "ttft_s": f, "pooled_tokens_s": (n - r_) / (e - f),
+                                 "resolved": sum(t["outcome"] == "R" for t in ar_tasks.values()),
+                                 "failed_tests": sum(t["outcome"] == "F" for t in ar_tasks.values()), "empty_patches": sum(t["outcome"] == "E" for t in ar_tasks.values()),
+                                 "agent_minutes": sum(t["agent_s"] for t in ar_tasks.values()) / 60, "tasks": ar_tasks}
+assert out["workload"]["ar_control"]["resolved"] + out["workload"]["ar_control"]["failed_tests"] + out["workload"]["ar_control"]["empty_patches"] == 10
+assert out["workload"]["ar_control"]["subset_sha256"] == re.search(r"subset_sha=([0-9a-f]+)", (W / "launch.log").read_text()).group(1) if "subset_sha=" in (W / "launch.log").read_text() else True
+
 
 # ---- output-length comparability on identical prompts (tree fixed vs MTP-5 reference runs) ----------------
 def lengths(p):
@@ -219,4 +246,4 @@ print(json.dumps({"tuning": {k: out["tuning_corpus"]["tree_fixed"][k] for k in (
                   "confirm": {k: out["confirmation_set"]["tree_fixed"][k] for k in ("pooled_tokens_s", "run_rates", "accepted_per_event")}, "confirm_ratio": out["confirmation_set"]["ratio_fixed_over_mtp5"],
                   "confirm_timers": out["confirmation_set"]["tree_fixed_timer_means_ms"], "sampling": {k: out["sampling"][k] for k in out["sampling"] if k != "residual_nodes"},
                   "ties": out["sampling"]["residual_nodes"], "fullmodel": {k: out["fullmodel"][k] for k in out["fullmodel"] if k != "run"},
-                  "workload": {k: out["workload"][k] for k in out["workload"] if k not in ("tasks", "prefix_reference")}, "output_lengths": out["output_length_comparability"], "tasks": {k: (t["outcome"], round(t["agent_s"] / 60, 1)) for k, t in sorted(tasks.items())}}, indent=1, default=str))
+                  "workload": {k: out["workload"][k] for k in out["workload"] if k not in ("tasks", "prefix_reference", "ar_control")}, "ar_control": {k: v for k, v in out["workload"]["ar_control"].items() if k != "tasks"}, "ar_tasks": {k: (t["outcome"], round(t["agent_s"] / 60, 1)) for k, t in sorted(ar_tasks.items())}, "output_lengths": out["output_length_comparability"], "tasks": {k: (t["outcome"], round(t["agent_s"] / 60, 1)) for k, t in sorted(tasks.items())}}, indent=1, default=str))

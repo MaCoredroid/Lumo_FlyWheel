@@ -1,0 +1,17 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 1b3285ddc..bec2b6826 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -859,7 +859,11 @@ class Card(_Verify):
+                     return kw, vc
+ 
+                 value = m.group("strg") or ""
+-                value = value.rstrip().replace("''", "'")
++                # Keep the single quotes escaped here; unescaping must be done
++                # once on the full joined value (see _parse_value), not per
++                # chunk, since an escaped quote ("''") can be split across two
++                # CONTINUE cards.
++                value = value.rstrip()
+                 if value and value[-1] == "&":
+                     value = value[:-1]
+                 values.append(value)

@@ -6,7 +6,7 @@
   "wt_head": "1dd1cbf1f56c38abc488bb227202b795b162ceca",
   "port_head": "bdfdb596fd75c572b7fe4d5bf9bed42f2d29ad98"
  },
- "synced_files_sha_verified": 734,
+ "synced_files_sha_verified": 914,
  "tuning_corpus": {
   "tree_fixed": {
    "runs": 3,
@@ -348,6 +348,83 @@
      "requests": 210,
      "e2e_s": 5688.3,
      "ttft_s": 381.2
+    }
+   }
+  },
+  "ar_control": {
+   "run": "swe/ar-20261004T222602Z",
+   "arm": "ar",
+   "worktree_head": "349ca3b237f02fd81d4e5ea8a145200691b4ba91",
+   "subset_sha256": "716503a46a991e3b187e14777f96f074c1a3359d9f8b7928f4453a6b9da1ee9b",
+   "output_tokens": 98477.0,
+   "requests": 231.0,
+   "e2e_s": 9632.580204725266,
+   "ttft_s": 310.971923828125,
+   "pooled_tokens_s": 10.539597571519547,
+   "resolved": 7,
+   "failed_tests": 3,
+   "empty_patches": 0,
+   "agent_minutes": 170.65166666666667,
+   "tasks": {
+    "13977": {
+     "verdict": "failed",
+     "agent_s": 773.8,
+     "outcome": "F",
+     "failure_mode": "tests_failed"
+    },
+    "14096": {
+     "verdict": "resolved",
+     "agent_s": 2005.0,
+     "outcome": "R",
+     "failure_mode": "tests_passed"
+    },
+    "14182": {
+     "verdict": "resolved",
+     "agent_s": 641.1,
+     "outcome": "R",
+     "failure_mode": "tests_passed"
+    },
+    "14309": {
+     "verdict": "resolved",
+     "agent_s": 256.6,
+     "outcome": "R",
+     "failure_mode": "tests_passed"
+    },
+    "14365": {
+     "verdict": "failed",
+     "agent_s": 459.6,
+     "outcome": "F",
+     "failure_mode": "tests_failed"
+    },
+    "14369": {
+     "verdict": "resolved",
+     "agent_s": 1749.2,
+     "outcome": "R",
+     "failure_mode": "tests_passed"
+    },
+    "14508": {
+     "verdict": "resolved",
+     "agent_s": 695.8,
+     "outcome": "R",
+     "failure_mode": "tests_passed"
+    },
+    "14539": {
+     "verdict": "resolved",
+     "agent_s": 1167.3,
+     "outcome": "R",
+     "failure_mode": "tests_passed"
+    },
+    "14598": {
+     "verdict": "failed",
+     "agent_s": 1748.9,
+     "outcome": "F",
+     "failure_mode": "tests_failed"
+    },
+    "14995": {
+     "verdict": "resolved",
+     "agent_s": 741.8,
+     "outcome": "R",
+     "failure_mode": "tests_passed"
     }
    }
   }
