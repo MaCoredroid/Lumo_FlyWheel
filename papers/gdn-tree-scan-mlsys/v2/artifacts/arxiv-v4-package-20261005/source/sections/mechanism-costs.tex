@@ -1,0 +1,47 @@
+We measure verification and accepted-state publication on shared synthetic operands for 48 GDN instances with the model's head dimensions, using the 28 active nodes of the deployed 32-row tree. Each measurement has 20 warmup iterations and 100 timed iterations. CUDA events bracket verification and publication; a 256-MiB buffer is written outside each timed iteration. Graph mode captures the verifier while retaining each method's publication wrapper; eager mode invokes the verifier directly. Accepted paths cycle through all 28 possible frontiers. Durable state is reset before each measurement and evolves across iterations. These measurements exclude attention, convolution, sampling, model projections, and interleaved execution of the remaining model layers.
+
+\begin{table}[t]
+\caption{GDN component latency in milliseconds on GB10. Verify, publish, and total columns give graph-mode medians; eager gives the total median without verifier graph replay. TreeWY fuses publication of the previous frontier with the current verification; its final flush is reported separately. These are timing observations under distinct numerical policies.}
+\label{tab:mechanism-times}
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Method & Verify & Publish & Total & Eager \\
+\midrule
+\sys{} & 12.90 & 4.49 & 17.69 & 17.58 \\
+Native path baseline & 29.71 & 2.70 & 32.41 & 33.73 \\
+PyTorch node baseline & 52.32 & 2.70 & 55.02 & 81.04 \\
+TreeWY author-default & \multicolumn{2}{c}{fused} & 11.01 & 11.71 \\
+Weaver author-default & 2.07 & 1.38 & 3.45 & 5.88 \\
+Weaver (FP32 preparation) & 4.05 & 1.40 & 5.45 & 9.13 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The native path baseline uses native recurrent updates with the same path cover but stores every node's full state. The PyTorch baseline instead updates nodes sequentially in topological order. Both publish by copying the selected leaf into durable state. \sys{} records a 17.69-ms graph-mode total, with a 10th--90th percentile interval of 17.18--17.84 ms, versus 32.41 ms (32.36--32.67) for native paths. Total medians are measured directly; they need not equal sums of region medians.
+
+TreeWY's steady step takes 11.01 ms. A finite sequence also requires its initial verification without a pending commit and a final deferred publication; the latter takes 10.51 ms in this implementation. Weaver includes accepted-path replay in its total. Its graph-mode topology rebuild takes approximately 0.02 ms separately and is excluded from the table because the topology is reused. These boundaries must be retained in a complete-cycle comparison.
+
+\begin{table}[t]
+\caption{Named persistent buffer allocations and numerical error for the GDN measurements. Output and state columns are maximum absolute errors against the float64 recurrence; state uses the deepest accepted path. Buffer totals exclude outputs, separate page pools, graph pools, and temporary per-call allocations; the naive state banks include reserved null and durable slots. These are not peak system memory or measured memory traffic.}
+\label{tab:mechanism-memory-error}
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabularx}{\columnwidth}{@{}Yrrr@{}}
+\toprule
+Method & Buffers (MiB) & Output error & State error \\
+\midrule
+\sys{} & 132.5 & $4.82\times 10^{-4}$ & $2.62\times 10^{-6}$ \\
+Native path baseline & 5,040.0 & $4.82\times 10^{-4}$ & $2.62\times 10^{-6}$ \\
+PyTorch node baseline & 5,040.0 & $4.82\times 10^{-4}$ & $6.51\times 10^{-7}$ \\
+TreeWY author-default & 192.8 & $6.31\times 10^{-4}$ & $5.10\times 10^{-3}$ \\
+Weaver author-default & 25.1 & $5.28\times 10^{-4}$ & $5.06\times 10^{-3}$ \\
+Weaver (FP32 preparation) & 31.1 & $5.18\times 10^{-4}$ & $8.55\times 10^{-7}$ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Table~\ref{tab:mechanism-memory-error} sums the tensor allocations explicitly retained for verification and publication. \sys{}'s 96-MiB cut-state buffer is reused across layers; only five cut rows, totaling 15 MiB per layer, are logically exported. This agrees with the storage formula in Section~\ref{sec:kernel}, but does not measure physical memory transactions. Operand rings and publication staging contribute the remaining named buffers. The deployment's separately allocated 1.5-GiB recurrent page pool is excluded. The naive baselines retain a 34-slot bank (32 physical nodes, one null slot, and one durable slot) and a staging copy for publication. Thus allocation boundaries differ across implementations. Framework peak allocations and all raw timing samples are preserved in the supplement.
+
+The errors in this experiment are descriptive, rather than an admission criterion. TreeWY and the two Weaver variants retain the preprocessing and precision differences described in Section~\ref{sec:m1-qualification}. Consequently, faster timings here do not establish equal-accuracy superiority, and they do not overturn the paired-bound failures in Table~\ref{tab:m1-qualification}. These isolated GDN measurements also do not predict a full-model decoding speedup.

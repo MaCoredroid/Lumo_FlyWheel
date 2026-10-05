@@ -1,0 +1,152 @@
+{
+  "created_at_utc": "2026-10-05T16:26:59Z",
+  "article_id": "2609.23900",
+  "replaces": "v3 (2026-10-04)",
+  "title": "LumoTree: Path-Parallel Speculative Verification for Hybrid Language Models",
+  "scope": "Manuscript compilation closure only; no README, private notes, logs, evidence archives, or generated output PDF included. Full-line author comments removed; class license comments retained.",
+  "source_commit": "676227ba7ff25f628f7f99b25bb861215476619a",
+  "artifact_tag": "lumotree-v2-artifact-r3",
+  "archive_bytes": 113470,
+  "archive_sha256": "6617569cde0bc0a9c971e524845bab234d2f3989ace5660f4f4d4f763283ebd2",
+  "members": [
+    {
+      "path": "IEEEtran.cls",
+      "bytes": 281789,
+      "sha256": "c37d5b1e9c0b137454fad858d395decc117504e3f41a6d8685e749ebecff247b"
+    },
+    {
+      "path": "abstract.tex",
+      "bytes": 999,
+      "sha256": "6df1bdc2006279afc460b73e1232d9fc439687cfd18d4afadd3c9e9842bd9a45"
+    },
+    {
+      "path": "figures/cost-breakdown.tikz",
+      "bytes": 1038,
+      "sha256": "a29baf437e9f19ee1c33111a07645daed2ace8857492b6daf29468452ee62fee"
+    },
+    {
+      "path": "figures/pipeline.tikz",
+      "bytes": 4669,
+      "sha256": "4eaed23cd58ff06d51a72b8a169d8dd1be13f0570b157c2f9d69d104d140fe5c"
+    },
+    {
+      "path": "figures/scan-replay.tikz",
+      "bytes": 1035,
+      "sha256": "19c984883a8b70cc5209c33fa4f62e98aba708ad2b025568d1b2d600a3e4ecd0"
+    },
+    {
+      "path": "figures/spine-layout.tikz",
+      "bytes": 820,
+      "sha256": "390a6d64b34627e93a2d63cae64d971abe54569be978fa5477984e3228d5579c"
+    },
+    {
+      "path": "figures/state-contract.tikz",
+      "bytes": 1056,
+      "sha256": "50d1d7f5d30f4a1ed79ee5634299028d352765a68089bef2c340431d03b46898"
+    },
+    {
+      "path": "main.bbl",
+      "bytes": 12975,
+      "sha256": "745a1eff1c23e93da5b0e3eb78276134fce82108889458df633b269a7a2ce304"
+    },
+    {
+      "path": "main.tex",
+      "bytes": 48615,
+      "sha256": "2ece6b5dbaa4a32fe66c1364593c6b53d81e98288be701d7c559d21d07c356fb"
+    },
+    {
+      "path": "ref.bib",
+      "bytes": 13892,
+      "sha256": "9b35603941b925ad27f9a7f8517ccd1c71f3f9402ea745f932fd86bbcabffe85"
+    },
+    {
+      "path": "sections/execution-costs.tex",
+      "bytes": 1284,
+      "sha256": "61a10ac34261a5f99a59d37a33cc72eea870e396f49a38f392532d5e1b5a2954"
+    },
+    {
+      "path": "sections/fullmodel-protocol.tex",
+      "bytes": 2540,
+      "sha256": "cb62d56162bb107789222945e9c2ef37dc47234e5e408daa40784a871e8ac3b5"
+    },
+    {
+      "path": "sections/fullmodel-validation.tex",
+      "bytes": 3347,
+      "sha256": "fe34af1c037a52890ba86fb3ca41bc8def41876b2d3fd013272f8f7508526457"
+    },
+    {
+      "path": "sections/mechanism-costs.tex",
+      "bytes": 5057,
+      "sha256": "fbc21f0b2fc66bf650706f49bdb8ef5bfa7856839570e5ebb5e16843769a0f2a"
+    },
+    {
+      "path": "sections/native-continuation.tex",
+      "bytes": 2388,
+      "sha256": "366222cac0b744bbc996cca7924e96ebc262a50c115cf89a83f245ecf0928266"
+    },
+    {
+      "path": "sections/optimization-spans.tex",
+      "bytes": 1630,
+      "sha256": "ae35b3b0ea31e4ee1c3baa532a9b6d0438e51422294d631ec4d647dd5e5e89a5"
+    },
+    {
+      "path": "sections/recurrent-comparison.tex",
+      "bytes": 2777,
+      "sha256": "0ac8ea1e338af46351a0feaac63f910c8698d30ba3bfa15c898c2ee5db3f3814"
+    },
+    {
+      "path": "sections/recurrent-validation.tex",
+      "bytes": 1986,
+      "sha256": "bc1748a5cbcec41f4c13fad78e585170ca5066504a274861b11eb878936f850a"
+    },
+    {
+      "path": "sections/replay-protocol.tex",
+      "bytes": 2673,
+      "sha256": "1adda3b0fa834ddb493b6b239f47f09d7ad21c1acab7bb9de64aada0aa072cc1"
+    },
+    {
+      "path": "sections/request-replay.tex",
+      "bytes": 9235,
+      "sha256": "feb38c728f3e1c892d365579a82d869db1716a4df66818e082c457529c0bf298"
+    },
+    {
+      "path": "sections/sampling-validation.tex",
+      "bytes": 3605,
+      "sha256": "30bff91f581d9f1d46c7aff8d8b7055d8c6d4c3f4873bb0e7cd5ef4b47893ed3"
+    },
+    {
+      "path": "sections/workload-configuration.tex",
+      "bytes": 1799,
+      "sha256": "07272f720002ef8b79b6ec3be3207f8be5315eef25d6ada30e60c8544336f537"
+    },
+    {
+      "path": "sections/workload-details.tex",
+      "bytes": 1417,
+      "sha256": "ae428b44ef55c8b6e9e34cda8ea588e6f3429a7d8c372f0e5e6f5e586650895d"
+    },
+    {
+      "path": "sections/workload.tex",
+      "bytes": 3724,
+      "sha256": "c3871b93a2aada8b36e51d358f66ce5f4a89f454c3433f822500c6a467057acc"
+    }
+  ],
+  "full_line_comments_stripped": 1,
+  "clean_build": {
+    "success": true,
+    "pages": 16,
+    "latex_warnings": 0,
+    "text_equal_to_current_pdf": true
+  },
+  "arxiv_pdf": {
+    "path": "artifacts/arxiv-v4-package-20261005/arxiv-compiled-v4.pdf",
+    "sha256": "05f9f6d80a92d142a733e5274ef01ce815b5f22d540ec024db190e9d3a0f2ffd",
+    "pages": 16
+  },
+  "suggested_metadata": {
+    "comments": "16 pages, 3 figures. v4: adds a plain-decoding agent control and a second attempt per arm to the ten-task study, three-run MTP-3/MTP-7 cost curve, three SGLang runs on the disjoint corpus, and a same-engine per-step cost table",
+    "primary_category": "cs.LG"
+  },
+  "uploaded": false,
+  "submitted": false,
+  "handoff": "Author uploads through the arXiv UI; not submitted by the assistant"
+}
