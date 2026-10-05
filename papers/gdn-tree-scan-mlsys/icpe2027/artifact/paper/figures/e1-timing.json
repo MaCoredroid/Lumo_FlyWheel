@@ -1,5 +1,5 @@
 {
-  "source": "/Users/anon/work/CursorWS/repo/papers/gdn-tree-scan-mlsys/v2/results/e1/aggregate.json",
+  "source": "/Users/user/work/CursorWS/project_wheel/papers/gdn-tree-scan-mlsys/v2/results/e1/aggregate.json",
   "source_sha256": "dbd4542ee9899da3eb592fdf8a0b935010f5c8035de9d5cb75e581343c7deb1d",
   "scope": "Top: three paired-boot rates and complete-arm means. Bottom: supplied paired-block 95% bootstrap percentile intervals; three-block uncertainty is coarse. Missing support is not zero.",
   "plotted": {

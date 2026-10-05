@@ -4,7 +4,7 @@
 # Env: PD_TAG (e.g. -pd1), PD_HOOKS=1 (passive trace),
 #      PD_LIMIT (requests, default all), PD_MAXTOK (default 1024), PD_REQUESTS (default tuning corpus)
 set -uo pipefail
-ROOT=/home/user/shared/treehost-v2exp-runs; WT=/home/user/shared/treehost-v2exp-20260930; PORT=/home/user/shared/repo-nvfp4-port-20260816
+ROOT=/home/user/shared/treehost-v2exp-runs; WT=/home/user/shared/treehost-v2exp-20260930; PORT=/home/user/shared/projectwheel-nvfp4-port-20260816
 Q1V3=$WT/scripts/v2exp/q1v3; GD=$WT/scripts/v2exp/gatediag; GFD=$WT/scripts/v2exp/pendiag
 TAG=${PD_TAG:?set PD_TAG}; TAGW=$(printf "%s" "$TAG" | tr -cd "A-Za-z0-9"); TS=$(date -u +%Y%m%dT%H%M%SZ)
 REQ=${PD_REQUESTS:-$ROOT/corpus/requests}; NREQ=$(ls "$REQ"/*.json | wc -l); [[ -n "${PD_LIMIT:-}" ]] && NREQ=$PD_LIMIT
@@ -17,7 +17,7 @@ cp -r "$Q1V3" "$SRC"; rm -rf "$SRC/__pycache__" "$SRC/tests/__pycache__"
 mv "$SRC/patch_runner.py" "$SRC/patch_runner_q1v3.py"; cp "$GFD/patch_runner.py" "$SRC/patch_runner.py"
 cp "$GD/q1v3_hooks.py" "$SRC/q1v3_hooks.py"; [[ "${PD_HOOKS:-0}" == 1 ]] && touch "$SRC/HOOKS_ON"
 PYTHONDONTWRITEBYTECODE=1 python3 "$Q1V3/make_cand_launch.py" --out "$RUN/CAND/gen" > "$RUN/CAND/gen.log" || { log "launch-chain generation refused"; cat "$RUN/CAND/gen.log"; exit 1; }
-PYTHONPATH=$WT/src $PORT/.venv/bin/python -c "from project_serving.model_server import recover_host_memory; recover_host_memory()" || log "recover_host_memory failed"
+PYTHONPATH=$WT/src $PORT/.venv/bin/python -c "from project_wheel_serving.model_server import recover_host_memory; recover_host_memory()" || log "recover_host_memory failed"
 SUF=_pd${TAGW}$TS
 PROMOAB_EXTRA_ENV="FR13_B1_CREDENTIAL_POINTER=/nonexistent
 FR13_FA2_QROW32_B1_TIERB_WORKLOAD=exact16_qc_remainder_10

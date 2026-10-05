@@ -1,0 +1,39 @@
+{
+  "model_name_or_path": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
+  "started_at": "2026-10-05T01:28:00Z",
+  "ended_at": "2026-10-05T03:40:31Z",
+  "instances_total": 10,
+  "verdict_counts": {
+    "failed": 4,
+    "resolved": 6
+  },
+  "failure_mode_counts": {
+    "tests_failed": 3,
+    "tests_passed": 6,
+    "patch_apply_failed": 1
+  },
+  "per_repo_total": {
+    "astropy/astropy": 10
+  },
+  "per_repo_resolved": {
+    "astropy/astropy": 6
+  },
+  "eval_wall_seconds": {
+    "p50": 40.535,
+    "p90": 51.835,
+    "p99": 52.814,
+    "min": 0.0,
+    "max": 52.814
+  },
+  "codex_wall_seconds": {
+    "p50": 421.337,
+    "p90": 1328.099,
+    "p99": 2017.817,
+    "min": 135.826,
+    "max": 2017.817
+  },
+  "budget_capped_tasks": 0,
+  "budget_capped_task_ids": [],
+  "campaign_task_budget_s": 9000.0,
+  "resolved_rate": 0.6
+}

@@ -1,0 +1,32 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 118bfced8..e1ab48ebb 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -1299,6 +1299,27 @@ def _format_value(value):
+ 
+ def _format_float(value):
+     """Format a floating number to make sure it gets the decimal point."""
++    # Use the shortest string representation that round-trips to the same
++    # value, but fall back to a 16 significant digit representation if it
++    # does not fit in the 20 character value field.
++    if np.isfinite(value):
++        value_str = f"{value!r}"
++        if "e" in value_str:
++            # Normalize the exponent notation to use an uppercase "E" and
++            # pad the exponent to two digits.
++            significand, exponent = value_str.split("e")
++            if exponent[0] in ("+", "-"):
++                sign = exponent[0]
++                exponent = exponent[1:]
++            else:
++                sign = ""
++            value_str = f"{significand}E{sign}{int(exponent):02d}"
++        elif "." not in value_str:
++            value_str += ".0"
++
++        if len(value_str) <= 20:
++            return value_str
++
+     value_str = f"{value:.16G}"
+     if "." not in value_str and "E" not in value_str:
+         value_str += ".0"

@@ -729,7 +729,7 @@
     "eval_wall_clock_seconds": 40.702,
     "error": null,
     "arch": "x86_64",
-    "eval_host": "user-Alienware-Aurora-ACT1250",
+    "eval_host": "mark-Alienware-Aurora-ACT1250",
     "run_id": "x86eval-out-1791075741",
     "namespace": "swebench",
     "cache_level": "env"

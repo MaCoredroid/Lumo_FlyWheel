@@ -1,0 +1,50 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 118bfced8..77e21ed61 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -1299,7 +1299,11 @@ def _format_value(value):
+ 
+ def _format_float(value):
+     """Format a floating number to make sure it gets the decimal point."""
+-    value_str = f"{value:.16G}"
++    # Try the shortest round-trip representation first; only fall back to
++    # the fixed 16-significant-digit format if that is too long.
++    value_str = str(value)
++    if "e" in value_str:
++        value_str = value_str.replace("e", "E")
+     if "." not in value_str and "E" not in value_str:
+         value_str += ".0"
+     elif "E" in value_str:
+@@ -1318,12 +1322,27 @@ def _format_float(value):
+     str_len = len(value_str)
+ 
+     if str_len > 20:
+-        idx = value_str.find("E")
++        # Fall back to the 16-significant-digit format and truncate.
++        value_str = f"{value:.16G}"
++        if "." not in value_str and "E" not in value_str:
++            value_str += ".0"
++        elif "E" in value_str:
++            significand, exponent = value_str.split("E")
++            if exponent[0] in ("+", "-"):
++                sign = exponent[0]
++                exponent = exponent[1:]
++            else:
++                sign = ""
++            value_str = f"{significand}E{sign}{int(exponent):02d}"
+ 
+-        if idx < 0:
+-            value_str = value_str[:20]
+-        else:
+-            value_str = value_str[: 20 - (str_len - idx)] + value_str[idx:]
++        str_len = len(value_str)
++        if str_len > 20:
++            idx = value_str.find("E")
++
++            if idx < 0:
++                value_str = value_str[:20]
++            else:
++                value_str = value_str[: 20 - (str_len - idx)] + value_str[idx:]
+ 
+     return value_str
+ 

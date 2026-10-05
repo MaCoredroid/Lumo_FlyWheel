@@ -1,0 +1,8 @@
+{
+ "astropy__astropy-14365": {
+  "agent_host": "alienware",
+  "host_machine": "x86_64",
+  "image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-14365:latest",
+  "image_arch": "x86_64"
+ }
+}

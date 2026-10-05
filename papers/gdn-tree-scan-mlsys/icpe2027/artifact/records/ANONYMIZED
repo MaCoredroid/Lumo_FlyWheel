@@ -1,1 +1,1 @@
-names, hosts and project identifiers replaced; numbers unchanged
+Names, host paths and the system name were replaced in this copy; numeric records are unchanged. Byte hashes in SYNC-MANIFEST.json are recomputed over the scrubbed files.

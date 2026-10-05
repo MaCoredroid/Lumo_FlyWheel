@@ -7,7 +7,7 @@ MODE=${1:-sampled}
 [[ $MODE == sampled ]] || { echo "fixed32 route requires temperature>0; only sampled mode is supported"; exit 2; }; MAXTOK=${2:-1024}
 ROOT=/home/user/shared/treehost-v2exp-runs
 WT=/home/user/shared/treehost-v2exp-20260930
-PORTWT=/home/user/shared/repo-nvfp4-port-20260816
+PORTWT=/home/user/shared/projectwheel-nvfp4-port-20260816
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 TAGW=$(printf "%s" "${V2_TAG:-}" | tr -cd "A-Za-z0-9")
 AK=${V2_ARM_KIND:-C}; [[ $AK == C || $AK == G ]] || { echo "V2_ARM_KIND must be C or G"; exit 2; }
@@ -69,7 +69,7 @@ for c in $(docker ps -aq --filter "name=fr13-bigdenom-${V2_KIND:-hydra27_fixed32
   docker stop -t 30 "$c" >/dev/null 2>&1; docker rm "$c" >/dev/null && echo "removed own container $c"
 done
 # keep the per-step GPU timer sidecars (target forward, drafter, committer) with the run
-cp /home/user/shared/repo-nvfp4-port-20260816/output/fr13_sfwd_sidecar/*_promoab_${AK}_v2exp${TAGW}${MODE}${TS}*.json.* "$OUT/" 2>/dev/null || echo "no timer sidecars"
+cp /home/user/shared/projectwheel-nvfp4-port-20260816/output/fr13_sfwd_sidecar/*_promoab_${AK}_v2exp${TAGW}${MODE}${TS}*.json.* "$OUT/" 2>/dev/null || echo "no timer sidecars"
 cp "$RUNROOT"/*/container_env.txt "$OUT/" 2>/dev/null; grep -h "SUFFIX PASS GATE\|FR14_SUFFIX_PASS_GATE" "$RUNROOT"/*/launch.log 2>/dev/null | head -3 > "$OUT/gate_launch.txt"
 # fail the step if any replay record errored or the replay itself failed
 EXPECT=$NREQ; RFILE="$OUT/replay.jsonl"

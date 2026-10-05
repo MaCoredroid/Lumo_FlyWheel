@@ -3,11 +3,12 @@
 Recomputes replay pools, the captured-row history check, the Monte-Carlo sampler verdicts (with an independent
 top-k boundary-tie check on every residual node), the v3 continuation verdict statistics, and the SWE arm's
 outcomes, pooled decode rate, acceptance and phase timers, then writes AUDIT.json."""
-import glob, hashlib, json, re, runpy, statistics
+import os, glob, hashlib, json, re, runpy, statistics
 from pathlib import Path
 HERE = Path(__file__).resolve().parent
 V2 = HERE.parent.parent
 read = lambda p: json.loads(Path(p).read_text())
+sha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()
 PRIOR = json.loads((HERE / "AUDIT.json").read_text()) if (HERE / "AUDIT.json").exists() else {}
 def prior(path, fallback):
     """Earlier-era records are supplied in the companion archive; fall back to the values recorded in AUDIT.json."""
@@ -16,7 +17,6 @@ def prior(path, fallback):
     except FileNotFoundError:
         print("note: companion record absent, using recorded value:", path.name)
         return fallback
-sha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()
 out = {"schema": "claude.penfix-audit.v1"}
 
 # ---- provenance -------------------------------------------------------------------------------------------
@@ -191,6 +191,81 @@ assert out["workload"]["resolved"] + out["workload"]["failed_tests"] + out["work
 prev = prior(V2 / "results/claude-results-20261002/summaries/swe_study_20261001.json", {a_: {"resolved": v_["resolved"], "agent_min_total": v_["agent_min_total"], "pooled": v_["pooled"]} for a_, v_ in PRIOR["workload"]["prefix_reference"].items()})
 out["workload"]["prefix_reference"] = {a_: {k: prev[a_][k] for k in ("resolved", "agent_min_total", "pooled")} for a_ in prev if isinstance(prev[a_], dict)}
 
+# ---- plain-decoding agent control (same harness, subset, budgets and sampling; no speculative decoding) ----
+A_ = HERE / "raw/workload/ar_control"
+ar_tasks = {}
+for l in (A_ / "swe_orchestrator.log").read_text().splitlines():
+    m = re.search(r"<- astropy__astropy-(\d+) verdict=(\w+) elapsed_total=([\d.]+)s", l)
+    if m: ar_tasks[m.group(1)] = {"verdict": m.group(2), "agent_s": float(m.group(3))}
+assert sorted(ar_tasks) == sorted(tasks)
+ar_reports = {Path(p).parts[-3].split("-")[-1]: read(p) for p in glob.glob(str(A_ / "swe_out/verified/per_task/*/eval/eval_report.json"))}
+assert len(ar_reports) == 10 and all(ar_reports[k]["verdict"] == ar_tasks[k]["verdict"] for k in ar_tasks)
+for k in ar_tasks:
+    r = ar_reports[k]
+    ar_tasks[k]["outcome"] = "R" if r["passed"] else ("E" if r.get("synthetic_no_patch") else "F")
+    ar_tasks[k]["failure_mode"] = r["failure_mode"]
+b, a = metrics(A_ / "metrics_before_swe.txt"), metrics(A_ / "metrics_after_swe.txt")
+n, r_, e, f = [a["vllm:" + x] - b.get("vllm:" + x, 0) for x in ("generation_tokens_total", "request_success_total", "e2e_request_latency_seconds_sum", "time_to_first_token_seconds_sum")]
+assert a.get("vllm:num_requests_running", 0) == 0 and a.get("vllm:num_requests_waiting", 0) == 0
+assert a.get("vllm:spec_decode_num_drafts_total", 0) == 0 and "--speculative" not in (A_ / "serve_cmd.txt").read_text()
+drv = (A_ / "driver.log").read_text()
+out["workload"]["ar_control"] = {"run": "swe/ar-20261004T222602Z", "arm": "ar", "worktree_head": re.search(r"wt=([0-9a-f]+)", drv).group(1),
+                                 "subset_sha256": re.search(r"subset_sha=([0-9a-f]+)", drv).group(1),
+                                 "output_tokens": n, "requests": r_, "e2e_s": e, "ttft_s": f, "pooled_tokens_s": (n - r_) / (e - f),
+                                 "resolved": sum(t["outcome"] == "R" for t in ar_tasks.values()),
+                                 "failed_tests": sum(t["outcome"] == "F" for t in ar_tasks.values()), "empty_patches": sum(t["outcome"] == "E" for t in ar_tasks.values()),
+                                 "agent_minutes": sum(t["agent_s"] for t in ar_tasks.values()) / 60, "tasks": ar_tasks}
+assert out["workload"]["ar_control"]["resolved"] + out["workload"]["ar_control"]["failed_tests"] + out["workload"]["ar_control"]["empty_patches"] == 10
+assert out["workload"]["ar_control"]["subset_sha256"] == re.search(r"subset_sha=([0-9a-f]+)", (W / "launch.log").read_text()).group(1) if "subset_sha=" in (W / "launch.log").read_text() else True
+
+# ---- second live attempt per arm (same harness, subset, budgets and sampling) ---------------------------------
+def arm_summary(d, engine):
+    t = {}
+    for l in (d / "swe_orchestrator.log").read_text().splitlines():
+        m = re.search(r"<- astropy__astropy-(\d+) verdict=(\w+) elapsed_total=([\d.]+)s", l)
+        if m: t[m.group(1)] = {"verdict": m.group(2), "agent_s": float(m.group(3))}
+    assert sorted(t) == sorted(tasks), d
+    rep = {Path(q).parts[-3].split("-")[-1]: read(q) for q in glob.glob(str(d / "swe_out/verified/per_task/*/eval/eval_report.json"))}
+    assert len(rep) == 10 and all(rep[k]["verdict"] == t[k]["verdict"] for k in t), d
+    for k in t:
+        t[k]["outcome"] = "R" if rep[k]["passed"] else ("E" if rep[k].get("synthetic_no_patch") else "F"); t[k]["failure_mode"] = rep[k]["failure_mode"]
+    b, a = metrics(d / "metrics_before_swe.txt"), metrics(d / "metrics_after_swe.txt")
+    pre = {"vllm": ("vllm:generation_tokens_total", "vllm:request_success_total", "vllm:e2e_request_latency_seconds_sum", "vllm:time_to_first_token_seconds_sum"),
+           "sglang": ("sglang:generation_tokens_total", "sglang:num_requests_total", "sglang:e2e_request_latency_seconds_sum", "sglang:time_to_first_token_seconds_sum")}[engine]
+    n, r_, e, f = [a[x] - b.get(x, 0) for x in pre]
+    s_ = {"output_tokens": n, "requests": r_, "e2e_s": e, "ttft_s": f, "pooled_tokens_s": (n - r_) / (e - f),
+          "resolved": sum(x["outcome"] == "R" for x in t.values()), "failed_tests": sum(x["outcome"] == "F" for x in t.values()),
+          "empty_patches": sum(x["outcome"] == "E" for x in t.values()), "agent_minutes": sum(x["agent_s"] for x in t.values()) / 60, "tasks": t}
+    if engine == "vllm":
+        assert a.get("vllm:num_requests_running", 0) == 0 and a.get("vllm:num_requests_waiting", 0) == 0
+        ev = a.get("vllm:spec_decode_num_drafts_total", 0) - b.get("vllm:spec_decode_num_drafts_total", 0)
+        if ev: s_["accepted_per_event"] = (a["vllm:spec_decode_num_accepted_tokens_total"] - b.get("vllm:spec_decode_num_accepted_tokens_total", 0)) / ev
+        else: s_["accepted_per_event"] = None
+    else:
+        s_["spec_accept_length_gauge"] = a.get("sglang:spec_accept_length")
+    assert s_["resolved"] + s_["failed_tests"] + s_["empty_patches"] == 10
+    return s_
+SECOND = {"tree": ("treehost_penfix_attempt2", "vllm"), "mtp5": ("mtp5_attempt2", "vllm"), "sglang": ("sglang_attempt2", "sglang"), "ar": ("ar_attempt2", "vllm")}
+sec = {}
+for arm, (sub, eng) in SECOND.items():
+    d = HERE / "raw/workload" / sub
+    if not d.exists():
+        assert os.environ.get("PENFIX_AUDIT_PARTIAL"), f"missing second attempt {sub}"; continue
+    sec[arm] = arm_summary(d, eng); sec[arm]["dir"] = "raw/workload/" + sub
+    if arm == "tree":
+        sec[arm]["timer_means_ms"] = timer_means([timers(d / "sidecars")]); sec[arm]["split_k_engaged"] = "gqa_pair_splitk" in (d / "launch.log").read_text()
+        assert sec[arm]["split_k_engaged"] and sec[arm]["accepted_per_event"] is not None
+    if arm == "ar": assert sec[arm]["accepted_per_event"] is None and "--speculative" not in (d / "serve_cmd.txt").read_text()
+out["workload"]["second_attempts"] = sec
+# two-attempt tallies per arm: first attempts are the corrected tree arm (this audit), the MTP-5/SGLang reference runs, and the AR control
+first = {"tree": out["workload"], "ar": out["workload"]["ar_control"],
+         **{k: {"resolved": prev[a_]["resolved"], "agent_minutes": prev[a_]["agent_min_total"], "output_tokens": prev[a_]["pooled"]["gen_tokens"], "requests": prev[a_]["pooled"]["requests"],
+                "e2e_s": prev[a_]["pooled"]["e2e_s"], "ttft_s": prev[a_]["pooled"]["ttft_s"]} for k, a_ in (("mtp5", "vllm_mtp5"), ("sglang", "sglang_eagle_s7_d8"))}}
+out["workload"]["two_attempt_tallies"] = {arm: {"resolved_of_20": first[arm]["resolved"] + sec[arm]["resolved"], "requests": first[arm]["requests"] + sec[arm]["requests"],
+                                                "output_tokens": first[arm]["output_tokens"] + sec[arm]["output_tokens"],
+                                                "pooled_tokens_s": (first[arm]["output_tokens"] + sec[arm]["output_tokens"] - first[arm]["requests"] - sec[arm]["requests"]) / (first[arm]["e2e_s"] + sec[arm]["e2e_s"] - first[arm]["ttft_s"] - sec[arm]["ttft_s"]),
+                                                "agent_minutes": first[arm]["agent_minutes"] + sec[arm]["agent_minutes"], "resolved_by_attempt": [first[arm]["resolved"], sec[arm]["resolved"]]} for arm in sec}
+
 
 # ---- output-length comparability on identical prompts (tree fixed vs MTP-5 reference runs) ----------------
 def lengths(p):
@@ -206,15 +281,32 @@ def length_compare(tree_runs, mtp_glob_dirs):
             "requests_tree_longer": sum(mt[q] > mm[q] for q in reqs), "requests": len(reqs),
             "tree_run_totals": [sum(x.values()) for x in tl], "mtp5_run_totals": [sum(x.values()) for x in ml]}
 mtp_tune = [p for p in sorted((V2 / "results").glob("*/raw/replay/mtp5-sampled-20261001T0[67]*/replay.jsonl"))]
-if len(mtp_tune) < 3:
-    print("note: native-arm replays absent; output-length comparability taken from recorded values"); out["output_length_comparability"] = PRIOR["output_length_comparability"]
 mtp_tune = sorted({p.parent.name: p for p in mtp_tune}.values(), key=lambda p: p.parent.name)
 mtp_conf = sorted({p.parent.name: p for p in (V2 / "results").glob("*/raw/replay/mtp5-cfM*/replay.jsonl")}.values(), key=lambda p: p.parent.name)
 if len(mtp_tune) >= 3: out["output_length_comparability"] = {"tuning_corpus": length_compare(tuning, mtp_tune), "confirmation_set": length_compare(confirm, mtp_conf), "mtp5_runs": [p.parent.name for p in mtp_tune + mtp_conf]}
+else:
+    print("note: native-arm replays absent; output-length comparability taken from recorded values"); out["output_length_comparability"] = PRIOR["output_length_comparability"]
+
+# ---- SGLang EAGLE 7/8 on the confirmation set: three replicates (cfS1 earlier tree, cfS2/cfS3 here) -------
+sg = sorted({q.parent.name: q for q in list((V2 / "results").glob("*/raw/replay/sglang-s7k1d8-cfS*/replay.jsonl"))}.values(), key=lambda q: q.parent.name)
+def replay_sg(q):
+    rows = [json.loads(l) for l in Path(q).read_text().splitlines()]
+    assert len(rows) == 43 and not any(r.get("error") for r in rows)
+    n = sum(r["completion_tokens"] for r in rows); t = sum(r["t_e2e_s"] - r["t_ttft_s"] for r in rows)
+    return {"run": Path(q).parent.name, "output_tokens": n, "decode_seconds": t, "tokens_s": (n - 43) / t}
+sgr = [replay_sg(q) for q in sg]
+if len(sgr) < 3:
+    print("note: SGLang cfS1 replay is in the companion archive; using recorded replicate values"); out["confirmation_set"]["sglang_s7k1d8"] = PRIOR["confirmation_set"]["sglang_s7k1d8"]
+else:
+    assert len(sgr) == 3
+if len(sgr) == 3: out["confirmation_set"]["sglang_s7k1d8"] = {"runs": 3, "pooled_tokens_s": sum(r["output_tokens"] - 43 for r in sgr) / sum(r["decode_seconds"] for r in sgr),
+                                            "run_rates": [r["tokens_s"] for r in sgr], "run_names": [r["run"] for r in sgr],
+                                            "input_parity": "chat endpoint; messages shared, serialized token IDs not matched"}
+out["confirmation_set"]["ratio_fixed_tree_over_sglang"] = out["confirmation_set"]["tree_fixed"]["pooled_tokens_s"] / out["confirmation_set"]["sglang_s7k1d8"]["pooled_tokens_s"]
 (HERE / "AUDIT.json").write_text(json.dumps(out, indent=1, default=str))
 print(json.dumps({"tuning": {k: out["tuning_corpus"]["tree_fixed"][k] for k in ("pooled_tokens_s", "run_rates", "accepted_per_event")}, "tuning_ratio": out["tuning_corpus"]["ratio_fixed_over_mtp5"],
                   "tuning_timers": out["tuning_corpus"]["tree_fixed_timer_means_ms"],
                   "confirm": {k: out["confirmation_set"]["tree_fixed"][k] for k in ("pooled_tokens_s", "run_rates", "accepted_per_event")}, "confirm_ratio": out["confirmation_set"]["ratio_fixed_over_mtp5"],
                   "confirm_timers": out["confirmation_set"]["tree_fixed_timer_means_ms"], "sampling": {k: out["sampling"][k] for k in out["sampling"] if k != "residual_nodes"},
                   "ties": out["sampling"]["residual_nodes"], "fullmodel": {k: out["fullmodel"][k] for k in out["fullmodel"] if k != "run"},
-                  "workload": {k: out["workload"][k] for k in out["workload"] if k not in ("tasks", "prefix_reference")}, "output_lengths": out["output_length_comparability"], "tasks": {k: (t["outcome"], round(t["agent_s"] / 60, 1)) for k, t in sorted(tasks.items())}}, indent=1, default=str))
+                  "workload": {k: out["workload"][k] for k in out["workload"] if k not in ("tasks", "prefix_reference", "ar_control")}, "ar_control": {k: v for k, v in out["workload"]["ar_control"].items() if k != "tasks"}, "ar_tasks": {k: (t["outcome"], round(t["agent_s"] / 60, 1)) for k, t in sorted(ar_tasks.items())}, "second_attempts": {a: {k: v for k, v in x.items() if k != "tasks"} for a, x in sec.items()}, "second_tasks": {a: {k: (t["outcome"], round(t["agent_s"] / 60, 1)) for k, t in sorted(x["tasks"].items())} for a, x in sec.items()}, "two_attempt_tallies": out["workload"]["two_attempt_tallies"], "output_lengths": out["output_length_comparability"], "tasks": {k: (t["outcome"], round(t["agent_s"] / 60, 1)) for k, t in sorted(tasks.items())}}, indent=1, default=str))

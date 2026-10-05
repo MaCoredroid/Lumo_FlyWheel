@@ -418,7 +418,7 @@ class Hooks:
         hooks = self
         if not self.wrapped:
             self.wrapped = True
-            import project_serving.fr10_gdn_tree_kernel as TK   # GMR imports the KV16 entry point at call time
+            import project_wheel_serving.fr10_gdn_tree_kernel as TK   # GMR imports the KV16 entry point at call time
             orig_kv16 = TK.launch_attn_kv_linear_remap_syncfree_fixed16
 
             def kv16(**kw):

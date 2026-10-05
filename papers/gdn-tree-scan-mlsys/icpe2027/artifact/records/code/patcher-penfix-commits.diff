@@ -4,7 +4,7 @@ Date:   Sat Oct 3 18:57:30 2026 +0000
 
     v2exp: FR13_TREE_PENALTY_HISTORY — per-path penalty histories for tree verification rows (fixes the flattened-chain history defect found 2026-10-02); tree self rows routed through apply_logits_processors_tree_self; CPU pre-flight (synthetic trees, 2480/2480 captured rows, patched stock sampler compiles) and re-qualification queue
     
-    Co-Authored-By: the assistant <noreply@anthropic.com>
+    Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 
 diff --git a/scripts/fr10_phase4_patch_vllm_tree_gdn.py b/scripts/fr10_phase4_patch_vllm_tree_gdn.py
 index 48d20e1a6..4f2024f8b 100644
@@ -148,7 +148,7 @@ Date:   Sat Oct 3 19:09:51 2026 +0000
 
     v2exp: FR13_TREE_PENALTY_HISTORY — parse tree_parent_indices in the runner's layout (31 draft-space parents per tree request, request-local, root -1, draft-less requests omitted); the first boot refused on the fail-loud validator (physical-row layout assumed); pre-flight updated to the real layout and a mixed batch
     
-    Co-Authored-By: the assistant <noreply@anthropic.com>
+    Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 
 diff --git a/scripts/fr10_phase4_patch_vllm_tree_gdn.py b/scripts/fr10_phase4_patch_vllm_tree_gdn.py
 index 4f2024f8b..0a69af0dc 100644

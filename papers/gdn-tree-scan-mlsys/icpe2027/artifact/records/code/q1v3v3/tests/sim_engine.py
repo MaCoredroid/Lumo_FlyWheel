@@ -21,13 +21,13 @@ ATT = [f"language_model.model.layers.{i}.self_attn.attn" for i in range(3, 64, 4
 
 
 def _install_fake_modules():
-    """project_serving.fr10_gdn_tree_kernel (KV16 entry point) and vllm...gdn_linear_attn (publication)."""
-    if "project_serving.fr10_gdn_tree_kernel" not in sys.modules:
-        pkg = types.ModuleType("project_serving"); pkg.__path__ = []
-        tk = types.ModuleType("project_serving.fr10_gdn_tree_kernel")
+    """project_wheel_serving.fr10_gdn_tree_kernel (KV16 entry point) and vllm...gdn_linear_attn (publication)."""
+    if "project_wheel_serving.fr10_gdn_tree_kernel" not in sys.modules:
+        pkg = types.ModuleType("project_wheel_serving"); pkg.__path__ = []
+        tk = types.ModuleType("project_wheel_serving.fr10_gdn_tree_kernel")
         tk.launch_attn_kv_linear_remap_syncfree_fixed16 = _kv16
         pkg.fr10_gdn_tree_kernel = tk
-        sys.modules["project_serving"] = pkg; sys.modules["project_serving.fr10_gdn_tree_kernel"] = tk
+        sys.modules["project_wheel_serving"] = pkg; sys.modules["project_wheel_serving.fr10_gdn_tree_kernel"] = tk
     names = ["vllm", "vllm.model_executor", "vllm.model_executor.layers", "vllm.model_executor.layers.mamba", "vllm.model_executor.layers.mamba.gdn_linear_attn"]
     for i, n in enumerate(names):
         if n not in sys.modules:
@@ -35,7 +35,7 @@ def _install_fake_modules():
             sys.modules[n] = m
             if i:
                 setattr(sys.modules[names[i - 1]], n.rsplit(".", 1)[1], m)
-    return sys.modules["project_serving.fr10_gdn_tree_kernel"], sys.modules["vllm.model_executor.layers.mamba.gdn_linear_attn"]
+    return sys.modules["project_wheel_serving.fr10_gdn_tree_kernel"], sys.modules["vllm.model_executor.layers.mamba.gdn_linear_attn"]
 
 
 def _kv16(*, kv_caches, slot_mapping, accepted_paths, num_accepted_tokens, **_):

@@ -8,7 +8,7 @@
 # Native arms are untouched (chain histories are correct for chains) and are not repeated.
 set -uo pipefail
 ROOT=/home/user/shared/treehost-v2exp-runs; WT=/home/user/shared/treehost-v2exp-20260930; V=$WT/scripts/v2exp
-PY=/home/user/shared/repo-nvfp4-port-20260816/.venv/bin/python
+PY=/home/user/shared/projectwheel-nvfp4-port-20260816/.venv/bin/python
 RES=$V/results/sampling_20261003; mkdir -p "$RES"
 log(){ echo "[penfix $(date -u +%FT%TZ)] $*" | tee -a "$ROOT/sweep.log"; }
 idle(){ for i in $(seq 1 720); do
@@ -16,7 +16,7 @@ idle(){ for i in $(seq 1 720); do
 step(){ local name=$1; shift; idle || { log "not idle; abort before $name"; exit 3; }
   log "start: $name"; env "$@"; local rc=$?; log "end: $name rc=$rc"; return $rc; }
 PSHA=$(sha256sum $WT/scripts/fr10_phase4_patch_vllm_tree_gdn.py | cut -c1-16)
-cmp -s $WT/scripts/fr10_phase4_patch_vllm_tree_gdn.py /home/user/shared/repo-nvfp4-port-20260816/scripts/fr10_phase4_patch_vllm_tree_gdn.py || { log "patcher copies differ; refusing"; exit 2; }
+cmp -s $WT/scripts/fr10_phase4_patch_vllm_tree_gdn.py /home/user/shared/projectwheel-nvfp4-port-20260816/scripts/fr10_phase4_patch_vllm_tree_gdn.py || { log "patcher copies differ; refusing"; exit 2; }
 log "penfix queue start commit=$(git -C $WT rev-parse --short HEAD) patcher_sha256=$PSHA"
 step "PF0 capture (fixed patcher, record-only pendiag, 4 req x 256 tok)" PD_TAG=-pf0 PD_HOOKS=0 PD_LIMIT=4 PD_MAXTOK=256 bash $V/pendiag/pendiag.sh || { log "capture failed"; exit 4; }
 TRACE=$(ls -t $ROOT/replay/tree-pf0-sampled-*/pen_trace.jsonl | head -1); [[ -s "$TRACE" ]] || { log "no pen_trace"; exit 4; }

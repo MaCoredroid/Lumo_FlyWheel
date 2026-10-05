@@ -24,7 +24,7 @@ STOCK = f"{CODEX}/identity/native_source/vllm__v1__worker__gpu_model_runner.py"
 HAVE_CASES = os.path.exists(CS.CASES_FILE)
 
 
-@pytest.user.skipif(not HAVE_CASES, reason="v3 cases.json not built yet")
+@pytest.mark.skipif(not HAVE_CASES, reason="v3 cases.json not built yet")
 def test_case_file_structure():
     doc = CS.validate(check_sources=False)
     pre = list(doc["prefixes"])
@@ -38,7 +38,7 @@ def test_case_file_structure():
     assert all(v["held_out"] for v in doc["prefixes"].values())
 
 
-@pytest.user.skipif(not HAVE_CASES, reason="v3 cases.json not built yet")
+@pytest.mark.skipif(not HAVE_CASES, reason="v3 cases.json not built yet")
 def test_negative_control_sibling_is_valid_same_length():
     doc = CS.load()
     for n in doc["negative_controls"]:
@@ -50,7 +50,7 @@ def test_negative_control_sibling_is_valid_same_length():
             assert len(sib) == len(cy["nodes"]) and sib != cy["nodes"] and sib[:-1] == cy["nodes"][:-1]
 
 
-@pytest.user.skipif(not HAVE_CASES, reason="v3 cases.json not built yet")
+@pytest.mark.skipif(not HAVE_CASES, reason="v3 cases.json not built yet")
 def test_plan_orders_and_cold_first_case():
     doc = CS.load()
     n = len(doc["cases"]); npre = len(doc["prefixes"])
@@ -68,7 +68,7 @@ def test_plan_orders_and_cold_first_case():
 
 
 # ------------------------------------------------------------------ patchers / launch generation
-@pytest.user.skipif(not os.path.exists(STOCK), reason="captured stock runner not present")
+@pytest.mark.skipif(not os.path.exists(STOCK), reason="captured stock runner not present")
 def test_native_patch_anchors(tmp_path):
     rec = PR.run("native", STOCK, None, False, None)
     assert rec["problems"] == [] and rec["files"]["runner"]["matches_reference_copy"]
@@ -79,7 +79,7 @@ def test_native_patch_anchors(tmp_path):
     assert not again["applied"] and any("double patch" in p for p in again["problems"])
 
 
-@pytest.user.skipif(not os.path.exists(GEN), reason="captured generated sources not present")
+@pytest.mark.skipif(not os.path.exists(GEN), reason="captured generated sources not present")
 def test_cand_patch_anchors(tmp_path):
     r, j = tmp_path / "r.py", tmp_path / "j.py"
     r.write_text(open(f"{GEN}/gpu_model_runner.patched.py").read()); j.write_text(open(f"{GEN}/rejection_sampler.patched.py").read())
@@ -101,7 +101,7 @@ def test_make_cand_launch(tmp_path):
 
 
 # ------------------------------------------------------------------ paged state access
-@pytest.user.parametrize("page_src,page_dst", [(4, 16), (64, 1024), (16, 4)])
+@pytest.mark.parametrize("page_src,page_dst", [(4, 16), (64, 1024), (16, 4)])
 def test_kv_reblock_roundtrip(page_src, page_dst):
     n, P = 40, 3 * page_dst + 5
     def cache(page):

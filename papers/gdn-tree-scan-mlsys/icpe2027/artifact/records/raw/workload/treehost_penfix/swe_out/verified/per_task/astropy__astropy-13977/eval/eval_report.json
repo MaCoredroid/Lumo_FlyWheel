@@ -14,7 +14,7 @@
   "patch_bytes": 0,
   "eval_wall_clock_seconds": 0.0,
   "arch": "x86_64",
-  "eval_host": "user-Alienware-Aurora-ACT1250",
+  "eval_host": "mark-Alienware-Aurora-ACT1250",
   "worker_report": {
     "instance_id": "astropy__astropy-13977",
     "verdict": "failed",
@@ -22,7 +22,7 @@
     "failure_mode": "patch_apply_failed",
     "error": "empty_patch",
     "arch": "x86_64",
-    "eval_host": "user-Alienware-Aurora-ACT1250",
+    "eval_host": "mark-Alienware-Aurora-ACT1250",
     "eval_wall_clock_seconds": 0.0
   }
 }

@@ -15,7 +15,7 @@ set -uo pipefail
 WT=/home/user/shared/treehost-v2exp-20260930
 Q1V3=$WT/scripts/v2exp/q1v3v3
 RUNS=${Q1V3_RUNS:-/home/user/shared/treehost-v2exp-runs/q1v3v3/runs}
-PY=/home/user/shared/repo-nvfp4-port-20260816/.venv/bin/python
+PY=/home/user/shared/projectwheel-nvfp4-port-20260816/.venv/bin/python
 KV_PIN_BYTES=${KV_PIN_BYTES:-42949672960}          # 40 GiB: >= the 34.1 GiB a 131072-token request needs; ~150 blocks
 KV_V_FALLBACK_BYTES=${KV_V_FALLBACK_BYTES:-56543355208}  # 52.66 GiB (Codex candidate stage-1 KV) if no candidate boot record
 STAGES=A,CAND,B,V,P; WAIT_IDLE=0; DRY=0; RUN_ID=${RUN_ID:-q1v3-$(date -u +%Y%m%dT%H%M%SZ)}
@@ -68,7 +68,7 @@ run_native(){  # arm kv_bytes packed
   log "stage $ARM: kv_bytes=$KVB packed=$PACKED"
   [[ $DRY == 1 ]] && { (cd "$Q1V3" && PYTHONDONTWRITEBYTECODE=1 python3 client.py --arm "$ARM" --run "$RUN" --plan-only); return 0; }
   preflight "$ARM"
-  PYTHONPATH=$WT/src $PY -c "from project_serving.model_server import recover_host_memory; recover_host_memory()" || log "recover_host_memory failed"
+  PYTHONPATH=$WT/src $PY -c "from project_wheel_serving.model_server import recover_host_memory; recover_host_memory()" || log "recover_host_memory failed"
   free -g > "$RUN/free_before_$ARM.txt"
   awk '/^MemFree:/{exit ($2/1048576 < 85)}' /proc/meminfo || { log "MemFree < 85 GiB after recovery"; return 1; }
   mkdir -p "$RUN/$ARM"

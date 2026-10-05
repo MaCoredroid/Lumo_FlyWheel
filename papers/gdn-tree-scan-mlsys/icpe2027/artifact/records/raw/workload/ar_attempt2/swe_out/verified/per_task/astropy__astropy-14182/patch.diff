@@ -1,0 +1,25 @@
+diff --git a/astropy/io/ascii/rst.py b/astropy/io/ascii/rst.py
+index abdeba8ef..b377e0af7 100644
+--- a/astropy/io/ascii/rst.py
++++ b/astropy/io/ascii/rst.py
+@@ -57,10 +57,17 @@ class RST(FixedWidth):
+     data_class = SimpleRSTData
+     header_class = SimpleRSTHeader
+ 
+-    def __init__(self):
+-        super().__init__(delimiter_pad=None, bookend=False)
++    def __init__(self, header_rows=None):
++        super().__init__(delimiter_pad=None, bookend=False, header_rows=header_rows)
++        # The data start line depends on the number of header rows: one leading
++        # position line, the header rows themselves, and one trailing position
++        # line before the first data row.
++        self.data.start_line = len(self.data.header_rows) + 2
+ 
+     def write(self, lines):
+         lines = super().write(lines)
+-        lines = [lines[1]] + lines + [lines[1]]
++        # The position line (e.g. "=====") is written just after the header
++        # rows; duplicate it as the leading and trailing table borders.
++        position_line = lines[len(self.data.header_rows)]
++        lines = [position_line] + lines + [position_line]
+         return lines

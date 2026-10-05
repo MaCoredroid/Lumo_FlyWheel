@@ -9,7 +9,7 @@ idle(){ for i in $(seq 1 720); do
   if [[ -z "$(docker ps -q)" ]] && ! pgrep -f "run_tree_arm|run_native_arm|run_swe_|gatediag.sh|gatefix.sh|pendiag.sh|replay.py|q1v3v3/run_all" >/dev/null; then return 0; fi; sleep 10; done; return 1; }
 step(){ local name=$1; shift; idle || { log "not idle; abort before $name"; exit 3; }
   log "start: $name"; env "$@"; local rc=$?; log "end: $name rc=$rc"; return $rc; }
-cmp -s $WT/scripts/fr10_phase4_patch_vllm_tree_gdn.py /home/user/shared/repo-nvfp4-port-20260816/scripts/fr10_phase4_patch_vllm_tree_gdn.py || { log "patcher copies differ; refusing"; exit 2; }
+cmp -s $WT/scripts/fr10_phase4_patch_vllm_tree_gdn.py /home/user/shared/projectwheel-nvfp4-port-20260816/scripts/fr10_phase4_patch_vllm_tree_gdn.py || { log "patcher copies differ; refusing"; exit 2; }
 log "penfix stage 2 start commit=$(git -C $WT rev-parse --short HEAD) patcher_sha256=$(sha256sum $WT/scripts/fr10_phase4_patch_vllm_tree_gdn.py | cut -c1-16)"
 step "q1v3 v3 continuation, fixed patcher" bash $V/q1v3v3/run_all.sh --wait-idle --run-id q1v3v3-penfix-$(date -u +%Y%m%dT%H%M%SZ)
 step "SWE ten-task TreeHost arm, fixed patcher" bash $V/run_swe_tree_arm.sh

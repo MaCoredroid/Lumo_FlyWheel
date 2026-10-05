@@ -7,5 +7,5 @@
   "model_id": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
   "eval_wall_clock_seconds": 40.702,
   "arch": "x86_64",
-  "eval_host": "user-Alienware-Aurora-ACT1250"
+  "eval_host": "mark-Alienware-Aurora-ACT1250"
 }
