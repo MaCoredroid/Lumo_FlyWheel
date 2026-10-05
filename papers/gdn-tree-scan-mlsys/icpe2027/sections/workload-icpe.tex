@@ -1,18 +1,18 @@
-The coding-agent study completes 40 attempts, one per task and arm, with plain autoregressive decoding of the same checkpoint on the same vLLM build as the control (Table~\ref{tab:agent-study}; task-level outcomes in Appendix~\ref{app:workload}). \sys{} resolves five tasks with eight nonempty patches, of which three fail tests, and two empty patches; native MTP-5 resolves six with two failing and two empty; SGLang resolves five with three failing and two empty; plain decoding resolves seven with three failing and no empty patch. Empty patches count as failures without invoking the evaluator. The live trajectories diverge after the first tool call: \sys{} emits 258,889 output tokens over 248 requests, against 134,643 over 224 for MTP-5, 158,827 over 210 for SGLang, and 98,477 over 231 for plain decoding, so its lower pooled decode rate and longer summed agent duration here contrast with the fixed-request replays. The control decodes at 10.54 tokens/s, 2.5 times slower than \sys{}, yet its summed agent duration is shorter than \sys{}'s because it emits 2.6 times fewer tokens; all three speculative arms emitted more tokens than plain decoding. The replay check in Section~\ref{sec:res-sampler} finds no large aggregate length shift between the tree and chain arms on fixed prompts; with one attempt per arm, the live token-volume differences cannot be separated from trajectory variance, and their cause remains unresolved. The study is descriptive: one attempt per arm, ten selected tasks, and no benchmark-wide quality estimate.
+The coding-agent study completes 80 attempts: ten tasks, four arms, two attempts per task and arm, with plain autoregressive decoding of the same checkpoint on the same vLLM build as the control (Table~\ref{tab:agent-study}; task-level outcomes in Appendix~\ref{app:workload}). \sys{} resolves five then six tasks, native MTP-5 six and six, SGLang five and five, and plain decoding seven and seven; empty patches (three for \sys{}, two each for MTP-5 and SGLang, none for plain decoding, over both attempts) count as failures without invoking the evaluator. Over twenty attempts per arm, plain decoding resolves 14, MTP-5 12, \sys{} 11, and SGLang 10; a two-sided Fisher exact test on 14 against 10 of 20 gives $p=0.33$, so the study does not separate the arms on outcome. The live trajectories diverge after the first tool call, and output volume varies as much between attempts of one arm as between arms: \sys{} emits 258,889 then 181,415 output tokens, MTP-5 134,643 then 168,299, SGLang 158,827 then 227,540, and plain decoding 98,477 then 173,433. The first attempt's ordering, in which \sys{} emitted the most tokens and ran longest, does not repeat: in the second attempt \sys{} emits 8\% more tokens than MTP-5 and finishes in fewer minutes. Pooled over both attempts, \sys{} decodes at 26.62 tokens/s against 24.95 for MTP-5, 28.46 for SGLang, and 10.47 for plain decoding; MTP-5's second attempt accepted 2.84 drafts per event, below the 3.15 of its fixed-request replays, which lowers its live rate. The replay check in Section~\ref{sec:res-sampler} finds no large aggregate length shift between the tree and chain arms on fixed prompts. The study is descriptive: two attempts per arm on ten selected tasks give no benchmark-wide quality estimate, and live rates include each arm's own trajectory.
 
 \begin{table}[t]
-\caption{Ten-task coding-agent study, one attempt per task and arm; plain decoding is the same-build control without speculation. Minutes sum agent durations, including tools but excluding server startup and evaluation. Decode rates use server-counter differences in Eq.~\ref{eq:pooled-decode}.}
+\caption{Ten-task coding-agent study, two attempts per task and arm. Resolved counts are per attempt (of ten); requests, tokens, and minutes sum both attempts; decode rates pool both attempts with server-counter differences in Eq.~\ref{eq:pooled-decode}. Plain decoding is the same-build control without speculation. Minutes sum agent durations, including tools but excluding server startup and evaluation.}
 \label{tab:agent-study}
 \centering\small
 \setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}lrrrr@{}}
+\begin{tabular}{@{}lcrrrr@{}}
 \toprule
-Arm & Resolved & Requests & Tokens/s & Minutes \\
+Arm & Resolved & Requests & Tokens & Tokens/s & Minutes \\
 \midrule
-\sys{} & 5/10 & 248 & 26.12 & 190.8 \\
-Native MTP-5 & 6/10 & 224 & 27.17 & 99.5 \\
-SGLang EAGLE & 5/10 & 210 & 29.89 & 103.0 \\
-Plain decoding & 7/10 & 231 & 10.54 & 170.7 \\
+\sys{} & 5, 6 & 457 & 440,304 & 26.62 & 323.3 \\
+Native MTP-5 & 6, 6 & 463 & 302,942 & 24.95 & 240.7 \\
+SGLang EAGLE & 5, 5 & 475 & 386,367 & 28.46 & 261.0 \\
+Plain decoding & 7, 7 & 481 & 271,910 & 10.47 & 464.7 \\
 \bottomrule
 \end{tabular}
 \end{table}

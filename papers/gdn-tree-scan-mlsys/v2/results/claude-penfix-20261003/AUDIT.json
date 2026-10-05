@@ -6,7 +6,7 @@
   "wt_head": "1dd1cbf1f56c38abc488bb227202b795b162ceca",
   "port_head": "bdfdb596fd75c572b7fe4d5bf9bed42f2d29ad98"
  },
- "synced_files_sha_verified": 914,
+ "synced_files_sha_verified": 1717,
  "tuning_corpus": {
   "tree_fixed": {
    "runs": 3,
@@ -426,6 +426,361 @@
      "outcome": "R",
      "failure_mode": "tests_passed"
     }
+   }
+  },
+  "second_attempts": {
+   "tree": {
+    "output_tokens": 181415.0,
+    "requests": 209.0,
+    "e2e_s": 7292.5330765247345,
+    "ttft_s": 668.5175368785858,
+    "pooled_tokens_s": 27.355914084960002,
+    "resolved": 6,
+    "failed_tests": 3,
+    "empty_patches": 1,
+    "agent_minutes": 132.52166666666668,
+    "tasks": {
+     "13977": {
+      "verdict": "failed",
+      "agent_s": 481.9,
+      "outcome": "F",
+      "failure_mode": "tests_failed"
+     },
+     "14096": {
+      "verdict": "resolved",
+      "agent_s": 681.0,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14182": {
+      "verdict": "failed",
+      "agent_s": 375.5,
+      "outcome": "F",
+      "failure_mode": "tests_failed"
+     },
+     "14309": {
+      "verdict": "resolved",
+      "agent_s": 184.8,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14365": {
+      "verdict": "resolved",
+      "agent_s": 341.3,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14369": {
+      "verdict": "resolved",
+      "agent_s": 2068.4,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14508": {
+      "verdict": "failed",
+      "agent_s": 939.7,
+      "outcome": "E",
+      "failure_mode": "patch_apply_failed"
+     },
+     "14539": {
+      "verdict": "resolved",
+      "agent_s": 1206.4,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14598": {
+      "verdict": "failed",
+      "agent_s": 1381.6,
+      "outcome": "F",
+      "failure_mode": "tests_failed"
+     },
+     "14995": {
+      "verdict": "resolved",
+      "agent_s": 290.7,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     }
+    },
+    "accepted_per_event": 4.408379456049515,
+    "dir": "raw/workload/lumotree_penfix_attempt2",
+    "timer_means_ms": {
+     "target": 114.91714657088713,
+     "drafter": 54.51767242129327,
+     "committer": 20.192124149966045,
+     "wall": 197.10143445329314
+    },
+    "split_k_engaged": true
+   },
+   "mtp5": {
+    "output_tokens": 168299.0,
+    "requests": 239.0,
+    "e2e_s": 7837.190602064133,
+    "ttft_s": 662.3428339958191,
+    "pooled_tokens_s": 23.423493491799455,
+    "resolved": 6,
+    "failed_tests": 4,
+    "empty_patches": 0,
+    "agent_minutes": 141.24666666666664,
+    "tasks": {
+     "13977": {
+      "verdict": "failed",
+      "agent_s": 402.4,
+      "outcome": "F",
+      "failure_mode": "tests_failed"
+     },
+     "14096": {
+      "verdict": "resolved",
+      "agent_s": 396.0,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14182": {
+      "verdict": "failed",
+      "agent_s": 286.6,
+      "outcome": "F",
+      "failure_mode": "tests_failed"
+     },
+     "14309": {
+      "verdict": "resolved",
+      "agent_s": 121.9,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14365": {
+      "verdict": "resolved",
+      "agent_s": 224.3,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14369": {
+      "verdict": "failed",
+      "agent_s": 4088.0,
+      "outcome": "F",
+      "failure_mode": "tests_failed"
+     },
+     "14508": {
+      "verdict": "resolved",
+      "agent_s": 1747.2,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14539": {
+      "verdict": "resolved",
+      "agent_s": 177.8,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14598": {
+      "verdict": "failed",
+      "agent_s": 847.0,
+      "outcome": "F",
+      "failure_mode": "tests_failed"
+     },
+     "14995": {
+      "verdict": "resolved",
+      "agent_s": 183.6,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     }
+    },
+    "accepted_per_event": 2.84037558685446,
+    "dir": "raw/workload/mtp5_attempt2"
+   },
+   "sglang": {
+    "output_tokens": 227540.0,
+    "requests": 265.0,
+    "e2e_s": 8824.107631444931,
+    "ttft_s": 569.8926518931985,
+    "pooled_tokens_s": 27.534417332602935,
+    "resolved": 5,
+    "failed_tests": 5,
+    "empty_patches": 0,
+    "agent_minutes": 157.96,
+    "tasks": {
+     "13977": {
+      "verdict": "failed",
+      "agent_s": 1618.8,
+      "outcome": "F",
+      "failure_mode": "tests_failed"
+     },
+     "14096": {
+      "verdict": "failed",
+      "agent_s": 872.1,
+      "outcome": "F",
+      "failure_mode": "tests_failed"
+     },
+     "14182": {
+      "verdict": "resolved",
+      "agent_s": 1232.1,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14309": {
+      "verdict": "resolved",
+      "agent_s": 249.0,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14365": {
+      "verdict": "failed",
+      "agent_s": 612.1,
+      "outcome": "F",
+      "failure_mode": "tests_failed"
+     },
+     "14369": {
+      "verdict": "failed",
+      "agent_s": 900.4,
+      "outcome": "F",
+      "failure_mode": "tests_failed"
+     },
+     "14508": {
+      "verdict": "resolved",
+      "agent_s": 248.0,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14539": {
+      "verdict": "resolved",
+      "agent_s": 494.9,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14598": {
+      "verdict": "failed",
+      "agent_s": 2588.9,
+      "outcome": "F",
+      "failure_mode": "tests_failed"
+     },
+     "14995": {
+      "verdict": "resolved",
+      "agent_s": 661.3,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     }
+    },
+    "spec_accept_length_gauge": 3.425,
+    "dir": "raw/workload/sglang_attempt2"
+   },
+   "ar": {
+    "output_tokens": 173433.0,
+    "requests": 250.0,
+    "e2e_s": 17028.440413475037,
+    "ttft_s": 415.39875745773315,
+    "pooled_tokens_s": 10.424520902665195,
+    "resolved": 7,
+    "failed_tests": 3,
+    "empty_patches": 0,
+    "agent_minutes": 294.065,
+    "tasks": {
+     "13977": {
+      "verdict": "failed",
+      "agent_s": 3361.7,
+      "outcome": "F",
+      "failure_mode": "tests_failed"
+     },
+     "14096": {
+      "verdict": "resolved",
+      "agent_s": 2293.5,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14182": {
+      "verdict": "resolved",
+      "agent_s": 2084.6,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14309": {
+      "verdict": "resolved",
+      "agent_s": 340.0,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14365": {
+      "verdict": "failed",
+      "agent_s": 215.2,
+      "outcome": "F",
+      "failure_mode": "tests_failed"
+     },
+     "14369": {
+      "verdict": "resolved",
+      "agent_s": 2055.8,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14508": {
+      "verdict": "resolved",
+      "agent_s": 2703.9,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14539": {
+      "verdict": "resolved",
+      "agent_s": 667.5,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     },
+     "14598": {
+      "verdict": "failed",
+      "agent_s": 1986.3,
+      "outcome": "F",
+      "failure_mode": "tests_failed"
+     },
+     "14995": {
+      "verdict": "resolved",
+      "agent_s": 1935.4,
+      "outcome": "R",
+      "failure_mode": "tests_passed"
+     }
+    },
+    "accepted_per_event": null,
+    "dir": "raw/workload/ar_attempt2"
+   }
+  },
+  "two_attempt_tallies": {
+   "tree": {
+    "resolved_of_20": 11,
+    "requests": 457.0,
+    "output_tokens": 440304.0,
+    "pooled_tokens_s": 26.615621356284187,
+    "agent_minutes": 323.29,
+    "resolved_by_attempt": [
+     5,
+     6
+    ]
+   },
+   "mtp5": {
+    "resolved_of_20": 12,
+    "requests": 463.0,
+    "output_tokens": 302942.0,
+    "pooled_tokens_s": 24.954032372009586,
+    "agent_minutes": 240.74666666666664,
+    "resolved_by_attempt": [
+     6,
+     6
+    ]
+   },
+   "sglang": {
+    "resolved_of_20": 10,
+    "requests": 475.0,
+    "output_tokens": 386367.0,
+    "pooled_tokens_s": 28.45535263961221,
+    "agent_minutes": 260.96000000000004,
+    "resolved_by_attempt": [
+     5,
+     5
+    ]
+   },
+   "ar": {
+    "resolved_of_20": 14,
+    "requests": 481.0,
+    "output_tokens": 271910.0,
+    "pooled_tokens_s": 10.465882541705634,
+    "agent_minutes": 464.7166666666667,
+    "resolved_by_attempt": [
+     7,
+     7
+    ]
    }
   }
  },

@@ -1,0 +1,91 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 1b3285ddc..b88572a6b 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -27,6 +27,50 @@ VALUE_INDICATOR_LEN = len(VALUE_INDICATOR)
+ HIERARCH_VALUE_INDICATOR = "="  # HIERARCH cards may use a shortened indicator
+ 
+ 
++def _group_escaped_value(value, width):
++    """
++    Split a string value into contiguous pieces such that each piece, after
++    escaping single-quotes (``'`` -> ``''``), is at most ``width`` characters
++    long.
++
++    Pieces are broken at whitespace where possible, mirroring
++    :func:`~astropy.io.fits.util._words_group`; a run of characters longer
++    than ``width`` is split in the middle.  Unlike escaping the whole value
++    first and then splitting, this operates on the unescaped value so that an
++    escaped quote pair (``''``) is never split across two pieces.
++    """
++    pieces = []
++    n = len(value)
++    start = 0
++    while start < n:
++        # Walk forward, accounting for the fact that a single-quote is
++        # written as two characters once escaped.
++        cost = 0
++        end = start
++        last_space = -1
++        while end < n:
++            c = value[end]
++            step = 2 if c == "'" else 1
++            if cost + step > width:
++                break
++            cost += step
++            if c == " ":
++                last_space = end
++            end += 1
++        # If the width limit was reached before the end of the value, prefer
++        # to break right after the last interior space so that words are kept
++        # intact, matching the behaviour of ``_words_group``.  If the
++        # remainder fits within the width, take it all.
++        if end < n and last_space != -1:
++            end = last_space + 1
++        if end == start:
++            # Guarantee forward progress; a single character always fits.
++            end = start + 1
++        pieces.append(value[start:end])
++        start = end
++    return pieces
++
++
+ class Undefined:
+     """Undefined value."""
+ 
+@@ -870,8 +914,13 @@ class Card(_Verify):
+             if keyword in self._commentary_keywords:
+                 valuecomment = "".join(values)
+             else:
+-                # CONTINUE card
+-                valuecomment = f"'{''.join(values)}' / {' '.join(comments)}"
++                # CONTINUE card; the individual values have had their
++                # single-quotes unescaped above, so they must be re-escaped
++                # here before being wrapped in a new pair of quotes,
++                # otherwise adjacent quotes would be collapsed when the
++                # reconstructed value string is parsed again.
++                joined_value = "".join(values).replace("'", "''")
++                valuecomment = f"'{joined_value}' / {' '.join(comments)}"
+             return keyword, valuecomment
+ 
+         if self.keyword in self._special_keywords:
+@@ -1057,8 +1106,8 @@ class Card(_Verify):
+         output = []
+ 
+         # do the value string
+-        value = self._value.replace("'", "''")
+-        words = _words_group(value, value_length)
++        value = self._value
++        words = _group_escaped_value(value, value_length)
+         for idx, word in enumerate(words):
+             if idx == 0:
+                 headstr = "{:{len}}= ".format(self.keyword, len=KEYWORD_LENGTH)
+@@ -1071,7 +1120,7 @@ class Card(_Verify):
+             else:
+                 value_format = "'{}&'"
+ 
+-            value = value_format.format(word)
++            value = value_format.format(word.replace("'", "''"))
+ 
+             output.append(f"{headstr + value:80}")
+ 

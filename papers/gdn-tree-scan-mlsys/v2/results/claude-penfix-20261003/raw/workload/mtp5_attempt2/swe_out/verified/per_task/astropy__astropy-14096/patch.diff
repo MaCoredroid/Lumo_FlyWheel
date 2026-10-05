@@ -1,0 +1,21 @@
+diff --git a/astropy/coordinates/sky_coordinate.py b/astropy/coordinates/sky_coordinate.py
+index ab475f7d0..5bf1da866 100644
+--- a/astropy/coordinates/sky_coordinate.py
++++ b/astropy/coordinates/sky_coordinate.py
+@@ -871,6 +871,16 @@ class SkyCoord(ShapedLikeNDArray):
+         Overrides getattr to return coordinates that this can be transformed
+         to, based on the alias attr in the primary transform graph.
+         """
++        # If the attribute is a property on the class, the property getter
++        # raised AttributeError and Python called __getattr__ as a fallback.
++        # Re-invoke the property getter to propagate the original error.
++        prop = getattr(type(self), attr, None)
++        if isinstance(prop, property):
++            try:
++                return prop.fget(self)
++            except AttributeError:
++                raise
++
+         if "_sky_coord_frame" in self.__dict__:
+             if self._is_name(attr):
+                 return self  # Should this be a deepcopy of self?

@@ -1,0 +1,84 @@
+{
+ "bash": {
+  "scripts/fr13_bigdenom_swe_serve_variant.sh": {
+   "mtime": 1787591390,
+   "sha256": "03ffdc696a9620972f50cf1452b5771239b03ef90d9a2cc060fe3781ff35c6c1",
+   "size": 157856
+  },
+  "scripts/fr13_canonical_env.sh": {
+   "mtime": 1786900311,
+   "sha256": "b81e8d2f6d3a63e68e365d69ef56a4e62f1fc184c42eb9664852a06b2b1662fa",
+   "size": 13787
+  },
+  "scripts/fr13_fixed32_floor_timers_seq.sh": {
+   "mtime": 1786990279,
+   "sha256": "e503b2f8f11c6fad1f504ad1a12bb4c01d882c7f86dcb7f5edd85872668003d9",
+   "size": 11573
+  },
+  "scripts/fr13_launch_forked_fa2_tree_server.sh": {
+   "mtime": 1787558497,
+   "sha256": "55c1b67fb4ae7e3c177638cbfcae2ec03ea17f6b49568e68a8676e700416d4b3",
+   "size": 459859
+  },
+  "scripts/fr13_required_tree_flags.sh": {
+   "mtime": 1786900311,
+   "sha256": "74de72c709d5eba3a00146056f2af38c4d8b443b6925c5a8e4feb7fbe8e95e21",
+   "size": 11963
+  },
+  "scripts/swe_x86_helpers/offload_codex_proxy.sh": {
+   "mtime": 1787536260,
+   "sha256": "874866ce560bea0bdab83e713b4e3cfe3c355af8e77023d56af54837dba86074",
+   "size": 31366
+  }
+ },
+ "dirty_at_boot": [],
+ "head": "bdfdb596fd75c572b7fe4d5bf9bed42f2d29ad98",
+ "python": {
+  "scripts/fr10_phase4_patch_vllm_tree_gdn.py": {
+   "mtime": 1791054571,
+   "sha256": "9de17bba337f0c5be1198ca4d164c6983291870deb23f0ae293098d68b1d1cbf",
+   "size": 2127246
+  },
+  "scripts/fr13_device_multidraft_kernel.py": {
+   "mtime": 1787593862,
+   "sha256": "648ff0e33e8a7cdd0fbe8ebb3d2befaa27002a3347f94f9bdc0668365ed2e8e9",
+   "size": 376224
+  },
+  "scripts/fr13_fixed32_contract.py": {
+   "mtime": 1787555589,
+   "sha256": "7db68571060a6fcb488dd41c6adf49f4a3f8faa7dbb6021520e5632611da5730",
+   "size": 191125
+  },
+  "scripts/fr13_fixed32_topology.py": {
+   "mtime": 1787604837,
+   "sha256": "c02703b4bc777e5edfa01623b446a289cba8f1023e31d8efd7fc8126666b38bc",
+   "size": 54622
+  },
+  "scripts/fr13_floor_gate.py": {
+   "mtime": 1787601080,
+   "sha256": "df023a31e1fb2a86c9f1c3a8834e199160b373510b0e1a0da045f9175fbe5025",
+   "size": 497448
+  },
+  "scripts/fr13_patch_fa2_tree_bias.py": {
+   "mtime": 1787556662,
+   "sha256": "8f61b9cd6a079d0605daedb545b8a2e95225714693c775d396059bab2ce626b2",
+   "size": 481205
+  },
+  "scripts/fr13_qrow32_b1_pass_sidecar.py": {
+   "mtime": 1787161051,
+   "sha256": "affea02e8b99a79dea3fe9fc15395a34d91df57a45398f048b5ddd514a12880c",
+   "size": 70746
+  },
+  "scripts/run_swe_bench_q36_a.py": {
+   "mtime": 1787601019,
+   "sha256": "a924716508292e5a86ae7cde1ee09794dd229665f2a42b958f26cd06fba224c9",
+   "size": 443150
+  },
+  "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": {
+   "mtime": 1787595459,
+   "sha256": "d9dd0c697b466180ab5d834a52555c1516edb534e0a3d1bd3094e0d1489c24c8",
+   "size": 732084
+  }
+ },
+ "schema": "fr14.closure_watch.v1"
+}

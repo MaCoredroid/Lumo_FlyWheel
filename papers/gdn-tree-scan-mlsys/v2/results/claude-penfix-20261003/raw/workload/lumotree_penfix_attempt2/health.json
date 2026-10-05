@@ -1,0 +1,76 @@
+{
+  "swe_orchestrator_rc": 0,
+  "swe_window_wall_s": 7953,
+  "tasks": [
+    {
+      "instance_id": "astropy__astropy-13977",
+      "codex_elapsed_s": 421.337,
+      "codex_timed_out": false,
+      "patch_bytes": 1013,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-14096",
+      "codex_elapsed_s": 620.915,
+      "codex_timed_out": false,
+      "patch_bytes": 1053,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-14182",
+      "codex_elapsed_s": 316.639,
+      "codex_timed_out": false,
+      "patch_bytes": 882,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-14309",
+      "codex_elapsed_s": 135.826,
+      "codex_timed_out": false,
+      "patch_bytes": 476,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-14365",
+      "codex_elapsed_s": 293.022,
+      "codex_timed_out": false,
+      "patch_bytes": 995,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-14369",
+      "codex_elapsed_s": 2017.817,
+      "codex_timed_out": false,
+      "patch_bytes": 12431,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-14508",
+      "codex_elapsed_s": 929.805,
+      "codex_timed_out": false,
+      "patch_bytes": 0,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-14539",
+      "codex_elapsed_s": 1154.979,
+      "codex_timed_out": false,
+      "patch_bytes": 530,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-14598",
+      "codex_elapsed_s": 1328.099,
+      "codex_timed_out": false,
+      "patch_bytes": 810,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-14995",
+      "codex_elapsed_s": 236.105,
+      "codex_timed_out": false,
+      "patch_bytes": 645,
+      "verdict": "resolved"
+    }
+  ]
+}
