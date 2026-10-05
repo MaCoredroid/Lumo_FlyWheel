@@ -303,10 +303,43 @@ if len(sgr) == 3: out["confirmation_set"]["sglang_s7k1d8"] = {"runs": 3, "pooled
                                             "run_rates": [r["tokens_s"] for r in sgr], "run_names": [r["run"] for r in sgr],
                                             "input_parity": "chat endpoint; messages shared, serialized token IDs not matched"}
 out["confirmation_set"]["ratio_fixed_tree_over_sglang"] = out["confirmation_set"]["tree_fixed"]["pooled_tokens_s"] / out["confirmation_set"]["sglang_s7k1d8"]["pooled_tokens_s"]
+
+# ---- same-engine per-step cost curve: pooled decode seconds per speculative event, tokens per event ---------
+def per_step(rr):
+    k = 43 * len(rr); n = sum(r["output_tokens"] for r in rr); t = sum(r["decode_seconds"] for r in rr); ev = sum(r["events"] for r in rr)
+    steps = ev if ev else n - k
+    return {"runs": [r["run"] for r in rr], "pooled_tokens_s": (n - k) / t, "ms_per_step": 1000 * t / steps, "tokens_per_step": (n - k) / steps, "run_rates": [r["tokens_s"] for r in rr]}
+def native_runs(pattern):
+    return [replay(q) for q in sorted({q.parent.name: q for q in (V2 / "results").glob(pattern)}.values(), key=lambda q: q.parent.name)]
+def replay_any(p):  # replay() asserts spec counters; plain decoding has none
+    rows = [json.loads(l) for l in Path(p).read_text().splitlines()]
+    assert len(rows) == 43 and not any(r.get("error") for r in rows) and all(r["max_tokens"] == 1024 for r in rows)
+    n = sum(r["completion_tokens"] for r in rows); t = sum(r["t_e2e_s"] - r["t_ttft_s"] for r in rows)
+    return {"run": Path(p).parent.name, "requests": 43, "output_tokens": n, "decode_seconds": t, "tokens_s": (n - 43) / t, "accepted": 0, "events": 0, "accepted_per_event": None, "prompt_counts": {r["request"]: r["prompt_tokens"] for r in rows}}
+ps = {"first": {}, "disjoint": {}}
+first_sets = {"mtp1": "*/raw/replay/mtp1-*sampled-*/replay.jsonl", "mtp3": "*/raw/replay/mtp3-*sampled-*/replay.jsonl", "mtp5": "*/raw/replay/mtp5-sampled-20261001T0[67]*/replay.jsonl", "mtp7": "*/raw/replay/mtp7-*sampled-*/replay.jsonl"}
+for arm, pat in first_sets.items():
+    rr = native_runs(pat)
+    if rr: assert all(r["prompt_counts"] == tuning[0]["prompt_counts"] for r in rr), arm; ps["first"][arm] = per_step(rr)
+ar1 = [replay_any(q) for q in sorted((V2 / "results").glob("*/raw/replay/ar-sampled-20261001T045451Z/replay.jsonl"))]
+if ar1: assert ar1[0]["prompt_counts"] == tuning[0]["prompt_counts"]; ps["first"]["ar"] = per_step(ar1)
+ps["first"]["tree"] = per_step(tuning)
+ps["disjoint"]["tree"] = per_step(confirm)
+m5c = native_runs("*/raw/replay/mtp5-cfM*/replay.jsonl")
+if m5c: assert all(r["prompt_counts"] == confirm[0]["prompt_counts"] for r in m5c); ps["disjoint"]["mtp5"] = per_step(m5c)
+arc = [replay_any(q) for q in sorted((HERE / "raw/replay").glob("ar-cfA1-sampled-*/replay.jsonl"))]
+assert len(arc) == 1 and arc[0]["prompt_counts"] == confirm[0]["prompt_counts"]; ps["disjoint"]["ar"] = per_step(arc)
+expected = {"first": {"mtp1": 1, "mtp3": 3, "mtp5": 3, "mtp7": 3, "ar": 1, "tree": 3}, "disjoint": {"tree": 3, "mtp5": 3, "ar": 1}}
+missing = [(c, a) for c in expected for a in expected[c] if a not in ps[c] or len(ps[c][a]["runs"]) != expected[c][a]]
+if missing:
+    assert os.environ.get("PENFIX_AUDIT_PARTIAL") or (HERE / "ANONYMIZED").exists(), f"per-step runs missing: {missing}"
+    print("note: per-step runs in the companion archive; using recorded values for", missing)
+    for c, a in missing: ps[c][a] = PRIOR["per_step"][c][a]
+out["per_step"] = ps
 (HERE / "AUDIT.json").write_text(json.dumps(out, indent=1, default=str))
 print(json.dumps({"tuning": {k: out["tuning_corpus"]["tree_fixed"][k] for k in ("pooled_tokens_s", "run_rates", "accepted_per_event")}, "tuning_ratio": out["tuning_corpus"]["ratio_fixed_over_mtp5"],
                   "tuning_timers": out["tuning_corpus"]["tree_fixed_timer_means_ms"],
                   "confirm": {k: out["confirmation_set"]["tree_fixed"][k] for k in ("pooled_tokens_s", "run_rates", "accepted_per_event")}, "confirm_ratio": out["confirmation_set"]["ratio_fixed_over_mtp5"],
                   "confirm_timers": out["confirmation_set"]["tree_fixed_timer_means_ms"], "sampling": {k: out["sampling"][k] for k in out["sampling"] if k != "residual_nodes"},
                   "ties": out["sampling"]["residual_nodes"], "fullmodel": {k: out["fullmodel"][k] for k in out["fullmodel"] if k != "run"},
-                  "workload": {k: out["workload"][k] for k in out["workload"] if k not in ("tasks", "prefix_reference", "ar_control")}, "ar_control": {k: v for k, v in out["workload"]["ar_control"].items() if k != "tasks"}, "ar_tasks": {k: (t["outcome"], round(t["agent_s"] / 60, 1)) for k, t in sorted(ar_tasks.items())}, "second_attempts": {a: {k: v for k, v in x.items() if k != "tasks"} for a, x in sec.items()}, "second_tasks": {a: {k: (t["outcome"], round(t["agent_s"] / 60, 1)) for k, t in sorted(x["tasks"].items())} for a, x in sec.items()}, "two_attempt_tallies": out["workload"]["two_attempt_tallies"], "output_lengths": out["output_length_comparability"], "tasks": {k: (t["outcome"], round(t["agent_s"] / 60, 1)) for k, t in sorted(tasks.items())}}, indent=1, default=str))
+                  "workload": {k: out["workload"][k] for k in out["workload"] if k not in ("tasks", "prefix_reference", "ar_control")}, "ar_control": {k: v for k, v in out["workload"]["ar_control"].items() if k != "tasks"}, "ar_tasks": {k: (t["outcome"], round(t["agent_s"] / 60, 1)) for k, t in sorted(ar_tasks.items())}, "second_attempts": {a: {k: v for k, v in x.items() if k != "tasks"} for a, x in sec.items()}, "second_tasks": {a: {k: (t["outcome"], round(t["agent_s"] / 60, 1)) for k, t in sorted(x["tasks"].items())} for a, x in sec.items()}, "two_attempt_tallies": out["workload"]["two_attempt_tallies"], "per_step": {c: {a: {k: v for k, v in x.items() if k != "runs"} | {"n_runs": len(x["runs"])} for a, x in d.items()} for c, d in out["per_step"].items()}, "output_lengths": out["output_length_comparability"], "tasks": {k: (t["outcome"], round(t["agent_s"] / 60, 1)) for k, t in sorted(tasks.items())}}, indent=1, default=str))

@@ -4,6 +4,7 @@ note: anonymized copy; frozen-protocol byte hashes are verified in the companion
 note: companion record absent, using recorded value: swe_study_20261001.json
 note: native-arm replays absent; output-length comparability taken from recorded values
 note: SGLang cfS1 replay is in the companion archive; using recorded replicate values
+note: per-step runs in the companion archive; using recorded values for [('first', 'mtp1'), ('first', 'mtp3'), ('first', 'mtp5'), ('first', 'mtp7'), ('first', 'ar'), ('disjoint', 'mtp5')]
 {
  "tuning": {
   "pooled_tokens_s": 28.13488855290438,
@@ -882,6 +883,105 @@ note: SGLang cfS1 replay is in the companion archive; using recorded replicate v
     7,
     7
    ]
+  }
+ },
+ "per_step": {
+  "first": {
+   "tree": {
+    "pooled_tokens_s": 28.13488855290438,
+    "ms_per_step": 188.97999745930684,
+    "tokens_per_step": 5.316931167245751,
+    "run_rates": [
+     28.242841065054538,
+     27.397547141664038,
+     28.784897393971402
+    ],
+    "n_runs": 3
+   },
+   "mtp1": {
+    "pooled_tokens_s": 15.367093497315617,
+    "ms_per_step": 122.52869479802773,
+    "tokens_per_step": 1.8829099090653416,
+    "run_rates": [
+     15.367093497315617
+    ],
+    "n_runs": 1
+   },
+   "mtp3": {
+    "pooled_tokens_s": 22.440661171390126,
+    "ms_per_step": 142.9381088716647,
+    "tokens_per_step": 3.2076256696683005,
+    "run_rates": [
+     22.615828294477392,
+     22.65787380095854,
+     22.061838421227268
+    ],
+    "n_runs": 3
+   },
+   "mtp5": {
+    "pooled_tokens_s": 26.11541277587504,
+    "ms_per_step": 159.0060281995403,
+    "tokens_per_step": 4.152508060283422,
+    "run_rates": [
+     26.037287914478686,
+     26.076443787167705,
+     26.227951697158986
+    ],
+    "n_runs": 3
+   },
+   "mtp7": {
+    "pooled_tokens_s": 25.385004350949,
+    "ms_per_step": 180.67956882428567,
+    "tokens_per_step": 4.586551640732081,
+    "run_rates": [
+     26.472885241400064,
+     23.997361011732508,
+     25.716310297874326
+    ],
+    "n_runs": 3
+   },
+   "ar": {
+    "pooled_tokens_s": 10.540174822572272,
+    "ms_per_step": 94.87508668816893,
+    "tokens_per_step": 1.0,
+    "run_rates": [
+     10.540174822572272
+    ],
+    "n_runs": 1
+   }
+  },
+  "disjoint": {
+   "tree": {
+    "pooled_tokens_s": 30.76084073269594,
+    "ms_per_step": 184.80213330140742,
+    "tokens_per_step": 5.684668989547038,
+    "run_rates": [
+     30.846815513380562,
+     31.143129834522206,
+     30.38140857843952
+    ],
+    "n_runs": 3
+   },
+   "ar": {
+    "pooled_tokens_s": 10.784519555302813,
+    "ms_per_step": 92.72550296487654,
+    "tokens_per_step": 1.0,
+    "run_rates": [
+     10.784519555302813
+    ],
+    "n_runs": 1
+   },
+   "mtp5": {
+    "pooled_tokens_s": 27.51982039102265,
+    "ms_per_step": 154.33316373103287,
+    "tokens_per_step": 4.247220946256316,
+    "run_rates": [
+     27.41319658242524,
+     27.436560693977437,
+     27.705072568402777
+    ],
+    "n_runs": 3
+   }
   }
  },
  "output_lengths": {
