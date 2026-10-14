@@ -1,56 +1,88 @@
-# Comment for RFC #54080 (TreeWY) — v2 draft, plain voice. Mark reviews, Mark posts.
+# Comment for RFC #54080 (TreeWY) — v8 (owners-audit edit pass applied). Mark posts.
+
+> **STATUS 2026-09-10: RETIRED — DO NOT POST.** Codex red-team NO-GO (B4: quoted
+> an Aug-28 post as "today" + unsound resolution argument; B5: "no FP8 B=1
+> comparison" contradicted by Vol III, "byte-exact enforced at boot" not
+> publicly supported). Upstream Plan v2 moves the tree question to #55688
+> (COMMENT_55688_DRAFT.md), which references #54080 in one clause. Kept for
+> the record only.
+
+> DECOUPLED: posts FIRST, no RFC number ("I'll link it here"). One item needs
+> Mark's confirmation before posting: the capture-set qualifier "decode-only
+> ragged batches" — confirm that matches what our fixed32 serve actually
+> captures (mixed prefill/decode was NOT in our capture set, correct?).
+> All owner-facing claims below were verified against their primary sources.
 
 ---
 
-Nice work, and thanks for publishing the negative result along with the
-method. We've spent the past several months on the same problem and can
-confirm your main finding independently: we run tree speculative decoding
-for GDN hybrids in agent serving (our own vLLM fork, 27B Qwen hybrid, the
-campaign is written up in
-[our public volume series](https://macoredroid.github.io/Lumo_FlyWheel/)),
-and our chain baseline also beats our tree end-to-end (+52% full-step in our
-stack) — different hardware, different benchmark, same sign as your sweep.
+Congrats on the paper and the branch — the `N+1`-snapshot framing and the
+memory table at 397B are the part I hadn't seen quantified anywhere.
 
-Two things we learned that might save you time:
+One data point on the capture blocker, and I read the branch first: your GDN
+commit is *written* to capture — static slot-indexed stash, masks built at
+`__init__`, no host sync — and what takes it away at width>1 is the global
+`cudagraph_mode` PIECEWISE downgrade, which by your §4 evicts the GDN mixer
+from graphs too. `config/vllm.py` names the constraint exactly: the width>1
+mask "routes them to FlashInfer's prefill wrapper. vLLM builds that wrapper
+without cudagraph buffers, so the mask cannot be replayed." That's a
+property of how vLLM constructs that wrapper, not of branching verify. In
+our out-of-tree fork (27B Qwen hybrid, FA2 varlen) the ancestor mask never
+goes through a host-side `plan()`: it is a persistent device buffer added to
+the score tile, so the graph replays it like any other static-address input.
+Full capture held at width > 1 on decode-only ragged batches — no
+`cudagraph_mode` PIECEWISE fallback.
 
-**1. Graph capture is solvable, but it isn't the last wall.** We serve a
-fixed-shape tree (32 slots per step, padded when the proposer emits fewer),
-so the verify step has a static shape and captures in a full CUDA graph. The
-ancestor mask sits inside the attention kernel as an additive bias, not a
-separate backend; our implementation does this in an FA2 varlen fork. Once
-capture held, the bottleneck moved to the commit: replaying the accepted
-path through the recurrent layers is a train of small latency-bound kernels
-(≈66 ms of GPU time per step for us — 48 layers at ~1.4 ms each,
-occupancy-bound, well above the bandwidth floor). We measured six escape
-routes — multi-stream, batched-fused replay, GDN replication, head-merge in
-tree attention, spine checkpointing, batched output — and all six lost
-([writeup](https://macoredroid.github.io/Lumo_FlyWheel/keep-or-replay.html)).
-To be clear, this is a second data point from different silicon, not a
-rebuttal of your capture diagnosis — both can be true. The route we haven't
-exhausted is fusing the replay into the next step's forward pass; that one
-is still under validation on our side.
+Our sign matches yours: in our matched B=4 control the tree accepted 4.286
+vs native MTP-5's 3.422 yet ran 32.85 vs 42.74 tok/s (tied 10/16 on tasks
+resolved); a later lever stack brought the best arm to ~parity with our
+native fit. Your docs put the chain at 11,523 tok/s and `[3,3,3]` at 1,614 —
+not comparable point-for-point to ours (different model, GPU, drafter, and
+21 nodes against your 39), and I'm not apportioning your gap between the
+PIECEWISE downgrade and the extra verify tokens; your README names both
+causes, and one B=4 point on other hardware can't separate them. The only
+claim is that a captured branching verify exists. (Details:
+https://macoredroid.github.io/Lumo_FlyWheel/.)
 
-**2. We evaluated a WY-form verify early on and set it aside for serving** —
-not on the math, which is the same one you use, but because chunked WY is a
-different summation order than native decode, so *bit-exact* equality with
-the served model can't hold. To be fair to WY: at the bar that matters for
-acceptance (per-depth argmax), our WY prototype measured lossless on the
-spine in our tests — the difference is contract strictness, not practical
-quality. We kept WY as an fp32 oracle
-([writeup](https://macoredroid.github.io/Lumo_FlyWheel/gdn-tree-scan.html),
-predates this RFC). Related facts from getting the tree lossless: byte-exact state does not
-imply byte-exact output; a pure reduction-order change cost us 0.087
-tok/event of acceptance; and sibling-state selection errors are invisible to
-numerical closeness checks — they surface only at the output level. In your
-design the equivalent surface is the ancestor mask: a wrong entry blends a
-sibling's contribution into the solve just as silently. We have regression
-tests for these three failure classes (reduction-order reassociation,
-sibling-state selection, tie-break determinism) and would like to contribute
-them upstream; they don't depend on the verify mechanism, so they apply to
-TreeWY as-is.
+On correctness: your all-ones-width control is byte-identical to the chain
+within `reconstruct`; ours is a different anchor — greedy output byte-exact
+against a *no-speculation* reference at fan-out 1, enforced as a boot-time
+and per-generation contract. That anchor is what made this visible:
+byte-exact state does not imply byte-exact output — a reduction-order change
+alone cost us 0.087 tok/event of acceptance at greedy. You already compare
+acceptance length end-to-end (§5's 175 matched points, mean |Δ| 0.039), as
+does the ReplaySSM series — the gap is resolution, not method: at
+max |Δ| 0.33 that comparison can't resolve an 0.087-class shift, and your
+Appendix B Table 4 has treewy below storeall in all three shapes
+(mean −0.085), captioned as sampling noise — the same sign three times is
+worth a deterministic check. Your closed form is pinned tight (1e-5 against
+the naive recurrence, ~1e-15 in fp64); where drift can live is the bf16
+kernel layer (2e-2 vs `chunk_gated_delta_rule`, 1.95e-3 for the production
+V-hoisted mixer) — and F21HGG's report today on #49887 shows the same class
+live upstream ("first diverged … at output token 8 … the chunked replay
+transform changes arithmetic order"). We have deterministic CPU fixtures for
+exactly this — reduction-order reassociation, and greedy tie-break
+determinism (`logits.argmax` versus the chain Triton kernel's greedy path on
+vocab ties — sibling ties you already break deterministically). They'd apply
+to #49847/#49887 and your branch alike; I'd like to contribute them either
+way.
 
-We were about to file an RFC for the state-layer interfaces this work needs:
-per-node parent indexing, a declared carry budget, and a replay hook on
-`MambaSpecDecodeGPUContext`, each a no-op for chains. Given your RFC, we'd
-rather do that under your thread than next to it. Interested in
-collaborating? We have a draft interface PR ready to open.
+Last thing, read from the branch. Of the three substrate pieces we have
+ready — per-node parent indexing, a declared carry budget, a
+replay-on-commit hook — your branch carries working equivalents:
+`SpecDecodeMetadata.draft_parents`/`draft_depths`; the
+`num_speculative_blocks = 0` stash shape (which `main` now also carries from
+#51855 under a different predicate, and which ReplaySSM wrote first in
+July); and the lazy commit keyed on `accepted_leaf_ids`. #49847/#49887 and
+#54103 are each growing their own. Your framing names the design question: a
+commit that is "an ancestor-masked reduction rather than a cursor move," and
+ReplaySSM's ring — whose circular indexing was chosen "for tree-based
+speculative decoding, where accepted tokens are no longer contiguous in the
+buffer" — are two answers to one question. Neither a scalar cursor nor a
+mask alone covers both; an accepted-node index list derives both. We're
+preparing an interface RFC proposing that shared surface, with a draft PR —
+I'll link it here. One question that is yours to answer: do those shapes fit
+TreeWY's commit path as-is, or does the ancestor-masked reduction need
+something a shared hook doesn't carry yet?
+
+_Disclosure: AI-assisted analysis; I ran the benchmarks and reviewed the
+traces myself._

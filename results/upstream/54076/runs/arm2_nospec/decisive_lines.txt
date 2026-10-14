@@ -1,0 +1,24 @@
+##### arm2_nospec  (2604 lines)  #####
+--- ready/startup ---
+{'ready': True, 'startup_s': 310.1, 'server_exit': None, 'smoke_ok': True, 'smoke_error': None}
+--- stock INFO/DEBUG block-size lines ---
+1843:(EngineCore pid=2732299) INFO 09-21 21:52:34 [platforms/interface.py:911] Setting attention block size to 784 tokens to ensure that attention page size is >= mamba page size.
+1844:(EngineCore pid=2732299) INFO 09-21 21:52:34 [platforms/interface.py:935] Padding mamba page size by 0.13% to ensure that mamba page size and attention page size are exactly equal.
+2455:(EngineCore pid=2732299) INFO 09-21 21:53:43 [v1/core/kv_cache_utils.py:1869] GPU KV cache size: 160,085 tokens, Maximum concurrency for 4,096 tokens per request: 39.08x
+--- hook lines ---
+48:(APIServer pid=2732162) [[E54076]] pid=2732162 HOOK_INSTALLED EngineCore._initialize_kv_caches
+67:[[E54076]] pid=2732299 HOOK_INSTALLED EngineCore._initialize_kv_caches
+2498:(EngineCore pid=2732299) [[E54076]] pid=2732299 POST_INIT_KV_CACHES id(cache_config)=0xe4f088155730 cache_config.block_size=784 cache_config.mamba_block_size=784 n_groups=4
+2499:(EngineCore pid=2732299) [[E54076]] pid=2732299 POST_INIT_GROUP idx=0 spec=MambaSpec block_size=784
+2500:(EngineCore pid=2732299) [[E54076]] pid=2732299 POST_INIT_GROUP idx=1 spec=MambaSpec block_size=784
+2501:(EngineCore pid=2732299) [[E54076]] pid=2732299 POST_INIT_GROUP idx=2 spec=MambaSpec block_size=784
+2502:(EngineCore pid=2732299) [[E54076]] pid=2732299 POST_INIT_GROUP idx=3 spec=FullAttentionSpec block_size=784
+2503:(EngineCore pid=2732299) [[E54076]] pid=2732299 HOOK_INSTALLED Scheduler.__init__
+2504:(EngineCore pid=2732299) [[E54076]] pid=2732299 SCHEDULER_CACHE_CONFIG id(cache_config)=0xe4f088155730 cache_config.block_size=784 cache_config.mamba_block_size=784 cache_config.mamba_cache_mode=align cache_config.enable_prefix_caching=True cache_config.mamba_page_size_padded=3211264 cache_config.num_gpu_blocks=469
+2505:(EngineCore pid=2732299) [[E54076]] pid=2732299 SCHEDULER_FIELDS scheduler.block_size=784 scheduler.hash_block_size=784 need_mamba_block_aligned_split=True mamba_partial_cache_hit=False has_mamba_layers=True use_eagle=False
+2506:(EngineCore pid=2732299) [[E54076]] pid=2732299 KV_GROUP idx=0 spec=MambaSpec block_size=784 page_size_bytes=3211264 prefix_cacheable=ABSENT_IN_0.28.0 n_layers=16 first_layer=language_model.model.layers.0.linear_attn
+2507:(EngineCore pid=2732299) [[E54076]] pid=2732299 KV_GROUP idx=1 spec=MambaSpec block_size=784 page_size_bytes=3211264 prefix_cacheable=ABSENT_IN_0.28.0 n_layers=16 first_layer=language_model.model.layers.1.linear_attn
+2508:(EngineCore pid=2732299) [[E54076]] pid=2732299 KV_GROUP idx=2 spec=MambaSpec block_size=784 page_size_bytes=3211264 prefix_cacheable=ABSENT_IN_0.28.0 n_layers=16 first_layer=language_model.model.layers.2.linear_attn
+2509:(EngineCore pid=2732299) [[E54076]] pid=2732299 KV_GROUP idx=3 spec=FullAttentionSpec block_size=784 page_size_bytes=3211264 prefix_cacheable=ABSENT_IN_0.28.0 n_layers=16 first_layer=language_model.model.layers.3.self_attn.attn
+2510:(EngineCore pid=2732299) [[E54076]] pid=2732299 VERDICT cache_config.block_size=784 MambaSpec.block_size=784 divergent=False
+--- errors ---

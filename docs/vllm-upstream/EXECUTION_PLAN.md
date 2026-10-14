@@ -1,3 +1,5 @@
+> **SUPERSEDED 2026-09-10 by PLAN_V3.md** (converged with Codex; trees are a design record; focus on GDN/quantized-serving defects). Kept for history.
+
 # vLLM Upstreaming — Execution Plan (v1, 2026-08-24)
 
 > **Stale in parts (2026-08-28):** PR-1 died to duplicate #53059; the RFC is

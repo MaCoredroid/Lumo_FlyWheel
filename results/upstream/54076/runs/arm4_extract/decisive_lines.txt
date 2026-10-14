@@ -1,0 +1,36 @@
+##### arm4_extract  (2648 lines)  #####
+--- ready/startup ---
+{'ready': True, 'startup_s': 310.1, 'server_exit': None, 'smoke_ok': True, 'smoke_error': None}
+--- stock INFO/DEBUG block-size lines ---
+1855:(EngineCore pid=2735033) INFO 09-21 21:58:44 [platforms/interface.py:911] Setting attention block size to 800 tokens to ensure that attention page size is >= mamba page size.
+1856:(EngineCore pid=2735033) INFO 09-21 21:58:44 [platforms/interface.py:935] Padding mamba page size by 1.52% to ensure that mamba page size and attention page size are exactly equal.
+2462:(EngineCore pid=2735033) INFO 09-21 21:59:53 [v1/core/kv_cache_utils.py:1812] Using block size 200 for hidden-state cache layer cache_only_layers.64; page alignment wastes 1228800 bytes (37.50%) per block
+2480:(EngineCore pid=2735033) INFO 09-21 21:59:55 [v1/core/kv_cache_utils.py:1812] Using block size 200 for hidden-state cache layer cache_only_layers.64; page alignment wastes 1228800 bytes (37.50%) per block
+2481:(EngineCore pid=2735033) INFO 09-21 21:59:55 [v1/core/kv_cache_utils.py:1869] GPU KV cache size: 52,110 tokens, Maximum concurrency for 4,096 tokens per request: 12.72x
+--- hook lines ---
+53:(APIServer pid=2734852) [[E54076]] pid=2734852 HOOK_INSTALLED EngineCore._initialize_kv_caches
+72:[[E54076]] pid=2735033 HOOK_INSTALLED EngineCore._initialize_kv_caches
+2521:(EngineCore pid=2735033) [[E54076]] pid=2735033 POST_INIT_KV_CACHES id(cache_config)=0xfb3fe21e5400 cache_config.block_size=200 cache_config.mamba_block_size=800 n_groups=5
+2522:(EngineCore pid=2735033) [[E54076]] pid=2735033 POST_INIT_GROUP idx=0 spec=MambaSpec block_size=800
+2523:(EngineCore pid=2735033) [[E54076]] pid=2735033 POST_INIT_GROUP idx=1 spec=MambaSpec block_size=800
+2524:(EngineCore pid=2735033) [[E54076]] pid=2735033 POST_INIT_GROUP idx=2 spec=MambaSpec block_size=800
+2525:(EngineCore pid=2735033) [[E54076]] pid=2735033 POST_INIT_GROUP idx=3 spec=FullAttentionSpec block_size=800
+2526:(EngineCore pid=2735033) [[E54076]] pid=2735033 POST_INIT_GROUP idx=4 spec=HiddenStateCacheSpec block_size=200
+2527:(EngineCore pid=2735033) [[E54076]] pid=2735033 HOOK_INSTALLED Scheduler.__init__
+2533:(EngineCore pid=2735033) [[E54076]] pid=2735033 SCHEDULER_CACHE_CONFIG id(cache_config)=0xfb3fe21e5400 cache_config.block_size=200 cache_config.mamba_block_size=800 cache_config.mamba_cache_mode=align cache_config.enable_prefix_caching=True cache_config.mamba_page_size_padded=3276800 cache_config.num_gpu_blocks=458
+2534:(EngineCore pid=2735033) [[E54076]] pid=2735033 SCHEDULER_FIELDS scheduler.block_size=800 scheduler.hash_block_size=200 need_mamba_block_aligned_split=True mamba_partial_cache_hit=True has_mamba_layers=True use_eagle=False
+2535:(EngineCore pid=2735033) [[E54076]] pid=2735033 KV_GROUP idx=0 spec=MambaSpec block_size=800 page_size_bytes=3276800 prefix_cacheable=ABSENT_IN_0.28.0 n_layers=16 first_layer=language_model.model.layers.0.linear_attn
+2536:(EngineCore pid=2735033) [[E54076]] pid=2735033 KV_GROUP idx=1 spec=MambaSpec block_size=800 page_size_bytes=3276800 prefix_cacheable=ABSENT_IN_0.28.0 n_layers=16 first_layer=language_model.model.layers.1.linear_attn
+2537:(EngineCore pid=2735033) [[E54076]] pid=2735033 KV_GROUP idx=2 spec=MambaSpec block_size=800 page_size_bytes=3276800 prefix_cacheable=ABSENT_IN_0.28.0 n_layers=16 first_layer=language_model.model.layers.2.linear_attn
+2538:(EngineCore pid=2735033) [[E54076]] pid=2735033 KV_GROUP idx=3 spec=FullAttentionSpec block_size=800 page_size_bytes=3276800 prefix_cacheable=ABSENT_IN_0.28.0 n_layers=16 first_layer=language_model.model.layers.3.self_attn.attn
+2539:(EngineCore pid=2735033) [[E54076]] pid=2735033 KV_GROUP idx=4 spec=HiddenStateCacheSpec block_size=200 page_size_bytes=3276800 prefix_cacheable=ABSENT_IN_0.28.0 n_layers=1 first_layer=cache_only_layers.64
+2540:(EngineCore pid=2735033) [[E54076]] pid=2735033 VERDICT cache_config.block_size=200 MambaSpec.block_size=800 divergent=True
+--- errors ---
+2632:(APIServer pid=2734852) ERROR 09-21 22:00:14 [v1/engine/async_llm.py:744] AsyncLLM output_handler failed.
+2633:(APIServer pid=2734852) ERROR 09-21 22:00:14 [v1/engine/async_llm.py:744] Traceback (most recent call last):
+2634:(APIServer pid=2734852) ERROR 09-21 22:00:14 [v1/engine/async_llm.py:744]   File "/home/mark/shared/exp54928/.venv/lib/python3.12/site-packages/vllm/v1/engine/async_llm.py", line 690, in output_handler
+2635:(APIServer pid=2734852) ERROR 09-21 22:00:14 [v1/engine/async_llm.py:744]     outputs = await engine_core.get_output_async()
+2636:(APIServer pid=2734852) ERROR 09-21 22:00:14 [v1/engine/async_llm.py:744]               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2637:(APIServer pid=2734852) ERROR 09-21 22:00:14 [v1/engine/async_llm.py:744]   File "/home/mark/shared/exp54928/.venv/lib/python3.12/site-packages/vllm/v1/engine/core_client.py", line 1104, in get_output_async
+2638:(APIServer pid=2734852) ERROR 09-21 22:00:14 [v1/engine/async_llm.py:744]     raise self._format_exception(outputs) from None
+2639:(APIServer pid=2734852) ERROR 09-21 22:00:14 [v1/engine/async_llm.py:744] vllm.v1.engine.exceptions.EngineDeadError: EngineCore encountered an issue. See stack trace (above) for the root cause.

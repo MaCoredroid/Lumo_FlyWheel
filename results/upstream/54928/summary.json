@@ -1,0 +1,240 @@
+{
+ "L1/G": {
+  "A_missing_or_error": 0,
+  "B_missing_or_error": 0,
+  "A_errors": [],
+  "B_errors": [],
+  "A_distinct_sequences": 1,
+  "B_distinct_sequences": 1,
+  "A_variant_counts": [
+   5
+  ],
+  "B_variant_counts": [
+   5
+  ],
+  "all_pairs_first_div": [
+   {
+    "A_variant": 0,
+    "B_variant": 0,
+    "first_div": 69
+   }
+  ],
+  "id_mismatches_A": [
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "id_mismatches_B": [
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "A_within_launch_stable": true,
+  "B_within_launch_stable": true,
+  "logprob_alignment_ok": true,
+  "A_len": 256,
+  "B_len": 256,
+  "A_finish": "length",
+  "B_finish": "length",
+  "first_divergence": 69,
+  "A_emitted": 5339,
+  "A_maximizers": [
+   5339,
+   8932
+  ],
+  "A_top2_margin_nats": 0.0,
+  "E_emitted": 8932,
+  "V_maximizers": [
+   8932
+  ],
+  "V_unique": true,
+  "B_top2_margin_nats": 0.125,
+  "pattern": "E == V != A"
+ },
+ "L1/T": {
+  "A_missing_or_error": 0,
+  "B_missing_or_error": 0,
+  "A_errors": [],
+  "B_errors": [],
+  "A_distinct_sequences": 1,
+  "B_distinct_sequences": 1,
+  "A_variant_counts": [
+   5
+  ],
+  "B_variant_counts": [
+   5
+  ],
+  "all_pairs_first_div": [
+   {
+    "A_variant": 0,
+    "B_variant": 0,
+    "first_div": 53
+   }
+  ],
+  "id_mismatches_A": [
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "id_mismatches_B": [
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "A_within_launch_stable": true,
+  "B_within_launch_stable": true,
+  "logprob_alignment_ok": true,
+  "A_len": 256,
+  "B_len": 256,
+  "A_finish": "length",
+  "B_finish": "length",
+  "first_divergence": 53,
+  "A_emitted": 579,
+  "A_maximizers": [
+   579
+  ],
+  "A_top2_margin_nats": 0.125,
+  "E_emitted": 728,
+  "V_maximizers": [
+   728
+  ],
+  "V_unique": true,
+  "B_top2_margin_nats": 0.125,
+  "pattern": "E == V != A"
+ },
+ "L2/G": {
+  "A_missing_or_error": 0,
+  "B_missing_or_error": 0,
+  "A_errors": [],
+  "B_errors": [],
+  "A_distinct_sequences": 1,
+  "B_distinct_sequences": 1,
+  "A_variant_counts": [
+   5
+  ],
+  "B_variant_counts": [
+   5
+  ],
+  "all_pairs_first_div": [
+   {
+    "A_variant": 0,
+    "B_variant": 0,
+    "first_div": 69
+   }
+  ],
+  "id_mismatches_A": [
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "id_mismatches_B": [
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "A_within_launch_stable": true,
+  "B_within_launch_stable": true,
+  "logprob_alignment_ok": true,
+  "A_len": 256,
+  "B_len": 256,
+  "A_finish": "length",
+  "B_finish": "length",
+  "first_divergence": 69,
+  "A_emitted": 5339,
+  "A_maximizers": [
+   5339,
+   8932
+  ],
+  "A_top2_margin_nats": 0.0,
+  "E_emitted": 8932,
+  "V_maximizers": [
+   8932
+  ],
+  "V_unique": true,
+  "B_top2_margin_nats": 0.125,
+  "pattern": "E == V != A"
+ },
+ "L2/T": {
+  "A_missing_or_error": 0,
+  "B_missing_or_error": 0,
+  "A_errors": [],
+  "B_errors": [],
+  "A_distinct_sequences": 1,
+  "B_distinct_sequences": 1,
+  "A_variant_counts": [
+   5
+  ],
+  "B_variant_counts": [
+   5
+  ],
+  "all_pairs_first_div": [
+   {
+    "A_variant": 0,
+    "B_variant": 0,
+    "first_div": 53
+   }
+  ],
+  "id_mismatches_A": [
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "id_mismatches_B": [
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "A_within_launch_stable": true,
+  "B_within_launch_stable": true,
+  "logprob_alignment_ok": true,
+  "A_len": 256,
+  "B_len": 256,
+  "A_finish": "length",
+  "B_finish": "length",
+  "first_divergence": 53,
+  "A_emitted": 579,
+  "A_maximizers": [
+   579
+  ],
+  "A_top2_margin_nats": 0.125,
+  "E_emitted": 728,
+  "V_maximizers": [
+   728
+  ],
+  "V_unique": true,
+  "B_top2_margin_nats": 0.125,
+  "pattern": "E == V != A"
+ },
+ "between_launch/G/A": {
+  "identical": true,
+  "first_div": null
+ },
+ "between_launch/G/B": {
+  "identical": true,
+  "first_div": null
+ },
+ "between_launch/T/A": {
+  "identical": true,
+  "first_div": null
+ },
+ "between_launch/T/B": {
+  "identical": true,
+  "first_div": null
+ }
+}
