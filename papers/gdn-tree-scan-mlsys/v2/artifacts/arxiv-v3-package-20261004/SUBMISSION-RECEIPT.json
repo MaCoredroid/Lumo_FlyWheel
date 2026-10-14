@@ -5,10 +5,10 @@
   "replaces": "v2",
   "submission_id": "8178517",
   "submitted": true,
-  "status_observed": "processing",
+  "status_observed": "publicly available",
   "confirmation_observed": "Article submitted",
   "submission_type_observed": "Replacement of 2609.23900",
-  "announcement_confirmed": false,
+  "announcement_confirmed": true,
   "announcement_time": null,
   "article_url": "https://arxiv.org/abs/2609.23900",
   "account_status_url": "https://arxiv.org/user/",
@@ -32,5 +32,9 @@
     "license": "https://arxiv.org/licenses/nonexclusive-distrib/1.0/"
   },
   "submission_agreement_authorization": "User explicitly replied: Accept and continue submitting v3",
-  "verification_note": "Uploaded frozen source archive; arXiv compilation succeeded. The server PDF has 16 pages versus the local 15-page build, with the final reference on page 16. Title, author, abstract, metadata, and processing status were verified in the arXiv UI."
+  "verification_note": "Uploaded frozen source archive; arXiv compilation succeeded. The server PDF has 16 pages versus the local 15-page build, with the final reference on page 16. Title, author, abstract, metadata, and processing status were verified in the arXiv UI.",
+  "publication_verified_at_utc": "2026-10-06T05:42:12+00:00",
+  "public_version_verified": "v3",
+  "public_pdf_url": "https://arxiv.org/pdf/2609.23900v3",
+  "public_pdf_pages": 16
 }

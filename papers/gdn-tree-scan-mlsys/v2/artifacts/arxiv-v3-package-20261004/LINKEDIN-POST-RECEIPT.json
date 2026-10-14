@@ -1,0 +1,14 @@
+{
+  "recorded_at_utc": "2026-10-06T05:42:12+00:00",
+  "status": "published",
+  "confirmation_observed": "Post successful.",
+  "account": "Zhiyuan Ma",
+  "profile_url": "https://www.linkedin.com/in/zhiyuanmatech/",
+  "audience": "Anyone (Global)",
+  "post_url": "https://www.linkedin.com/feed/update/urn:li:activity:7513111178362118146/",
+  "share_url": "https://www.linkedin.com/feed/update/urn:li:share:7513111177598615552/",
+  "paper_url": "https://arxiv.org/abs/2609.23900",
+  "post_text": "My paper, LumoTree: Path-Parallel Speculative Verification for Hybrid Language Models, is now on arXiv.\n\nIt brings together the engineering work behind my earlier speculative-decoding blogs: GPU kernels, state and cache correctness, and serving measurements.\n\nThe core design verifies candidate token paths in parallel, then commits the accepted path consistently across recurrent state, convolution history, and attention caches.\n\nOn DGX Spark, recorded-request replay on two corpora showed 7.7–11.8% higher throughput than native five-token MTP. The live coding-agent study did not establish faster task completion.\n\nPaper: https://arxiv.org/abs/2609.23900",
+  "version_number_mentioned_in_post_text": false,
+  "verification": "Opened the published post and verified the personal account, complete text, and arXiv preview."
+}
